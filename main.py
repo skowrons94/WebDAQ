@@ -55,3 +55,4 @@ tm.display()
 # Configure the TCP/IP links
 tm.configure_pt( )
 tm.enable_pt( )
+tm.start()

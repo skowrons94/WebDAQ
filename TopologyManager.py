@@ -250,8 +250,8 @@ class TopologyManager:
             return True
 
         print("--- Starting actors:")
-        self._data_manager.createDirectory(time.time(),
-                                           self.return_run_number())
+        #self._data_manager.createDirectory(time.time(),
+        #                                   self.return_run_number())
         actorOK = nbActors = 0 
         for idx in  range(len(self._list_actors)-1,-1,-1):
             print(self._actor_type[idx])
@@ -304,8 +304,8 @@ class TopologyManager:
         '''Increment the run to the next '''
         self.set_run_number(self.return_run_number()+1)        
         if  nbActors == actorOK:
-            self._data_manager.moveTkTSpectra(self.get_list_hosts())
-            self._data_manager.convertRawData()
+            #self._data_manager.moveTkTSpectra(self.get_list_hosts())
+            #self._data_manager.convertRawData()
             return True
         else :
             return False

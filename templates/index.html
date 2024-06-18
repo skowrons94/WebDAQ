@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<h1>Run Control</h1>
+<p>Run number: {{ run_number }}</p>
+{% if is_running %}
+    <p>Run is running</p>
+{% else %}
+    <p>Run is not running</p>
+{% endif %}
+<form class="form-inline" method="POST" action="/">
+    <input type="submit" name="start" value="Start Run" class="btn btn-primary">
+    <input type="submit" name="stop" value="Stop Run" class="btn btn-primary">
+</form>
+<!-- <form method="POST" action="/start_run">
+    <button type="submit">Start Run</button>
+</form>
+<form method="POST" action="/stop_run">
+    <button type="submit">Stop Run</button>
+</form>
+<form method="POST" action="/set_run_number">
+    <input type="text" name="run_number">
+    <button type="submit">Set Run Number</button>
+</form>
+<form method="POST" action="/get_run_number">
+    <button type="submit">Get Run Number</button>
+</form> -->
