@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAQ Histograms</title>
+    <script src="https://root.cern/js/latest/scripts/JSRoot.core.js"></script>
+    <style>
+        #histogramContainer {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px; /* Space between histograms */
+        }
+        .histogram {
+            width: 300px; /* Set a fixed width for histograms */
+            height: 300px; /* Set a fixed height for histograms */
+            border: 1px solid #ccc; /* Optional border for clarity */
+        }
+        .nav { margin-bottom: 20px; background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
+        .nav a { margin-right: 20px; text-decoration: none; color: #007bff; }
+        .nav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+     <!-- Navigation tab -->
+    <a href="/">Home</a>
+    <a href="/add_caen">CAEN Boards</a>
+    <a href="/json_editor">CAEN Configuration</a>
+    <a href="/histo">Plots</a>
+    <a href="http://lunaserver:3000">Grafana</a>
+</div>
+
+<h1>DAQ Histograms</h1>
+
+<label for="runNumber">Run Number:</label>
+<input type="text" id="runNumber" name="runNumber" value="0">
+<button onclick="createHistogramDivs()">Prepare Plots from File</button>
+<button onclick="loadHistograms()">Load Data from File</button>
+<button onclick="receiveHistogramDivs()">Prepare Plots from Spy</button>
+<button onclick="receiveObjects()">Receive Data from Spy</button>
+
+<div id="histogramContainer"></div>
+
+<script>
+// Function to create histogram divs based on the number of channels
+function createHistogramDivs() {
+    var runNumber = document.getElementById('runNumber').value;
+    console.log('Creating histogram divs for run number:', runNumber);
+
+    // Clear previous histograms
+    document.getElementById("histogramContainer").innerHTML = "";
+
+    // Fetch the list of available files for the given run number
+    fetch(`/get_files/${runNumber}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(fileNames => {
+            console.log('Available files:', fileNames);
+            if (fileNames.length === 0) {
+                console.log('No files found for this run number.');
+                return; // Exit if no files are found
+            }
+
+            // Create divs for each histogram
+            fileNames.forEach(function(fileName) {
+                console.log('Creating div for file:', fileName);
+                var histoContainer = document.createElement('div');
+                histoContainer.className = 'histogram';
+                histoContainer.id = fileName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
+
+                // Append to the main container
+                document.getElementById("histogramContainer").appendChild(histoContainer);
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching file list:', error);
+        });
+}
+
+// Function to create histogram divs based on the number of channels
+function receiveHistogramDivs() {
+    // Create a WebSocket connection to the server (assuming WebSocket proxying)
+    const socket = new WebSocket('ws://localhost:9090');
+            
+    // Receive collection of TH1D and TGraph objects
+    socket.onmessage = async function(event) {
+        let data = event.data;
+
+        // Assume the data is received in JSON format from the server
+        let receivedCollection = await JSROOT.IO.parse(data);
+
+        // Loop through the collection and render each object
+        if (receivedCollection._typename === "TList") {
+
+            // Create divs for each histogram
+            for (let i = 0; i < receivedCollection.arr.length; i++) {
+                let receivedObj = receivedCollection.arr[i];
+                console.log('Creating div for file:', receivedObj.fName);
+                var histoContainer = document.createElement('div');
+                histoContainer.className = 'histogram';
+                histoContainer.id = receivedObj.fName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
+
+                // Append to the main container
+                document.getElementById("histogramContainer").appendChild(histoContainer);
+            }
+        }
+    }
+}
+
+async function receiveObjects() {
+            // Create a WebSocket connection to the server (assuming WebSocket proxying)
+            const socket = new WebSocket('ws://localhost:9090');
+            
+            // Receive collection of TH1D and TGraph objects
+            socket.onmessage = async function(event) {
+                let data = event.data;
+
+                // Assume the data is received in JSON format from the server
+                let receivedCollection = await JSROOT.IO.parse(data);
+
+                // Loop through the collection and render each object
+                if (receivedCollection._typename === "TList") {
+                    for (let i = 0; i < receivedCollection.arr.length; i++) {
+                        let receivedObj = receivedCollection.arr[i];
+
+                        if (receivedObj._typename == 'TH1D') {
+                            // Set title to file name
+                            receivedObj.fTitle = fileName;    
+
+                            // Set y and x axis titles
+                            receivedObj.fYaxis.fTitle = "Counts";
+                            receivedObj.fXaxis.fTitle = "Bins";
+                            // Draw the histogram in the respective div
+                            var divId = fileName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
+                                setTimeout(() => {
+                                    var histoDiv = document.getElementById(divId);
+                                    if (histoDiv) {
+                                        console.log('Drawing histogram in container:', divId);
+                                        JSROOT.draw(divId, receivedObj, "hist");
+                                    } else {
+                                        console.error('Div not found for histogram:', divId);
+                                    }
+                                }, 50); // Small timeout to ensure rendering
+                        } else if (receivedObj._typename == 'TGraph') {
+                            // Set title to file name
+                            receivedObj.fTitle = fileName;    
+
+                            // Set y and x axis titles
+                            receivedObj.fYaxis.fTitle = "Signal Height";
+                            receivedObj.fXaxis.fTitle = "Sample Number";
+                            // Draw the histogram in the respective div
+                            var divId = fileName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
+                                setTimeout(() => {
+                                    var histoDiv = document.getElementById(divId);
+                                    if (histoDiv) {
+                                        console.log('Drawing histogram in container:', divId);
+                                        JSROOT.draw(divId, receivedObj, "graph");
+                                    } else {
+                                        console.error('Div not found for histogram:', divId);
+                                    }
+                                }, 50); // Small timeout to ensure rendering
+                        }
+                    }
+                }
+            };
+
+            socket.onopen = function() {
+                console.log('Connection established!');
+            };
+
+            socket.onclose = function() {
+                console.log('Connection closed!');
+            };
+        }
+
+// Function that recieves histograms from the server TSocket
+async function receiveObjects() {
+            // Create a WebSocket connection to the server (assuming WebSocket proxying)
+            const socket = new WebSocket('ws://localhost:3333');
+            
+            // Receive TH1D and TGraph from the server
+            socket.onmessage = async function(event) {
+                let data = event.data;
+
+                // Assume the data is received in JSON format from the server
+                let receivedObj = await JSROOT.IO.parse(data);
+
+                if (receivedObj._typename == 'TH1D') {
+                    // Set title to file name
+                    receivedObj.fTitle = fileName;    
+
+                    // Set y and x axis titles
+                    receivedObj.fYaxis.fTitle = "Counts";
+                    receivedObj.fXaxis.fTitle = "Bins";
+                    // Draw the histogram in the respective div
+                    var divId = fileName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
+                        setTimeout(() => {
+                            var histoDiv = document.getElementById(divId);
+                            if (histoDiv) {
+                                console.log('Drawing histogram in container:', divId);
+                                JSROOT.draw(divId, receivedObj, "hist");
+                            } else {
+                                console.error('Div not found for histogram:', divId);
+                            }
+                        }, 50); // Small timeout to ensure rendering
+                } else if (receivedObj._typename == 'TGraph') {
+                    // Set title to file name
+                    receivedObj.fTitle = fileName;    
+
+                    // Set y and x axis titles
+                    receivedObj.fYaxis.fTitle = "Signal Height";
+                    receivedObj.fXaxis.fTitle = "Sample Number";
+                    // Draw the histogram in the respective div
+                    var divId = fileName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
+                        setTimeout(() => {
+                            var histoDiv = document.getElementById(divId);
+                            if (histoDiv) {
+                                console.log('Drawing histogram in container:', divId);
+                                JSROOT.draw(divId, receivedObj, "graph");
+                            } else {
+                                console.error('Div not found for histogram:', divId);
+                            }
+                        }, 50); // Small timeout to ensure rendering
+                }
+            };
+
+            socket.onopen = function() {
+                console.log('Connection established!');
+            };
+
+            socket.onclose = function() {
+                console.log('Connection closed!');
+            };
+        }
+
+// Function to load and plot histograms
+function loadHistograms() {
+    var runNumber = document.getElementById('runNumber').value;
+    console.log('Loading histogram data for run number:', runNumber);
+
+    // Fetch the list of available files for the given run number
+    fetch(`/get_files/${runNumber}`)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(fileNames => {
+            console.log('Available files for loading:', fileNames);
+            if (fileNames.length === 0) {
+                console.log('No files found for this run number.');
+                return; // Exit if no files are found
+            }
+
+            // Process each file for plotting
+            fileNames.forEach(function(fileName) {
+                console.log('Loading data for file:', fileName);
+                fetch(`/get_data/${runNumber}/${fileName}`)
+                    .then(response => {
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        return response.text();
+                    })
+                    .then(data => {
+                        console.log('Data for file:', fileName, data);
+                        // Parse the data to create histogram
+                        var lines = data.trim().split('\n');
+                        var countsData = [];
+
+                        lines.forEach(function(line) {
+                            var parts = line.trim().split(/\s+/);
+                            var counts = parseFloat(parts[1]);
+                            countsData.push(counts);
+                        });
+
+                        console.log('Counts data for file:', fileName, countsData);
+
+                        // Create a JSROOT histogram
+                        var nbins = countsData.length;
+                        var h = JSROOT.createHistogram('TH1F', nbins, 0, nbins);
+
+                        // Set title to file name
+                        h.fTitle = fileName;    
+
+                        // Set y and x axis titles
+                        h.fYaxis.fTitle = "Counts";
+                        h.fXaxis.fTitle = "Bins";
+
+                        // Fill histogram bins with data
+                        for (var i = 0; i < nbins; i++) {
+                            h.setBinContent(i + 1, countsData[i]);
+                        }
+
+                        // Draw the histogram in the respective div
+                        var divId = fileName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
+                        setTimeout(() => {
+                            var histoDiv = document.getElementById(divId);
+                            if (histoDiv) {
+                                console.log('Drawing histogram in container:', divId);
+                                JSROOT.draw(divId, h, "hist");
+                            } else {
+                                console.error('Div not found for histogram:', divId);
+                            }
+                        }, 50); // Small timeout to ensure rendering
+                    })
+                    .catch(error => {
+                        console.error('Error loading histogram data:', error);
+                    });
+            });
+        })
+        .catch(error => {
+            console.error('Error fetching file list:', error);
+        });
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV File Editor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background-color: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            border: 1px solid #ccc;
+            padding: 12px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        th {
+            background-color: #007bff;
+            color: white;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        td input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            font-size: 14px;
+            text-align: center;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 14px;
+            border: none;
+            cursor: pointer;
+            color: white;
+            background-color: #007bff;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .remove-column {
+            cursor: pointer;
+            color: red;
+            font-size: 18px;
+            margin-left: 10px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 10;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 400px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .close {
+            color: red;
+            float: right;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: darkred;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSV File Editor</h1>
+
+    <table id="csvTable">
+        <thead>
+            <tr id="tableHeader"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <div class="controls">
+        <button onclick="addColumn()">Add Column</button>
+        <button onclick="openFormulaModal()">Add Formula Column</button>
+        <button onclick="saveCSV()">Save CSV</button>
+        <button onclick="startRun()">Start Run</button>
+        <button onclick="stopRun()">Stop Run</button>
+    </div>
+
+    <!-- Modal for Adding Formula Column -->
+    <div id="formulaModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeFormulaModal()">&times;</span>
+            <h2>Add Formula Column</h2>
+            <label for="formulaName">Column Name:</label>
+            <input type="text" id="formulaName" placeholder="Formula Column Name">
+            <br><br>
+            <label for="formulaInput">Formula:</label>
+            <input type="text" id="formulaInput" placeholder="e.g., C1 + C2 * 2">
+            <br><br>
+            <button onclick="addFormulaColumn()">Add Formula Column</button>
+        </div>
+    </div>
+
+    <script>
+        let runNumber = null;
+        let formulaColumns = [];
+
+        // Load the CSV file on page load
+        window.onload = function() {
+            fetch('/get_csv')
+                .then(response => response.json())
+                .then(data => renderTable(data));
+        };
+
+        // Render the CSV table
+        function renderTable(data) {
+            const header = document.getElementById('tableHeader');
+            const body = document.getElementById('tableBody');
+
+            header.innerHTML = '';
+            body.innerHTML = '';
+
+            if (data.length > 0) {
+                // Render header
+                data[0].forEach((col, index) => {
+                    const th = document.createElement('th');
+                    th.innerHTML = `<input type="text" value="${col}" onchange="updateHeader(${index}, this.value)">
+                                    <span class="remove-column" onclick="removeColumn(${index})">&times;</span>`;
+                    header.appendChild(th);
+                });
+
+                // Render body
+                for (let i = 1; i < data.length; i++) {
+                    const row = document.createElement('tr');
+                    data[i].forEach((cell, index) => {
+                        const td = document.createElement('td');
+                        td.innerHTML = `<input type="text" value="${cell}" onchange="updateCell(${i}, ${index}, this.value)">`;
+                        row.appendChild(td);
+                    });
+                    body.appendChild(row);
+                }
+            }
+        }
+
+        // Add a new column
+        function addColumn() {
+            const header = document.getElementById('tableHeader');
+            const body = document.getElementById('tableBody');
+
+            // Add header column
+            const th = document.createElement('th');
+            th.innerHTML = `<input type="text" value="New Column" onchange="updateHeader(${header.children.length}, this.value)">
+                            <span class="remove-column" onclick="removeColumn(${header.children.length})">&times;</span>`;
+            header.appendChild(th);
+
+            // Add empty cells to body rows
+            for (let i = 0; i < body.children.length; i++) {
+                const td = document.createElement('td');
+                td.innerHTML = `<input type="text" onchange="updateCell(${i+1}, ${header.children.length - 1}, this.value)">`;
+                body.children[i].appendChild(td);
+            }
+        }
+
+        // Remove a column
+        function removeColumn(colIndex) {
+            const header = document.getElementById('tableHeader');
+            const body = document.getElementById('tableBody');
+
+            // Remove from header
+            header.removeChild(header.children[colIndex]);
+
+            // Remove corresponding cells from each row
+            for (let i = 0; i < body.children.length; i++) {
+                body.children[i].removeChild(body.children[i].children[colIndex]);
+            }
+
+            // Recalculate formula columns if necessary
+            recalculateFormulas();
+        }
+
+        // Save the current CSV to the server
+        function saveCSV() {
+            const table = document.getElementById('csvTable');
+            const data = [];
+
+            // Get headers
+            const headers = [];
+            const headerRow = document.getElementById('tableHeader').children;
+            for (let th of headerRow) {
+                headers.push(th.children[0].value);
+            }
+            data.push(headers);
+
+            // Get body data
+            const bodyRows = document.getElementById('tableBody').children;
+            for (let row of bodyRows) {
+                const rowData = [];
+                for (let cell of row.children) {
+                    rowData.push(cell.children[0].value);
+                }
+                data.push(rowData);
+            }
+
+            // Send to server
+            fetch('/save_csv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ data })
+            }).then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('CSV saved successfully!');
+                }
+            });
+        }
+
+        // Update cell value
+        function updateCell(rowIndex, colIndex, value) {
+            recalculateFormulas();
+        }
+
+        // Update header value
+        function updateHeader(colIndex, value) {
+            recalculateFormulas();
+        }
+
+        // Start a new run
+        function startRun() {
+            fetch('/start_run', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        runNumber = data.run_number;
+                        alert(`Run ${runNumber} started at ${data.start_time}`);
+                        window.onload();
+                    }
+                });
+        }
+
+        // Stop the current run
+        function stopRun() {
+            if (runNumber !== null) {
+                fetch('/stop_run', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            alert(`Run ${runNumber} stopped at ${data.stop_time}`);
+                            window.onload();
+                        }
+                    });
+            } else {
+                alert("No run in progress.");
+            }
+        }
+
+        // Open the formula modal
+        function openFormulaModal() {
+            document.getElementById('formulaModal').style.display = 'block';
+        }
+
+        // Close the formula modal
+        function closeFormulaModal() {
+            document.getElementById('formulaModal').style.display = 'none';
+        }
+
+        // Add a formula column
+        function addFormulaColumn() {
+            const formulaName = document.getElementById('formulaName').value;
+            const formulaInput = document.getElementById('formulaInput').value;
+            const header = document.getElementById('tableHeader');
+            const body = document.getElementById('tableBody');
+
+            if (formulaName && formulaInput) {
+                // Add the new formula column to the header
+                const th = document.createElement('th');
+                th.innerHTML = `<input type="text" value="${formulaName}" disabled>
+                                <span class="remove-column" onclick="removeColumn(${header.children.length})">&times;</span>`;
+                header.appendChild(th);
+
+                // Store formula
+                formulaColumns.push({ index: header.children.length - 1, formula: formulaInput });
+
+                // Apply formula and fill in the rows
+                for (let i = 0; i < body.children.length; i++) {
+                    const td = document.createElement('td');
+                    const formulaValue = evaluateFormula(formulaInput, i + 1);  // Pass row index + 1 (to account for headers)
+                    td.innerHTML = `<input type="text" value="${formulaValue}" disabled>`;
+                    body.children[i].appendChild(td);
+                }
+
+                closeFormulaModal();
+            } else {
+                alert("Please provide both a column name and a formula.");
+            }
+        }
+
+        // Recalculate all formula columns
+        function recalculateFormulas() {
+            formulaColumns.forEach(formulaCol => {
+                const formula = formulaCol.formula;
+                const colIndex = formulaCol.index;
+                const body = document.getElementById('tableBody');
+
+                for (let i = 0; i < body.children.length; i++) {
+                    const td = body.children[i].children[colIndex].children[0];
+                    const formulaValue = evaluateFormula(formula, i + 1);
+                    td.value = formulaValue;
+                }
+            });
+        }
+
+        // Evaluate the formula for a row
+        function evaluateFormula(formula, rowIndex) {
+            const body = document.getElementById('tableBody');
+            const row = body.children[rowIndex - 1]; // rowIndex - 1 since rowIndex is 1-based
+            const cells = row.children;
+
+            // Replace C1, C2, etc. in the formula with actual cell values
+            let evaluatedFormula = formula;
+            for (let i = 0; i < cells.length; i++) {
+                const cellValue = parseFloat(cells[i].children[0].value) || 0;
+                const columnVar = 'C' + (i + 1);  // e.g., C1, C2, C3, etc.
+                evaluatedFormula = evaluatedFormula.replaceAll(columnVar, cellValue);
+            }
+
+            try {
+                return eval(evaluatedFormula);
+            } catch (error) {
+                return "Error";
+            }
+        }
+    </script>
+</body>
+</html>

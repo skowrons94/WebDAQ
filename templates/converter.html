@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Run File Converter</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            width: 600px;
+            margin: 50px auto;
+        }
+        label, input {
+            display: block;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: grey;
+        }
+        .output {
+            margin-top: 20px;
+            background-color: #f7f7f7;
+            padding: 10px;
+            border: 1px solid #ddd;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Run File Converter</h2>
+        <label for="run-number">Enter Run Number:</label>
+        <input type="number" id="run-number" min="0" placeholder="Run Number">
+        <button id="check-btn">Check & Convert</button>
+
+        <div class="output" id="output"></div>
+    </div>
+
+    <script>
+        document.getElementById("check-btn").addEventListener("click", function() {
+            const runNumber = document.getElementById("run-number").value;
+            const outputDiv = document.getElementById("output");
+
+            if (!runNumber) {
+                outputDiv.innerHTML = "<p style='color: red;'>Please enter a valid run number.</p>";
+                return;
+            }
+
+            outputDiv.innerHTML = "<p>Checking files...</p>";
+
+            fetch(`/check-and-convert/${runNumber}`)
+                .then(response => response.text())
+                .then(data => {
+                    outputDiv.innerHTML = `<pre>${data}</pre>`;
+                })
+                .catch(error => {
+                    outputDiv.innerHTML = `<p style="color: red;">Error: ${error}</p>`;
+                });
+        });
+    </script>
+</body>
+</html>
