@@ -183,6 +183,16 @@ def add_caen():
     # Render the CAEN board form page
     return render_template('add_caen.html', caen_boards=daq_state['caen_boards'])
 
+# New route for removing a CAEN board
+@app.route('/remove_caen/<int:board_index>', methods=['POST'])
+def remove_caen(board_index):
+    global daq_state
+    # Remove the board based on its index in the list
+    if 0 <= board_index < len(daq_state['caen_boards']):
+        removed_board = daq_state['caen_boards'].pop(board_index)
+        print(f"Removed CAEN Board: {removed_board}")
+    return redirect(url_for('add_caen'))
+
 # Route to serve all the data for a given run number
 @app.route('/get_data/<run_number>/<filename>', methods=['GET'])
 def get_data(run_number, filename):
