@@ -1,5 +1,6 @@
 import os
 import csv
+import time
 
 import subprocess
 import pickle as pkl
@@ -99,8 +100,10 @@ tm.display()
 #dm = container()
 #dm.start()
 
+time.sleep(2)
+
 #tm.configure_pt( )
-#m.enable_pt( )
+#tm.enable_pt( )
 
 def setup_daq( ):
     write_ruconf(daq_state)
