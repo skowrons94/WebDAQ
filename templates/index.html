@@ -5,65 +5,77 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DAQ Control</title>
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        .container { max-width: 400px; margin: 0 auto; }
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
+        .container { max-width: 500px; margin: 0 auto; background-color: #fff; padding: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; }
-        .form-group input, .form-group select { width: 100%; padding: 8px; box-sizing: border-box; }
-        .form-group .radio-group { display: flex; justify-content: space-between; }
-        .button-group { margin-top: 20px; }
-        .button-group button { padding: 10px 15px; margin-right: 10px; }
-        .board-list { margin-top: 30px; }
-        .board-list h3 { margin-bottom: 10px; }
-        .board-list ul { list-style-type: none; padding: 0; }
-        .board-list li { background-color: #f9f9f9; padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; }
-        .board-list li form { display: inline; }
-        .remove-button { background-color: #ff6666; color: white; border: none; padding: 5px 10px; cursor: pointer; }
-        .remove-button:hover { background-color: #cc0000; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
+        .form-inline { display: flex; justify-content: space-between; }
+        .form-inline .form-group { flex: 1; margin-right: 10px; }
+        .form-inline .form-group:last-child { margin-right: 0; }
+        .checkbox-inline { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .button-group { margin-top: 20px; display: flex; justify-content: space-between; }
+        .button-group button { padding: 10px 15px; border: none; background-color: #007bff; color: white; cursor: pointer; border-radius: 5px; }
+        .button-group button:hover { background-color: #0056b3; }
+        .status-message { text-align: center; font-size: 24px; margin-top: 30px; }
+        .status-running { color: green; }
+        .status-stopped { color: red; }
+        #file_size_input { display: none; }
         .nav { margin-bottom: 20px; background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
         .nav a { margin-right: 20px; text-decoration: none; color: #007bff; }
         .nav a:hover { text-decoration: underline; }
     </style>
+    <script>
+        function toggleFileSizeLimit() {
+            var checkbox = document.getElementById('limit_size');
+            var fileSizeInput = document.getElementById('file_size_input');
+            fileSizeInput.style.display = checkbox.checked ? 'block' : 'none';
+        }
+    </script>
 </head>
 <body>
     <div class="nav">
         <!-- Navigation tab -->
-        <a href="/">Home</a>
-        <a href="/add_caen">Boards</a>
-        <a href="/json_editor">Configuration</a>
-        <a href="/histo">Plots</a>
-        <a href="/converter">Converter</a>
-        <a href="/logbook">Logbook</a>
-        <a href="http://lunaserver:3000">Grafana</a>
-    </div>
+       <a href="/">Home</a>
+       <a href="/add_caen">Boards</a>
+       <a href="/json_editor">Configuration</a>
+       <a href="/histo">Plots</a>
+       <a href="/logbook">Logbook</a>
+       <a href="/converter">Converter</a>
+       <a href="http://lunaserver:3000">Grafana</a>
+   </div>
     <div class="container">
-
-        <!-- DAQ Status Indicator -->
-        <div class="status-indicator {% if daq_running %}status-running{% else %}status-stopped{% endif %}">
-            DAQ is {% if daq_running %}Running{% else %}Stopped{% endif %}
-        </div>
-
         <h1>DAQ Control</h1>
         <form method="POST">
             <div class="form-group">
                 <label for="run_number">Run Number:</label>
                 <input type="text" id="run_number" name="run_number" value="{{ daq_state['run_number'] }}" required>
             </div>
-            <div class="form-group">
-                <label for="param1">Parameter 1:</label>
-                <input type="text" id="param1" name="param1" value="{{ daq_state['param1'] }}" required>
+
+            <div class="form-inline">
+                <div class="form-group">
+                    <label for="coincidence_window">Coincidence Window (ns):</label>
+                    <input type="text" id="coincidence_window" name="coincidence_window" value="{{ daq_state['coincidence_window'] }}" required>
+                </div>
+                <div class="form-group">
+                    <label for="multiplicity">Multiplicity:</label>
+                    <input type="text" id="multiplicity" name="multiplicity" value="{{ daq_state['multiplicity'] }}" required>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="param2">Parameter 2:</label>
-                <input type="text" id="param2" name="param2" value="{{ daq_state['param2'] }}" required>
+
+            <div class="checkbox-inline">
+                <div>
+                    <input type="checkbox" id="save_data" name="save_data" {% if daq_state['save_data'] %}checked{% endif %}>
+                    <label for="save_data">Save Data</label>
+                </div>
+                <div>
+                    <input type="checkbox" id="limit_size" name="limit_size" onclick="toggleFileSizeLimit()" {% if daq_state['limit_size'] %}checked{% endif %}>
+                    <label for="limit_size">Limit File Size</label>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="param3">Parameter 3:</label>
-                <input type="text" id="param3" name="param3" value="{{ daq_state['param3'] }}" required>
-            </div>
-            <div class="form-group">
-                <label for="param4">Parameter 4:</label>
-                <input type="text" id="param4" name="param4" value="{{ daq_state['param4'] }}" required>
+
+            <div class="form-group" id="file_size_input" {% if not daq_state['limit_size'] %}style="display: none;"{% endif %}>
+                <label for="file_size_limit">File Size Limit (MB):</label>
+                <input type="text" id="file_size_limit" name="file_size_limit" value="{{ daq_state['file_size_limit'] }}">
             </div>
 
             <div class="button-group">
@@ -71,6 +83,10 @@
                 <button type="submit" name="stop">Stop DAQ</button>
             </div>
         </form>
+
+        <div class="status-message {% if daq_state['daq_running'] %}status-running{% else %}status-stopped{% endif %}">
+            DAQ is {% if daq_state['daq_running'] %}Running{% else %}Stopped{% endif %}
+        </div>
     </div>
 </body>
 </html>

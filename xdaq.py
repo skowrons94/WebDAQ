@@ -210,6 +210,18 @@ class xdaq_actor:
                                                            str(runnumber))
         self._messenger.send_message(message)
 
+    def set_file_path(self,filepath):
+        message = self._messenger.create_parameter_message("outputFilepath",
+                                                           "xsd:string",
+                                                           filepath)
+        self._messenger.send_message(message)
+
+    def set_file_size_limit(self,filelimit):
+        message = self._messenger.create_parameter_message("outputFileSizeLimit_MB",
+                                                           "xsd:unsignedLong",
+                                                           str(filelimit))
+        self._messenger.send_message(message)
+
     def get_run_number(self):
         message = self._messenger.create_info_message("runNumber","xsd:unsignedInt")
         answer = self._messenger.send_message(message)
@@ -221,6 +233,12 @@ class xdaq_actor:
         message = self._messenger.create_parameter_message("merge_window",
                                                            "xsd:unsignedInt",
                                                            str(window))
+        self._messenger.send_message(message)
+
+    def set_multiplicity(self,multiplicity):
+        message = self._messenger.create_parameter_message("multiplicity",
+                                                           "xsd:unsignedInt",
+                                                           str(multiplicity))
         self._messenger.send_message(message)
 
     def get_coinc_window(self):
@@ -497,8 +515,7 @@ class topology:
             return True
 
         print("--- Starting actors:")
-        #self._data_manager.createDirectory(time.time(),
-        #                                   self.return_run_number())
+        #self._data_manager.createDirectory(time.time(),self.return_run_number())
         actorOK = nbActors = 0 
         for idx in  range(len(self._list_actors)-1,-1,-1):
             print(self._actor_type[idx])
@@ -616,7 +633,7 @@ class topology:
                 act.set_run_number(runNumber)
 
     def return_run_number(self):
-        return self._gf_actors[0].get_run_number()
+        return self._ru_actors[0].get_run_number()
         
     def how_many_ru(self):
         return self._number_ru
@@ -720,6 +737,10 @@ class topology:
         for actors in self._mu_actors:
             actors.set_coinc_window(window)
             print("Merger coincidence window",actors.get_coinc_window())
+
+    def set_multiplicity(self,multiplicity):
+        for actors in self._bu_actors:
+            actors.set_multiplicity(multiplicity)
 
     def return_coincidence_window(self):
         return self._mu_actors[0].get_coinc_window()

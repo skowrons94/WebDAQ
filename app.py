@@ -6,7 +6,7 @@ import subprocess
 import pickle as pkl
 
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, jsonify, flash
 
 from xdaq import topology, container
 
@@ -85,11 +85,11 @@ else:
     daq_state = {
         'is_running': False,
         'run_number': 0,
-        'param1': 1,
-        'param2': 1,
-        'param3': 1,
-        'param4': 1,
-        'message': "Nothing",
+        'coincidence_window': 20,
+        'multiplicity': 1,
+        'save_data': False,
+        'limit_size': False,
+        'file_size_limit': None,
         'caen_boards': []
     }
 
@@ -135,29 +135,46 @@ web_canvas = None
 def index():
     global daq_state
     if request.method == 'POST':
-        if 'start' in request.form:
-            daq_state['run_number'] = request.form.get('run_number')
-            daq_state['param1'] = request.form.get('param1')
-            daq_state['param2'] = request.form.get('param2')
-            daq_state['param3'] = request.form.get('param3')
-            daq_state['param4'] = request.form.get('param4')
-            # Check if there are CAEN boards to start the DAQ
-            if( len(daq_state['caen_boards']) == 0 ):
-                daq_state['message'] = f"DAQ cannot be started without CAEN boards."
-                return render_template('index.html', daq_state=daq_state, daq_running=daq_state['is_running'])
-            #setup_daq( )
-            #start_daq( )
-            daq_state['message'] = f"DAQ started successfully :)"
-            daq_state['is_running'] = True
-            print(f"DAQ Started with Run Number: {daq_state['run_number']} and Parameters: {daq_state['parameters']}")
-        elif 'stop' in request.form:
-            #stop_daq( )
-            daq_state['message'] = f"DAQ stopped successfully :)"
-            daq_state['is_running'] = False
-            print(f"DAQ Stopped.")
-        return render_template('index.html', daq_state=daq_state, daq_running=daq_state['is_running'])
+        # Retrieve form inputs
+        run_number = request.form.get('run_number')
+        coincidence_window = request.form.get('coincidence_window')
+        multiplicity = request.form.get('multiplicity')
+        save_data = 'save_data' in request.form
+        limit_size = 'limit_size' in request.form
+        file_size_limit = request.form.get('file_size_limit') if limit_size else None
 
-    return render_template('index.html', daq_state=daq_state, daq_running=daq_state['is_running'])
+        # Update DAQ state with form values
+        daq_state.update({
+            'run_number': int(run_number),
+            'coincidence_window': coincidence_window,
+            'multiplicity': multiplicity,
+            'save_data': save_data,
+            'limit_size': limit_size,
+            'file_size_limit': file_size_limit
+        })
+
+        # Check if directory exists before starting DAQ
+        run_directory = f"data/run{run_number}"
+        if 'start' in request.form:
+            # Dump the daq_state to a pickle file
+            dump_state(daq_state)
+            daq_state['daq_running'] = True
+            if os.path.exists(run_directory):
+                flash(f"Directory {run_directory} already exists. Are you sure you want to overwrite the data?")
+                return render_template('index.html', daq_state=daq_state)
+
+            #start_daq()  # Call to start DAQ
+        elif 'stop' in request.form:
+            #stop_daq()  # Call to stop DAQ
+            # Increment run_number after stopping
+            daq_state['daq_running'] = False
+            daq_state['run_number'] += 1
+            dump_state(daq_state)
+
+        return render_template('index.html', daq_state=daq_state)
+
+    return render_template('index.html', daq_state=daq_state)
+
 
 # Route for adding CAEN boards
 @app.route('/add_caen', methods=['GET', 'POST'])
@@ -196,12 +213,12 @@ def remove_caen(board_index):
 # Route to serve all the data for a given run number
 @app.route('/get_data/<run_number>/<filename>', methods=['GET'])
 def get_data(run_number, filename):
-    histogram_dir = f"histo/run{run_number}/"
+    histogram_dir = f"data/run{run_number}/"
     return send_from_directory(histogram_dir, filename)
 
 @app.route('/get_files/<run_number>')
 def get_files(run_number):
-    histogram_dir = f"histo/run{run_number}/"
+    histogram_dir = f"data/run{run_number}/"
     try:
         files = [f for f in os.listdir(histogram_dir) if f.endswith('.dat')]
         return jsonify(files)
