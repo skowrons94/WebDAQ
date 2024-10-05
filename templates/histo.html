@@ -41,7 +41,7 @@
 <button onclick="createHistogramDivs()">Prepare Plots from File</button>
 <button onclick="loadHistograms()">Load Data from File</button>
 <button onclick="receiveHistogramDivs()">Prepare Plots from Spy</button>
-<button onclick="receiveObjects()">Receive Data from Spy</button>
+<button onclick="receiveObjects()">Load Data from Spy</button>
 
 <div id="histogramContainer"></div>
 
@@ -85,51 +85,46 @@ function createHistogramDivs() {
 
 // Function to create histogram divs based on the number of channels
 function receiveHistogramDivs() {
-    // Create a WebSocket connection to the server (assuming WebSocket proxying)
-    const socket = new WebSocket('ws://localhost:9090');
-            
-    // Receive collection of TH1D and TGraph objects
-    socket.onmessage = async function(event) {
-        let data = event.data;
+    
+    fetch(`/get_root_data/${runNumber}`)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    console.error('Error:', data.error);
+                    return;
+                }
+                for (let i = 0; i < data.length; i++) {
+                    let histo = data[i];
+                    console.log('Div for file:', histo.fName);
+                    var histoContainer = document.createElement('div');
+                    histoContainer.className = 'histogram';
+                    histoContainer.id = histo.fName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
 
-        // Assume the data is received in JSON format from the server
-        let receivedCollection = await JSROOT.IO.parse(data);
-
-        // Loop through the collection and render each object
-        if (receivedCollection._typename === "TList") {
-
-            // Create divs for each histogram
-            for (let i = 0; i < receivedCollection.arr.length; i++) {
-                let receivedObj = receivedCollection.arr[i];
-                console.log('Creating div for file:', receivedObj.fName);
-                var histoContainer = document.createElement('div');
-                histoContainer.className = 'histogram';
-                histoContainer.id = receivedObj.fName.replace(/[^a-zA-Z0-9]/g, '_'); // Ensure a valid ID
-
-                // Append to the main container
-                document.getElementById("histogramContainer").appendChild(histoContainer);
-            }
-        }
+                    // Append to the main container
+                    document.getElementById("histogramContainer").appendChild(histoContainer);
+                }
+            })
+            .catch(error => console.error('Fetch error:', error));
     }
-}
 
 async function receiveObjects() {
-            // Create a WebSocket connection to the server (assuming WebSocket proxying)
-            const socket = new WebSocket('ws://localhost:9090');
-            
-            // Receive collection of TH1D and TGraph objects
-            socket.onmessage = async function(event) {
-                let data = event.data;
+    fetch(`/get_root_data/${runNumber}`)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.json();
+            })
+            .then(data => {
+                if (data.error) {
+                    console.error('Error:', data.error);
+                    return;
+                }
+                    for (let i = 0; i < data.length; i++) {
+                        let receivedObj = data[i];
 
-                // Assume the data is received in JSON format from the server
-                let receivedCollection = await JSROOT.IO.parse(data);
-
-                // Loop through the collection and render each object
-                if (receivedCollection._typename === "TList") {
-                    for (let i = 0; i < receivedCollection.arr.length; i++) {
-                        let receivedObj = receivedCollection.arr[i];
-
-                        if (receivedObj._typename == 'TH1D') {
+                        if (receivedObj._typename == 'TH1F') {
                             // Set title to file name
                             receivedObj.fTitle = fileName;    
 
@@ -167,16 +162,7 @@ async function receiveObjects() {
                                 }, 50); // Small timeout to ensure rendering
                         }
                     }
-                }
-            };
-
-            socket.onopen = function() {
-                console.log('Connection established!');
-            };
-
-            socket.onclose = function() {
-                console.log('Connection closed!');
-            };
+                })
         }
 
 // Function that recieves histograms from the server TSocket

@@ -23,6 +23,7 @@
         .nav { margin-bottom: 20px; background-color: #f4f4f4; padding: 10px; border-radius: 5px; }
         .nav a { margin-right: 20px; text-decoration: none; color: #007bff; }
         .nav a:hover { text-decoration: underline; }
+        #run_number { text-align: center; }
     </style>
     <script>
         function toggleFileSizeLimit() {
@@ -31,6 +32,7 @@
             fileSizeInput.style.display = checkbox.checked ? 'block' : 'none';
         }
     </script>
+    <link rel="stylesheet" href="themes/luna.css">
 </head>
 <body>
     <div class="nav">
@@ -44,11 +46,12 @@
        <a href="http://lunaserver:3000">Grafana</a>
    </div>
     <div class="container">
-        <h1>DAQ Control</h1>
+        <h1 style="font-size: 42px; color: red; text-align: center;">LUNA Control</h1>
+        
         <form method="POST">
             <div class="form-group">
-                <label for="run_number">Run Number:</label>
-                <input type="text" id="run_number" name="run_number" value="{{ daq_state['run_number'] }}" required>
+                <label style="font-size: 32px; text-align: center;" for="run_number">Run Number</label>
+                <input style="font-size: 32px;" type="text" id="run_number" name="run_number" value="{{ daq_state['run_number'] }}" required>
             </div>
 
             <div class="form-inline">

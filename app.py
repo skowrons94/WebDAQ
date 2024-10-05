@@ -1,6 +1,7 @@
 import os
 import csv
 import time
+import ROOT
 
 import subprocess
 import pickle as pkl
@@ -50,12 +51,14 @@ def write_buconf(state):
 
 # Path to the CSV file
 CSV_FILE = 'logbook.csv'
+ROWS = [['Run Number', 'Start Time', 'Stop Time']]
 
 # Check if CSV exists, if not, create it with predefined columns
 def check_and_create_csv():
     if not os.path.exists(CSV_FILE):
         with open(CSV_FILE, mode='w', newline='') as file:
             writer = csv.writer(file)
+            writer.writerows(ROWS)
 
 # Read CSV and return data as list of rows
 def read_csv():
@@ -112,9 +115,15 @@ def setup_daq( ):
     tm.configure( )
 
 def start_daq( ):
-    tm.start( )
-    # Spy is started by starting the LunaSpy application
-    # It must be launched with "-d" that follow board name, firmware and channel and "-n" that follow the run number
+    #tm.start( )
+    # Add run to CSV logbook
+    if( daq_state['save_data'] ):
+        rows = read_csv()
+        run_number = daq_state['run_number']
+        start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        new_row = [run_number, start_time, '']
+        rows.append(new_row)
+        write_csv(rows)
     # Example: ./LunaSpy -d board_name firmware channel -n run_number
     cmd = "LunaSpy"
     for board in daq_state['caen_boards']:
@@ -125,8 +134,16 @@ def start_daq( ):
 
 def stop_daq( ):
     # Spy is stopped by killing the LunaSpy application
-    os.system("pkill LunaSpy")
-    tm.halt( )
+    #os.system("pkill LunaSpy")
+    #tm.halt( )
+    # Update the stop time in the CSV logbook
+    # If save data is enabled, increment run number
+    if( daq_state['save_data'] ):
+        rows = read_csv()
+        run_number = daq_state['run_number']
+        stop_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        rows[-1][2] = stop_time  # Stop time is in 3rd column (index 2)
+        write_csv(rows)
 
 # Initialize ROOT TWebCanvas
 web_canvas = None
@@ -154,7 +171,20 @@ def index():
         })
 
         # Check if directory exists before starting DAQ
-        run_directory = f"data/run{run_number}"
+        data_directory = f"data/"
+        # If doesn't exist, create it
+        if not os.path.exists(data_directory):
+            os.makedirs(data_directory)
+        run_directory = f"data/run{run_number}/"
+        # If save data is enabled, create the run directory
+        if save_data and not os.path.exists(run_directory):
+            os.makedirs(run_directory)
+
+        # Copy the JSON configuration files to the conf directory
+        for board in daq_state['caen_boards']:
+            conf_file = f"conf/{board['name']}_{board['id']}.json"
+            os.system(f"cp {conf_file} data/run{run_number}/")
+
         if 'start' in request.form:
             # Dump the daq_state to a pickle file
             dump_state(daq_state)
@@ -163,12 +193,13 @@ def index():
                 flash(f"Directory {run_directory} already exists. Are you sure you want to overwrite the data?")
                 return render_template('index.html', daq_state=daq_state)
 
-            #start_daq()  # Call to start DAQ
+            start_daq()  # Call to start DAQ
         elif 'stop' in request.form:
-            #stop_daq()  # Call to stop DAQ
+            stop_daq()  # Call to stop DAQ
             # Increment run_number after stopping
             daq_state['daq_running'] = False
-            daq_state['run_number'] += 1
+            # If save data is enabled, increment run number
+            if save_data: daq_state['run_number'] += 1
             dump_state(daq_state)
 
         return render_template('index.html', daq_state=daq_state)
@@ -191,6 +222,9 @@ def add_caen():
             'dpp': request.form.get('dpp'),
             'chan': request.form.get('chan')
         }
+        # Toggle spaces
+        for key in caen_board:
+            caen_board[key] = caen_board[key].strip()
         # Add the new board to the list
         daq_state['caen_boards'].append(caen_board)
         print(f"Added CAEN Board: {caen_board}")
@@ -209,6 +243,24 @@ def remove_caen(board_index):
         removed_board = daq_state['caen_boards'].pop(board_index)
         print(f"Removed CAEN Board: {removed_board}")
     return redirect(url_for('add_caen'))
+
+# Route to serve all the data for a given run number
+@app.route('/receive_data', methods=['GET'])
+def receive_data( ):
+    socket = ROOT.TSocket("localhost", 3333)
+    message = ROOT.TMessage()
+    socket.Recv(message)
+    # The messagge is a TList
+    list = message.ReadObject(message.GetClass())
+    # The list contains channel number elements for histograms and waves
+    histos, waves = [], []
+    for i in range(list.GetSize()):
+        obj = list.At(i)
+        if obj.InheritsFrom("TH1"): histos.append(obj)
+        elif obj.InheritsFrom("TGraph"): waves.append(obj)
+
+    # Send these to /histo
+    return jsonify({"histos": histos})
 
 # Route to serve all the data for a given run number
 @app.route('/get_data/<run_number>/<filename>', methods=['GET'])
@@ -284,6 +336,7 @@ def check_and_convert(run_number):
 
 @app.route('/get_csv', methods=['GET'])
 def get_csv():
+    check_and_create_csv()
     rows = read_csv()
     return jsonify(rows)
 
@@ -299,9 +352,9 @@ def start_run():
     run_number = len(rows)  # Use row count as run number
     start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    new_row = [run_number, '', '', start_time, '']
+    new_row = [run_number, start_time, '']
     rows.append(new_row)
-    
+
     write_csv(rows)
     return jsonify({"status": "success", "run_number": run_number, "start_time": start_time})
 
