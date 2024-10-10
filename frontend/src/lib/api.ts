@@ -7,7 +7,6 @@ const api = axios.create({
 
 console.log('API base URL:', process.env.NEXT_PUBLIC_API_URL);
 
-
 api.interceptors.request.use((config) => {
     const token = useAuthStore.getState().token;
     if (token) {
@@ -22,14 +21,70 @@ export const login = (username: string, password: string) =>
 export const register = (username: string, email: string, password: string) =>
     api.post('/register', { username, email, password });
 
-export const startRun = () => api.post('/start_run');
+export const startRun = () => api.post('/experiment/start_run');
 
-export const stopRun = () => api.post('/stop_run');
+export const stopRun = () => api.post('/experiment/stop_run');
 
 export const addNote = (runNumber: number, note: string) =>
     api.post('/experiment/add_note', { run_number: runNumber, note });
 
 export const getRunMetadata = (runNumber: number) =>
     api.get(`/experiment/get_run_metadata?run_number=${runNumber}`);
+
+// Functions for board management
+export const getBoardConfiguration = () =>
+    api.get('/experiment/get_board_configuration');
+
+export const addBoard = (boardData: any) =>
+    api.post('/experiment/add_board', boardData);
+
+export const removeBoard = (boardId: string) =>
+    api.post('/experiment/remove_board', { id: boardId });
+
+// Functions for XDAQ configuration
+
+export const getCoincidenceWindow = () => 
+    api.get('/experiment/get_coincidence_window').then(res => res.data);
+export const setCoincidenceWindow = (value: number) => 
+    api.post('/experiment/set_coincidence_window', { value }).then(res => res.data);
+
+export const getMultiplicity = () => 
+    api.get('/experiment/get_multiplicity').then(res => res.data);
+export const setMultiplicity = (value: number) => 
+    api.post('/experiment/set_multiplicity', { value }).then(res => res.data);
+
+export const getSaveData = () => 
+    api.get('/experiment/get_save_data').then(res => res.data);
+export const setSaveData = (value: boolean) => 
+    api.post('/experiment/set_save_data', { value }).then(res => res.data);
+
+export const getLimitDataSize = () => 
+    api.get('/experiment/get_limit_data_size').then(res => res.data);
+export const setLimitDataSize = (value: boolean) => 
+    api.post('/experiment/set_limit_data_size', { value }).then(res => res.data);
+
+export const getDataSizeLimit = () => 
+    api.get('/experiment/get_data_size_limit').then(res => res.data);
+export const setDataSizeLimit = (value: number) => 
+    api.post('/experiment/set_data_size_limit', { value }).then(res => res.data);
+
+// Functions for logbook management
+export const getCSV = () => 
+    api.get('/experiment/get_csv').then(res => res.data);
+export const saveCSV = (csvData: string[][]) =>
+    api.post('/experiment/save_csv', { data: csvData });
+
+// DAQ State
+export const getCurrentRunNumber = () => 
+    api.get('/experiment/get_run_number').then(res => res.data);
+
+export const setRunNumber = (runNumber: number) =>
+    api.post('/experiment/set_run_number', { run_number: runNumber });
+
+export const checkRunDirectoryExists = ( ) => 
+    api.get(`/experiment/check_run_directory`).then(res => res.data);
+
+export const getRunStatus = () =>
+    api.get('/experiment/get_run_status').then(res => res.data);
 
 export default api;

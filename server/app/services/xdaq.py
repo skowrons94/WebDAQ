@@ -1,12 +1,277 @@
-from xml.dom import minidom
-import time
 import os
-import socket 
+import time
+import pycurl
+import socket
+import docker
 import threading
 
-from app.services.XDAQActor import *
+import xml.etree.ElementTree as ET
 
-class TopologyManager:
+from xml.dom import minidom
+from io import StringIO, BytesIO
+
+class xdaq_messenger:
+    _message=""
+    _hostname=""
+    _hostport=""
+    _instance=""
+    _classname=""
+    
+    def __init__(self, hostname, hostport, instance, classname):
+        self._message="toto"
+        self._hostname = hostname
+        self._hostport = hostport
+        self._instance = str(instance)
+        self._classname = classname
+
+    def create_action_message(self,action):
+        message = "<SOAP-ENV:Envelope SOAP-ENV:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\" xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:SOAP-ENC=\"http://schemas.xmlsoap.org/soap/encoding/\"><SOAP-ENV:Header></SOAP-ENV:Header><SOAP-ENV:Body><xdaq:"+action+" xmlns:xdaq=\"urn:xdaq-soap:3.0\"/></SOAP-ENV:Body></SOAP-ENV:Envelope>" 
+        return message
+
+    def create_info_message(self,parName, parType):
+        message = "<SOAP-ENV:Envelope SOAP-ENV:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\" xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:SOAP-ENC=\"http://schemas.xmlsoap.org/soap/encoding/\"><SOAP-ENV:Header></SOAP-ENV:Header><SOAP-ENV:Body><xdaq:ParameterGet xmlns:xdaq=\"urn:xdaq-soap:3.0\"><p:properties xmlns:p=\"urn:xdaq-application:"+self._classname+"\" xsi:type=\"soapenc:Struct\"><p:"+parName+" xsi:type=\""+parType+"\"/></p:properties></xdaq:ParameterGet></SOAP-ENV:Body></SOAP-ENV:Envelope>";
+        return message
+
+    def create_parameter_message(self,parName,parType,parValue):
+        message = "<SOAP-ENV:Envelope SOAP-ENV:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\" xmlns:SOAP-ENV=\"http://schemas.xmlsoap.org/soap/envelope/\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:SOAP-ENC=\"http://schemas.xmlsoap.org/soap/encoding/\"><SOAP-ENV:Header></SOAP-ENV:Header><SOAP-ENV:Body><xdaq:ParameterSet xmlns:xdaq=\"urn:xdaq-soap:3.0\"><p:properties xmlns:p=\"urn:xdaq-application:"+self._classname+"\" xsi:type=\"soapenc:Struct\"><p:"+parName+" xsi:type=\""+parType+"\">"+parValue+"</p:"+parName+"></p:properties></xdaq:ParameterSet></SOAP-ENV:Body></SOAP-ENV:Envelope>"
+        return message
+
+    def send_message(self,message):
+        hostURL="http://"+self._hostname+":"+self._hostport
+    
+        actionClient="SOAPAction: urn:xdaq-application:class="+self._classname+",instance="+self._instance
+        header = [actionClient,"Content-Type: text/xml","Content-Description: SOAP Message"]
+        answer = BytesIO()
+        c = pycurl.Curl()
+        c.setopt(pycurl.URL, hostURL)
+        c.setopt(pycurl.HTTPHEADER, header)
+        c.setopt(pycurl.POST,0)
+        c.setopt(pycurl.POSTFIELDS, str(message))
+        c.setopt(pycurl.WRITEFUNCTION, answer.write)
+        c.setopt(pycurl.WRITEDATA,answer)
+#        c.setopt(pycurl.VERBOSE,2)
+        c.perform()
+        response=answer.getvalue().decode('UTF-8')
+        c.close()
+        return response
+        
+class filters_control:
+    _tcp_host=""
+    _tcp_port=16161
+    _tcp_buffer=1024
+
+    def __init__(self,hostname,hostport):
+        self._tcp_host=hostname
+        self._tcp_port=hostport
+
+    def connect(self):
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._socket.connect((self._tcp_host,self._tcp_port))
+
+    def disconnect(self):
+        self._socket.close()
+
+    def erase_spec(self):
+        self.connect()
+        self._socket.send("erase")
+        self.disconnect()
+        print(self._socket.recv(self._tcp_buffer))
+
+    def write_spec(self):
+        self.connect()
+        self._socket.send("write")
+        self.disconnect()
+        print(self._socket.recv(self._tcp_buffer))
+
+    def configure_filter(self):
+        self.connect()
+        self._socket.send("configure")
+        self.disconnect()
+        print(self._socket.recv(self._tcp_buffer))
+
+class xdaq_actor:
+    _url = ""
+    _hostname = ""
+    _hostport = ""
+    _instance = 0
+    _classname = ""
+    _enable_file = False
+    _id = 0
+    def __init__(self, url, classname, instance, identity):
+        self._url = url
+        self._instance = int(instance)
+        self._classname = classname
+        self._enable_file = False
+        self._hostname=socket.gethostname()
+        self._hostport=url[url.rfind(':')+1:]
+        self._messenger=xdaq_messenger(self._hostname,self._hostport,self._instance,self._classname)
+        self._id = identity
+        
+    def set_url(self, url):
+        self._url = url
+        
+    def set_hostname(self, hostname):
+        self._hostname = hostname
+
+    def set_hostport(self, hostport):
+        self._hostport = hostport
+
+    def set_instance(self, instance):
+        self._instance = instance
+
+    def set_class(self, classname):
+        self._class = classname
+
+    def set_enablefile(self, fileenable):
+        self._enable_file = fileenable
+
+    def return_hostname(self):
+        return self._hostname
+    
+    def return_hostport(self):
+        return self._hostport
+    
+    def return_classname(self):
+        return self._classname
+    
+    def return_instance(self):
+        return self._instance
+
+    def return_identity(self):
+        return self._identity
+
+    def return_classname_nice(self):
+        name = ""
+        if "::ru::" in self._classname:
+            name = "Readout_Unit"
+        elif "Local" in self._classname:
+            name = "Local_Filter"
+        elif "::bu::" in self._classname:
+            name = "Builder_Unit"
+        elif "::merger::" in self._classname:
+            name = "Merger_Unit"
+        elif "Global" in self._classname:
+            name ="Global_Filter"
+        else:
+            name =self._classname
+        
+        return name
+
+    def return_url(self):
+        return self._url
+
+    def return_actor_info_url(self):
+        return self._url+'/urn:xdaq-application:lid='+str(self._id)
+
+    def display(self):
+        print("----> Actor running on ", self._url,
+              " class = ", self._classname,
+              " instance = ", self._instance,
+              " host = ", self._hostname,
+              " port = ", self._hostport)
+        
+    def check_status(self):
+        message = self._messenger.create_info_message("stateName","xsd:string")
+        answer = self._messenger.send_message(message)
+        positionEnd = answer.find("</p:stateName")
+        positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
+        status = answer[positionBeg+1:positionEnd]
+        return status              
+
+    def get_output_bandwith(self):
+        message = self._messenger.create_info_message("outputBandw","xsd:string")
+        answer = self._messenger.send_message(message)
+        positionEnd = answer.find("</p:outputBandw")
+        positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
+        return answer[positionBeg+1:positionEnd]
+
+    def get_input_bandwith(self):
+        message = self._messenger.create_info_message("inputBandw","xsd:string")
+        answer = self._messenger.send_message(message)
+        positionEnd = answer.find("</p:inputBandw")
+        positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
+        return answer[positionBeg+1:positionEnd]
+        
+    def configure(self):
+        message = self._messenger.create_action_message("Configure")
+        self._messenger.send_message(message)
+
+    def enable(self):
+        message = self._messenger.create_action_message("Enable")
+        self._messenger.send_message(message)
+
+    def halt(self):
+        message = self._messenger.create_action_message("Halt")
+        self._messenger.send_message(message)
+    
+    def set_run_number(self,runnumber):
+        message = self._messenger.create_parameter_message("runNumber",
+                                                           "xsd:unsignedInt",
+                                                           str(runnumber))
+        self._messenger.send_message(message)
+
+    def set_file_path(self,filepath):
+        message = self._messenger.create_parameter_message("outputFilepath",
+                                                           "xsd:string",
+                                                           filepath)
+        self._messenger.send_message(message)
+
+    def set_file_size_limit(self,filelimit):
+        message = self._messenger.create_parameter_message("outputFileSizeLimit_MB",
+                                                           "xsd:unsignedLong",
+                                                           str(filelimit))
+        self._messenger.send_message(message)
+
+    def get_run_number(self):
+        message = self._messenger.create_info_message("runNumber","xsd:unsignedInt")
+        answer = self._messenger.send_message(message)
+        positionEnd = answer.find("</p:runNumber")
+        positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
+        return int(answer[positionBeg+1:positionEnd])
+
+    def set_coinc_window(self,window):
+        message = self._messenger.create_parameter_message("merge_window",
+                                                           "xsd:unsignedInt",
+                                                           str(window))
+        self._messenger.send_message(message)
+
+    def set_multiplicity(self,multiplicity):
+        message = self._messenger.create_parameter_message("multiplicity",
+                                                           "xsd:unsignedInt",
+                                                           str(multiplicity))
+        self._messenger.send_message(message)
+
+    def get_coinc_window(self):
+        message = self._messenger.create_info_message("merge_window","xsd:unsignedInt")
+        answer = self._messenger.send_message(message)
+        positionEnd = answer.find("</p:merge_window")
+        positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
+        return int(answer[positionBeg+1:positionEnd])
+
+    def set_file_enable(self,file_enable):
+        message = ""
+        if file_enable:
+            print("--------> Enabling file")
+            message=self._messenger.create_parameter_message("writeDataFile",
+                                                             "xsd:boolean",
+                                                             "true")
+        else:
+            print("--------> Disabling file")
+            message=self._messenger.create_parameter_message("writeDataFile",
+                                                             "xsd:boolean",
+                                                             "false")
+        self._messenger.send_message(message)
+        
+
+    def get_configuration_file(self):
+        message = self._messenger.create_info_message("configFilepath","xsd:string")
+        answer = self._messenger.send_message(message)
+        positionEnd = answer.find("</p:configFilepath")
+        positionBeg = answer.rfind(">",positionEnd-60,positionEnd)
+        return answer[positionBeg+1:positionEnd]
+
+    
+class topology:
     _topology_filename=""
     _tag_pt="pt::atcp"
     _tag_ru="ReadoutUnit"
@@ -79,9 +344,9 @@ class TopologyManager:
                 instance = y.attributes['instance'].value
                 identity = y.attributes['id'].value
                 if self._tag_pt in classname:
-                    self._pt_actors.append(XDAQActor(url,classname,instance,identity))
+                    self._pt_actors.append(xdaq_actor(url,classname,instance,identity))
                 if self._tag_ru in classname:
-                    self._ru_actors.append(XDAQActor(url,classname,instance,identity))
+                    self._ru_actors.append(xdaq_actor(url,classname,instance,identity))
                 elif self._tag_lf in classname:
                     hostname = url[url.find('gal'):url.rfind(":")]
                     alreadyPresent = False
@@ -90,13 +355,13 @@ class TopologyManager:
                             alreadyPresent = True
                     if not alreadyPresent:
                         self._list_hosts.append(hostname)
-                    self._lf_actors.append(XDAQActor(url,classname,instance,identity))
+                    self._lf_actors.append(xdaq_actor(url,classname,instance,identity))
                 elif self._tag_bu in classname:
-                    self._bu_actors.append(XDAQActor(url,classname,instance,identity))
+                    self._bu_actors.append(xdaq_actor(url,classname,instance,identity))
                 elif self._tag_mu in classname:
-                    self._mu_actors.append(XDAQActor(url,classname,instance,identity))
+                    self._mu_actors.append(xdaq_actor(url,classname,instance,identity))
                 elif self._tag_gf in classname:
-                    self._gf_actors.append(XDAQActor(url,classname,instance,identity))
+                    self._gf_actors.append(xdaq_actor(url,classname,instance,identity))
 
 
             # Sorting actors by instance number of commodity 
@@ -250,8 +515,7 @@ class TopologyManager:
             return True
 
         print("--- Starting actors:")
-        #self._data_manager.createDirectory(time.time(),
-        #                                   self.return_run_number())
+        #self._data_manager.createDirectory(time.time(),self.return_run_number())
         actorOK = nbActors = 0 
         for idx in  range(len(self._list_actors)-1,-1,-1):
             print(self._actor_type[idx])
@@ -369,7 +633,7 @@ class TopologyManager:
                 act.set_run_number(runNumber)
 
     def return_run_number(self):
-        return self._gf_actors[0].get_run_number()
+        return self._ru_actors[0].get_run_number()
         
     def how_many_ru(self):
         return self._number_ru
@@ -474,6 +738,29 @@ class TopologyManager:
             actors.set_coinc_window(window)
             print("Merger coincidence window",actors.get_coinc_window())
 
+    def set_multiplicity(self,multiplicity):
+        for actors in self._bu_actors:
+            actors.set_multiplicity(multiplicity)
+
+    def set_file_paths(self,filepath):
+        for actors in self._ru_actors:
+            actors.set_file_path(filepath)
+        for actors in self._lf_actors:
+            actors.set_file_path(filepath)
+        for actors in self._bu_actors:
+            actors.set_file_path(filepath)
+        for actors in self._mu_actors:
+            actors.set_file_path(filepath)
+        for actors in self._gf_actors:
+            actors.set_file_path(filepath)
+
+    def set_enable_files(self,flag):
+        self.enableRU_file(flag)
+        self.enableLF_file(flag)
+        self.enableBU_file(flag)
+        self.enableMU_file(flag)
+        self.enableGF_file(flag)
+
     def return_coincidence_window(self):
         return self._mu_actors[0].get_coinc_window()
 
@@ -483,3 +770,50 @@ class TopologyManager:
         else:
             return self._lf_actors[instance].get_configuration_file()
             
+class container:
+
+    def __init__(self):
+        self.client = docker.from_env()
+        self.initialize()
+
+    def start( self ):
+
+        # If container xdaq exists, remove it
+        try: self.client.containers.get("xdaq").remove(force=True)
+        except docker.errors.NotFound: pass
+
+        # Get current directory
+        curr_dir = os.path.dirname(os.path.realpath(__file__))
+
+        # Run container xdaq
+        self.client.containers.run( "skowrons/xdaq:v3.0", "sleep infinity", 
+                                    hostname="xdaq", 
+                                    name="xdaq", 
+                                    ports={'50000': 50000, '51000': 51000, '52000': 52000,
+                                           '40000': 40000, '41000': 41000, '42000': 42000,
+                                           '10002': 10002, '10003': 10003},
+                                    volumes={curr_dir: {'bind': '/home/xdaq/project', 'mode': 'rw'},
+                                                '/dev': {'bind': '/dev', 'mode': 'rw'}, 
+                                                '/lib/modules': {'bind': '/lib/modules', 'mode': 'rw'}},
+                                    detach=True, 
+                                    remove=True, 
+                                    privileged=True )
+
+        # Start ReadoutUnit in the container
+        cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        # Start LocalFilter in the container
+        cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        # Start BuilderUnit in the container
+        cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        time.sleep(2)
+
+    def stop( self ):
+        # If container xdaq exists, remove it
+        try: self.client.containers.get("xdaq").remove(force=True)
+        except docker.errors.NotFound: pass

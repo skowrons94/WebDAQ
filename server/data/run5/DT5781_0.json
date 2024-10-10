@@ -1,0 +1,506 @@
+{
+    "dgtzs": {
+        "BoardName": "DT5781",
+        "BoardNb": 0,
+        "ConnectionType": "Optical Connection",
+        "Firmware": "DPP-Pulse Height Analysis (PHA)",
+        "LinkNb": 3,
+        "Model": 36,
+        "NbChannels": 4,
+        "SerialNumber": 2269
+    },
+    "registers": {
+        "reg_1038": {
+            "address": "0x1038",
+            "channel": 0,
+            "name": "Pre Trigger",
+            "value": "0x000000c8"
+        },
+        "reg_1054": {
+            "address": "0x1054",
+            "channel": 0,
+            "name": "RC-CR2 Smoothing Factor",
+            "value": "0x00000004"
+        },
+        "reg_1058": {
+            "address": "0x1058",
+            "channel": 0,
+            "name": "Input Rise Time",
+            "value": "0x0000000a"
+        },
+        "reg_105c": {
+            "address": "0x105c",
+            "channel": 0,
+            "name": "Trapezoid Rise Time",
+            "value": "0x000001f4"
+        },
+        "reg_1060": {
+            "address": "0x1060",
+            "channel": 0,
+            "name": "Trapezoid Flat Top",
+            "value": "0x000000c8"
+        },
+        "reg_1064": {
+            "address": "0x1064",
+            "channel": 0,
+            "name": "Trapezoid Peaking Time",
+            "value": "0x000000a0"
+        },
+        "reg_1068": {
+            "address": "0x1068",
+            "channel": 0,
+            "name": "Trapezoid Decay Time",
+            "value": "0x00001388"
+        },
+        "reg_106c": {
+            "address": "0x106c",
+            "channel": 0,
+            "name": "Trigger Threshold",
+            "value": "0x0000005a"
+        },
+        "reg_1070": {
+            "address": "0x1070",
+            "channel": 0,
+            "name": "Rise Time Validation Window",
+            "value": "0x00000000"
+        },
+        "reg_1074": {
+            "address": "0x1074",
+            "channel": 0,
+            "name": "Trigger Hold-off Width",
+            "value": "0x00000030"
+        },
+        "reg_1078": {
+            "address": "0x1078",
+            "channel": 0,
+            "name": "Peak Hold-off",
+            "value": "0x0000000c"
+        },
+        "reg_1080": {
+            "address": "0x1080",
+            "channel": 0,
+            "name": "DPP Algorithm Control",
+            "value": "0x04300015"
+        },
+        "reg_1084": {
+            "address": "0x1084",
+            "channel": 0,
+            "name": "Shaped Trigger Width",
+            "value": "0x0000000a"
+        },
+        "reg_1098": {
+            "address": "0x1098",
+            "channel": 0,
+            "name": "DC Offset",
+            "value": "0x0000e665"
+        },
+        "reg_10a0": {
+            "address": "0x10a0",
+            "channel": 0,
+            "name": "DPP Algorithm Control 2",
+            "value": "0x00000000"
+        },
+        "reg_10c4": {
+            "address": "0x10c4",
+            "channel": 0,
+            "name": "Fine Gain",
+            "value": "0x0000d6be"
+        },
+        "reg_10d4": {
+            "address": "0x10d4",
+            "channel": 0,
+            "name": "Veto Width",
+            "value": "0x00000064"
+        },
+        "reg_1138": {
+            "address": "0x1138",
+            "channel": 1,
+            "name": "Pre Trigger",
+            "value": "0x000000c8"
+        },
+        "reg_1154": {
+            "address": "0x1154",
+            "channel": 1,
+            "name": "RC-CR2 Smoothing Factor",
+            "value": "0x00000004"
+        },
+        "reg_1158": {
+            "address": "0x1158",
+            "channel": 1,
+            "name": "Input Rise Time",
+            "value": "0x0000000a"
+        },
+        "reg_115c": {
+            "address": "0x115c",
+            "channel": 1,
+            "name": "Trapezoid Rise Time",
+            "value": "0x000001f4"
+        },
+        "reg_1160": {
+            "address": "0x1160",
+            "channel": 1,
+            "name": "Trapezoid Flat Top",
+            "value": "0x000000c8"
+        },
+        "reg_1164": {
+            "address": "0x1164",
+            "channel": 1,
+            "name": "Trapezoid Peaking Time",
+            "value": "0x000000a0"
+        },
+        "reg_1168": {
+            "address": "0x1168",
+            "channel": 1,
+            "name": "Trapezoid Decay Time",
+            "value": "0x00001388"
+        },
+        "reg_116c": {
+            "address": "0x116c",
+            "channel": 1,
+            "name": "Trigger Threshold",
+            "value": "0x0000005a"
+        },
+        "reg_1170": {
+            "address": "0x1170",
+            "channel": 1,
+            "name": "Rise Time Validation Window",
+            "value": "0x00000000"
+        },
+        "reg_1174": {
+            "address": "0x1174",
+            "channel": 1,
+            "name": "Trigger Hold-off Width",
+            "value": "0x00000030"
+        },
+        "reg_1178": {
+            "address": "0x1178",
+            "channel": 1,
+            "name": "Peak Hold-off",
+            "value": "0x0000000c"
+        },
+        "reg_1180": {
+            "address": "0x1180",
+            "channel": 1,
+            "name": "DPP Algorithm Control",
+            "value": "0x04300015"
+        },
+        "reg_1184": {
+            "address": "0x1184",
+            "channel": 1,
+            "name": "Shaped Trigger Width",
+            "value": "0x0000000a"
+        },
+        "reg_1198": {
+            "address": "0x1198",
+            "channel": 1,
+            "name": "DC Offset",
+            "value": "0x0000e665"
+        },
+        "reg_11a0": {
+            "address": "0x11a0",
+            "channel": 1,
+            "name": "DPP Algorithm Control 2",
+            "value": "0x00000000"
+        },
+        "reg_11c4": {
+            "address": "0x11c4",
+            "channel": 1,
+            "name": "Fine Gain",
+            "value": "0x0000d6be"
+        },
+        "reg_11d4": {
+            "address": "0x11d4",
+            "channel": 1,
+            "name": "Veto Width",
+            "value": "0x00000064"
+        },
+        "reg_1238": {
+            "address": "0x1238",
+            "channel": 2,
+            "name": "Pre Trigger",
+            "value": "0x000000c8"
+        },
+        "reg_1254": {
+            "address": "0x1254",
+            "channel": 2,
+            "name": "RC-CR2 Smoothing Factor",
+            "value": "0x00000004"
+        },
+        "reg_1258": {
+            "address": "0x1258",
+            "channel": 2,
+            "name": "Input Rise Time",
+            "value": "0x0000000a"
+        },
+        "reg_125c": {
+            "address": "0x125c",
+            "channel": 2,
+            "name": "Trapezoid Rise Time",
+            "value": "0x000001f4"
+        },
+        "reg_1260": {
+            "address": "0x1260",
+            "channel": 2,
+            "name": "Trapezoid Flat Top",
+            "value": "0x000000c8"
+        },
+        "reg_1264": {
+            "address": "0x1264",
+            "channel": 2,
+            "name": "Trapezoid Peaking Time",
+            "value": "0x000000a0"
+        },
+        "reg_1268": {
+            "address": "0x1268",
+            "channel": 2,
+            "name": "Trapezoid Decay Time",
+            "value": "0x00001388"
+        },
+        "reg_126c": {
+            "address": "0x126c",
+            "channel": 2,
+            "name": "Trigger Threshold",
+            "value": "0x0000005a"
+        },
+        "reg_1270": {
+            "address": "0x1270",
+            "channel": 2,
+            "name": "Rise Time Validation Window",
+            "value": "0x00000000"
+        },
+        "reg_1274": {
+            "address": "0x1274",
+            "channel": 2,
+            "name": "Trigger Hold-off Width",
+            "value": "0x00000030"
+        },
+        "reg_1278": {
+            "address": "0x1278",
+            "channel": 2,
+            "name": "Peak Hold-off",
+            "value": "0x0000000c"
+        },
+        "reg_1280": {
+            "address": "0x1280",
+            "channel": 2,
+            "name": "DPP Algorithm Control",
+            "value": "0x04300015"
+        },
+        "reg_1284": {
+            "address": "0x1284",
+            "channel": 2,
+            "name": "Shaped Trigger Width",
+            "value": "0x0000000a"
+        },
+        "reg_1298": {
+            "address": "0x1298",
+            "channel": 2,
+            "name": "DC Offset",
+            "value": "0x0000e665"
+        },
+        "reg_12a0": {
+            "address": "0x12a0",
+            "channel": 2,
+            "name": "DPP Algorithm Control 2",
+            "value": "0x00000000"
+        },
+        "reg_12c4": {
+            "address": "0x12c4",
+            "channel": 2,
+            "name": "Fine Gain",
+            "value": "0x0000d6be"
+        },
+        "reg_12d4": {
+            "address": "0x12d4",
+            "channel": 2,
+            "name": "Veto Width",
+            "value": "0x00000064"
+        },
+        "reg_1338": {
+            "address": "0x1338",
+            "channel": 3,
+            "name": "Pre Trigger",
+            "value": "0x000000c8"
+        },
+        "reg_1354": {
+            "address": "0x1354",
+            "channel": 3,
+            "name": "RC-CR2 Smoothing Factor",
+            "value": "0x00000004"
+        },
+        "reg_1358": {
+            "address": "0x1358",
+            "channel": 3,
+            "name": "Input Rise Time",
+            "value": "0x0000000a"
+        },
+        "reg_135c": {
+            "address": "0x135c",
+            "channel": 3,
+            "name": "Trapezoid Rise Time",
+            "value": "0x000001f4"
+        },
+        "reg_1360": {
+            "address": "0x1360",
+            "channel": 3,
+            "name": "Trapezoid Flat Top",
+            "value": "0x000000c8"
+        },
+        "reg_1364": {
+            "address": "0x1364",
+            "channel": 3,
+            "name": "Trapezoid Peaking Time",
+            "value": "0x000000a0"
+        },
+        "reg_1368": {
+            "address": "0x1368",
+            "channel": 3,
+            "name": "Trapezoid Decay Time",
+            "value": "0x00001388"
+        },
+        "reg_136c": {
+            "address": "0x136c",
+            "channel": 3,
+            "name": "Trigger Threshold",
+            "value": "0x0000005a"
+        },
+        "reg_1370": {
+            "address": "0x1370",
+            "channel": 3,
+            "name": "Rise Time Validation Window",
+            "value": "0x00000000"
+        },
+        "reg_1374": {
+            "address": "0x1374",
+            "channel": 3,
+            "name": "Trigger Hold-off Width",
+            "value": "0x00000030"
+        },
+        "reg_1378": {
+            "address": "0x1378",
+            "channel": 3,
+            "name": "Peak Hold-off",
+            "value": "0x0000000c"
+        },
+        "reg_1380": {
+            "address": "0x1380",
+            "channel": 3,
+            "name": "DPP Algorithm Control",
+            "value": "0x04300015"
+        },
+        "reg_1384": {
+            "address": "0x1384",
+            "channel": 3,
+            "name": "Shaped Trigger Width",
+            "value": "0x0000000a"
+        },
+        "reg_1398": {
+            "address": "0x1398",
+            "channel": 3,
+            "name": "DC Offset",
+            "value": "0x0000e665"
+        },
+        "reg_13a0": {
+            "address": "0x13a0",
+            "channel": 3,
+            "name": "DPP Algorithm Control 2",
+            "value": "0x00000000"
+        },
+        "reg_13c4": {
+            "address": "0x13c4",
+            "channel": 3,
+            "name": "Fine Gain",
+            "value": "0x0000d6be"
+        },
+        "reg_13d4": {
+            "address": "0x13d4",
+            "channel": 3,
+            "name": "Veto Width",
+            "value": "0x00000064"
+        },
+        "reg_8000": {
+            "address": "0x8000",
+            "channel": 0,
+            "name": "Board Configuration",
+            "value": "0x01468905"
+        },
+        "reg_800c": {
+            "address": "0x800c",
+            "channel": 0,
+            "name": "Aggregate Organization",
+            "value": "0x00000002"
+        },
+        "reg_8020": {
+            "address": "0x8020",
+            "channel": 0,
+            "name": "Record Length",
+            "value": "0x000003e8"
+        },
+        "reg_8100": {
+            "address": "0x8100",
+            "channel": 0,
+            "name": "Acquisition Control",
+            "value": "0x00000000"
+        },
+        "reg_810c": {
+            "address": "0x810c",
+            "channel": 0,
+            "name": "Global Trigger Mask",
+            "value": "0x80000000"
+        },
+        "reg_8110": {
+            "address": "0x8110",
+            "channel": 0,
+            "name": "Front Panel TRG-OUT (GPO) Enable mask",
+            "value": "0x00000000"
+        },
+        "reg_811c": {
+            "address": "0x811c",
+            "channel": 0,
+            "name": "Front Panel I/O Control",
+            "value": "0x00008000"
+        },
+        "reg_8120": {
+            "address": "0x8120",
+            "channel": 0,
+            "name": "Channel Enable Mask",
+            "value": "0x00000001"
+        },
+        "reg_8180": {
+            "address": "0x8180",
+            "channel": 0,
+            "name": "Trigger Validation Mask",
+            "value": "0x20000000"
+        },
+        "reg_8184": {
+            "address": "0x8184",
+            "channel": 1,
+            "name": "Trigger Validation Mask",
+            "value": "0x20000000"
+        },
+        "reg_81c4": {
+            "address": "0x81c4",
+            "channel": 0,
+            "name": "Extended Veto Delay",
+            "value": "0x12340014"
+        },
+        "reg_ef00": {
+            "address": "0xef00",
+            "channel": 0,
+            "name": "Readout Control",
+            "value": "0x00000010"
+        },
+        "reg_ef08": {
+            "address": "0xef08",
+            "channel": 0,
+            "name": "Board ID",
+            "value": "0x00000000"
+        },
+        "reg_ef1c": {
+            "address": "0xef1c",
+            "channel": 0,
+            "name": "Aggregate Number per BLT",
+            "value": "0x00000001"
+        }
+    }
+}
