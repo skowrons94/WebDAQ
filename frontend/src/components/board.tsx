@@ -112,11 +112,14 @@ export function Board() {
           <Link href="/board" className="text-sm font-medium hover:underline">
             Boards
           </Link>
-          <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
+          <Link href="/plots" className="text-sm font-medium hover:underline" prefetch={false}>
             Plots
           </Link>
           <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
             Metadata
+          </Link>
+          <Link href="/logbook" className="text-sm font-medium hover:underline" prefetch={false}>
+            Logbook
           </Link>
           <Link href="/json" className="text-sm font-medium hover:underline" prefetch={false}>
             JSON

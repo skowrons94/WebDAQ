@@ -189,11 +189,14 @@ export function Logbook() {
           <Link href="/board" className="text-sm font-medium hover:underline">
             Boards
           </Link>
-          <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
+          <Link href="/plots" className="text-sm font-medium hover:underline" prefetch={false}>
             Plots
           </Link>
           <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
             Metadata
+          </Link>
+          <Link href="/logbook" className="text-sm font-medium hover:underline" prefetch={false}>
+            Logbook
           </Link>
           <Link href="/json" className="text-sm font-medium hover:underline" prefetch={false}>
             JSON
@@ -215,12 +218,6 @@ export function Logbook() {
                     onChange={(e) => updateHeader(index, e.target.value)}
                     className="w-full"
                   />
-                  <button
-                    onClick={() => removeColumn(index)}
-                    className="ml-2 text-red-500 hover:text-red-700"
-                  >
-                    &times;
-                  </button>
                 </TableHead>
               ))}
             </TableRow>
@@ -242,49 +239,6 @@ export function Logbook() {
             ))}
           </TableBody>
         </Table>
-
-        <div className="mt-4 flex justify-center space-x-4">
-          <Button onClick={addColumn}>Add Column</Button>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button>Add Formula Column</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Formula Column</DialogTitle>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="formulaName" className="text-right">
-                    Column Name
-                  </Label>
-                  <Input
-                    id="formulaName"
-                    value={formulaName}
-                    onChange={(e) => setFormulaName(e.target.value)}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="formulaInput" className="text-right">
-                    Formula
-                  </Label>
-                  <Input
-                    id="formulaInput"
-                    value={formulaInput}
-                    onChange={(e) => setFormulaInput(e.target.value)}
-                    placeholder="e.g., C1 + C2 * 2"
-                    className="col-span-3"
-                  />
-                </div>
-              </div>
-              <Button onClick={addFormulaColumn}>Add Formula Column</Button>
-            </DialogContent>
-          </Dialog>
-          <Button onClick={handleSaveCSV}>Save CSV</Button>
-          <Button onClick={handleStartRun}>Start Run</Button>
-          <Button onClick={handleStopRun}>Stop Run</Button>
-        </div>
       </main>
     </div>
   )

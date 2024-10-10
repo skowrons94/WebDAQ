@@ -70,15 +70,12 @@ def read_csv():
     else:
         with open(CSV_FILE, mode='r') as file:
             reader = csv.reader(file)
-            print( reader )
             rows = list(reader)
-            print( rows, type( rows ) )
             return rows
         
 def write_csv(rows):
     with open('logbook.csv', mode='w') as file:
         writer = csv.writer(file)
-        print( rows, type( rows ) )
         writer.writerows(rows)
 
 def check_project( ):
@@ -93,12 +90,13 @@ def check_project( ):
         # Variables to store the current DAQ system state and CAEN boards
         daq_state = {
             'running': False,
+            'start_time': 0,
             'run': 0,
             'coincidence_window': 20,
             'multiplicity': 1,
             'save': False,
             'limit_size': False,
-            'file_size_limit': None,
+            'file_size_limit': 0,
             'boards': []
         }
         with open('conf/boards.pkl', 'wb') as f: 
@@ -173,6 +171,9 @@ def start_run( ):
         rows = read_csv()
         rows.append([run, time, None])
         write_csv(rows)
+
+    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    daq_state['start_time'] = time
     
     # Run the Spy to  save the histograms to txt file in run directory
     # Example: ./LunaSpy -d board_name firmware channel -n run_number
@@ -205,6 +206,8 @@ def stop_run( ):
         rows = read_csv()
         rows[-1][2] = time
         write_csv(rows)
+
+    daq_state['start_time'] = None
 
     # Update the daq_state file
     update_project(daq_state)
@@ -251,17 +254,12 @@ def add_caen():
     # Add the new board to the list
     daq_state['boards'].append(board)
 
-    print(board)
-
     # Get board name and dpp
     board_name = board['name']
     dpp = board['dpp']
 
     # Chekc if default configuration file exists
     dpp = "PSD" if dpp == 0 else "PHA"
-    print(f"json/{board_name}_{dpp}.json")
-    print(board_name)
-    print(dpp)
     if os.path.exists(f"json/{board_name}_{dpp}.json"):
         # Copy to "conf" directory
         os.system(f"cp json/{board_name}_{dpp}.json conf/{board_name}_{board['id']}.json")
@@ -295,11 +293,8 @@ def remove_caen():
 @jwt_required_custom
 def update_coincidence_window():
     global daq_state
-
-    coincidence_window = request.get_json()#["coincidence_window"]
-    print(coincidence_window)
+    coincidence_window = request.get_json()["value"]
     daq_state['coincidence_window'] = coincidence_window
-
     return jsonify(daq_state['coincidence_window'])
 
 # Route to update multiplicity
@@ -307,11 +302,8 @@ def update_coincidence_window():
 @jwt_required_custom
 def update_multiplicity():
     global daq_state
-
-    multiplicity = request.get_json()#["multiplicity"]
-    print(multiplicity)
+    multiplicity = request.get_json()["value"]
     daq_state['multiplicity'] = multiplicity
-
     return jsonify(daq_state['multiplicity'])
 
 # Route to update save data
@@ -319,11 +311,8 @@ def update_multiplicity():
 @jwt_required_custom
 def update_save_data():
     global daq_state
-
-    save = request.get_json()#["save"]
-    print(save)
+    save = request.get_json()["value"]
     daq_state['save'] = save
-
     return jsonify(daq_state['save'])
 
 # Route to update limit size
@@ -331,11 +320,8 @@ def update_save_data():
 @jwt_required_custom
 def update_limit_size():
     global daq_state
-
-    limit_size = request.get_json()#["limit_data_size"]
-    print(limit_size)
+    limit_size = request.get_json()["value"]
     daq_state['limit_size'] = limit_size
-
     return jsonify(daq_state['limit_size'])
 
 # Route to update file size limit
@@ -343,11 +329,8 @@ def update_limit_size():
 @jwt_required_custom
 def update_file_size_limit():
     global daq_state
-
-    file_size_limit = request.get_json()#["data_size_limit"]
-    print(file_size_limit)
+    file_size_limit = request.get_json()["value"]
     daq_state['file_size_limit'] = file_size_limit
-
     return jsonify(daq_state['file_size_limit'])
 
 # Route to get the coincidence window
@@ -390,7 +373,6 @@ def get_file_size_limit():
 @jwt_required_custom
 def get_board_configuration():
     global daq_state
-    print(daq_state['boards'])
     return jsonify(daq_state['boards'])
 
 # Route to get the csv file
@@ -403,8 +385,8 @@ def get_csv():
 @bp.route("/experiment/save_csv", methods=['POST'])
 @jwt_required_custom
 def save_csv():
-    data = request.get_json()["data"]
-
+    data = request.get_json()["csvData"]
+    write_csv(data)
     return jsonify({'message': 'CSV saved successfully !'}), 200
 
 # Get run number from the database
@@ -419,7 +401,7 @@ def get_run_number():
 @jwt_required_custom
 def set_run_number():
     global daq_state
-    run_number = request.get_json()["run_number"]
+    run_number = request.get_json()["value"]
     daq_state['run'] = run_number
     return jsonify(daq_state['run'])
 
@@ -440,6 +422,12 @@ def check_run_directory():
 def get_run_status():
     global daq_state
     return jsonify(daq_state['running'])
+
+@bp.route("/experiment/get_start_time", methods=['GET'])
+@jwt_required_custom
+def get_start_time():
+    global daq_state
+    return jsonify(daq_state['start_time'])
 
 # Route to serve all the data for a given run number
 @bp.route('/get_data/<run_number>/<filename>', methods=['GET'])

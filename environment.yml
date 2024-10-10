@@ -1,0 +1,28 @@
+# Environment file for the LUNA Run Control
+name: luna
+
+channels:
+  - conda-forge
+  - defaults
+
+dependencies:
+  - python=3.10
+  - numpy
+  - matplotlib
+  - jupyter
+  - ipykernel
+  - ipywidgets
+  - nodejs
+  - jupyterlab
+  - flask
+  - flask-sqlalchemy
+  - flask-migrate
+  - flask-jwt-extended
+  - flask-cors
+  - root
+  - fastapi
+  - pycurl
+  - pkgconfig
+  - pip
+  - pip:
+    - docker

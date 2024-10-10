@@ -36,8 +36,11 @@ import {
   setDataSizeLimit,
   getCurrentRunNumber,
   setRunNumber,
-  checkRunDirectoryExists
+  checkRunDirectoryExists,
+  getRunStatus,
+  getStartTime
 } from '@/lib/api'
+import { set } from 'react-hook-form'
 
 export function RunControl() {
   const clearToken = useAuthStore((state) => state.clearToken)
@@ -45,13 +48,14 @@ export function RunControl() {
   const { toast } = useToast()
 
   const [coincidenceTime, setCoincidenceTime] = useState("")
-  const [multiplicity, setMultiplicity] = useState("")
-  const [saveData, setSaveData] = useState(false)
+  const [multiplicity, setMultiplicityBox] = useState("")
+  const [saveData, setSaveDataBox] = useState(false)
   const [limitFileSize, setLimitFileSize] = useState(false)
   const [fileSizeLimit, setFileSizeLimit] = useState("")
   const [runNumber, setRunNumberState] = useState<number | null>(null)
   const [isRunning, setIsRunning] = useState(false)
   const [timer, setTimer] = useState(0)
+  const [startTime, setStartTime] = useState<string | null>(null)
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
 
   useEffect(() => {
@@ -60,17 +64,22 @@ export function RunControl() {
 
   useEffect(() => {
     let interval: NodeJS.Timeout | null = null
-    if (isRunning) {
-      interval = setInterval(() => {
-        setTimer((prevTimer) => prevTimer + 1)
-      }, 1000)
-    } else if (!isRunning && timer !== 0) {
-      if (interval) clearInterval(interval)
+    if (isRunning && startTime) {
+      const updateTimer = () => {
+        const start = new Date(startTime).getTime()
+        const now = new Date().getTime()
+        const elapsed = Math.floor((now - start) / 1000)
+        setTimer(elapsed)
+      }
+      updateTimer() // Update immediately
+      interval = setInterval(updateTimer, 1000)
+    } else if (!isRunning) {
+      setTimer(0)
     }
     return () => {
       if (interval) clearInterval(interval)
     }
-  }, [isRunning, timer])
+  }, [isRunning, startTime])
 
   const fetchInitialData = async () => {
     try {
@@ -80,22 +89,28 @@ export function RunControl() {
         saveDataStatus,
         limitFileSizeStatus,
         fileSizeLimitData,
-        currentRunNumber
+        currentRunNumber,
+        runStatus,
+        startTimeData
       ] = await Promise.all([
         getCoincidenceWindow(),
         getMultiplicity(),
         getSaveData(),
         getLimitDataSize(),
         getDataSizeLimit(),
-        getCurrentRunNumber()
+        getCurrentRunNumber(),
+        getRunStatus(),
+        getStartTime()
       ])
 
       setCoincidenceTime(coincidenceTimeData.toString())
-      setMultiplicity(multiplicityData.toString())
-      setSaveData(saveDataStatus)
+      setMultiplicityBox(multiplicityData.toString())
+      setSaveDataBox(saveDataStatus)
       setLimitFileSize(limitFileSizeStatus)
       setFileSizeLimit(fileSizeLimitData.toString())
       setRunNumberState(currentRunNumber)
+      setIsRunning(runStatus)
+      setStartTime(startTimeData)
     } catch (error) {
       console.error('Failed to fetch initial data:', error)
       toast({
@@ -123,8 +138,10 @@ export function RunControl() {
 
     try {
       await setRunNumber(runNumber!)
-      const directoryExists = await checkRunDirectoryExists( )
-      console.log(directoryExists)
+      const directoryExists = await checkRunDirectoryExists()
+      setSaveData(saveData)
+      console.log('saveData:', saveData)
+      console.log('getSaveData:', await getSaveData())
       if (directoryExists) {
         setShowOverrideDialog(true)
         return
@@ -145,7 +162,8 @@ export function RunControl() {
     try {
       // Set all variables before starting the run
       await setCoincidenceWindow(parseInt(coincidenceTime))
-      await setMultiplicity(multiplicity)
+      console.log('multiplicity:', parseInt(multiplicity))
+      await setMultiplicity(parseInt(multiplicity))
       await setSaveData(saveData)
       await setLimitDataSize(limitFileSize)
       if (limitFileSize) {
@@ -154,8 +172,9 @@ export function RunControl() {
 
       // Start the run
       await startRun()
+      const newStartTime = await getStartTime()
       setIsRunning(true)
-      setTimer(0)
+      setStartTime(newStartTime)
       toast({
         title: 'Run Started',
         description: `Run ${runNumber} started successfully with all parameters set.`,
@@ -174,6 +193,7 @@ export function RunControl() {
     try {
       await stopRun()
       setIsRunning(false)
+      setStartTime(null)
       toast({
         title: 'Run Stopped',
         description: 'The experiment run has been stopped successfully.',
@@ -201,27 +221,33 @@ export function RunControl() {
 
   const handleCoincidenceTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCoincidenceTime(e.target.value)
+    setCoincidenceWindow(parseInt(e.target.value))
   }
 
   const handleMultiplicityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setMultiplicity(e.target.value)
+    setMultiplicityBox(e.target.value)
+    setMultiplicity(parseInt(e.target.value))
   }
 
   const handleSaveDataChange = (checked: boolean) => {
+    setSaveDataBox(checked)
     setSaveData(checked)
   }
 
   const handleLimitFileSizeChange = (checked: boolean) => {
     setLimitFileSize(checked)
+    setLimitDataSize(checked)
   }
 
   const handleFileSizeLimitChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileSizeLimit(e.target.value)
+    setDataSizeLimit(parseInt(e.target.value))
   }
 
   const handleRunNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value)
     setRunNumberState(value)
+    setRunNumber(value)
   }
 
   return (
@@ -243,6 +269,9 @@ export function RunControl() {
           </Link>
           <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
             Metadata
+          </Link>
+          <Link href="/logbook" className="text-sm font-medium hover:underline" prefetch={false}>
+            Logbook
           </Link>
           <Link href="/json" className="text-sm font-medium hover:underline" prefetch={false}>
             JSON
@@ -373,8 +402,9 @@ export function RunControl() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction  onClick={startRunProcess}>Override</AlertDialogAction>
+            <AlertDialogAction onClick={startRunProcess}>Override</AlertDialogAction>
           </AlertDialogFooter>
+        
         </AlertDialogContent>
       </AlertDialog>
     </div>

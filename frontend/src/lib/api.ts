@@ -46,45 +46,48 @@ export const removeBoard = (boardId: string) =>
 export const getCoincidenceWindow = () => 
     api.get('/experiment/get_coincidence_window').then(res => res.data);
 export const setCoincidenceWindow = (value: number) => 
-    api.post('/experiment/set_coincidence_window', { value }).then(res => res.data);
+    api.post('/experiment/set_coincidence_window', { value: value });
 
 export const getMultiplicity = () => 
     api.get('/experiment/get_multiplicity').then(res => res.data);
 export const setMultiplicity = (value: number) => 
-    api.post('/experiment/set_multiplicity', { value }).then(res => res.data);
+    api.post('/experiment/set_multiplicity', { value: value });
 
 export const getSaveData = () => 
     api.get('/experiment/get_save_data').then(res => res.data);
 export const setSaveData = (value: boolean) => 
-    api.post('/experiment/set_save_data', { value }).then(res => res.data);
+    api.post('/experiment/set_save_data', { value: value });
 
 export const getLimitDataSize = () => 
     api.get('/experiment/get_limit_data_size').then(res => res.data);
 export const setLimitDataSize = (value: boolean) => 
-    api.post('/experiment/set_limit_data_size', { value }).then(res => res.data);
+    api.post('/experiment/set_limit_data_size', { value: value });
 
 export const getDataSizeLimit = () => 
     api.get('/experiment/get_data_size_limit').then(res => res.data);
 export const setDataSizeLimit = (value: number) => 
-    api.post('/experiment/set_data_size_limit', { value }).then(res => res.data);
+    api.post('/experiment/set_data_size_limit', { value: value });
 
 // Functions for logbook management
 export const getCSV = () => 
     api.get('/experiment/get_csv').then(res => res.data);
 export const saveCSV = (csvData: string[][]) =>
-    api.post('/experiment/save_csv', { data: csvData });
+    api.post('/experiment/save_csv', { csvData });
 
 // DAQ State
 export const getCurrentRunNumber = () => 
     api.get('/experiment/get_run_number').then(res => res.data);
 
-export const setRunNumber = (runNumber: number) =>
-    api.post('/experiment/set_run_number', { run_number: runNumber });
+export const setRunNumber = (value: number) =>
+    api.post('/experiment/set_run_number', { value: value });
 
 export const checkRunDirectoryExists = ( ) => 
     api.get(`/experiment/check_run_directory`).then(res => res.data);
 
 export const getRunStatus = () =>
     api.get('/experiment/get_run_status').then(res => res.data);
+
+export const getStartTime = () => 
+    api.get('/experiment/get_start_time').then(res => res.data);
 
 export default api;
