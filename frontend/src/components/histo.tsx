@@ -43,14 +43,6 @@ export default function HistogramsPage() {
     return () => clearInterval(interval)
   }, [])
 
-  useEffect(() => {
-    if (jsrootLoaded && isRunning) {
-      updateHistograms()
-      const interval = setInterval(updateHistograms, 1000)
-      return () => clearInterval(interval)
-    }
-  }, [jsrootLoaded, isRunning])
-
   const fetchBoardConfiguration = async () => {
     try {
       const response = await getBoardConfiguration()
@@ -82,6 +74,14 @@ export default function HistogramsPage() {
       })
     }
   }
+
+  useEffect(() => {
+    if ( isRunning) {
+      updateHistograms()
+      const interval = setInterval(updateHistograms, 1000)
+      return () => clearInterval(interval)
+    }
+  }, [jsrootLoaded, isRunning])
 
   const updateHistograms = async () => {
     for (const board of boards) {
@@ -118,7 +118,7 @@ export default function HistogramsPage() {
     hist.fName = name
     hist.fTitle = `Random Histogram for ${name}`
     for (let i = 0; i < 1000; ++i) {
-      hist.fill(Math.random() * 100)
+      hist.Fill(Math.random() * 100)
     }
     return hist
   }
