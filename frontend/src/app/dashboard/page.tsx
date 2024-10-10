@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/auth-store';
 import { RunControl } from '@/components/run-control';
 import { Stats } from '@/components/stats';
+import { HistogramsPage } from '@/components/histo';
 import { useToast } from '@/components/ui/use-toast';
 
 const queryClient = new QueryClient()
@@ -34,7 +35,7 @@ export default function DashboardPage() {
       </div>
       <div>
         <h2 className="text-xl font-semibold mb-4">Live Statistics</h2>
-        <Stats />
+        <HistogramsPage />
       </div>
     </div>
         </QueryClientProvider>
