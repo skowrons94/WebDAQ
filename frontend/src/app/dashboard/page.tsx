@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/auth-store';
 import { RunControl } from '@/components/run-control';
+import { Stats } from '@/components/stats';
 import { useToast } from '@/components/ui/use-toast';
 
 const queryClient = new QueryClient()
@@ -26,9 +27,16 @@ export default function DashboardPage() {
 
     return (
         <QueryClientProvider client={queryClient}>
-            <div className="container mx-auto px-4 py-8">
-                <RunControl />
-            </div>
+            <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">LUNA Run Control Dashboard</h1>
+      <div className="mb-8">
+        <RunControl />
+      </div>
+      <div>
+        <h2 className="text-xl font-semibold mb-4">Live Statistics</h2>
+        <Stats />
+      </div>
+    </div>
         </QueryClientProvider>
     );
 }

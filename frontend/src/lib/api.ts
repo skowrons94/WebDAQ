@@ -90,4 +90,78 @@ export const getRunStatus = () =>
 export const getStartTime = () => 
     api.get('/experiment/get_start_time').then(res => res.data);
 
+    // Start data acquisition
+    export const startAcquisitionCurrent = () =>
+        api.post('/start_acquisition').then(res => res.data);
+  
+  // Stop data acquisition
+    export const stopAcquisitionCurrent = () =>
+        api.post('/stop_acquisition').then(res => res.data);
+  
+    // Get all buffered data
+    export const getAllDataCurrent = () =>
+        api.get('/get_data').then(res => res.data);
+  
+    // Get the latest data point
+    export const getLatestDataCurrent = () =>
+        api.get('/get_latest_data').then(res => res.data);
+    
+    // Set a controller setting
+    export const setSettingCurrent = (setting: string, value: string) =>
+        api.post('/set_setting', { setting, value }).then(res => res.data);
+    
+    // Get a controller setting
+    export const getSettingCurrent = (setting: string) =>
+        api.get('/get_setting', { params: { setting } }).then(res => res.data);
+    
+    // Reset the controller
+    export const resetControllerCurrent = () =>
+        api.post('/reset').then(res => res.data);
+  
+  // Set save data option
+    export const setSaveDataCurrent = (saveData: boolean, saveFolder: string = '') =>
+        api.post('/set_save_data', { save_data: saveData, save_folder: saveFolder }).then(res => res.data);
+
+    export const getSaveDataCurrent = () =>
+        api.get('/get_save_data').then(res => res.data);
+
+    // Set number of channels
+    export const setChannelsCurrent = (numChannels: number) =>
+        api.post('/current/set_channels', { n_channels: numChannels }).then(res => res.data);
+
+    export const getChannelsCurrent = () =>
+        api.get('/current/get_channels').then(res => res.data);
+
+    // Set range
+    export const setRngCurrent = (rng: string) =>
+        api.post('/current/set_rng', { rng }).then(res => res.data);
+
+    export const getRngCurrent = () =>
+        api.get('/current/get_rng').then(res => res.data);
+
+    // Graphite-related functions
+    export const getTerminalVoltage = (from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/terminal_voltage', { params: { from, until } }).then(res => res.data);
+  
+    export const getExtractionVoltage = (from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/extraction_voltage', { params: { from, until } }).then(res => res.data);
+  
+    export const getColumnCurrent = (from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/column_current', { params: { from, until } }).then(res => res.data);
+  
+    export const getBoardRates = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/board_rates', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
+
+    export const getBoardRatesP = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/board_rates_pu', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
+
+    export const getBoardRatesL = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/board_rates_lost', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
+
+    export const getBoardRatesS = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/board_rates_satu', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
+
+    export const getBoardRatesD = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+        api.get('/stats/board_rates_dt', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
+
 export default api;
