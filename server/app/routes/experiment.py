@@ -14,7 +14,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 
 from app.services import xdaq
 
-XDAQ_FLAG = False
+XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
 
@@ -25,10 +25,10 @@ def write_ruconf(state):
         f.write(f"NumberOfBoards {len(state['boards'])}\n\n")
         for board in state['boards']:
             conf = "/home/xdaq/project/conf/{}_{}.json".format(board['name'], board['id'])
-            link_type = 0 if board['link_type'] == "Optical" else 1
-            if board["dpp"] == "DPP-PHA": dpp = "DPP_PHA"
-            elif board["dpp"] == "DPP-PSD": dpp = "DPP_PSD"
-            f.write(f"Board {board['name']} {board['id']} {board['vme']} {board['link_type']} {board['link_num']} {dpp}\n")
+            link_type = 1 if board['link_type'] == "Optical" else 0
+            if board["dpp"] == "DPP-PHA": dpp = 0
+            elif board["dpp"] == "DPP-PSD": dpp = 1
+            f.write(f"Board {board['name']} {board['id']} {board['vme']} {link_type} {board['link_num']} {dpp}\n")
             f.write(f"BoardConf {board['id']} {conf}\n")
 
 def write_lfconf(state):
@@ -41,7 +41,7 @@ def write_lfconf(state):
             if board["dpp"] == "DPP-PHA": dpp = "DPP_PHA"
             elif board["dpp"] == "DPP-PSD": dpp = "DPP_PSD"
             f.write(f"Board {board['id']} {board['name']} {dpp} {board['chan']} 0 1 1\n")
-        f.write("GraphiteServer lunaserver 2003\n")
+        f.write("GraphiteServer graphite 2003\n")
 
 def write_buconf(state):
     if not os.path.exists('conf'):
@@ -112,11 +112,14 @@ topology.load_topology( )
 topology.display()
 
 if( XDAQ_FLAG ):
-    container = xdaq.container()
+    directory = os.path.dirname(os.path.realpath("./server"))
+    container = xdaq.container(directory)
     container.start()
-
+    print( "Container started...")
     topology.configure_pt( )
+    print( "PT configured...")
     topology.enable_pt( )
+    print( "PT enabled...")
 
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
@@ -160,6 +163,7 @@ def start_run( ):
         topology.set_run_number(run)
         topology.set_enable_files(save)
         topology.set_file_paths(f"/home/xdaq/project/data/run{run}/")
+        topology.configure( )
         topology.start( )
 
     daq_state['running'] = True
@@ -182,8 +186,8 @@ def start_run( ):
         for board in daq_state['boards']:
             firmware = 0 if board['dpp'] == "DPP-PHA" else 1
             cmd += f" -d {board['name']} {firmware} {board['chan']}"
-        cmd += f" -n {daq_state['run_number']}"
-        os.system(cmd)
+        cmd += f" -n {daq_state['run']}"
+        os.system(f"{cmd} &")
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
@@ -210,6 +214,7 @@ def stop_run( ):
     daq_state['start_time'] = None
 
     # Update the daq_state file
+    print( daq_state )
     update_project(daq_state)
 
     return jsonify({'message': 'Run stopped successfully !'}), 200
@@ -345,6 +350,7 @@ def get_coincidence_window():
 @jwt_required_custom
 def get_multiplicity():
     global daq_state
+    print( daq_state['multiplicity'] )  
     return jsonify(daq_state['multiplicity'])
 
 # Route to get the save data
@@ -352,6 +358,7 @@ def get_multiplicity():
 @jwt_required_custom
 def get_save_data():
     global daq_state
+    print( daq_state['save'] )
     return jsonify(daq_state['save'])
 
 # Route to get the limit size
@@ -359,6 +366,7 @@ def get_save_data():
 @jwt_required_custom
 def get_limit_size():
     global daq_state
+    print( daq_state['limit_size'] )
     return jsonify(daq_state['limit_size'])
 
 # Route to get the file size limit

@@ -23,7 +23,7 @@
       <properties xmlns="urn:xdaq-application:ReadoutUnit" xsi:type="soapenc:Struct">
 	<runNumber xsi:type="xsd:unsignedInt">0</runNumber>
 	<inputFilepath xsi:type="xsd:string">/home/xdaq/xdata/ruData</inputFilepath>
-	<configFilepath xsi:type="xsd:string">/home/xdaq/conf/</configFilepath>
+	<configFilepath xsi:type="xsd:string">/home/xdaq/project/conf/</configFilepath>
 	<detInputMask xsi:type="xsd:string">ff</detInputMask>
 	<dataOutput soapenc:arrayType="xsd:ur-type[3]" xsi:type="soapenc:Array">
 	  <item soapenc:position="[0]" xsi:type="xsd:string">local</item>
@@ -71,7 +71,7 @@
   <outputFileSizeLimit_MB xsi:type="xsd:unsignedLong">0</outputFileSizeLimit_MB>
 	<outputFileCycleCounter xsi:type="xsd:unsignedInt">0</outputFileCycleCounter>
 	<outputFilepath xsi:type="xsd:string">/home/xdaq/xdata/lfData</outputFilepath>
-	<configFilepath xsi:type="xsd:string">/home/xdaq/conf/LocalFilter.conf</configFilepath>
+	<configFilepath xsi:type="xsd:string">/home/xdaq/project/conf/LocalFilter.conf</configFilepath>
 	<buInstances soapenc:arrayType="xsd:ur-type[1]" xsi:type="soapenc:Array">
 	  <item soapenc:position="[0]" xsi:type="xsd:unsignedInt">0</item>
 	</buInstances>
@@ -97,7 +97,7 @@
     <xc:Application class="rubuilder::bu::Application" id="60" instance="0" network="local">
       <properties xmlns="urn:xdaq-application:BuilderUnit" xsi:type="soapenc:Struct">
 	<runNumber xsi:type="xsd:unsignedInt">0</runNumber>
-	<detconfFilepath xsi:type="xsd:string">/home/xdaq/conf/Builder.conf</detconfFilepath>
+	<detconfFilepath xsi:type="xsd:string">/home/xdaq/project/conf/Builder.conf</detconfFilepath>
 	<dataOutput soapenc:arrayType="xsd:ur-type[2]" xsi:type="soapenc:Array">
 	  <item soapenc:position="[0]" xsi:type="xsd:string">local</item>
     	  <item soapenc:position="[1]" xsi:type="xsd:string">spy</item>

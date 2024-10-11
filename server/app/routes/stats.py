@@ -7,12 +7,17 @@ import os
 bp = Blueprint('stats', __name__)
 
 # Initialize GraphiteClient
+GRAPHITE_HOST = 'localhost'
+GRAPHITE_PORT = 80
+
+client_daq = GraphiteClient(GRAPHITE_HOST, GRAPHITE_PORT)
+
 GRAPHITE_HOST = 'lunaserver'
 GRAPHITE_PORT = 80
 
-client = GraphiteClient(GRAPHITE_HOST, GRAPHITE_PORT)
+client_mv = GraphiteClient(GRAPHITE_HOST, GRAPHITE_PORT)
 
-def get_metric_data(metric: str, from_time: str = '-1h', until_time: str = 'now') -> Dict[str, Any]:
+def get_metric_data(metric: str, client: GraphiteClient, from_time: str = '-1h', until_time: str = 'now') -> Dict[str, Any]:
     try:
         data = client.get_data(metric, from_time, until_time)
         return {'success': True, 'data': data}
@@ -23,7 +28,7 @@ def get_metric_data(metric: str, from_time: str = '-1h', until_time: str = 'now'
 def get_terminal_voltage():
     from_time = request.args.get('from', '-1h')
     until_time = request.args.get('until', 'now')
-    result = get_metric_data('accelerator.terminal_voltage', from_time, until_time)
+    result = get_metric_data('accelerator.terminal_voltage', client_mv, from_time, until_time)
     if result['success']:
         return jsonify(result['data']), 200
     else:
@@ -33,7 +38,7 @@ def get_terminal_voltage():
 def get_extraction_voltage():
     from_time = request.args.get('from', '-1h')
     until_time = request.args.get('until', 'now')
-    result = get_metric_data('accelerator.extraction_voltage', from_time, until_time)
+    result = get_metric_data('accelerator.extraction_voltage', client_mv, from_time, until_time)
     if result['success']:
         return jsonify(result['data']), 200
     else:
@@ -43,7 +48,7 @@ def get_extraction_voltage():
 def get_column_current():
     from_time = request.args.get('from', '-1h')
     until_time = request.args.get('until', 'now')
-    result = get_metric_data('accelerator.upcharge_current', from_time, until_time)
+    result = get_metric_data('accelerator.upcharge_current', client_mv, from_time, until_time)
     if result['success']:
         return jsonify(result['data']), 200
     else:
@@ -61,7 +66,7 @@ def get_board_rates():
         return jsonify({'error': 'Missing required parameters: board_id, board_name, or channel'}), 400
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.totalRate'
-    result = get_metric_data(metric, from_time, until_time)
+    result = get_metric_data(metric, client_daq, from_time, until_time)
     
     if result['success']:
         return jsonify(result['data']), 200
@@ -80,7 +85,7 @@ def get_board_rates_pu():
         return jsonify({'error': 'Missing required parameters: board_id, board_name, or channel'}), 400
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.pileRate'
-    result = get_metric_data(metric, from_time, until_time)
+    result = get_metric_data(metric, client_daq, from_time, until_time)
     
     if result['success']:
         return jsonify(result['data']), 200
@@ -99,7 +104,7 @@ def get_board_rates_satu():
         return jsonify({'error': 'Missing required parameters: board_id, board_name, or channel'}), 400
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.satuRate'
-    result = get_metric_data(metric, from_time, until_time)
+    result = get_metric_data(metric, client_daq, from_time, until_time)
     
     if result['success']:
         return jsonify(result['data']), 200
@@ -118,7 +123,7 @@ def get_board_rates_lost():
         return jsonify({'error': 'Missing required parameters: board_id, board_name, or channel'}), 400
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.lostRate'
-    result = get_metric_data(metric, from_time, until_time)
+    result = get_metric_data(metric, client_daq, from_time, until_time)
     
     if result['success']:
         return jsonify(result['data']), 200
@@ -137,7 +142,7 @@ def get_board_rates_dt():
         return jsonify({'error': 'Missing required parameters: board_id, board_name, or channel'}), 400
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.deadTime'
-    result = get_metric_data(metric, from_time, until_time)
+    result = get_metric_data(metric, client_daq, from_time, until_time)
     
     if result['success']:
         return jsonify(result['data']), 200

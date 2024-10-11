@@ -3,9 +3,7 @@
 
 ### Server
 - go to server dir
-`
-cd server
-`
+`cd server`
 - Initialize database
 `flask db init`
 `flask db migrate -m "Initial migration."`

@@ -498,6 +498,7 @@ class topology:
             while not allConfigured:
                 time.sleep(0.5)
                 for act in actors:
+                    print("Configure", act.check_status(), act.display())
                     if act.check_status() == 'Configured':
                         allConfigured = True
                         actorOK += 1
@@ -517,23 +518,27 @@ class topology:
         print("--- Starting actors:")
         #self._data_manager.createDirectory(time.time(),self.return_run_number())
         actorOK = nbActors = 0 
-        for idx in  range(len(self._list_actors)-1,-1,-1):
-            print(self._actor_type[idx])
+        for idx in range(len(self._list_actors)-1,-1,-1):
+            print(self._actor_type[idx], idx)
             myThreads = []
             nbActors += len(self._list_actors[idx])
             for act in self._list_actors[idx]:
                 myThreads.append(threading.Thread(target=act.enable))
                 myThreads[-1].start()
-            allStarted = False
-            maxIteration = 0
-            while not allStarted:
-                time.sleep(0.5)
+        
+        allStarted = False
+        maxIteration = 0
+        while not allStarted:
+            time.sleep(0.5)
+            for idx in range(len(self._list_actors)):
                 for act in self._list_actors[idx]:
+                    print(act.check_status(), act.display())
                     if act.check_status() == 'Running':
                         allStarted = True
                         actorOK += 1
                     else:
                         allStarted = False
+
         if  nbActors == actorOK:
             return True
         else :
@@ -744,11 +749,11 @@ class topology:
 
     def set_file_paths(self,filepath):
         for actors in self._ru_actors:
-            actors.set_file_path(filepath)
+            actors.set_file_path(filepath+"/ru")
         for actors in self._lf_actors:
-            actors.set_file_path(filepath)
+            actors.set_file_path(filepath+"/lf")
         for actors in self._bu_actors:
-            actors.set_file_path(filepath)
+            actors.set_file_path(filepath+"/bu")
         for actors in self._mu_actors:
             actors.set_file_path(filepath)
         for actors in self._gf_actors:
@@ -772,9 +777,9 @@ class topology:
             
 class container:
 
-    def __init__(self):
+    def __init__(self, directory):
         self.client = docker.from_env()
-        self.initialize()
+        self.directory = directory
 
     def start( self ):
 
@@ -782,8 +787,22 @@ class container:
         try: self.client.containers.get("xdaq").remove(force=True)
         except docker.errors.NotFound: pass
 
+        # If container xdaq exists, remove it
+        try: self.client.containers.get("graphite").remove(force=True)
+        except docker.errors.NotFound: pass
+
+        # If graphite volume does not exist, create it
+        try: self.client.volumes.get("graphite")
+        except docker.errors.NotFound: self.client.volumes.create("graphite")
+
         # Get current directory
-        curr_dir = os.path.dirname(os.path.realpath(__file__))
+        curr_dir = self.directory
+
+        # Create a network
+        try: self.client.networks.get("xdaq_net").remove()
+        except docker.errors.NotFound: pass
+
+        self.client.networks.create("xdaq_net", driver="bridge")
 
         # Run container xdaq
         self.client.containers.run( "skowrons/xdaq:v3.0", "sleep infinity", 
@@ -795,23 +814,38 @@ class container:
                                     volumes={curr_dir: {'bind': '/home/xdaq/project', 'mode': 'rw'},
                                                 '/dev': {'bind': '/dev', 'mode': 'rw'}, 
                                                 '/lib/modules': {'bind': '/lib/modules', 'mode': 'rw'}},
+                                    network="xdaq_net",
                                     detach=True, 
                                     remove=True, 
                                     privileged=True )
+
+        # Run graphite container
+        self.client.containers.run( "graphiteapp/graphite-statsd", 
+                                    hostname="graphite", 
+                                    name="graphite", 
+                                    ports={'2003': 2003, '8125': 8125, '80': 80},
+                                    network="xdaq_net",
+                                    volumes={'graphite': {'bind': '/opt/graphite/storage', 'mode': 'rw'}},
+                                    detach=True, 
+                                    remove=True )
 
         # Start ReadoutUnit in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
+        time.sleep(1)
+
         # Start LocalFilter in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        time.sleep(1)
 
         # Start BuilderUnit in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(2)
+        time.sleep(1)
 
     def stop( self ):
         # If container xdaq exists, remove it
