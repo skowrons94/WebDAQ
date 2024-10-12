@@ -1,6 +1,8 @@
 # app/routes/experiment.py
 import os
 import csv
+
+from ROOT import TSocket, TMessage, TH1F
 from fastapi import HTTPException
 
 import pickle as pkl
@@ -13,6 +15,7 @@ from app.models.run_metadata import RunMetadata
 from app.utils.jwt_utils import jwt_required_custom, get_current_user
 
 from app.services import xdaq
+from app.services.root_client import ROOTClient
 
 XDAQ_FLAG = True
 
@@ -120,6 +123,7 @@ if( XDAQ_FLAG ):
     print( "PT configured...")
     topology.enable_pt( )
     print( "PT enabled...")
+    root_client = ROOTClient( )
 
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
@@ -188,6 +192,7 @@ def start_run( ):
             cmd += f" -d {board['name']} {firmware} {board['chan']}"
         cmd += f" -n {daq_state['run']}"
         os.system(f"{cmd} &")
+        root_client.start()
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
@@ -198,7 +203,8 @@ def stop_run( ):
     
     # Stop the XDAQ
     if( XDAQ_FLAG ):
-        os.system("pkill LunaSpy")
+        root_client.stop()
+        #os.system("pkill LunaSpy")
         topology.halt( )
 
     daq_state['running'] = False
