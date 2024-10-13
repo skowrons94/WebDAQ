@@ -44,48 +44,48 @@ export default function DashboardPage() {
           
           <header className="bg-card p-4 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-4">
-              <MoonStarIcon className="w-6 h-6" />
+              <MoonStarIcon className="w-8 h-8 text-primary" />
               <h1 className="text-xl font-bold">LUNA Run Control Interface</h1>
             </div>
             <nav className="flex items-center gap-4">
               <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
-                Run Control
+          Run Control
               </Link>
               <Link href="/board" className="text-sm font-medium hover:underline">
-                Boards
+          Boards
               </Link>
               <Link href="/plots" className="text-sm font-medium hover:underline" prefetch={false}>
-                Plots
+          Plots
               </Link>
               <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
-                Metadata
+          Metadata
               </Link>
               <Link href="/logbook" className="text-sm font-medium hover:underline" prefetch={false}>
-                Logbook
+          Logbook
               </Link>
               <Link href="/json" className="text-sm font-medium hover:underline" prefetch={false}>
-                JSON
+          JSON
               </Link>
               <Link href="http://lunaserver:3000" className="text-sm font-medium hover:underline" prefetch={false}>
-                Grafana
+          Grafana
               </Link>
               <Button variant="secondary" onClick={handleLogout}>Logout</Button>
             </nav>
           </header>
 
-      <div className="mb-8">
+            <div className="mb-8 px-4">
         <RunControl />
-      </div>
-      <div>
-        <h2 className="text-2xl font-semibold mb-4">  Live Statistics</h2>
-        <Stats />
-      </div>
-      <div className="mb-8" />
-      <div>
-        <h3 className="text-2xl font-semibold mb-4">Plots</h3>
-        <HistogramsPage />
-      </div>
-    </div>
+            </div>
+            <div className="px-4">
+              <h2 className="text-2xl font-semibold mb-4">Live Statistics</h2>
+              <Stats />
+            </div>
+            <div className="mb-8" />
+            <div className="px-4">
+              <h3 className="text-2xl font-semibold mb-4">Plots</h3>
+              <HistogramsPage />
+            </div>
+          </div>
         </QueryClientProvider>
     );
 }
