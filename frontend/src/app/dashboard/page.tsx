@@ -1,6 +1,9 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import Link from "next/link"
+
+import { Button } from "@/components/ui/button"
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/auth-store';
@@ -11,7 +14,11 @@ import { useToast } from '@/components/ui/use-toast';
 
 const queryClient = new QueryClient()
 
+
+
 export default function DashboardPage() {
+
+    const clearToken = useAuthStore((state) => state.clearToken)
     const router = useRouter();
     const token = useAuthStore((state) => state.token);
     const { toast } = useToast()
@@ -26,15 +33,51 @@ export default function DashboardPage() {
         return null;
     }
 
+    const handleLogout = () => {
+      clearToken()
+      router.push('/')
+    }
+
     return (
-        <QueryClientProvider client={queryClient}>
-            <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">LUNA Run Control Dashboard</h1>
+      <QueryClientProvider client={queryClient}>
+        <div className="flex flex-col h-screen bg-background text-foreground">
+          
+          <header className="bg-card p-4 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-4">
+              <MoonStarIcon className="w-6 h-6" />
+              <h1 className="text-xl font-bold">LUNA Run Control Interface</h1>
+            </div>
+            <nav className="flex items-center gap-4">
+              <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
+                Run Control
+              </Link>
+              <Link href="/board" className="text-sm font-medium hover:underline">
+                Boards
+              </Link>
+              <Link href="/plots" className="text-sm font-medium hover:underline" prefetch={false}>
+                Plots
+              </Link>
+              <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
+                Metadata
+              </Link>
+              <Link href="/logbook" className="text-sm font-medium hover:underline" prefetch={false}>
+                Logbook
+              </Link>
+              <Link href="/json" className="text-sm font-medium hover:underline" prefetch={false}>
+                JSON
+              </Link>
+              <Link href="http://lunaserver:3000" className="text-sm font-medium hover:underline" prefetch={false}>
+                Grafana
+              </Link>
+              <Button variant="secondary" onClick={handleLogout}>Logout</Button>
+            </nav>
+          </header>
+
       <div className="mb-8">
         <RunControl />
       </div>
       <div>
-        <h2 className="text-2xl font-semibold mb-4">Live Statistics</h2>
+        <h2 className="text-2xl font-semibold mb-4">  Live Statistics</h2>
         <Stats />
       </div>
       <div className="mb-8" />
@@ -45,4 +88,26 @@ export default function DashboardPage() {
     </div>
         </QueryClientProvider>
     );
+}
+
+
+function MoonStarIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9" />
+      <path d="M20 3v4" />
+      <path d="M22 5h-4" />
+    </svg>
+  )
 }

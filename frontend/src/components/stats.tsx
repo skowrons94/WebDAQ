@@ -26,7 +26,7 @@ export function Stats() {
 
   useEffect(() => {
     fetchBoardConfiguration()
-    const interval = setInterval(fetchStats, 1000)
+    const interval = setInterval(fetchStats, 10000)
     return () => clearInterval(interval)
   }, [])
 
