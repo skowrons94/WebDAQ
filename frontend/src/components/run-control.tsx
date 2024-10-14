@@ -160,6 +160,10 @@ export function RunControl() {
 
   const startRunProcess = async () => {
     try {
+      toast({
+        title: 'Starting Run...',
+        description: `Please wait while the run ${runNumber} is being started.`,
+      })
       // Set all variables before starting the run
       await setCoincidenceWindow(parseInt(coincidenceTime))
       console.log('multiplicity:', parseInt(multiplicity))
@@ -191,13 +195,17 @@ export function RunControl() {
 
   const handleStopRun = async () => {
     try {
-      await stopRun()
-      setIsRunning(false)
       setStartTime(null)
+      toast({
+        title: 'Stopping Run...',
+        description: 'Please wait while the run is being stopped.',
+      })
+      await stopRun()
       toast({
         title: 'Run Stopped',
         description: 'The experiment run has been stopped successfully.',
       })
+      setIsRunning(false)
 
       // Increment run number
       const newRunNumber = await getCurrentRunNumber()
