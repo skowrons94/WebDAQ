@@ -1,6 +1,7 @@
 # app/routes/experiment.py
 import os
 import csv
+import json
 
 from ROOT import TSocket, TMessage, TH1F
 from fastapi import HTTPException
@@ -444,18 +445,68 @@ def get_start_time():
     return jsonify(daq_state['start_time'])
 
 # Route to serve all the data for a given run number
-@bp.route('/get_data/<run_number>/<filename>', methods=['GET'])
+@bp.route('/histogram/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom
-def get_data(run_number, filename):
-    histogram_dir = f"data/run{run_number}/"
-    return send_from_directory(histogram_dir, filename)
+def get_histo(board_id, channel):
+    # We must get the histogram for board and channel
+    global root_client
 
-@bp.route("/get_files/<run_number>", methods=['GET'])
+    print( "Asking for histogram", board_id, channel )
+
+    idx = 0
+    for board in daq_state['boards']:
+        if board['id'] < int(board_id):
+            idx += board['chan']
+    idx += int(channel)
+
+    histo = root_client.histograms[idx].copy( )
+    return jsonify(histo)
+
+@bp.route('/waveforms/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom
-def get_files(run_number):
-    histogram_dir = f"data/run{run_number}/"
-    files = [f for f in os.listdir(histogram_dir) if f.endswith('.dat')]
-    if(len(files) == 0):
-        return jsonify([])
-    else:
-        return jsonify(files)
+def get_wave(board_id, channel):
+    # We must get the histogram for board and channel
+    global root_client
+    
+    idx = 0
+    for board in daq_state['boards']:
+        if board['id'] < int(board_id):
+            idx += board['chan']
+    idx += int(channel)
+
+    histo = root_client.graphs[idx].copy( )
+    return jsonify(histo)
+
+@bp.route('/waveforms/activate', methods=['GET'])
+@jwt_required_custom
+def activate_wave():
+    # We must change the JSON configuration file to enable waveforms
+    for board in daq_state['boards']:
+        filename = f"conf/{board['name']}_{board['id']}.json"
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        string = data['registers']['reg_8000']["value"]
+        value = int(string, 16)
+        value |= 1 << 16
+        data['registers']['reg_8000']["value"] = hex(value)
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=4)
+
+    return jsonify({'message': 'Waveforms activated successfully !'}), 200
+
+@bp.route('/waveforms/deactivate', methods=['GET'])
+@jwt_required_custom
+def deactivate_wave():
+    # We must change the JSON configuration file to enable waveforms
+    for board in daq_state['boards']:
+        filename = f"conf/{board['name']}_{board['id']}.json"
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        string = data['registers']['reg_8000']["value"]
+        value = int(string, 16)
+        value &= ~(1 << 16)
+        data['registers']['reg_8000']["value"] = hex(value)
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=4)
+
+    return jsonify({'message': 'Waveforms deactivated successfully !'}), 200

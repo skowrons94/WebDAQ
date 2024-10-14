@@ -164,4 +164,17 @@ export const getStartTime = () =>
     export const getBoardRatesD = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
         api.get('/stats/board_rates_dt', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
 
+    // Get the histograms for a given board_id and channel
+    export const getHistogram = (boardId: string, channel: string) =>
+        api.get(`/waveforms/${boardId}/${channel}`).then(res => res.data);
+
+    export const getWaveform = (boardId: string, channel: string) =>
+        api.get(`/waveforms/${boardId}/${channel}`).then(res => res.data);
+
+    export const activateWaveform = () =>
+        api.post('/waveform/activate').then(res => res.data);
+
+    export const deactivateWaveform = () =>
+        api.post('/waveform/deactivate').then(res => res.data);
+
 export default api;

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber } from '@/lib/api'
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getWaveform } from '@/lib/api'
 import { Card, CardContent } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
@@ -92,11 +92,10 @@ export default function HistogramsPage() {
           let histogram
           if (isRunning && runNumber !== null) {
             try {
-              const response = await fetch(`/data/run${runNumber}/${histoId}.root`)
+              const response = await getHistogram(board.id, i)
               if (response.ok) {
-                const buffer = await response.arrayBuffer()
-                histogram = await window.JSROOT.openFile(buffer)
-                histogram = await histogram.readObject(`${histoId};1`)
+                const json = await response.json()
+                histogram = window.JSROOT.parse(json)
               } else {
                 histogram = createRandomHistogram(histoId)
               }
