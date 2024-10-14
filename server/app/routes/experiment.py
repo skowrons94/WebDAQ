@@ -18,7 +18,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.root_client import ROOTClient
 
-XDAQ_FLAG = True
+XDAQ_FLAG = False
 
 bp = Blueprint('experiment', __name__)
 

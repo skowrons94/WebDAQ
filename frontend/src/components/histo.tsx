@@ -141,7 +141,7 @@ export default function HistogramsPage() {
                         return (
                           <div
                             key={histoId}
-                            ref={el => histogramRefs.current[histoId] = el}
+                            ref={el => { histogramRefs.current[histoId] = el }}
                             className="w-full h-48 border"
                           ></div>
                         )
