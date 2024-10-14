@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getWaveform } from '@/lib/api'
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram } from '@/lib/api'
 import { Card, CardContent } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
@@ -32,16 +32,32 @@ export default function HistogramsPage() {
   const [runNumber, setRunNumber] = useState<number | null>(null)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
+  const histogramData = useRef<{[key: string]: any}>({})
   const { toast } = useToast()
+  const initialFetchDone = useRef(false)
 
   useEffect(() => {
     fetchBoardConfiguration()
     fetchRunStatus()
     const interval = setInterval(() => {
       fetchRunStatus()
-    }, 1000)
+    }, 2000)
     return () => clearInterval(interval)
   }, [])
+
+  useEffect(() => {
+    if (boards.length > 0 && !initialFetchDone.current) {
+      initialFetchDone.current = true
+      updateHistograms()
+    }
+  }, [jsrootLoaded, boards])
+
+  useEffect(() => {
+    if (isRunning) {
+      const interval = setInterval(updateHistograms, 5000)
+      return () => clearInterval(interval)
+    }
+  }, [jsrootLoaded, isRunning])
 
   const fetchBoardConfiguration = async () => {
     try {
@@ -75,31 +91,27 @@ export default function HistogramsPage() {
     }
   }
 
-  useEffect(() => {
-    if ( isRunning) {
-      updateHistograms()
-      const interval = setInterval(updateHistograms, 1000)
-      return () => clearInterval(interval)
-    }
-  }, [jsrootLoaded, isRunning])
-
   const updateHistograms = async () => {
+    console.log('Updating histograms...')
     for (const board of boards) {
       for (let i = 0; i < parseInt(board.chan); i++) {
         const histoId = `board${board.id}_channel${i}`
         const histoElement = histogramRefs.current[histoId]
+        console.log(histoElement)
         if (histoElement) {
           let histogram
-          if (isRunning && runNumber !== null) {
-            try {
-              const response = await getHistogram(board.id, i.toString())
-              histogram = window.JSROOT.parse(response)
-            } catch (error) {
-              console.error(`Failed to fetch histogram for ${histoId}:`, error)
-              histogram = createRandomHistogram(histoId)
+          try {
+            const response = await getHistogram(board.id, i.toString())
+            histogram = window.JSROOT.parse(response)
+            histogramData.current[histoId] = histogram
+          } catch (error) {
+            console.error(`Failed to fetch histogram for ${histoId}:`, error)
+            if (!histogramData.current[histoId]) {
+              histogram = createBlankHistogram(histoId)
+              histogramData.current[histoId] = histogram
+            } else {
+              histogram = histogramData.current[histoId]
             }
-          } else {
-            histogram = createRandomHistogram(histoId)
           }
           window.JSROOT.redraw(histoElement, histogram, "hist")
         }
@@ -107,13 +119,10 @@ export default function HistogramsPage() {
     }
   }
 
-  const createRandomHistogram = (name: string) => {
+  const createBlankHistogram = (name: string) => {
     const hist = window.JSROOT.createHistogram("TH1F", 100)
     hist.fName = name
-    hist.fTitle = `Random Histogram for ${name}`
-    for (let i = 0; i < 1000; ++i) {
-      hist.Fill(Math.random() * 100)
-    }
+    hist.fTitle = `Histogram for ${name}`
     return hist
   }
 
@@ -125,7 +134,6 @@ export default function HistogramsPage() {
       />
 
       <main className="flex-1 container mx-auto p-4">
-
         <Accordion type="multiple" className="w-full space-y-4">
           {boards.map((board) => (
             <AccordionItem value={`board-${board.id}`} key={board.id}>

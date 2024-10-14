@@ -17,7 +17,7 @@ GRAPHITE_PORT = 80
 
 client_mv = GraphiteClient(GRAPHITE_HOST, GRAPHITE_PORT)
 
-def get_metric_data(metric: str, client: GraphiteClient, from_time: str = '-1h', until_time: str = 'now') -> Dict[str, Any]:
+def get_metric_data(metric: str, client: GraphiteClient, from_time: str = '-10s', until_time: str = 'now') -> Dict[str, Any]:
     try:
         data = client.get_data(metric, from_time, until_time)
         return {'success': True, 'data': data}
@@ -26,7 +26,7 @@ def get_metric_data(metric: str, client: GraphiteClient, from_time: str = '-1h',
 
 @bp.route('/stats/terminal_voltage', methods=['GET'])
 def get_terminal_voltage():
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
     result = get_metric_data('accelerator.terminal_voltage', client_mv, from_time, until_time)
     if result['success']:
@@ -36,7 +36,7 @@ def get_terminal_voltage():
 
 @bp.route('/stats/extraction_voltage', methods=['GET'])
 def get_extraction_voltage():
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
     result = get_metric_data('accelerator.extraction_voltage', client_mv, from_time, until_time)
     if result['success']:
@@ -46,7 +46,7 @@ def get_extraction_voltage():
 
 @bp.route('/stats/column_current', methods=['GET'])
 def get_column_current():
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
     result = get_metric_data('accelerator.upcharge_current', client_mv, from_time, until_time)
     if result['success']:
@@ -59,14 +59,18 @@ def get_board_rates():
     board_id = request.args.get('board_id')
     board_name = request.args.get('board_name')
     channel = request.args.get('channel')
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
+
+    print("I'm asking data for: ", board_id, board_name, channel, from_time, until_time)
 
     if not all([board_id, board_name, channel]):
         return jsonify({'error': 'Missing required parameters: board_id, board_name, or channel'}), 400
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.totalRate'
     result = get_metric_data(metric, client_daq, from_time, until_time)
+
+    print( "metric: ", metric, "result: ", result)
     
     if result['success']:
         return jsonify(result['data']), 200
@@ -78,7 +82,7 @@ def get_board_rates_pu():
     board_id = request.args.get('board_id')
     board_name = request.args.get('board_name')
     channel = request.args.get('channel')
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
 
     if not all([board_id, board_name, channel]):
@@ -97,7 +101,7 @@ def get_board_rates_satu():
     board_id = request.args.get('board_id')
     board_name = request.args.get('board_name')
     channel = request.args.get('channel')
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
 
     if not all([board_id, board_name, channel]):
@@ -116,7 +120,7 @@ def get_board_rates_lost():
     board_id = request.args.get('board_id')
     board_name = request.args.get('board_name')
     channel = request.args.get('channel')
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
 
     if not all([board_id, board_name, channel]):
@@ -135,7 +139,7 @@ def get_board_rates_dt():
     board_id = request.args.get('board_id')
     board_name = request.args.get('board_name')
     channel = request.args.get('channel')
-    from_time = request.args.get('from', '-1h')
+    from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
 
     if not all([board_id, board_name, channel]):
@@ -143,9 +147,13 @@ def get_board_rates_dt():
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.deadTime'
     result = get_metric_data(metric, client_daq, from_time, until_time)
-    
+
     if result['success']:
-        return jsonify(result['data']), 200
+        data = result['data']
+        for i in range(len(data)):
+            if data[i][1] is not None:
+                data[i] = (data[i][0], data[i][1] * 100)
+        return jsonify(data), 200
     else:
         return jsonify({'error': result['error']}), 500
 

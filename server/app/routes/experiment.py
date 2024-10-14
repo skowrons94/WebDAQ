@@ -451,8 +451,6 @@ def get_histo(board_id, channel):
     # We must get the histogram for board and channel
     global root_client
 
-    print( "Asking for histogram", board_id, channel )
-
     idx = 0
     for board in daq_state['boards']:
         if int(board['id']) < int(board_id):

@@ -140,28 +140,28 @@ export const getStartTime = () =>
         api.get('/current/get_rng').then(res => res.data);
 
     // Graphite-related functions
-    export const getTerminalVoltage = (from: string = '-1h', until: string = 'now') =>
+    export const getTerminalVoltage = (from: string = '-10s', until: string = 'now') =>
         api.get('/stats/terminal_voltage', { params: { from, until } }).then(res => res.data);
   
-    export const getExtractionVoltage = (from: string = '-1h', until: string = 'now') =>
+    export const getExtractionVoltage = (from: string = '-10s', until: string = 'now') =>
         api.get('/stats/extraction_voltage', { params: { from, until } }).then(res => res.data);
   
-    export const getColumnCurrent = (from: string = '-1h', until: string = 'now') =>
+    export const getColumnCurrent = (from: string = '-10s', until: string = 'now') =>
         api.get('/stats/column_current', { params: { from, until } }).then(res => res.data);
   
-    export const getBoardRates = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+    export const getBoardRates = (boardId: string, boardName: string, channel: string, from: string = '-10s', until: string = 'now') =>
         api.get('/stats/board_rates', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
 
-    export const getBoardRatesP = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+    export const getBoardRatesP = (boardId: string, boardName: string, channel: string, from: string = '-10s', until: string = 'now') =>
         api.get('/stats/board_rates_pu', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
 
-    export const getBoardRatesL = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+    export const getBoardRatesL = (boardId: string, boardName: string, channel: string, from: string = '-10s', until: string = 'now') =>
         api.get('/stats/board_rates_lost', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
 
-    export const getBoardRatesS = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+    export const getBoardRatesS = (boardId: string, boardName: string, channel: string, from: string = '-10s', until: string = 'now') =>
         api.get('/stats/board_rates_satu', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
 
-    export const getBoardRatesD = (boardId: string, boardName: string, channel: string, from: string = '-1h', until: string = 'now') =>
+    export const getBoardRatesD = (boardId: string, boardName: string, channel: string, from: string = '-10s', until: string = 'now') =>
         api.get('/stats/board_rates_dt', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
 
     // Get the histograms for a given board_id and channel

@@ -814,6 +814,7 @@ class container:
                                     volumes={curr_dir: {'bind': '/home/xdaq/project', 'mode': 'rw'},
                                                 '/dev': {'bind': '/dev', 'mode': 'rw'}, 
                                                 '/lib/modules': {'bind': '/lib/modules', 'mode': 'rw'}},
+                                    environment=["TZ=Europe/Rome"],
                                     network="xdaq_net",
                                     detach=True, 
                                     remove=True, 
@@ -826,6 +827,7 @@ class container:
                                     ports={'2003': 2003, '8125': 8125, '80': 80},
                                     network="xdaq_net",
                                     volumes={'graphite': {'bind': '/opt/graphite/storage', 'mode': 'rw'}},
+                                    environment=["TZ=Europe/Rome"],
                                     detach=True, 
                                     remove=True )
 
