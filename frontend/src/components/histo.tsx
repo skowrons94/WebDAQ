@@ -92,13 +92,8 @@ export default function HistogramsPage() {
           let histogram
           if (isRunning && runNumber !== null) {
             try {
-              const response = await getHistogram(board.id, i)
-              if (response.ok) {
-                const json = await response.json()
-                histogram = window.JSROOT.parse(json)
-              } else {
-                histogram = createRandomHistogram(histoId)
-              }
+              const response = await getHistogram(board.id, i.toString())
+              histogram = window.JSROOT.parse(response)
             } catch (error) {
               console.error(`Failed to fetch histogram for ${histoId}:`, error)
               histogram = createRandomHistogram(histoId)

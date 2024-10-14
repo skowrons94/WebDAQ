@@ -166,7 +166,7 @@ export const getStartTime = () =>
 
     // Get the histograms for a given board_id and channel
     export const getHistogram = (boardId: string, channel: string) =>
-        api.get(`/waveforms/${boardId}/${channel}`).then(res => res.data);
+        api.get(`/histograms/${boardId}/${channel}`).then(res => res.data);
 
     export const getWaveform = (boardId: string, channel: string) =>
         api.get(`/waveforms/${boardId}/${channel}`).then(res => res.data);

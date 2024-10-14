@@ -19,6 +19,7 @@ def register():
 def login():
     data = request.get_json()
     user = User.query.filter_by(username=data['username']).first()
+    print( data )
     if user and user.check_password(data['password']):
         token = generate_token(user.id)
         return jsonify({'token': token}), 200

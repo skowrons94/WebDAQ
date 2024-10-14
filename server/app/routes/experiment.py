@@ -3,7 +3,7 @@ import os
 import csv
 import json
 
-from ROOT import TSocket, TMessage, TH1F
+from ROOT import TSocket, TMessage, TH1F, TBufferJSON, TGraph
 from fastapi import HTTPException
 
 import pickle as pkl
@@ -445,7 +445,7 @@ def get_start_time():
     return jsonify(daq_state['start_time'])
 
 # Route to serve all the data for a given run number
-@bp.route('/histogram/<board_id>/<channel>', methods=['GET'])
+@bp.route('/histograms/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom
 def get_histo(board_id, channel):
     # We must get the histogram for board and channel
@@ -455,12 +455,13 @@ def get_histo(board_id, channel):
 
     idx = 0
     for board in daq_state['boards']:
-        if board['id'] < int(board_id):
+        if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
 
-    histo = root_client.histograms[idx].copy( )
-    return jsonify(histo)
+    histo = root_client.histograms[idx].Clone( )
+    obj = TBufferJSON.ConvertToJSON(histo)
+    return str(obj.Data())
 
 @bp.route('/waveforms/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom
@@ -470,11 +471,11 @@ def get_wave(board_id, channel):
     
     idx = 0
     for board in daq_state['boards']:
-        if board['id'] < int(board_id):
+        if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
 
-    histo = root_client.graphs[idx].copy( )
+    histo = root_client.graphs[idx].Copy( )
     return jsonify(histo)
 
 @bp.route('/waveforms/activate', methods=['GET'])
