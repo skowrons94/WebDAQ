@@ -37,6 +37,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+<<<<<<< HEAD
 
 # Run
 server/data/**
+=======
+*.pyc
+>>>>>>> compa_dev

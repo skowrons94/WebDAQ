@@ -259,38 +259,8 @@ export function RunControl() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
-      <header className="bg-card p-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
-          <MoonStarIcon className="w-6 h-6" />
-          <h1 className="text-xl font-bold">LUNA Run Control Interface</h1>
-        </div>
-        <nav className="flex items-center gap-4">
-          <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
-            Run Control
-          </Link>
-          <Link href="/board" className="text-sm font-medium hover:underline">
-            Boards
-          </Link>
-          <Link href="/plots" className="text-sm font-medium hover:underline" prefetch={false}>
-            Plots
-          </Link>
-          <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
-            Metadata
-          </Link>
-          <Link href="/logbook" className="text-sm font-medium hover:underline" prefetch={false}>
-            Logbook
-          </Link>
-          <Link href="/json" className="text-sm font-medium hover:underline" prefetch={false}>
-            JSON
-          </Link>
-          <Link href="http://lunaserver:3000" className="text-sm font-medium hover:underline" prefetch={false}>
-            Grafana
-          </Link>
-          <Button variant="secondary" onClick={handleLogout}>Logout</Button>
-        </nav>
-      </header>
-      <main className="flex-1 grid grid-cols-2 gap-4 p-6">
+    <div className="flex flex-col bg-background text-foreground">
+      <main className="flex-1 grid grid-cols-2 gap-3 p-3">
         <section className="bg-card p-4 rounded-lg shadow-sm">
           <h2 className="text-lg font-bold mb-4">Run Control</h2>
           <div className="grid grid-cols-2 gap-4">

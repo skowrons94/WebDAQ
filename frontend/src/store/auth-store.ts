@@ -7,9 +7,19 @@ type AuthState = {
 };
 
 const useAuthStore = create<AuthState>((set) => ({
-    token: null,
-    setToken: (token) => set({ token }),
-    clearToken: () => set({ token: null }),
+    token: typeof window !== 'undefined' ? localStorage.getItem('authToken') || null : null,
+    setToken: (token: string) => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('authToken', token);
+        }
+        set({ token });
+    },
+    clearToken: () => {
+        if (typeof window !== 'undefined') {
+            localStorage.removeItem('authToken');
+        }
+        set({ token: null });
+    },
 }));
 
 export default useAuthStore;
