@@ -5,6 +5,7 @@ import { Board } from '@/components/board'
 import useAuthStore from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
+import { Layout } from '@/components/dashboard-layout';
 
 export default function BoardPage() {
     const router = useRouter();
@@ -33,5 +34,9 @@ export default function BoardPage() {
         }
     }, [token, router]);
 
-  return <Board />
+    return (
+        <Layout>
+            <Board />
+        </Layout>
+    );
 }

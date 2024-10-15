@@ -6,6 +6,7 @@ import { Logbook } from '@/components/logbook'
 import useAuthStore from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
+import { Layout } from '@/components/dashboard-layout';
 
 const queryClient = new QueryClient()
 
@@ -38,10 +39,12 @@ export default function LogbookPage() {
 
     return (
         <QueryClientProvider client={queryClient}>
+        <Layout>
         <div className="container mx-auto px-4 py-8">
             <h1 className="text-3xl font-bold mb-6 text-center">Logbook</h1>
             <Logbook />
-        </div>
+                </div>
+        </Layout>
         </QueryClientProvider>
   )
 }

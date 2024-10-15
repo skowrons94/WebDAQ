@@ -100,37 +100,6 @@ export function Board() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <header className="bg-card p-4 flex items-center justify-between shadow-sm">
-        <div className="flex items-center gap-4">
-          <MoonStarIcon className="w-6 h-6" />
-          <h1 className="text-xl font-bold">LUNA Run Control Interface</h1>
-        </div>
-        <nav className="flex items-center gap-4">
-        <Link href="/dashboard" className="text-sm font-medium hover:underline" prefetch={false}>
-            Run Control
-          </Link>
-          <Link href="/board" className="text-sm font-medium hover:underline">
-            Boards
-          </Link>
-          <Link href="/plots" className="text-sm font-medium hover:underline" prefetch={false}>
-            Plots
-          </Link>
-          <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
-            Metadata
-          </Link>
-          <Link href="/logbook" className="text-sm font-medium hover:underline" prefetch={false}>
-            Logbook
-          </Link>
-          <Link href="/json" className="text-sm font-medium hover:underline" prefetch={false}>
-            JSON
-          </Link>
-          <Link href="http://lunaserver:3000" className="text-sm font-medium hover:underline" prefetch={false}>
-            Grafana
-          </Link>
-          <Button variant="secondary">Logout</Button>
-        </nav>
-      </header>
-
       <main className="flex-1 container mx-auto p-4">
         <Card className="w-full max-w-2xl mx-auto">
           <CardHeader>
