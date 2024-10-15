@@ -130,6 +130,7 @@ export default function HistogramsPage() {
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Script
         src="https://root.cern/js/latest/scripts/JSRoot.core.js"
+        crossOrigin='anonymous'
         onLoad={() => setJsrootLoaded(true)}
       />
 
