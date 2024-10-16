@@ -99,7 +99,7 @@ export function Board() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
+    <div className="flex flex-col min-h-screen text-foreground">
       <main className="flex-1 container mx-auto p-4">
         <Card className="w-full max-w-2xl mx-auto">
           <CardHeader>

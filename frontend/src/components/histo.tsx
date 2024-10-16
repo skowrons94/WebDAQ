@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, use } from 'react'
 import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram } from '@/lib/api'
 import { Card, CardContent } from "@/components/ui/card"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
@@ -9,6 +9,8 @@ import { useToast } from "@/components/ui/use-toast"
 import Script from 'next/script'
 import Link from 'next/link'
 import { MoonStarIcon } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { set } from 'react-hook-form'
 
 declare global {
   interface Window {
@@ -35,6 +37,14 @@ export default function HistogramsPage() {
   const histogramData = useRef<{[key: string]: any}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
+  const { theme, setTheme } = useTheme()
+
+  useEffect(() => {
+      if (typeof window.JSROOT === 'undefined') return
+
+      window.JSROOT.settings.DarkMode = theme === 'dark'
+      updateHistograms()
+  }, [theme])
 
   useEffect(() => {
     fetchBoardConfiguration()
@@ -120,6 +130,8 @@ export default function HistogramsPage() {
   }
 
   const createBlankHistogram = (name: string) => {
+
+    // window.JSROOT.settings.DarkMode = theme === 'dark'
     const hist = window.JSROOT.createHistogram("TH1F", 100)
     hist.fName = name
     hist.fTitle = `Histogram for ${name}`
@@ -131,37 +143,27 @@ export default function HistogramsPage() {
       <Script
         src="https://root.cern/js/latest/scripts/JSRoot.core.js"
         crossOrigin='anonymous'
-        onLoad={() => setJsrootLoaded(true)}
       />
 
       <main className="flex-1 container mx-auto p-4">
-        <Accordion type="multiple" className="w-full space-y-4">
           {boards.map((board) => (
-            <AccordionItem value={`board-${board.id}`} key={board.id}>
-              <AccordionTrigger className="text-lg font-semibold">
-                {board.name} (ID: {board.id})
-              </AccordionTrigger>
-              <AccordionContent>
                 <Card>
                   <CardContent>
-                    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-4 p-4 md:p-8">
                       {Array.from({ length: parseInt(board.chan) }).map((_, channelIndex) => {
-                        const histoId = `board${board.id}_channel${channelIndex}`
-                        return (
-                          <div
-                            key={histoId}
-                            ref={el => { histogramRefs.current[histoId] = el }}
-                            className="w-full h-48 border"
-                          ></div>
-                        )
+                      const histoId = `board${board.id}_channel${channelIndex}`
+                      return (
+                        <div
+                        key={histoId}
+                        ref={el => { histogramRefs.current[histoId] = el }}
+                          className="w-full h-80 border"
+                        ></div>
+                      )
                       })}
                     </div>
                   </CardContent>
                 </Card>
-              </AccordionContent>
-            </AccordionItem>
           ))}
-        </Accordion>
       </main>
     </div>
   )

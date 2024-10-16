@@ -1,5 +1,3 @@
-
-// page.tsx (root page)
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,7 +7,23 @@ import useAuthStore from '@/store/auth-store';
 import { RunControl } from '@/components/run-control';
 import { Stats } from '@/components/stats';
 import HistogramsPage from '@/components/histo';
-import { Layout } from '@/components/dashboard-layout';
+import { Layout } from '@/components/dashboard-layout'; import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 const queryClient = new QueryClient()
 
@@ -30,18 +44,24 @@ export default function DashboardPage() {
   return (
     <QueryClientProvider client={queryClient}>
       <Layout>
-        <div className="mb-8">
-          <RunControl />
-        </div>
-        <div>
-          <h2 className="text-2xl font-semibold mb-4">Live Statistics</h2>
-          <Stats />
-        </div>
-        <div className="mb-8" />
-        <div>
-          <h3 className="text-2xl font-semibold mb-4">Plots</h3>
-          <HistogramsPage />
-        </div>
+        <Tabs defaultValue="overview">        
+            <div className="flex items-center">
+              <TabsList>
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="stats">Stats</TabsTrigger>
+                <TabsTrigger value="histograms">Histograms</TabsTrigger>
+              </TabsList>
+            </div>
+          <TabsContent value="overview">
+            <RunControl />
+          </TabsContent>
+          <TabsContent value="stats">
+            <Stats />
+          </TabsContent>
+          <TabsContent value="histograms">
+            <HistogramsPage />
+          </TabsContent>
+        </Tabs>
       </Layout>
     </QueryClientProvider>
   );

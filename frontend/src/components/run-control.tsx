@@ -1,7 +1,27 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import {
+  Activity,
+  AlertTriangle,
+  BarChart3,
+  BarChart,
+  ChevronDown,
+  CircleUser,
+  Cog,
+  Database,
+  FlaskConical,
+  Menu,
+  PlayCircle,
+  Power,
+  Search,
+  StopCircle,
+  Thermometer,
+  CircleGauge,
+} from "lucide-react"
 import Link from "next/link"
+
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
@@ -18,6 +38,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import useAuthStore from '@/store/auth-store'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/use-toast'
@@ -57,6 +101,7 @@ export function RunControl() {
   const [timer, setTimer] = useState(0)
   const [startTime, setStartTime] = useState<string | null>(null)
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
+  const [showParametersDialog, setShowParametersDialog] = useState(false)
 
   useEffect(() => {
     fetchInitialData()
@@ -221,10 +266,16 @@ export function RunControl() {
   }
 
   const formatTime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    const remainingSeconds = seconds % 60
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
+    if (seconds < 60) {
+      return `${Math.floor(seconds / 10) * 10} seconds`
+    } else if (seconds < 3600) {
+      const minutes = Math.floor(seconds / 60)
+      return `${minutes} minutes`
+    } else {
+      const hours = Math.floor(seconds / 3600)
+      const minutes = Math.floor((seconds % 3600) / 60)
+      return `${hours} hours and ${minutes} minutes`
+    }
   }
 
   const handleCoincidenceTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -260,29 +311,194 @@ export function RunControl() {
 
   return (
     <div className="flex flex-col bg-background text-foreground">
-      <main className="flex-1 grid grid-cols-2 gap-3 p-3">
-        <section className="bg-card p-4 rounded-lg shadow-sm">
-          <h2 className="text-lg font-bold mb-4">Run Control</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Button onClick={handleStartRun} className="w-full" disabled={isRunning}>Start</Button>
-              <Button onClick={handleStopRun} variant="secondary" className="w-full" disabled={!isRunning}>
-                Stop
+        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+        <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Run Status
+              </CardTitle>
+              <Activity className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
+                <p className="text-xs text-muted-foreground">
+                {isRunning ? `Started ${formatTime(timer)} ago` : "Stopped"}
+                </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Beam Current
+              </CardTitle>
+              <Thermometer className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">250 uA</div>
+              <p className="text-xs text-muted-foreground">
+                +0.5 uA from start
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                ROI 1 counts
+              </CardTitle>
+              <BarChart className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">1,234</div>
+              <p className="text-xs text-muted-foreground">
+                +56 in last 5 minutes
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                BL1 Pressure
+              </CardTitle>
+              <CircleGauge className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">2.3e-7 mBar</div>
+              <p className="text-xs text-muted-foreground">
+                -0.1e-7 mBar from start
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Experiment Controls</CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+              <div className="flex items-center gap-4">
+                <Button onClick={handleStartRun} className="w-full" disabled={isRunning}>
+                  <PlayCircle className="mr-2 h-4 w-4" />
+                  Start Run
+                </Button>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button onClick={handleStopRun} variant="outline" className="w-full" disabled={!isRunning}>
+                  <StopCircle className="mr-2 h-4 w-4" />
+                  Stop Run
+                </Button>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button className="w-full" variant="outline" disabled>
+                  <BarChart3 className="mr-2 h-4 w-4" />
+                  View Live Data
+                </Button>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button className="w-full" variant="outline" disabled>
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Emergency Shutdown
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="xl:col-span-2">
+            <CardHeader className="flex flex-row items-center">
+              <div className="grid gap-2">
+                <CardTitle>Acquisition Parameters</CardTitle>
+                <CardDescription>
+                  Current settings for the DAQ.
+                </CardDescription>
+              </div>
+              <Button onClick={() => setShowParametersDialog(true)} className="ml-auto" size="sm">
+                <Cog className="mr-2 h-4 w-4" />
+                Adjust
               </Button>
-            </div>
-            <div className="flex flex-col gap-2">
-              <div className="bg-muted p-2 rounded-md flex items-center justify-center text-2xl font-bold">
-                {isRunning ? "Running" : "Stopped"}
-              </div>
-              <div className="bg-muted p-2 rounded-md flex items-center justify-center text-2xl font-bold">
-                {formatTime(timer)}
-              </div>
-            </div>
-          </div>
-          <Separator className="my-4" />
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="runNumber">Run Number</Label>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Parameter</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow>
+                    <TableCell>Run Number</TableCell>
+                    <TableCell>{runNumber !== null ? runNumber : ''}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">Autoincrement</Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Coincidence Time</TableCell>
+                    <TableCell>{coincidenceTime} ns</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">Set</Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Multiplycity</TableCell>
+                    <TableCell>{multiplicity}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">Set</Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Save data</TableCell>
+                    <TableCell></TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {saveData ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Max File Size</TableCell>
+                    <TableCell>
+                      {limitFileSize ? `${fileSizeLimit} MB` : 'None'}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {limitFileSize ? 'Set' : 'Unset'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+        </div>
+      </main>
+      <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Override Existing Run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The directory for run number {runNumber} already exists. Do you want to override it?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={startRunProcess}>Override</AlertDialogAction>
+          </AlertDialogFooter>
+        
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog open={showParametersDialog} onOpenChange={setShowParametersDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Adjust Acquisition Parameters</DialogTitle>
+            <DialogDescription>
+              Set the acquisition parameters for the DAQ.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="grid grid-cols-1 items-center gap-4">
+              <Label htmlFor="coincidenceTime">Run Number</Label>
               <Input
                 id="runNumber"
                 type="number"
@@ -291,7 +507,7 @@ export function RunControl() {
                 disabled={isRunning}
               />
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-1 items-center gap-4">
               <Label htmlFor="coincidenceTime">Coincidence Time (ns)</Label>
               <Input
                 id="coincidenceTime"
@@ -301,7 +517,7 @@ export function RunControl() {
                 disabled={isRunning}
               />
             </div>
-            <div className="flex flex-col gap-2">
+            <div className="grid grid-cols-1 items-center gap-4">
               <Label htmlFor="multiplicity">Multiplicity</Label>
               <Input
                 id="multiplicity"
@@ -342,49 +558,13 @@ export function RunControl() {
               </div>
             )}
           </div>
-        </section>
-        <section className="bg-card p-4 rounded-lg shadow-sm">
-          <h2 className="text-lg font-bold mb-4">Metadata</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="sample-id">Sample ID</Label>
-              <Input id="sample-id" type="text" defaultValue="123" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="operator">Operator</Label>
-              <Input id="operator" type="text" defaultValue="Name" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="timestamp">Timestamp</Label>
-              <Input id="timestamp" type="datetime-local" defaultValue="2023-06-30T12:34:56" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea id="notes" rows={3} defaultValue="This is a sample note." />
-            </div>
-          </div>
-          <Separator className="my-4" />
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary">Export</Button>
-            <Button>Save</Button>
-          </div>
-        </section>
-      </main>
-      <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Override Existing Run?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The directory for run number {runNumber} already exists. Do you want to override it?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={startRunProcess}>Override</AlertDialogAction>
-          </AlertDialogFooter>
-        
-        </AlertDialogContent>
-      </AlertDialog>
+          <DialogFooter>
+            <Button type="submit" onClick={() => setShowParametersDialog(false)}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
