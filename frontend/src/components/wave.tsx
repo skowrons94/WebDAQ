@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram } from '@/lib/api'
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getWaveform2 } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/loadJSROOT'
@@ -16,7 +16,7 @@ type BoardData = {
   chan: string;
 }
 
-export default function HistogramsPage() {
+export default function WaveformPage() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [runNumber, setRunNumber] = useState<number | null>(null)
@@ -126,7 +126,7 @@ export default function HistogramsPage() {
         if (histoElement && window.JSROOT) {
           let histogram
           try {
-            const response = await getHistogram(board.id, i.toString())
+            const response = await getWaveform2(board.id, i.toString())
             histogram = window.JSROOT.parse(response)
           } catch (error) {
             console.error(`Failed to fetch histogram for ${histoId}:`, error)

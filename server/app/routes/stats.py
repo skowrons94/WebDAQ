@@ -62,15 +62,11 @@ def get_board_rates():
     from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
 
-    print("I'm asking data for: ", board_id, board_name, channel, from_time, until_time)
-
     if not all([board_id, board_name, channel]):
         return jsonify({'error': 'Missing required parameters: board_id, board_name, or channel'}), 400
 
     metric = f'ancillary.rates.{board_name}.ch_{channel}.totalRate'
     result = get_metric_data(metric, client_daq, from_time, until_time)
-
-    print( "metric: ", metric, "result: ", result)
     
     if result['success']:
         return jsonify(result['data']), 200

@@ -10,12 +10,11 @@ import useAuthStore from '@/store/auth-store';
 import { RunControl } from '@/components/run-control';
 import { Stats } from '@/components/stats';
 import HistogramsPage from '@/components/histo';
+import WaveformPage from '@/components/wave';
 import { useToast } from '@/components/ui/use-toast';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 
 const queryClient = new QueryClient()
-
-
 
 export default function DashboardPage() {
 
@@ -55,9 +54,6 @@ export default function DashboardPage() {
             <Link href="/board" className="text-sm font-medium hover:underline">
               Boards
             </Link>
-            <Link href="/plots" className="text-sm font-medium hover:underline" prefetch={false}>
-              Plots
-            </Link>
             <Link href="#" className="text-sm font-medium hover:underline" prefetch={false}>
               Metadata
             </Link>
@@ -84,8 +80,12 @@ export default function DashboardPage() {
         </div>
         <div className="mb-8" />
         <div className="px-4">
-          <h3 className="text-2xl font-semibold mb-4">Plots</h3>
+          <h3 className="text-2xl font-semibold mb-4">Histograms</h3>
           <HistogramsPage />
+        </div>
+        <div className="px-4">
+          <h4 className="text-2xl font-semibold mb-4">Waveforms</h4>
+          <WaveformPage />
         </div>
       </div>
     </QueryClientProvider>

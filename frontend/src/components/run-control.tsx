@@ -38,7 +38,10 @@ import {
   setRunNumber,
   checkRunDirectoryExists,
   getRunStatus,
-  getStartTime
+  getStartTime,
+  activateWaveform,
+  deactivateWaveform,
+  getWaveformStatus
 } from '@/lib/api'
 import { set } from 'react-hook-form'
 
@@ -57,6 +60,7 @@ export function RunControl() {
   const [timer, setTimer] = useState(0)
   const [startTime, setStartTime] = useState<string | null>(null)
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
+  const [waveformsEnabled, setWaveformsEnabled] = useState(false)
 
   useEffect(() => {
     fetchInitialData()
@@ -91,7 +95,8 @@ export function RunControl() {
         fileSizeLimitData,
         currentRunNumber,
         runStatus,
-        startTimeData
+        startTimeData,
+        waveformStatus
       ] = await Promise.all([
         getCoincidenceWindow(),
         getMultiplicity(),
@@ -100,7 +105,8 @@ export function RunControl() {
         getDataSizeLimit(),
         getCurrentRunNumber(),
         getRunStatus(),
-        getStartTime()
+        getStartTime(),
+        getWaveformStatus()
       ])
 
       setCoincidenceTime(coincidenceTimeData.toString())
@@ -111,6 +117,7 @@ export function RunControl() {
       setRunNumberState(currentRunNumber)
       setIsRunning(runStatus)
       setStartTime(startTimeData)
+      setWaveformsEnabled(waveformStatus)
     } catch (error) {
       console.error('Failed to fetch initial data:', error)
       toast({
@@ -172,6 +179,11 @@ export function RunControl() {
       await setLimitDataSize(limitFileSize)
       if (limitFileSize) {
         await setDataSizeLimit(parseInt(fileSizeLimit))
+      }
+      if (waveformsEnabled) {
+        await activateWaveform()
+      } else {
+        await deactivateWaveform()
       }
 
       // Start the run
@@ -258,6 +270,24 @@ export function RunControl() {
     setRunNumber(value)
   }
 
+  const handleWaveformsChange = async (checked: boolean) => {
+    try {
+      if (checked) {
+        await activateWaveform()
+      } else {
+        await deactivateWaveform()
+      }
+      setWaveformsEnabled(checked)
+    } catch (error) {
+      console.error('Failed to change waveform status:', error)
+      toast({
+        title: "Error",
+        description: "Failed to change waveform status. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <div className="flex flex-col bg-background text-foreground">
       <main className="flex-1 grid grid-cols-2 gap-3 p-3">
@@ -292,7 +322,7 @@ export function RunControl() {
               />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="coincidenceTime">Coincidence Time (ns)</Label>
+              <Label htmlFor="coincidenceTime">Coincidence Time (us)</Label>
               <Input
                 id="coincidenceTime"
                 type="number"
@@ -341,6 +371,15 @@ export function RunControl() {
                 />
               </div>
             )}
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="waveforms"
+                checked={waveformsEnabled}
+                onCheckedChange={handleWaveformsChange}
+                disabled={isRunning}
+              />
+              <Label htmlFor="waveforms">Waveforms</Label>
+            </div>
           </div>
         </section>
         <section className="bg-card p-4 rounded-lg shadow-sm">
@@ -381,8 +420,8 @@ export function RunControl() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={startRunProcess}>Override</AlertDialogAction>
+          
           </AlertDialogFooter>
-        
         </AlertDialogContent>
       </AlertDialog>
     </div>

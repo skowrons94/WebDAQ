@@ -18,7 +18,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.root_client import ROOTClient
 
-XDAQ_FLAG = False
+XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
 
@@ -202,17 +202,17 @@ def start_run( ):
 def stop_run( ):
     global daq_state
     
+    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     # Stop the XDAQ
     if( XDAQ_FLAG ):
-        root_client.stop()
-        #os.system("pkill LunaSpy")
+        try: root_client.stop()
+        except: os.system("killall LunaSpy")
         topology.halt( )
 
     daq_state['running'] = False
 
     # If we save the data, update the run in the database
     if( daq_state['save'] or not XDAQ_FLAG ):
-        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         daq_state['run'] += 1
         rows = read_csv()
         rows[-1][2] = time
@@ -221,7 +221,6 @@ def stop_run( ):
     daq_state['start_time'] = None
 
     # Update the daq_state file
-    print( daq_state )
     update_project(daq_state)
 
     return jsonify({'message': 'Run stopped successfully !'}), 200
@@ -357,7 +356,6 @@ def get_coincidence_window():
 @jwt_required_custom
 def get_multiplicity():
     global daq_state
-    print( daq_state['multiplicity'] )  
     return jsonify(daq_state['multiplicity'])
 
 # Route to get the save data
@@ -365,7 +363,6 @@ def get_multiplicity():
 @jwt_required_custom
 def get_save_data():
     global daq_state
-    print( daq_state['save'] )
     return jsonify(daq_state['save'])
 
 # Route to get the limit size
@@ -373,7 +370,6 @@ def get_save_data():
 @jwt_required_custom
 def get_limit_size():
     global daq_state
-    print( daq_state['limit_size'] )
     return jsonify(daq_state['limit_size'])
 
 # Route to get the file size limit
@@ -448,35 +444,66 @@ def get_start_time():
 @bp.route('/histograms/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom
 def get_histo(board_id, channel):
-    # We must get the histogram for board and channel
-    global root_client
-
     idx = 0
     for board in daq_state['boards']:
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-
-    histo = root_client.histograms[idx].Clone( )
+    histo = root_client.histograms[idx]
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
-@bp.route('/waveforms/<board_id>/<channel>', methods=['GET'])
+# Route to serve all the data for a given run number
+@bp.route('/qlong/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom
-def get_wave(board_id, channel):
-    # We must get the histogram for board and channel
-    global root_client
-    
+def get_qlong(board_id, channel):
     idx = 0
     for board in daq_state['boards']:
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
+    histo = root_client.qlong[idx]
+    obj = TBufferJSON.ConvertToJSON(histo)
+    return str(obj.Data())
 
-    histo = root_client.graphs[idx].Copy( )
-    return jsonify(histo)
+# Route to serve all the data for a given run number
+@bp.route('/qshort/<board_id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_qhosrt(board_id, channel):
+    idx = 0
+    for board in daq_state['boards']:
+        if int(board['id']) < int(board_id):
+            idx += board['chan']
+    idx += int(channel)
+    histo = root_client.qshort[idx]
+    obj = TBufferJSON.ConvertToJSON(histo)
+    return str(obj.Data())
 
-@bp.route('/waveforms/activate', methods=['GET'])
+@bp.route('/waveforms/1/<board_id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_wave1(board_id, channel):
+    idx = 0
+    for board in daq_state['boards']:
+        if int(board['id']) < int(board_id):
+            idx += board['chan']
+    idx += int(channel)
+    histo = root_client.waves1[idx]
+    obj = TBufferJSON.ConvertToJSON(histo)
+    return str(obj.Data())
+
+@bp.route('/waveforms/2/<board_id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_wave2(board_id, channel):
+    idx = 0
+    for board in daq_state['boards']:
+        if int(board['id']) < int(board_id):
+            idx += board['chan']
+    idx += int(channel)
+    histo = root_client.waves2[idx]
+    obj = TBufferJSON.ConvertToJSON(histo)
+    return str(obj.Data())
+
+@bp.route('/waveforms/activate', methods=['POST'])
 @jwt_required_custom
 def activate_wave():
     # We must change the JSON configuration file to enable waveforms
@@ -493,7 +520,7 @@ def activate_wave():
 
     return jsonify({'message': 'Waveforms activated successfully !'}), 200
 
-@bp.route('/waveforms/deactivate', methods=['GET'])
+@bp.route('/waveforms/deactivate', methods=['POST'])
 @jwt_required_custom
 def deactivate_wave():
     # We must change the JSON configuration file to enable waveforms
@@ -509,3 +536,20 @@ def deactivate_wave():
             json.dump(data, f, indent=4)
 
     return jsonify({'message': 'Waveforms deactivated successfully !'}), 200
+
+@bp.route('/waveforms/status', methods=['GET'])
+@jwt_required_custom
+def wave_status():
+    # We must check if waveforms are enabled
+    for board in daq_state['boards']:
+        filename = f"conf/{board['name']}_{board['id']}.json"
+        with open(filename, 'r') as f:
+            data = json.load(f)
+
+        string = data['registers']['reg_8000']["value"]
+        value = int(string, 16)
+        if (value & (1 << 16)) == 0:
+            print( "Waveforms are disabled")
+            return jsonify(False)
+    print( "Waveforms are enabled")
+    return jsonify(True)
