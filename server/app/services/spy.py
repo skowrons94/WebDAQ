@@ -14,6 +14,7 @@ class ru_spy:
         self.running = False
         self.thread = None
         self.data = { "energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [] }
+        self.histo = ROOT.TH1F("Histogram", "Histogram", 32768, 0, 32768)
 
     def connect(self):
         self.socket = ROOT.TSocket(self.host, self.port)
@@ -111,14 +112,9 @@ class ru_spy:
             self.disconnect()
         except:
             os.system("killall LunaSpy")
-
-    def get(self):
-        h1 = ROOT.TH1F("h1", "h1", 32768, 0, 32768)
-        h1.FillRandom("gaus", 100)
-        return h1
     
     def get_object(self, name, idx):
         try:
             return self.data[name][idx].Clone( )
         except:
-            return ROOT.TH1F("h1", "h1", 32768, 0, 32768)
+            return self.histo
