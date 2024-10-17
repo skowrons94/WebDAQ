@@ -87,7 +87,20 @@ import {
   deactivateWaveform,
   getWaveformStatus
 } from '@/lib/api'
-import { set } from 'react-hook-form'
+
+type BoardData = {
+  id: string;
+  name: string;
+  vme: string;
+  link_type: string;
+  link_num: string;
+  dpp: string;
+  chan: string;
+}
+
+type ROIValues = {
+  [key: string]: { low: number; high: number; integral: number };
+}
 
 export function RunControl() {
   const clearToken = useAuthStore((state) => state.clearToken)
@@ -106,9 +119,17 @@ export function RunControl() {
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [waveformsEnabled, setWaveformsEnabled] = useState(false)
+  const [roiValues, setRoiValues] = useState<ROIValues>({})
 
   useEffect(() => {
     fetchInitialData()
+    const statusInterval = setInterval(fetchRunStatus, 5000)
+    const roiInterval = setInterval(updateROIData, 1000)
+
+    return () => {
+      clearInterval(statusInterval)
+      clearInterval(roiInterval)
+    }
   }, [])
 
   useEffect(() => {
@@ -120,7 +141,7 @@ export function RunControl() {
         const elapsed = Math.floor((now - start) / 1000)
         setTimer(elapsed)
       }
-      updateTimer() // Update immediately
+      updateTimer()
       interval = setInterval(updateTimer, 1000)
     } else if (!isRunning) {
       setTimer(0)
@@ -141,7 +162,8 @@ export function RunControl() {
         currentRunNumber,
         runStatus,
         startTimeData,
-        waveformStatus
+        waveformStatus,
+        roiData
       ] = await Promise.all([
         getCoincidenceWindow(),
         getMultiplicity(),
@@ -151,7 +173,8 @@ export function RunControl() {
         getCurrentRunNumber(),
         getRunStatus(),
         getStartTime(),
-        getWaveformStatus()
+        getWaveformStatus(),
+        getRoiValues()
       ])
 
       setCoincidenceTime(coincidenceTimeData.toString())
@@ -163,6 +186,7 @@ export function RunControl() {
       setIsRunning(runStatus)
       setStartTime(startTimeData)
       setWaveformsEnabled(waveformStatus)
+      setRoiValues(roiData)
     } catch (error) {
       console.error('Failed to fetch initial data:', error)
       toast({
@@ -170,6 +194,35 @@ export function RunControl() {
         description: "Failed to fetch initial data. Please try again.",
         variant: "destructive",
       })
+    }
+  }
+
+  const fetchRunStatus = async () => {
+    try {
+      const [statusResponse, runNumberResponse] = await Promise.all([
+        getRunStatus(),
+        getCurrentRunNumber()
+      ])
+      setIsRunning(statusResponse)
+      setRunNumberState(runNumberResponse)
+    } catch (error) {
+      console.error('Failed to fetch run status:', error)
+    }
+  }
+
+  const updateROIData = async () => {
+    try {
+      const response = await fetch('/api/cache')
+      const data = await response.json()
+      console.log(data.roiValues)
+      // Remove values where low and high are both 0 or low is 0 and high is 32
+      const filteredRoiValues = Object.fromEntries(
+        Object.entries(data.roiValues).filter(([_, roi]) => !(roi.low === 0 && roi.high === 32768) || (roi.low === 0 && roi.high === 0))
+      )
+      // The keys are of format board0_channel0, but we want "Board 0 Channel 0"
+      setRoiValues(filteredRoiValues)
+    } catch (error) {
+      console.error('Failed to update ROI data:', error)
     }
   }
 
@@ -191,9 +244,7 @@ export function RunControl() {
     try {
       await setRunNumber(runNumber!)
       const directoryExists = await checkRunDirectoryExists()
-      setSaveData(saveData)
-      console.log('saveData:', saveData)
-      console.log('getSaveData:', await getSaveData())
+      await setSaveData(saveData)
       if (directoryExists) {
         setShowOverrideDialog(true)
         return
@@ -218,7 +269,6 @@ export function RunControl() {
       })
       // Set all variables before starting the run
       await setCoincidenceWindow(parseInt(coincidenceTime))
-      console.log('multiplicity:', parseInt(multiplicity))
       await setMultiplicity(parseInt(multiplicity))
       await setSaveData(saveData)
       await setLimitDataSize(limitFileSize)
@@ -341,7 +391,7 @@ export function RunControl() {
 
   return (
     <div className="flex flex-col bg-background text-foreground">
-        <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
+      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
         <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -352,9 +402,9 @@ export function RunControl() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
-                <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {isRunning ? `Started ${formatTime(timer)} ago` : "Stopped"}
-                </p>
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -371,26 +421,28 @@ export function RunControl() {
               </p>
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                ROI 1 counts
-              </CardTitle>
-              <BarChart className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">1,234</div>
-              <p className="text-xs text-muted-foreground">
-                +56 in last 5 minutes
-              </p>
-            </CardContent>
-          </Card>
+          {Object.entries(roiValues).map(([histoId, roi]) => (
+            <Card key={histoId}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {histoId} ROI
+                </CardTitle>
+                <BarChart className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{roi.integral.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground">
+                  ROI: {roi.low} - {roi.high}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 BL1 Pressure
               </CardTitle>
-              <CircleGauge className="h-4 w-4 text-muted-foreground" />
+              <CircleGauge  className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">2.3e-7 mBar</div>
@@ -509,7 +561,6 @@ export function RunControl() {
               </Table>
             </CardContent>
           </Card>
-
         </div>
       </main>
       <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
@@ -524,7 +575,6 @@ export function RunControl() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={startRunProcess}>Override</AlertDialogAction>
           </AlertDialogFooter>
-        
         </AlertDialogContent>
       </AlertDialog>
       <Dialog open={showParametersDialog} onOpenChange={setShowParametersDialog}>
@@ -614,26 +664,5 @@ export function RunControl() {
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-function MoonStarIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9" />
-      <path d="M20 3v4" />
-      <path d="M22 5h-4" />
-    </svg>
   )
 }
