@@ -168,13 +168,29 @@ export const getStartTime = () =>
     export const getHistogram = (boardId: string, channel: string) =>
         api.get(`/histograms/${boardId}/${channel}`).then(res => res.data);
 
-    export const getWaveform = (boardId: string, channel: string) =>
-        api.get(`/waveforms/${boardId}/${channel}`).then(res => res.data);
+    export const getWaveform1 = (boardId: string, channel: string) =>
+        api.get(`/waveforms/1/${boardId}/${channel}`).then(res => res.data);
 
+    export const getWaveform2 = (boardId: string, channel: string) =>
+        api.get(`/waveforms/2/${boardId}/${channel}`).then(res => res.data);
+
+    // Get the histograms for a given board_id and channel
+    export const getQlong = (boardId: string, channel: string) =>
+        api.get(`/qlong/${boardId}/${channel}`).then(res => res.data);
+
+            // Get the histograms for a given board_id and channel
+    export const getQshort = (boardId: string, channel: string) =>
+        api.get(`/qshort/${boardId}/${channel}`).then(res => res.data);
+
+    // Waveform control
     export const activateWaveform = () =>
-        api.post('/waveform/activate').then(res => res.data);
+        api.post('/waveforms/activate').then(res => res.data);
 
     export const deactivateWaveform = () =>
-        api.post('/waveform/deactivate').then(res => res.data);
+        api.post('/waveforms/deactivate').then(res => res.data);
+
+    export const getWaveformStatus = () =>
+        api.get('/waveforms/status').then(res => res.data);
+
 
 export default api;

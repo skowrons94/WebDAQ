@@ -44,3 +44,4 @@ server/data/**
 =======
 *.pyc
 >>>>>>> compa_dev
+server/logbook.csv

@@ -2,17 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { 
-  getBoardConfiguration, 
-  getTerminalVoltage, 
-  getExtractionVoltage, 
-  getColumnCurrent, 
-  getBoardRates,
-  getBoardRatesP,
-  getBoardRatesL,
-  getBoardRatesS,
-  getBoardRatesD
-} from '@/lib/api'
+import { getBoardConfiguration, getTerminalVoltage, getExtractionVoltage, getColumnCurrent, getBoardRates } from '@/lib/api'
 
 type BoardData = {
   id: string;
@@ -51,17 +41,15 @@ export function Stats() {
     }
 
     try {
-      const [terminalVoltageResult, extractionVoltageResult, columnCurrentResult, ...boardStatsResults] = await Promise.allSettled([
+      const [terminalVoltageResult, extractionVoltageResult, columnCurrentResult, ...boardRatesResults] = await Promise.allSettled([
         getTerminalVoltage(),
         getExtractionVoltage(),
         getColumnCurrent(),
-        ...boards.flatMap(board => [
-          ...Array.from({ length: parseInt(board.chan) }, (_, i) => getBoardRates(board.id, board.name, i.toString())),
-          ...Array.from({ length: parseInt(board.chan) }, (_, i) => getBoardRatesP(board.id, board.name, i.toString())),
-          ...Array.from({ length: parseInt(board.chan) }, (_, i) => getBoardRatesL(board.id, board.name, i.toString())),
-          ...Array.from({ length: parseInt(board.chan) }, (_, i) => getBoardRatesS(board.id, board.name, i.toString())),
-          ...Array.from({ length: parseInt(board.chan) }, (_, i) => getBoardRatesD(board.id, board.name, i.toString()))
-        ])
+        ...boards.flatMap(board => 
+          Array.from({ length: parseInt(board.chan) }, (_, i) => 
+            getBoardRates(board.id, board.name, i.toString())
+          )
+        )
       ])
 
       const newStats: StatData[] = []
@@ -85,38 +73,22 @@ export function Stats() {
       }
 
       boards.forEach((board, boardIndex) => {
-        const channelCount = parseInt(board.chan)
-        const boardStatsStartIndex = boardIndex * channelCount * 5
-
-        Array.from({ length: channelCount }, (_, channelIndex) => {
-          const rateResult = boardStatsResults[boardStatsStartIndex + channelIndex]
-          const pileUpResult = boardStatsResults[boardStatsStartIndex + channelCount + channelIndex]
-          const lostResult = boardStatsResults[boardStatsStartIndex + 2 * channelCount + channelIndex]
-          const saturationResult = boardStatsResults[boardStatsStartIndex + 3 * channelCount + channelIndex]
-          const deadTimeResult = boardStatsResults[boardStatsStartIndex + 4 * channelCount + channelIndex]
-
-          const addStat = (name: string, result: PromiseSettledResult<any>, unit: string) => {
-            if (result.status === 'fulfilled') {
-              newStats.push({
-                name: `${board.name} Channel ${channelIndex} - ${name}`,
-                value: result.value[0]?.[1] ?? null,
-                unit: unit
-              })
-            } else {
-              console.error(`Failed to fetch ${name} for ${board.name} Ch${channelIndex}:`, result.reason)
-              newStats.push({
-                name: `${board.name} Ch${channelIndex} ${name}`,
-                value: null,
-                unit: unit
-              })
-            }
+        Array.from({ length: parseInt(board.chan) }, (_, channelIndex) => {
+          const rateResult = boardRatesResults[boardIndex * parseInt(board.chan) + channelIndex]
+          if (rateResult.status === 'fulfilled') {
+            newStats.push({
+              name: `${board.name} Channel ${channelIndex}`,
+              value: rateResult.value[0]?.[1] ?? null,
+              unit: 'Hz'
+            })
+          } else {
+            console.error(`Failed to fetch rate for ${board.name} Channel ${channelIndex}:`, rateResult.reason)
+            newStats.push({
+              name: `${board.name} Ch${channelIndex}`,
+              value: null,
+              unit: 'Hz'
+            })
           }
-
-          addStat('Rate', rateResult, 'Hz')
-          addStat('PileUp', pileUpResult, 'Hz')
-          addStat('Lost', lostResult, 'Hz')
-          addStat('Saturation', saturationResult, 'Hz')
-          addStat('Dead Time', deadTimeResult, '%')
         })
       })
 
@@ -133,7 +105,7 @@ export function Stats() {
   useEffect(() => {
     if (boards.length > 0) {
       fetchStats()
-      const interval = setInterval(fetchStats, 5000)
+      const interval = setInterval(fetchStats, 10000)
       return () => clearInterval(interval)
     }
   }, [boards, fetchStats])
