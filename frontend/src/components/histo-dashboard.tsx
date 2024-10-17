@@ -8,6 +8,7 @@ import { loadJSROOT } from '@/lib/load-jsroot'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useTheme } from 'next-themes'
+import { Button } from "@/components/ui/button"
 
 type BoardData = {
   id: string;
@@ -30,6 +31,7 @@ export default function HistogramDashboard() {
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [updateTrigger, setUpdateTrigger] = useState(0)
   const [roiValues, setRoiValues] = useState<ROIValues>({})
+  const [unsavedChanges, setUnsavedChanges] = useState(false)
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
@@ -38,6 +40,7 @@ export default function HistogramDashboard() {
   useEffect(() => {
     fetchBoardConfiguration()
     fetchRunStatus()
+    fetchCachedROIs()
     const statusInterval = setInterval(fetchRunStatus, 5000)
 
     loadJSROOT()
@@ -58,15 +61,6 @@ export default function HistogramDashboard() {
   }, [])
 
   useEffect(() => {
-    if (jsrootLoaded && boards.length > 0) {
-      if (!initialFetchDone.current) {
-        initialFetchDone.current = true
-        updateHistograms()
-      }
-    }
-  }, [jsrootLoaded, boards])
-
-  useEffect(() => {
     if (jsrootLoaded) {
       window.JSROOT.settings.DarkMode = theme === 'dark'
       const updateInterval = setInterval(() => {
@@ -80,7 +74,6 @@ export default function HistogramDashboard() {
     try {
       const response = await getBoardConfiguration()
       setBoards(response.data)
-      initializeROIValues(response.data)
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
       toast({
@@ -109,6 +102,21 @@ export default function HistogramDashboard() {
     }
   }
 
+  const fetchCachedROIs = async () => {
+    try {
+      const response = await fetch('/api/cache')
+      const data = await response.json()
+      if (data && data.roiValues) {
+        setRoiValues(data.roiValues)
+      } else {
+        initializeROIValues()
+      }
+    } catch (error) {
+      console.error('Failed to fetch cached ROIs:', error)
+      initializeROIValues()
+    }
+  }
+
   const createBlankHistogram = useCallback((name: string) => {
     if (window.JSROOT) {
       const hist = window.JSROOT.createHistogram("TH1F", 100)
@@ -133,7 +141,7 @@ export default function HistogramDashboard() {
     }
   }, [createBlankHistogram])
 
-  const initializeROIValues = (boards: BoardData[]) => {
+  const initializeROIValues = useCallback(() => {
     const initialROIValues: ROIValues = {}
     boards.forEach(board => {
       for (let i = 0; i < parseInt(board.chan); i++) {
@@ -141,8 +149,17 @@ export default function HistogramDashboard() {
         initialROIValues[histoId] = { low: 0, high: 32768, integral: 0 }
       }
     })
-    setRoiValues(initialROIValues)
-  }
+    setRoiValues(prevValues => ({
+      ...initialROIValues,
+      ...prevValues // This ensures we keep any existing values
+    }))
+  }, [boards])
+
+  useEffect(() => {
+    if (boards.length > 0) {
+      initializeROIValues()
+    }
+  }, [boards, initializeROIValues])
 
   const updateHistograms = useCallback(async () => {
     console.log('Updating histograms...')
@@ -157,8 +174,9 @@ export default function HistogramDashboard() {
             await drawHistogramWithROI(histoElement, histogram, histoId, i.toString(), board.id)
             
             // Calculate and update the integral
-            const { low, high } = roiValues[histoId]
+            const { low, high } = roiValues[histoId] || { low: 0, high: 0 }
             const integral = await getRoiIntegral(board.id, i.toString(), low, high)
+            // Set only the integral
             setRoiValues(prev => ({
               ...prev,
               [histoId]: { ...prev[histoId], integral }
@@ -174,7 +192,31 @@ export default function HistogramDashboard() {
         }
       }
     }
-  }, [boards, roiValues])
+  }, [boards])
+
+  const updateROICache = async (roiValues: ROIValues) => {
+    try {
+      await fetch('/api/cache', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(roiValues),
+      })
+      setUnsavedChanges(false)
+      toast({
+        title: "Success",
+        description: "ROI values have been saved.",
+      })
+    } catch (error) {
+      console.error('Failed to update ROI cache:', error)
+      toast({
+        title: "Error",
+        description: "Failed to save ROI values. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
 
   const handleROIChange = async (histoId: string, type: 'low' | 'high', value: number) => {
     const [boardId, channelStr] = histoId.split('_')
@@ -187,6 +229,7 @@ export default function HistogramDashboard() {
       ...prev,
       [histoId]: newRoiValues
     }))
+    setUnsavedChanges(true)
 
     // Update the integral when ROI changes
     try {
@@ -202,13 +245,12 @@ export default function HistogramDashboard() {
 
   const drawHistogramWithROI = async (element: HTMLDivElement, histogram: any, histoId: string, chan: string, id: string) => {
     if (window.JSROOT) {
-
       const canv = window.JSROOT.create('TCanvas');
 
       canv.fName = 'c1';
       canv.fPrimitives.Add(histogram, 'histo');
 
-      const { low, high } = roiValues[histoId]
+      const { low, high } = roiValues[histoId] || { low: 0, high: 32768 }
       console.log( low, high )
 
       const roiObj = await getRoiHistogram(id, chan, low, high)
@@ -226,9 +268,19 @@ export default function HistogramDashboard() {
     }
   }, [jsrootLoaded, boards, updateTrigger])
 
+  const handleSaveChanges = () => {
+    updateROICache(roiValues)
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Histogram Dashboard</h1>
+          <Button onClick={handleSaveChanges} disabled={!unsavedChanges}>
+            Save Changes
+          </Button>
+        </div>
         {boards.map((board) => (
           <Card key={board.id} className="mb-6">
             <CardHeader>
@@ -252,7 +304,7 @@ export default function HistogramDashboard() {
                             <Input
                               id={`${histoId}-low`}
                               type="number"
-                              value={roiValues[histoId]?.low}
+                              value={roiValues[histoId]?.low ?? 0}
                               onChange={(e) => handleROIChange(histoId, 'low', Number(e.target.value))}
                               className="w-24"
                             />
@@ -262,7 +314,7 @@ export default function HistogramDashboard() {
                             <Input
                               id={`${histoId}-high`}
                               type="number"
-                              value={roiValues[histoId]?.high}
+                              value={roiValues[histoId]?.high ?? 32768}
                               onChange={(e) => handleROIChange(histoId, 'high', Number(e.target.value))}
                               className="w-24"
                             />
