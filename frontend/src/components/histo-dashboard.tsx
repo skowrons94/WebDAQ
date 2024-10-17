@@ -23,6 +23,10 @@ type ROIValues = {
   [key: string]: { low: number; high: number; integral: number };
 }
 
+type Integrals = {
+  [key: string]: number;
+}
+
 export default function HistogramDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [isRunning, setIsRunning] = useState(false)
@@ -31,14 +35,19 @@ export default function HistogramDashboard() {
   const [updateTrigger, setUpdateTrigger] = useState(0)
   const [roiValues, setRoiValues] = useState<ROIValues>({})
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [integrals, setIntegrals] = useState<Integrals>({})
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
 
+  //First we get the cached ROIs
+  useEffect(() => {
+    fetchCachedROIs()
+  }, [])
+
   useEffect(() => {
     fetchBoardConfiguration()
     fetchRunStatus()
-    fetchCachedROIs()
     const statusInterval = setInterval(fetchRunStatus, 5000)
 
     loadJSROOT()
@@ -169,15 +178,6 @@ export default function HistogramDashboard() {
             const histogramData = await getHistogram(board.id, i.toString())
             const histogram = window.JSROOT.parse(histogramData)
             await drawHistogramWithROI(histoElement, histogram, histoId, i.toString(), board.id)
-            
-            // Calculate and update the integral
-            const { low, high } = roiValues[histoId] || { low: 0, high: 0 }
-            const integral = await getRoiIntegral(board.id, i.toString(), low, high)
-            // Set only the integral
-            setRoiValues(prev => ({
-              ...prev,
-              [histoId]: { ...prev[histoId], integral }
-            }))
           } catch (error) {
             console.error(`Failed to fetch histogram for ${histoId}:`, error)
             toast({
@@ -189,6 +189,24 @@ export default function HistogramDashboard() {
         }
       }
     }
+  }, [boards])
+
+  const updateROIIntegrals = useCallback(async () => {
+    console.log('Updating ROI integrals...')
+    const updatedIntegrals = { ...integrals }
+    for (const board of boards) {
+      for (let i = 0; i < parseInt(board.chan); i++) {
+        const histoId = `board${board.id}_channel${i}`
+        const { low, high } = roiValues[histoId] || { low: 0, high: 32768 }
+        try {
+          const integral = await getRoiIntegral(board.id, i.toString(), low, high)
+          updatedIntegrals[histoId] = integral
+        } catch (error) {
+          console.error(`Failed to get ROI integral for ${histoId}:`, error)
+        }
+      }
+    }
+    setIntegrals(updatedIntegrals)
   }, [boards])
 
   const updateROICache = async (roiValues: ROIValues) => {
@@ -216,28 +234,11 @@ export default function HistogramDashboard() {
   }
 
   const handleROIChange = async (histoId: string, type: 'low' | 'high', value: number) => {
-    const [boardId, channelStr] = histoId.split('_')
-    const channelId = channelStr.replace('channel', '')
-    const newRoiValues = {
-      ...roiValues[histoId],
-      [type]: value
-    }
     setRoiValues(prev => ({
       ...prev,
-      [histoId]: newRoiValues
+      [histoId]: { ...prev[histoId], [type]: value }
     }))
     setUnsavedChanges(true)
-
-    // Update the integral when ROI changes
-    try {
-      const integral = await getRoiIntegral(boardId.replace('board', ''), channelId, newRoiValues.low, newRoiValues.high)
-      setRoiValues(prev => ({
-        ...prev,
-        [histoId]: { ...newRoiValues, integral }
-      }))
-    } catch (error) {
-      console.error(`Failed to get ROI integral for ${histoId}:`, error)
-    }
   }
 
   const drawHistogramWithROI = async (element: HTMLDivElement, histogram: any, histoId: string, chan: string, id: string) => {
@@ -262,8 +263,9 @@ export default function HistogramDashboard() {
   useEffect(() => {
     if (jsrootLoaded && boards.length > 0) {
       updateHistograms()
+      updateROIIntegrals()
     }
-  }, [jsrootLoaded, boards, updateTrigger])
+  }, [jsrootLoaded, boards, updateTrigger, updateHistograms, updateROIIntegrals])
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
@@ -318,7 +320,7 @@ export default function HistogramDashboard() {
                           </div>
                         </div>
                         <div className="text-sm font-medium">
-                          Integral: {roiValues[histoId]?.integral.toFixed(2) || 'N/A'}
+                          Integral: {integrals[histoId] || 'N/A'}
                         </div>
                       </div>
                     </div>

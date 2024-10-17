@@ -85,7 +85,8 @@ import {
   getStartTime,
   activateWaveform,
   deactivateWaveform,
-  getWaveformStatus
+  getWaveformStatus,
+  getRoiIntegral
 } from '@/lib/api'
 
 type BoardData = {
@@ -101,6 +102,8 @@ type BoardData = {
 type ROIValues = {
   [key: string]: { low: number; high: number; integral: number };
 }
+
+type roi = { low: number; high: number; integral: number }
 
 export function RunControl() {
   const clearToken = useAuthStore((state) => state.clearToken)
@@ -162,8 +165,7 @@ export function RunControl() {
         currentRunNumber,
         runStatus,
         startTimeData,
-        waveformStatus,
-        roiData
+        waveformStatus
       ] = await Promise.all([
         getCoincidenceWindow(),
         getMultiplicity(),
@@ -173,8 +175,7 @@ export function RunControl() {
         getCurrentRunNumber(),
         getRunStatus(),
         getStartTime(),
-        getWaveformStatus(),
-        getRoiValues()
+        getWaveformStatus()
       ])
 
       setCoincidenceTime(coincidenceTimeData.toString())
@@ -186,7 +187,6 @@ export function RunControl() {
       setIsRunning(runStatus)
       setStartTime(startTimeData)
       setWaveformsEnabled(waveformStatus)
-      setRoiValues(roiData)
     } catch (error) {
       console.error('Failed to fetch initial data:', error)
       toast({
@@ -210,17 +210,48 @@ export function RunControl() {
     }
   }
 
+  function extractBoardAndChannel(str) {
+    const match = str.match(/board(\d+)_channel(\d+)/);
+    if (match) {
+      return {
+        boardId: parseInt(match[1], 10),
+        channelNumber: parseInt(match[2], 10)
+      };
+    }
+    return null; // Return null if the string doesn't match the expected format
+  }
+
   const updateROIData = async () => {
     try {
       const response = await fetch('/api/cache')
       const data = await response.json()
-      console.log(data.roiValues)
+
+      const boardData = extractBoardAndChannel(Object.keys(data.roiValues)[0])
+
+      // Now we loop through all the keys and update the integral value
+      for (const key in data.roiValues) {
+        const boardData = extractBoardAndChannel(key)
+        if (!boardData) {
+          console.error('Failed to extract board and channel data:', key)
+          continue
+        }
+
+        const roiTemp = data.roiValues[key]
+        const integral = await getRoiIntegral(boardData.boardId, boardData.channelNumber, roiTemp.low, roiTemp.high)
+        data.roiValues[key].integral = integral
+        // Change the key to "Board 0 Channel 0"
+        const newKey = `Board ${boardData.boardId} Channel ${boardData.channelNumber}`
+        data.roiValues[newKey] = data.roiValues[key]
+        delete data.roiValues[key]
+      }
+
       // Remove values where low and high are both 0 or low is 0 and high is 32
       const filteredRoiValues = Object.fromEntries(
-        Object.entries(data.roiValues).filter(([_, roi]) => !(roi.low === 0 && roi.high === 32768) || (roi.low === 0 && roi.high === 0))
+        Object.entries(data.roiValues).filter(([_, roi]) => !(roi.low === 0 && roi.high === 0))
       )
-      // The keys are of format board0_channel0, but we want "Board 0 Channel 0"
-      setRoiValues(filteredRoiValues)
+
+      data.roiValues = filteredRoiValues
+      setRoiValues(data.roiValues)
     } catch (error) {
       console.error('Failed to update ROI data:', error)
     }
@@ -425,12 +456,12 @@ export function RunControl() {
             <Card key={histoId}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
-                  {histoId} ROI
+                  {histoId}
                 </CardTitle>
                 <BarChart className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{roi.integral.toFixed(2)}</div>
+                <div className="text-2xl font-bold">{roi.integral}</div>
                 <p className="text-xs text-muted-foreground">
                   ROI: {roi.low} - {roi.high}
                 </p>
