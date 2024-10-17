@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram } from '@/lib/api'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getWaveform1 } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
-import { loadJSROOT } from '@/lib/loadJSROOT'
+import { loadJSROOT } from '@/lib/load-jsroot'
 
 type BoardData = {
   id: string;
@@ -16,11 +16,12 @@ type BoardData = {
   chan: string;
 }
 
-export default function HistogramsPage() {
+export default function WaveformDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [runNumber, setRunNumber] = useState<number | null>(null)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
+  const [updateTrigger, setUpdateTrigger] = useState(0)
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
@@ -28,21 +29,23 @@ export default function HistogramsPage() {
   useEffect(() => {
     fetchBoardConfiguration()
     fetchRunStatus()
-    const interval = setInterval(fetchRunStatus, 2000)
+    const statusInterval = setInterval(fetchRunStatus, 5000)
 
-    loadJSROOT().then(() => {
-      setJsrootLoaded(true)
-      setTimeout(initializeBlankHistograms, 0)
-    }).catch((error) => {
-      console.error('Failed to load JSROOT:', error)
-      toast({
-        title: "Error",
-        description: "Failed to load JSROOT. Some features may not work correctly.",
-        variant: "destructive",
+    loadJSROOT()
+      .then(() => {
+        setJsrootLoaded(true)
+        setTimeout(initializeBlankHistograms, 0)
       })
-    })
+      .catch((error) => {
+        console.error('Failed to load JSROOT:', error)
+        toast({
+          title: "Error",
+          description: "Failed to load JSROOT. Some features may not work correctly.",
+          variant: "destructive",
+        })
+      })
 
-    return () => clearInterval(interval)
+    return () => clearInterval(statusInterval)
   }, [])
 
   useEffect(() => {
@@ -56,8 +59,10 @@ export default function HistogramsPage() {
 
   useEffect(() => {
     if (jsrootLoaded) {
-      const interval = setInterval(updateHistograms, 2000)
-      return () => clearInterval(interval)
+      const updateInterval = setInterval(() => {
+        setUpdateTrigger(prev => prev + 1)
+      }, 2000)
+      return () => clearInterval(updateInterval)
     }
   }, [jsrootLoaded])
 
@@ -124,20 +129,28 @@ export default function HistogramsPage() {
         const histoId = `board${board.id}_channel${i}`
         const histoElement = histogramRefs.current[histoId]
         if (histoElement && window.JSROOT) {
-          let histogram
           try {
-            const response = await getHistogram(board.id, i.toString())
-            histogram = window.JSROOT.parse(response)
+            const histogramData = await getWaveform1(board.id, i.toString())
+            const histogram = window.JSROOT.parse(histogramData)
+            window.JSROOT.redraw(histoElement, histogram, "colz")
           } catch (error) {
             console.error(`Failed to fetch histogram for ${histoId}:`, error)
-          }
-          if (histogram) {
-            window.JSROOT.redraw(histoElement, histogram, "hist")
+            toast({
+              title: "Error",
+              description: `Failed to update histogram for ${board.name} - Channel ${i}`,
+              variant: "destructive",
+            })
           }
         }
       }
     }
-  }, [boards, createBlankHistogram])
+  }, [boards])
+
+  useEffect(() => {
+    if (jsrootLoaded && boards.length > 0) {
+      updateHistograms()
+    }
+  }, [jsrootLoaded, boards, updateTrigger])
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -152,11 +165,13 @@ export default function HistogramsPage() {
                 {Array.from({ length: parseInt(board.chan) }).map((_, channelIndex) => {
                   const histoId = `board${board.id}_channel${channelIndex}`
                   return (
-                    <div
-                      key={histoId}
-                      ref={el => { histogramRefs.current[histoId] = el }}
-                      className="w-full h-80 border rounded-lg shadow-sm"
-                    ></div>
+                    <div key={histoId} className="relative">
+                      <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
+                      <div
+                        ref={el => { histogramRefs.current[histoId] = el }}
+                        className="w-full h-80 border rounded-lg shadow-sm"
+                      ></div>
+                    </div>
                   )
                 })}
               </div>

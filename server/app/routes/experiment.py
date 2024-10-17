@@ -3,7 +3,7 @@ import os
 import csv
 import json
 
-from ROOT import TSocket, TMessage, TH1F, TBufferJSON, TGraph
+from ROOT import TBufferJSON
 from fastapi import HTTPException
 
 import pickle as pkl
@@ -16,11 +16,13 @@ from app.models.run_metadata import RunMetadata
 from app.utils.jwt_utils import jwt_required_custom, get_current_user
 
 from app.services import xdaq
-from app.services.root_client import ROOTClient
+from app.services.spy import ru_spy
 
 XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
+
+os.system("killall LunaSpy")
 
 def write_ruconf(state):
     if not os.path.exists('conf'): 
@@ -124,7 +126,8 @@ if( XDAQ_FLAG ):
     print( "PT configured...")
     topology.enable_pt( )
     print( "PT enabled...")
-    root_client = ROOTClient( )
+
+spy = ru_spy( )
 
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
@@ -187,13 +190,7 @@ def start_run( ):
     # Run the Spy to  save the histograms to txt file in run directory
     # Example: ./LunaSpy -d board_name firmware channel -n run_number
     if( XDAQ_FLAG ):
-        cmd = "LunaSpy"
-        for board in daq_state['boards']:
-            firmware = 0 if board['dpp'] == "DPP-PHA" else 1
-            cmd += f" -d {board['name']} {firmware} {board['chan']}"
-        cmd += f" -n {daq_state['run']}"
-        os.system(f"{cmd} &")
-        root_client.start()
+        spy.start(daq_state)
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
@@ -205,8 +202,7 @@ def stop_run( ):
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     # Stop the XDAQ
     if( XDAQ_FLAG ):
-        try: root_client.stop()
-        except: os.system("killall LunaSpy")
+        spy.stop()
         topology.halt( )
 
     daq_state['running'] = False
@@ -449,7 +445,10 @@ def get_histo(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = root_client.histograms[idx]
+    if( not XDAQ_FLAG ):
+        histo = spy.get( )
+    else:
+        histo = spy.get_object("energy", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -462,7 +461,7 @@ def get_qlong(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = root_client.qlong[idx]
+    histo = spy.get_object("qlong", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -475,7 +474,7 @@ def get_qhosrt(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = root_client.qshort[idx]
+    histo = spy.get_object("qshort", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -487,7 +486,10 @@ def get_wave1(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = root_client.waves1[idx]
+    if( not XDAQ_FLAG ):
+        histo = spy.get( )
+    else:
+        histo = spy.get_object("wave1", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -499,7 +501,10 @@ def get_wave2(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = root_client.waves2[idx]
+    if( not XDAQ_FLAG ):
+        histo = spy.get( )
+    else:
+        histo = spy.get_object("wave2", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 

@@ -9,8 +9,8 @@ import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/auth-store';
 import { RunControl } from '@/components/run-control';
 import { Stats } from '@/components/stats';
-import HistogramsPage from '@/components/histo';
-import WaveformPage from '@/components/wave';
+import HistogramDashboard from '@/components/histo-dashboard';
+import WaveformDashboard from '@/components/wave-dashboard';
 import { useToast } from '@/components/ui/use-toast';
 import { ModeToggle } from '@/components/ui/mode-toggle';
 
@@ -74,18 +74,12 @@ export default function DashboardPage() {
         <div className="mb-8 px-4">
           <RunControl />
         </div>
-        <div className="px-4">
-          <h2 className="text-2xl font-semibold mb-4">Live Statistics</h2>
-          <Stats />
-        </div>
         <div className="mb-8" />
         <div className="px-4">
-          <h3 className="text-2xl font-semibold mb-4">Histograms</h3>
-          <HistogramsPage />
-        </div>
-        <div className="px-4">
-          <h4 className="text-2xl font-semibold mb-4">Waveforms</h4>
-          <WaveformPage />
+          <h2 className="text-2xl font-semibold mb-4">Histograms</h2>
+          <HistogramDashboard />
+          <h3 className="text-2xl font-semibold mb-4">Waveforms</h3>
+          <WaveformDashboard />
         </div>
       </div>
     </QueryClientProvider>
