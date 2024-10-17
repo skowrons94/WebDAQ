@@ -6,21 +6,19 @@ channels:
   - defaults
 
 dependencies:
-  - python=3.10
+  - python
   - numpy
   - matplotlib
   - jupyter
   - ipykernel
   - ipywidgets
-  - nodejs
   - jupyterlab
   - flask
   - flask-sqlalchemy
   - flask-migrate
   - flask-jwt-extended
   - flask-cors
-  - root
-  - fastapi
+  - root=6.30.4
   - pycurl
   - pkgconfig
   - pip

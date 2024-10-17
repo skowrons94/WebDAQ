@@ -4,7 +4,6 @@ import csv
 import json
 
 from ROOT import TBufferJSON, TH1F
-from fastapi import HTTPException
 
 import pickle as pkl
 
@@ -18,7 +17,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.spy import ru_spy
 
-XDAQ_FLAG = True
+XDAQ_FLAG = False
 
 bp = Blueprint('experiment', __name__)
 
@@ -445,10 +444,7 @@ def get_histo(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    if( not XDAQ_FLAG ):
-        histo = spy.get( )
-    else:
-        histo = spy.get_object("energy", idx)
+    histo = spy.get_object("energy", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -486,10 +482,7 @@ def get_wave1(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    if( not XDAQ_FLAG ):
-        histo = spy.get( )
-    else:
-        histo = spy.get_object("wave1", idx)
+    histo = spy.get_object("wave1", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -501,10 +494,7 @@ def get_wave2(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    if( not XDAQ_FLAG ):
-        histo = spy.get( )
-    else:
-        histo = spy.get_object("wave2", idx)
+    histo = spy.get_object("wave2", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
