@@ -3,7 +3,7 @@ import os
 import csv
 import json
 
-from ROOT import TBufferJSON
+from ROOT import TBufferJSON, TH1F
 from fastapi import HTTPException
 
 import pickle as pkl
@@ -558,3 +558,44 @@ def wave_status():
             return jsonify(False)
     print( "Waveforms are enabled")
     return jsonify(True)
+
+# Route to serve all the data for a given run number
+@bp.route('/histograms/<board_id>/<channel>/<roi_min>/<roi_max>', methods=['GET'])
+@jwt_required_custom
+def get_roi_histo(board_id, channel, roi_min, roi_max):
+    idx = 0
+    for board in daq_state['boards']:
+        if int(board['id']) < int(board_id):
+            idx += board['chan']
+    idx += int(channel)
+
+    histo = spy.get_object("energy", idx)
+
+    h1 = TH1F(histo)
+    for i in range(0, int(roi_min)):
+        h1.SetBinContent(i, 0)
+    for i in range(int(roi_max), 32768):
+        h1.SetBinContent(i, 0)
+
+    h1.SetLineColor(2)
+    h1.SetFillStyle(3001)
+    h1.SetFillColorAlpha(2, 0.3)
+    h1.SetLineWidth(2)
+
+    obj = str(TBufferJSON.ConvertToJSON(h1).Data())
+    h1.Delete( )
+    del h1
+    return obj
+
+# Route to serve all the data for a given run number
+@bp.route('/roi/<board_id>/<channel>/<roi_min>/<roi_max>', methods=['GET'])
+@jwt_required_custom
+def get_roi_integral(board_id, channel, roi_min, roi_max):
+    idx = 0
+    for board in daq_state['boards']:
+        if int(board['id']) < int(board_id):
+            idx += board['chan']
+    idx += int(channel)
+    histo = spy.get_object("energy", idx)
+    integral = histo.Integral(int(roi_min), int(roi_max))
+    return jsonify(integral)

@@ -192,5 +192,13 @@ export const getStartTime = () =>
     export const getWaveformStatus = () =>
         api.get('/waveforms/status').then(res => res.data);
 
+    // Get ROI histograms
+    export const getRoiHistogram = (boardId: string, channel: string, roiMin: number, roiMax: number) =>
+        api.get(`/histograms/${boardId}/${channel}/${roiMin}/${roiMax}`).then(res => res.data);
+
+    // Get ROI histograms
+    export const getRoiIntegral = (boardId: string, channel: string, roiMin: number, roiMax: number) =>
+        api.get(`/roi/${boardId}/${channel}/${roiMin}/${roiMax}`).then(res => res.data);
+
 
 export default api;

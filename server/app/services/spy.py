@@ -30,7 +30,6 @@ class ru_spy:
     def receive(self):
         msg = ROOT.TMessage()
         if self.socket.Recv(msg) <= 0:
-            msg.Delete()
             return False
         
         if msg.GetClass().GetName() in ["TH1F"]:
@@ -114,12 +113,12 @@ class ru_spy:
             os.system("killall LunaSpy")
 
     def get(self):
-        h1 = ROOT.TH1F("h1", "h1", 100, -10, 10)
+        h1 = ROOT.TH1F("h1", "h1", 32768, 0, 32768)
         h1.FillRandom("gaus", 100)
         return h1
     
     def get_object(self, name, idx):
         try:
-            return self.data[name][idx]
+            return self.data[name][idx].Clone( )
         except:
-            return ROOT.TH1F("h1", "h1", 100, -10, 10)
+            return ROOT.TH1F("h1", "h1", 32768, 0, 32768)

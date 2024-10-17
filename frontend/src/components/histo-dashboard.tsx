@@ -1,10 +1,12 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram } from '@/lib/api'
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getRoiHistogram, getRoiIntegral } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 type BoardData = {
   id: string;
@@ -16,12 +18,17 @@ type BoardData = {
   chan: string;
 }
 
+type ROIValues = {
+  [key: string]: { low: number; high: number; integral: number };
+}
+
 export default function HistogramDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [runNumber, setRunNumber] = useState<number | null>(null)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [updateTrigger, setUpdateTrigger] = useState(0)
+  const [roiValues, setRoiValues] = useState<ROIValues>({})
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
@@ -70,6 +77,7 @@ export default function HistogramDashboard() {
     try {
       const response = await getBoardConfiguration()
       setBoards(response.data)
+      initializeROIValues(response.data)
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
       toast({
@@ -122,6 +130,17 @@ export default function HistogramDashboard() {
     }
   }, [createBlankHistogram])
 
+  const initializeROIValues = (boards: BoardData[]) => {
+    const initialROIValues: ROIValues = {}
+    boards.forEach(board => {
+      for (let i = 0; i < parseInt(board.chan); i++) {
+        const histoId = `board${board.id}_channel${i}`
+        initialROIValues[histoId] = { low: 0, high: 32768, integral: 0 }
+      }
+    })
+    setRoiValues(initialROIValues)
+  }
+
   const updateHistograms = useCallback(async () => {
     console.log('Updating histograms...')
     for (const board of boards) {
@@ -132,7 +151,15 @@ export default function HistogramDashboard() {
           try {
             const histogramData = await getHistogram(board.id, i.toString())
             const histogram = window.JSROOT.parse(histogramData)
-            window.JSROOT.redraw(histoElement, histogram, "colz")
+            await drawHistogramWithROI(histoElement, histogram, histoId, i.toString(), board.id)
+            
+            // Calculate and update the integral
+            const { low, high } = roiValues[histoId]
+            const integral = await getRoiIntegral(board.id, i.toString(), low, high)
+            setRoiValues(prev => ({
+              ...prev,
+              [histoId]: { ...prev[histoId], integral }
+            }))
           } catch (error) {
             console.error(`Failed to fetch histogram for ${histoId}:`, error)
             toast({
@@ -144,7 +171,51 @@ export default function HistogramDashboard() {
         }
       }
     }
-  }, [boards])
+  }, [boards, roiValues])
+
+  const handleROIChange = async (histoId: string, type: 'low' | 'high', value: number) => {
+    const [boardId, channelStr] = histoId.split('_')
+    const channelId = channelStr.replace('channel', '')
+    const newRoiValues = {
+      ...roiValues[histoId],
+      [type]: value
+    }
+    setRoiValues(prev => ({
+      ...prev,
+      [histoId]: newRoiValues
+    }))
+
+    // Update the integral when ROI changes
+    try {
+      const integral = await getRoiIntegral(boardId.replace('board', ''), channelId, newRoiValues.low, newRoiValues.high)
+      setRoiValues(prev => ({
+        ...prev,
+        [histoId]: { ...newRoiValues, integral }
+      }))
+    } catch (error) {
+      console.error(`Failed to get ROI integral for ${histoId}:`, error)
+    }
+  }
+
+  const drawHistogramWithROI = async (element: HTMLDivElement, histogram: any, histoId: string, chan: string, id: string) => {
+    if (window.JSROOT) {
+
+      const canv = window.JSROOT.create('TCanvas');
+
+      canv.fName = 'c1';
+      canv.fPrimitives.Add(histogram, 'histo');
+
+      const { low, high } = roiValues[histoId]
+      console.log( low, high )
+
+      const roiObj = await getRoiHistogram(id, chan, low, high)
+      const roiHistogram = window.JSROOT.parse(roiObj)
+
+      canv.fPrimitives.Add(roiHistogram, 'histo');
+
+      await window.JSROOT.redraw(element, canv)
+    }
+  }
 
   useEffect(() => {
     if (jsrootLoaded && boards.length > 0) {
@@ -169,8 +240,35 @@ export default function HistogramDashboard() {
                       <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
                       <div
                         ref={el => { histogramRefs.current[histoId] = el }}
-                        className="w-full h-80 border rounded-lg shadow-sm"
+                        className="w-full h-80 border rounded-lg shadow-sm mb-2"
                       ></div>
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="flex gap-4">
+                          <div className="flex flex-col">
+                            <Label htmlFor={`${histoId}-low`}>Low ROI</Label>
+                            <Input
+                              id={`${histoId}-low`}
+                              type="number"
+                              value={roiValues[histoId]?.low}
+                              onChange={(e) => handleROIChange(histoId, 'low', Number(e.target.value))}
+                              className="w-24"
+                            />
+                          </div>
+                          <div className="flex flex-col">
+                            <Label htmlFor={`${histoId}-high`}>High ROI</Label>
+                            <Input
+                              id={`${histoId}-high`}
+                              type="number"
+                              value={roiValues[histoId]?.high}
+                              onChange={(e) => handleROIChange(histoId, 'high', Number(e.target.value))}
+                              className="w-24"
+                            />
+                          </div>
+                        </div>
+                        <div className="text-sm font-medium">
+                          Integral: {roiValues[histoId]?.integral.toFixed(2) || 'N/A'}
+                        </div>
+                      </div>
                     </div>
                   )
                 })}

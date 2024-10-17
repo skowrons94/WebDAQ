@@ -470,7 +470,7 @@ export function RunControl() {
                     </TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell>Multiplycity</TableCell>
+                    <TableCell>Multiplicity</TableCell>
                     <TableCell>{multiplicity}</TableCell>
                     <TableCell>
                       <Badge variant="outline">Set</Badge>
@@ -493,6 +493,15 @@ export function RunControl() {
                     <TableCell>
                       <Badge variant="outline">
                         {limitFileSize ? 'Set' : 'Unset'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Waveforms</TableCell>
+                    <TableCell></TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {waveformsEnabled ? 'Enabled' : 'Disabled'}
                       </Badge>
                     </TableCell>
                   </TableRow>
