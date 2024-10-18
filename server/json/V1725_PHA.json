@@ -1,0 +1,2185 @@
+{
+    "dgtzs": {
+        "BoardName": "V1725A"
+    },
+    "registers":{
+	"reg_1020": {
+	    "name": "Record Length",
+	    "channel": 0,
+	    "address": "0x1020",
+	    "value": "0x000003A9"
+	},
+	"reg_1120": {
+	    "name": "Record Length",
+	    "channel": 1,
+	    "address": "0x1120",
+	    "value": "0x000003A9"
+	},
+	"reg_1220": {
+	    "name": "Record Length",
+	    "channel": 2,
+	    "address": "0x1220",
+	    "value": "0x000003A9"
+	},
+	"reg_1320": {
+	    "name": "Record Length",
+	    "channel": 3,
+	    "address": "0x1320",
+	    "value": "0x000003A9"
+	},
+	"reg_1420": {
+	    "name": "Record Length",
+	    "channel": 4,
+	    "address": "0x1420",
+	    "value": "0x000003A9"
+	},
+	"reg_1520": {
+	    "name": "Record Length",
+	    "channel": 5,
+	    "address": "0x1520",
+	    "value": "0x000003A9"
+	},
+	"reg_1620": {
+	    "name": "Record Length",
+	    "channel": 6,
+	    "address": "0x1620",
+	    "value": "0x000003A9"
+	},
+	"reg_1720": {
+	    "name": "Record Length",
+	    "channel": 7,
+	    "address": "0x1720",
+	    "value": "0x000003A9"
+	},
+	"reg_1820": {
+	    "name": "Record Length",
+	    "channel": 8,
+	    "address": "0x1820",
+	    "value": "0x000003A9"
+	},
+	"reg_1920": {
+	    "name": "Record Length",
+	    "channel": 9,
+	    "address": "0x1920",
+	    "value": "0x000003A9"
+	},
+	"reg_1A20": {
+	    "name": "Record Length",
+	    "channel": 10,
+	    "address": "0x1A20",
+	    "value": "0x000003A9"
+	},
+	"reg_1B20": {
+	    "name": "Record Length",
+	    "channel": 11,
+	    "address": "0x1B20",
+	    "value": "0x000003A9"
+	},
+	"reg_1C20": {
+	    "name": "Record Length",
+	    "channel": 12,
+	    "address": "0x1C20",
+	    "value": "0x000003A9"
+	},
+	"reg_1D20": {
+	    "name": "Record Length",
+	    "channel": 13,
+	    "address": "0x1D20",
+	    "value": "0x000003A9"
+	},
+	"reg_1E20": {
+	    "name": "Record Length",
+	    "channel": 14,
+	    "address": "0x1E20",
+	    "value": "0x000003A9"
+	},
+	"reg_1F20": {
+	    "name": "Record Length",
+	    "channel": 15,
+	    "address": "0x1F20",
+	    "value": "0x000003A9"
+	},
+	"reg_1028": {
+	    "name": "Input Dynamic Range",
+	    "channel": 0,
+	    "address": "0x1028",
+	    "value": "0x00000001"
+	},
+	"reg_1128": {
+	    "name": "Input Dynamic Range",
+	    "channel": 1,
+	    "address": "0x1128",
+	    "value": "0x00000001"
+	},
+	"reg_1228": {
+	    "name": "Input Dynamic Range",
+	    "channel": 2,
+	    "address": "0x1228",
+	    "value": "0x00000001"
+	},
+	"reg_1328": {
+	    "name": "Input Dynamic Range",
+	    "channel": 3,
+	    "address": "0x1328",
+	    "value": "0x00000001"
+	},
+	"reg_1428": {
+	    "name": "Input Dynamic Range",
+	    "channel": 4,
+	    "address": "0x1428",
+	    "value": "0x00000000"
+	},
+	"reg_1528": {
+	    "name": "Input Dynamic Range",
+	    "channel": 5,
+	    "address": "0x1528",
+	    "value": "0x00000001"
+	},
+	"reg_1628": {
+	    "name": "Input Dynamic Range",
+	    "channel": 6,
+	    "address": "0x1628",
+	    "value": "0x00000001"
+	},
+	"reg_1728": {
+	    "name": "Input Dynamic Range",
+	    "channel": 7,
+	    "address": "0x1728",
+	    "value": "0x00000001"
+	},
+	"reg_1828": {
+	    "name": "Input Dynamic Range",
+	    "channel": 8,
+	    "address": "0x1828",
+	    "value": "0x00000001"
+	},
+	"reg_1928": {
+	    "name": "Input Dynamic Range",
+	    "channel": 9,
+	    "address": "0x1928",
+	    "value": "0x00000001"
+	},
+	"reg_1A28": {
+	    "name": "Input Dynamic Range",
+	    "channel": 10,
+	    "address": "0x1A28",
+	    "value": "0x00000001"
+	},
+	"reg_1B28": {
+	    "name": "Input Dynamic Range",
+	    "channel": 11,
+	    "address": "0x1B28",
+	    "value": "0x00000001"
+	},
+	"reg_1C28": {
+	    "name": "Input Dynamic Range",
+	    "channel": 12,
+	    "address": "0x1C28",
+	    "value": "0x00000001"
+	},
+	"reg_1D28": {
+	    "name": "Input Dynamic Range",
+	    "channel": 13,
+	    "address": "0x1D28",
+	    "value": "0x00000001"
+	},
+	"reg_1E28": {
+	    "name": "Input Dynamic Range",
+	    "channel": 14,
+	    "address": "0x1E28",
+	    "value": "0x00000001"
+	},
+	"reg_1F28": {
+	    "name": "Input Dynamic Range",
+	    "channel": 15,
+	    "address": "0x1F28",
+	    "value": "0x00000001"
+	},
+	"reg_1034": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 0,
+	    "address": "0x1034",
+	    "value": "0x00000011"
+	},
+	"reg_1134": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 1,
+	    "address": "0x1134",
+	    "value": "0x00000011"
+	},
+	"reg_1234": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 2,
+	    "address": "0x1234",
+	    "value": "0x00000011"
+	},
+	"reg_1334": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 3,
+	    "address": "0x1334",
+	    "value": "0x00000011"
+	},
+	"reg_1434": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 4,
+	    "address": "0x1434",
+	    "value": "0x00000011"
+	},
+	"reg_1534": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 5,
+	    "address": "0x1534",
+	    "value": "0x00000011"
+	},
+	"reg_1634": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 6,
+	    "address": "0x1634",
+	    "value": "0x00000011"
+	},
+	"reg_1734": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 7,
+	    "address": "0x1734",
+	    "value": "0x00000011"
+	},
+	"reg_1834": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 8,
+	    "address": "0x1834",
+	    "value": "0x00000011"
+	},
+	"reg_1934": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 9,
+	    "address": "0x1934",
+	    "value": "0x00000011"
+	},
+	"reg_1A34": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 10,
+	    "address": "0x1A34",
+	    "value": "0x00000011"
+	},
+	"reg_1B34": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 11,
+	    "address": "0x1B34",
+	    "value": "0x00000011"
+	},
+	"reg_1C34": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 12,
+	    "address": "0x1C34",
+	    "value": "0x00000011"
+	},
+	"reg_1D34": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 13,
+	    "address": "0x1D34",
+	    "value": "0x00000011"
+	},
+	"reg_1E34": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 14,
+	    "address": "0x1E34",
+	    "value": "0x00000011"
+	},
+	"reg_1F34": {
+	    "name": "Number of Events per Aggregate",
+	    "channel": 15,
+	    "address": "0x1F34",
+	    "value": "0x00000011"
+	},
+	"reg_1038": {
+	    "name": "Pre Trigger",
+	    "channel": 0,
+	    "address": "0x1038",
+	    "value": "0x0000003E"
+	},
+	"reg_1138": {
+	    "name": "Pre Trigger",
+	    "channel": 1,
+	    "address": "0x1138",
+	    "value": "0x0000003E"
+	},
+	"reg_1238": {
+	    "name": "Pre Trigger",
+	    "channel": 2,
+	    "address": "0x1238",
+	    "value": "0x0000003E"
+	},
+	"reg_1338": {
+	    "name": "Pre Trigger",
+	    "channel": 3,
+	    "address": "0x1338",
+	    "value": "0x0000003E"
+	},
+	"reg_1438": {
+	    "name": "Pre Trigger",
+	    "channel": 4,
+	    "address": "0x1438",
+	    "value": "0x0000003E"
+	},
+	"reg_1538": {
+	    "name": "Pre Trigger",
+	    "channel": 5,
+	    "address": "0x1538",
+	    "value": "0x0000003E"
+	},
+	"reg_1638": {
+	    "name": "Pre Trigger",
+	    "channel": 6,
+	    "address": "0x1638",
+	    "value": "0x0000003E"
+	},
+	"reg_1738": {
+	    "name": "Pre Trigger",
+	    "channel": 7,
+	    "address": "0x1738",
+	    "value": "0x0000003E"
+	},
+	"reg_1838": {
+	    "name": "Pre Trigger",
+	    "channel": 8,
+	    "address": "0x1838",
+	    "value": "0x0000003E"
+	},
+	"reg_1938": {
+	    "name": "Pre Trigger",
+	    "channel": 9,
+	    "address": "0x1938",
+	    "value": "0x0000003E"
+	},
+	"reg_1A38": {
+	    "name": "Pre Trigger",
+	    "channel": 10,
+	    "address": "0x1A38",
+	    "value": "0x0000003E"
+	},
+	"reg_1B38": {
+	    "name": "Pre Trigger",
+	    "channel": 11,
+	    "address": "0x1B38",
+	    "value": "0x0000003E"
+	},
+	"reg_1C38": {
+	    "name": "Pre Trigger",
+	    "channel": 12,
+	    "address": "0x1C38",
+	    "value": "0x0000003E"
+	},
+	"reg_1D38": {
+	    "name": "Pre Trigger",
+	    "channel": 13,
+	    "address": "0x1D38",
+	    "value": "0x0000003E"
+	},
+	"reg_1E38": {
+	    "name": "Pre Trigger",
+	    "channel": 14,
+	    "address": "0x1E38",
+	    "value": "0x0000003E"
+	},
+	"reg_1F38": {
+	    "name": "Pre Trigger",
+	    "channel": 15,
+	    "address": "0x1F38",
+	    "value": "0x0000003E"
+	},
+	"reg_1040": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 0,
+	    "address": "0x1040",
+	    "value": "0x00000000"
+	},
+	"reg_1140": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 1,
+	    "address": "0x1140",
+	    "value": "0x00000000"
+	},
+	"reg_1240": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 2,
+	    "address": "0x1240",
+	    "value": "0x00000000"
+	},
+	"reg_1340": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 3,
+	    "address": "0x1340",
+	    "value": "0x00000000"
+	},
+	"reg_1440": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 4,
+	    "address": "0x1440",
+	    "value": "0x00000000"
+	},
+	"reg_1540": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 5,
+	    "address": "0x1540",
+	    "value": "0x00000000"
+	},
+	"reg_1640": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 6,
+	    "address": "0x1640",
+	    "value": "0x00000000"
+	},
+	"reg_1740": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 7,
+	    "address": "0x1740",
+	    "value": "0x00000000"
+	},
+	"reg_1840": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 8,
+	    "address": "0x1840",
+	    "value": "0x00000000"
+	},
+	"reg_1940": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 9,
+	    "address": "0x1940",
+	    "value": "0x00000000"
+	},
+	"reg_1A40": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 10,
+	    "address": "0x1A40",
+	    "value": "0x00000000"
+	},
+	"reg_1B40": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 11,
+	    "address": "0x1B40",
+	    "value": "0x00000000"
+	},
+	"reg_1C40": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 12,
+	    "address": "0x1C40",
+	    "value": "0x00000000"
+	},
+	"reg_1D40": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 13,
+	    "address": "0x1D40",
+	    "value": "0x00000000"
+	},
+	"reg_1E40": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 14,
+	    "address": "0x1E40",
+	    "value": "0x00000000"
+	},
+	"reg_1F40": {
+	    "name": "Channel n Stop Acquisition",
+	    "channel": 15,
+	    "address": "0x1F40",
+	    "value": "0x00000000"
+	},
+	"reg_1054": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 0,
+	    "address": "0x1054",
+	    "value": "0x00000000"
+	},
+	"reg_1154": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 1,
+	    "address": "0x1154",
+	    "value": "0x00000000"
+	},
+	"reg_1254": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 2,
+	    "address": "0x1254",
+	    "value": "0x00000000"
+	},
+	"reg_1354": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 3,
+	    "address": "0x1354",
+	    "value": "0x00000000"
+	},
+	"reg_1454": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 4,
+	    "address": "0x1454",
+	    "value": "0x00000000"
+	},
+	"reg_1554": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 5,
+	    "address": "0x1554",
+	    "value": "0x00000000"
+	},
+	"reg_1654": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 6,
+	    "address": "0x1654",
+	    "value": "0x00000000"
+	},
+	"reg_1754": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 7,
+	    "address": "0x1754",
+	    "value": "0x00000000"
+	},
+	"reg_1854": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 8,
+	    "address": "0x1854",
+	    "value": "0x00000000"
+	},
+	"reg_1954": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 9,
+	    "address": "0x1954",
+	    "value": "0x00000000"
+	},
+	"reg_1A54": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 10,
+	    "address": "0x1A54",
+	    "value": "0x00000000"
+	},
+	"reg_1B54": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 11,
+	    "address": "0x1B54",
+	    "value": "0x00000000"
+	},
+	"reg_1C54": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 12,
+	    "address": "0x1C54",
+	    "value": "0x00000000"
+	},
+	"reg_1D54": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 13,
+	    "address": "0x1D54",
+	    "value": "0x00000000"
+	},
+	"reg_1E54": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 14,
+	    "address": "0x1E54",
+	    "value": "0x00000000"
+	},
+	"reg_1F54": {
+	    "name": "RC-CR2 Smoothing Factor",
+	    "channel": 15,
+	    "address": "0x1F54",
+	    "value": "0x00000000"
+	},
+	"reg_1058": {
+	    "name": "Input Rise Time",
+	    "channel": 0,
+	    "address": "0x1058",
+	    "value": "0x00000008"
+	},
+	"reg_1158": {
+	    "name": "Input Rise Time",
+	    "channel": 1,
+	    "address": "0x1158",
+	    "value": "0x00000004"
+	},
+	"reg_1258": {
+	    "name": "Input Rise Time",
+	    "channel": 2,
+	    "address": "0x1258",
+	    "value": "0x00000008"
+	},
+	"reg_1358": {
+	    "name": "Input Rise Time",
+	    "channel": 3,
+	    "address": "0x1358",
+	    "value": "0x00000004"
+	},
+	"reg_1458": {
+	    "name": "Input Rise Time",
+	    "channel": 4,
+	    "address": "0x1458",
+	    "value": "0x00000008"
+	},
+	"reg_1558": {
+	    "name": "Input Rise Time",
+	    "channel": 5,
+	    "address": "0x1558",
+	    "value": "0x00000004"
+	},
+	"reg_1658": {
+	    "name": "Input Rise Time",
+	    "channel": 6,
+	    "address": "0x1658",
+	    "value": "0x00000008"
+	},
+	"reg_1758": {
+	    "name": "Input Rise Time",
+	    "channel": 7,
+	    "address": "0x1758",
+	    "value": "0x00000004"
+	},
+	"reg_1858": {
+	    "name": "Input Rise Time",
+	    "channel": 8,
+	    "address": "0x1858",
+	    "value": "0x00000009"
+	},
+	"reg_1958": {
+	    "name": "Input Rise Time",
+	    "channel": 9,
+	    "address": "0x1958",
+	    "value": "0x0000000F"
+	},
+	"reg_1A58": {
+	    "name": "Input Rise Time",
+	    "channel": 10,
+	    "address": "0x1A58",
+	    "value": "0x0000000F"
+	},
+	"reg_1B58": {
+	    "name": "Input Rise Time",
+	    "channel": 11,
+	    "address": "0x1B58",
+	    "value": "0x0000000F"
+	},
+	"reg_1C58": {
+	    "name": "Input Rise Time",
+	    "channel": 12,
+	    "address": "0x1C58",
+	    "value": "0x0000000F"
+	},
+	"reg_1D58": {
+	    "name": "Input Rise Time",
+	    "channel": 13,
+	    "address": "0x1D58",
+	    "value": "0x0000000F"
+	},
+	"reg_1E58": {
+	    "name": "Input Rise Time",
+	    "channel": 14,
+	    "address": "0x1E58",
+	    "value": "0x0000000F"
+	},
+	"reg_1F58": {
+	    "name": "Input Rise Time",
+	    "channel": 15,
+	    "address": "0x1F58",
+	    "value": "0x0000000F"
+	},
+	"reg_105C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 0,
+	    "address": "0x105C",
+	    "value": "0x00000177"
+	},
+	"reg_115C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 1,
+	    "address": "0x115C",
+	    "value": "0x00000006"
+	},
+	"reg_125C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 2,
+	    "address": "0x125C",
+	    "value": "0x00000177"
+	},
+	"reg_135C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 3,
+	    "address": "0x135C",
+	    "value": "0x00000006"
+	},
+	"reg_145C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 4,
+	    "address": "0x145C",
+	    "value": "0x00000177"
+	},
+	"reg_155C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 5,
+	    "address": "0x155C",
+	    "value": "0x00000006"
+	},
+	"reg_165C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 6,
+	    "address": "0x165C",
+	    "value": "0x00000177"
+	},
+	"reg_175C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 7,
+	    "address": "0x175C",
+	    "value": "0x00000006"
+	},
+	"reg_185C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 8,
+	    "address": "0x185C",
+	    "value": "0x00000177"
+	},
+	"reg_195C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 9,
+	    "address": "0x195C",
+	    "value": "0x00000177"
+	},
+	"reg_1A5C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 10,
+	    "address": "0x1A5C",
+	    "value": "0x00000177"
+	},
+	"reg_1B5C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 11,
+	    "address": "0x1B5C",
+	    "value": "0x00000177"
+	},
+	"reg_1C5C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 12,
+	    "address": "0x1C5C",
+	    "value": "0x00000177"
+	},
+	"reg_1D5C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 13,
+	    "address": "0x1D5C",
+	    "value": "0x00000177"
+	},
+	"reg_1E5C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 14,
+	    "address": "0x1E5C",
+	    "value": "0x00000177"
+	},
+	"reg_1F5C": {
+	    "name": "Trapezoid Rise Time",
+	    "channel": 15,
+	    "address": "0x1F5C",
+	    "value": "0x00000177"
+	},
+	"reg_1060": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 0,
+	    "address": "0x1060",
+	    "value": "0x0000003E"
+	},
+	"reg_1160": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 1,
+	    "address": "0x1160",
+	    "value": "0x0000001F"
+	},
+	"reg_1260": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 2,
+	    "address": "0x1260",
+	    "value": "0x0000003E"
+	},
+	"reg_1360": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 3,
+	    "address": "0x1360",
+	    "value": "0x0000001F"
+	},
+	"reg_1460": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 4,
+	    "address": "0x1460",
+	    "value": "0x0000003E"
+	},
+	"reg_1560": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 5,
+	    "address": "0x1560",
+	    "value": "0x0000001F"
+	},
+	"reg_1660": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 6,
+	    "address": "0x1660",
+	    "value": "0x0000003E"
+	},
+	"reg_1760": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 7,
+	    "address": "0x1760",
+	    "value": "0x0000001F"
+	},
+	"reg_1860": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 8,
+	    "address": "0x1860",
+	    "value": "0x0000003E"
+	},
+	"reg_1960": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 9,
+	    "address": "0x1960",
+	    "value": "0x0000003E"
+	},
+	"reg_1A60": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 10,
+	    "address": "0x1A60",
+	    "value": "0x0000003E"
+	},
+	"reg_1B60": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 11,
+	    "address": "0x1B60",
+	    "value": "0x0000003E"
+	},
+	"reg_1C60": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 12,
+	    "address": "0x1C60",
+	    "value": "0x0000003E"
+	},
+	"reg_1D60": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 13,
+	    "address": "0x1D60",
+	    "value": "0x0000003E"
+	},
+	"reg_1E60": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 14,
+	    "address": "0x1E60",
+	    "value": "0x0000003E"
+	},
+	"reg_1F60": {
+	    "name": "Trapezoid Flat Top",
+	    "channel": 15,
+	    "address": "0x1F60",
+	    "value": "0x0000003E"
+	},
+	"reg_1064": {
+	    "name": "Peaking time",
+	    "channel": 0,
+	    "address": "0x1064",
+	    "value": "0x00000031"
+	},
+	"reg_1164": {
+	    "name": "Peaking time",
+	    "channel": 1,
+	    "address": "0x1164",
+	    "value": "0x00000016"
+	},
+	"reg_1264": {
+	    "name": "Peaking time",
+	    "channel": 2,
+	    "address": "0x1264",
+	    "value": "0x00000031"
+	},
+	"reg_1364": {
+	    "name": "Peaking time",
+	    "channel": 3,
+	    "address": "0x1364",
+	    "value": "0x00000016"
+	},
+	"reg_1464": {
+	    "name": "Peaking time",
+	    "channel": 4,
+	    "address": "0x1464",
+	    "value": "0x00000031"
+	},
+	"reg_1564": {
+	    "name": "Peaking time",
+	    "channel": 5,
+	    "address": "0x1564",
+	    "value": "0x00000016"
+	},
+	"reg_1664": {
+	    "name": "Peaking time",
+	    "channel": 6,
+	    "address": "0x1664",
+	    "value": "0x00000031"
+	},
+	"reg_1764": {
+	    "name": "Peaking time",
+	    "channel": 7,
+	    "address": "0x1764",
+	    "value": "0x00000016"
+	},
+	"reg_1864": {
+	    "name": "Peaking time",
+	    "channel": 8,
+	    "address": "0x1864",
+	    "value": "0x00000031"
+	},
+	"reg_1964": {
+	    "name": "Peaking time",
+	    "channel": 9,
+	    "address": "0x1964",
+	    "value": "0x0000002C"
+	},
+	"reg_1A64": {
+	    "name": "Peaking time",
+	    "channel": 10,
+	    "address": "0x1A64",
+	    "value": "0x0000002C"
+	},
+	"reg_1B64": {
+	    "name": "Peaking time",
+	    "channel": 11,
+	    "address": "0x1B64",
+	    "value": "0x0000002C"
+	},
+	"reg_1C64": {
+	    "name": "Peaking time",
+	    "channel": 12,
+	    "address": "0x1C64",
+	    "value": "0x0000002C"
+	},
+	"reg_1D64": {
+	    "name": "Peaking time",
+	    "channel": 13,
+	    "address": "0x1D64",
+	    "value": "0x0000002C"
+	},
+	"reg_1E64": {
+	    "name": "Peaking time",
+	    "channel": 14,
+	    "address": "0x1E64",
+	    "value": "0x0000002C"
+	},
+	"reg_1F64": {
+	    "name": "Peaking time",
+	    "channel": 15,
+	    "address": "0x1F64",
+	    "value": "0x0000002C"
+	},
+	"reg_1068": {
+	    "name": "Decay time",
+	    "channel": 0,
+	    "address": "0x1068",
+	    "value": "0x00000A41"
+	},
+	"reg_1168": {
+	    "name": "Decay time",
+	    "channel": 1,
+	    "address": "0x1168",
+	    "value": "0x00000012"
+	},
+	"reg_1268": {
+	    "name": "Decay time",
+	    "channel": 2,
+	    "address": "0x1268",
+	    "value": "0x00000CB2"
+	},
+	"reg_1368": {
+	    "name": "Decay time",
+	    "channel": 3,
+	    "address": "0x1368",
+	    "value": "0x00000012"
+	},
+	"reg_1468": {
+	    "name": "Decay time",
+	    "channel": 4,
+	    "address": "0x1468",
+	    "value": "0x000009C4"
+	},
+	"reg_1568": {
+	    "name": "Decay time",
+	    "channel": 5,
+	    "address": "0x1568",
+	    "value": "0x00000012"
+	},
+	"reg_1668": {
+	    "name": "Decay time",
+	    "channel": 6,
+	    "address": "0x1668",
+	    "value": "0x00000A41"
+	},
+	"reg_1768": {
+	    "name": "Decay time",
+	    "channel": 7,
+	    "address": "0x1768",
+	    "value": "0x00000012"
+	},
+	"reg_1868": {
+	    "name": "Decay time",
+	    "channel": 8,
+	    "address": "0x1868",
+	    "value": "0x00000A41"
+	},
+	"reg_1968": {
+	    "name": "Decay time",
+	    "channel": 9,
+	    "address": "0x1968",
+	    "value": "0x00000AFC"
+	},
+	"reg_1A68": {
+	    "name": "Decay time",
+	    "channel": 10,
+	    "address": "0x1A68",
+	    "value": "0x00000AFC"
+	},
+	"reg_1B68": {
+	    "name": "Decay time",
+	    "channel": 11,
+	    "address": "0x1B68",
+	    "value": "0x00000AFC"
+	},
+	"reg_1C68": {
+	    "name": "Decay time",
+	    "channel": 12,
+	    "address": "0x1C68",
+	    "value": "0x00000AFC"
+	},
+	"reg_1D68": {
+	    "name": "Decay time",
+	    "channel": 13,
+	    "address": "0x1D68",
+	    "value": "0x00000AFC"
+	},
+	"reg_1E68": {
+	    "name": "Decay time",
+	    "channel": 14,
+	    "address": "0x1E68",
+	    "value": "0x00000AFC"
+	},
+	"reg_1F68": {
+	    "name": "Decay time",
+	    "channel": 15,
+	    "address": "0x1F68",
+	    "value": "0x00000AFC"
+	},
+	"reg_106C": {
+	    "name": "Trigger Threshold",
+	    "channel": 0,
+	    "address": "0x106C",
+	    "value": "0x00000091"
+	},
+	"reg_116C": {
+	    "name": "Trigger Threshold",
+	    "channel": 1,
+	    "address": "0x116C",
+	    "value": "0x0000006E"
+	},
+	"reg_126C": {
+	    "name": "Trigger Threshold",
+	    "channel": 2,
+	    "address": "0x126C",
+	    "value": "0x0000008C"
+	},
+	"reg_136C": {
+	    "name": "Trigger Threshold",
+	    "channel": 3,
+	    "address": "0x136C",
+	    "value": "0x0000006E"
+	},
+	"reg_146C": {
+	    "name": "Trigger Threshold",
+	    "channel": 4,
+	    "address": "0x146C",
+	    "value": "0x00000050"
+	},
+	"reg_156C": {
+	    "name": "Trigger Threshold",
+	    "channel": 5,
+	    "address": "0x156C",
+	    "value": "0x00000064"
+	},
+	"reg_166C": {
+	    "name": "Trigger Threshold",
+	    "channel": 6,
+	    "address": "0x166C",
+	    "value": "0x000000AA"
+	},
+	"reg_176C": {
+	    "name": "Trigger Threshold",
+	    "channel": 7,
+	    "address": "0x176C",
+	    "value": "0x0000006E"
+	},
+	"reg_186C": {
+	    "name": "Trigger Threshold",
+	    "channel": 8,
+	    "address": "0x186C",
+	    "value": "0x0000007D"
+	},
+	"reg_196C": {
+	    "name": "Trigger Threshold",
+	    "channel": 9,
+	    "address": "0x196C",
+	    "value": "0x00000078"
+	},
+	"reg_1A6C": {
+	    "name": "Trigger Threshold",
+	    "channel": 10,
+	    "address": "0x1A6C",
+	    "value": "0x00000078"
+	},
+	"reg_1B6C": {
+	    "name": "Trigger Threshold",
+	    "channel": 11,
+	    "address": "0x1B6C",
+	    "value": "0x00000078"
+	},
+	"reg_1C6C": {
+	    "name": "Trigger Threshold",
+	    "channel": 12,
+	    "address": "0x1C6C",
+	    "value": "0x00000078"
+	},
+	"reg_1D6C": {
+	    "name": "Trigger Threshold",
+	    "channel": 13,
+	    "address": "0x1D6C",
+	    "value": "0x00000078"
+	},
+	"reg_1E6C": {
+	    "name": "Trigger Threshold",
+	    "channel": 14,
+	    "address": "0x1E6C",
+	    "value": "0x00000078"
+	},
+	"reg_1F6C": {
+	    "name": "Trigger Threshold",
+	    "channel": 15,
+	    "address": "0x1F6C",
+	    "value": "0x00000078"
+	},
+	"reg_1070": {
+	    "name": "Rise time Validation Window",
+	    "channel": 0,
+	    "address": "0x1070",
+	    "value": "0x00000000"
+	},
+	"reg_1170": {
+	    "name": "Rise time Validation Window",
+	    "channel": 1,
+	    "address": "0x1170",
+	    "value": "0x00000000"
+	},
+	"reg_1270": {
+	    "name": "Rise time Validation Window",
+	    "channel": 2,
+	    "address": "0x1270",
+	    "value": "0x00000000"
+	},
+	"reg_1370": {
+	    "name": "Rise time Validation Window",
+	    "channel": 3,
+	    "address": "0x1370",
+	    "value": "0x00000000"
+	},
+	"reg_1470": {
+	    "name": "Rise time Validation Window",
+	    "channel": 4,
+	    "address": "0x1470",
+	    "value": "0x00000000"
+	},
+	"reg_1570": {
+	    "name": "Rise time Validation Window",
+	    "channel": 5,
+	    "address": "0x1570",
+	    "value": "0x00000000"
+	},
+	"reg_1670": {
+	    "name": "Rise time Validation Window",
+	    "channel": 6,
+	    "address": "0x1670",
+	    "value": "0x00000000"
+	},
+	"reg_1770": {
+	    "name": "Rise time Validation Window",
+	    "channel": 7,
+	    "address": "0x1770",
+	    "value": "0x00000000"
+	},
+	"reg_1870": {
+	    "name": "Rise time Validation Window",
+	    "channel": 8,
+	    "address": "0x1870",
+	    "value": "0x00000000"
+	},
+	"reg_1970": {
+	    "name": "Rise time Validation Window",
+	    "channel": 9,
+	    "address": "0x1970",
+	    "value": "0x00000000"
+	},
+	"reg_1A70": {
+	    "name": "Rise time Validation Window",
+	    "channel": 10,
+	    "address": "0x1A70",
+	    "value": "0x00000000"
+	},
+	"reg_1B70": {
+	    "name": "Rise time Validation Window",
+	    "channel": 11,
+	    "address": "0x1B70",
+	    "value": "0x00000000"
+	},
+	"reg_1C70": {
+	    "name": "Rise time Validation Window",
+	    "channel": 12,
+	    "address": "0x1C70",
+	    "value": "0x00000000"
+	},
+	"reg_1D70": {
+	    "name": "Rise time Validation Window",
+	    "channel": 13,
+	    "address": "0x1D70",
+	    "value": "0x00000000"
+	},
+	"reg_1E70": {
+	    "name": "Rise time Validation Window",
+	    "channel": 14,
+	    "address": "0x1E70",
+	    "value": "0x00000000"
+	},
+	"reg_1F70": {
+	    "name": "Rise time Validation Window",
+	    "channel": 15,
+	    "address": "0x1F70",
+	    "value": "0x00000000"
+	},
+	"reg_1074": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 0,
+	    "address": "0x1074",
+	    "value": "0x00000138"
+	},
+	"reg_1174": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 1,
+	    "address": "0x1174",
+	    "value": "0x00000138"
+	},
+	"reg_1274": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 2,
+	    "address": "0x1274",
+	    "value": "0x00000138"
+	},
+	"reg_1374": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 3,
+	    "address": "0x1374",
+	    "value": "0x00000138"
+	},
+	"reg_1474": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 4,
+	    "address": "0x1474",
+	    "value": "0x00000138"
+	},
+	"reg_1574": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 5,
+	    "address": "0x1574",
+	    "value": "0x00000138"
+	},
+	"reg_1674": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 6,
+	    "address": "0x1674",
+	    "value": "0x00000138"
+	},
+	"reg_1774": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 7,
+	    "address": "0x1774",
+	    "value": "0x00000138"
+	},
+	"reg_1874": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 8,
+	    "address": "0x1874",
+	    "value": "0x00000138"
+	},
+	"reg_1974": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 9,
+	    "address": "0x1974",
+	    "value": "0x00000138"
+	},
+	"reg_1A74": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 10,
+	    "address": "0x1A74",
+	    "value": "0x00000138"
+	},
+	"reg_1B74": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 11,
+	    "address": "0x1B74",
+	    "value": "0x00000138"
+	},
+	"reg_1C74": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 12,
+	    "address": "0x1C74",
+	    "value": "0x00000138"
+	},
+	"reg_1D74": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 13,
+	    "address": "0x1D74",
+	    "value": "0x00000138"
+	},
+	"reg_1E74": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 14,
+	    "address": "0x1E74",
+	    "value": "0x00000138"
+	},
+	"reg_1F74": {
+	    "name": "Trigger Hold-Off Width",
+	    "channel": 15,
+	    "address": "0x1F74",
+	    "value": "0x00000138"
+	},
+	"reg_1078": {
+	    "name": "Peak Hold-Off",
+	    "channel": 0,
+	    "address": "0x1078",
+	    "value": "0x0000003E"
+	},
+	"reg_1178": {
+	    "name": "Peak Hold-Off",
+	    "channel": 1,
+	    "address": "0x1178",
+	    "value": "0x0000003E"
+	},
+	"reg_1278": {
+	    "name": "Peak Hold-Off",
+	    "channel": 2,
+	    "address": "0x1278",
+	    "value": "0x0000003E"
+	},
+	"reg_1378": {
+	    "name": "Peak Hold-Off",
+	    "channel": 3,
+	    "address": "0x1378",
+	    "value": "0x0000003E"
+	},
+	"reg_1478": {
+	    "name": "Peak Hold-Off",
+	    "channel": 4,
+	    "address": "0x1478",
+	    "value": "0x0000003E"
+	},
+	"reg_1578": {
+	    "name": "Peak Hold-Off",
+	    "channel": 5,
+	    "address": "0x1578",
+	    "value": "0x0000003E"
+	},
+	"reg_1678": {
+	    "name": "Peak Hold-Off",
+	    "channel": 6,
+	    "address": "0x1678",
+	    "value": "0x0000003E"
+	},
+	"reg_1778": {
+	    "name": "Peak Hold-Off",
+	    "channel": 7,
+	    "address": "0x1778",
+	    "value": "0x0000003E"
+	},
+	"reg_1878": {
+	    "name": "Peak Hold-Off",
+	    "channel": 8,
+	    "address": "0x1878",
+	    "value": "0x0000003E"
+	},
+	"reg_1978": {
+	    "name": "Peak Hold-Off",
+	    "channel": 9,
+	    "address": "0x1978",
+	    "value": "0x0000003E"
+	},
+	"reg_1A78": {
+	    "name": "Peak Hold-Off",
+	    "channel": 10,
+	    "address": "0x1A78",
+	    "value": "0x0000003E"
+	},
+	"reg_1B78": {
+	    "name": "Peak Hold-Off",
+	    "channel": 11,
+	    "address": "0x1B78",
+	    "value": "0x0000003E"
+	},
+	"reg_1C78": {
+	    "name": "Peak Hold-Off",
+	    "channel": 12,
+	    "address": "0x1C78",
+	    "value": "0x0000003E"
+	},
+	"reg_1D78": {
+	    "name": "Peak Hold-Off",
+	    "channel": 13,
+	    "address": "0x1D78",
+	    "value": "0x0000003E"
+	},
+	"reg_1E78": {
+	    "name": "Peak Hold-Off",
+	    "channel": 14,
+	    "address": "0x1E78",
+	    "value": "0x0000003E"
+	},
+	"reg_1F78": {
+	    "name": "Peak Hold-Off",
+	    "channel": 15,
+	    "address": "0x1F78",
+	    "value": "0x0000003E"
+	},
+	"reg_1080": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 0,
+	    "address": "0x1080",
+	    "value": "0x0C4C1013"
+	},
+	"reg_1180": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 1,
+	    "address": "0x1180",
+	    "value": "0x0D4C0006"
+	},
+	"reg_1280": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 2,
+	    "address": "0x1280",
+	    "value": "0x0C4C1014"
+	},
+	"reg_1380": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 3,
+	    "address": "0x1380",
+	    "value": "0x0D4C0006"
+	},
+	"reg_1480": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 4,
+	    "address": "0x1480",
+	    "value": "0x0C4C1014"
+	},
+	"reg_1580": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 5,
+	    "address": "0x1580",
+	    "value": "0x0D4C0006"
+	},
+	"reg_1680": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 6,
+	    "address": "0x1680",
+	    "value": "0x0C4C1014"
+	},
+	"reg_1780": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 7,
+	    "address": "0x1780",
+	    "value": "0x0D4C0006"
+	},
+	"reg_1880": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 8,
+	    "address": "0x1880",
+	    "value": "0x0C4C0014"
+	},
+	"reg_1980": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 9,
+	    "address": "0x1980",
+	    "value": "0x0D4C0014"
+	},
+	"reg_1A80": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 10,
+	    "address": "0x1A80",
+	    "value": "0x0C4C0014"
+	},
+	"reg_1B80": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 11,
+	    "address": "0x1B80",
+	    "value": "0x0D4C0014"
+	},
+	"reg_1C80": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 12,
+	    "address": "0x1C80",
+	    "value": "0x0C4C0014"
+	},
+	"reg_1D80": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 13,
+	    "address": "0x1D80",
+	    "value": "0x0D4C0014"
+	},
+	"reg_1E80": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 14,
+	    "address": "0x1E80",
+	    "value": "0x0C4C0014"
+	},
+	"reg_1F80": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 15,
+	    "address": "0x1F80",
+	    "value": "0x0D4C0014"
+	},
+	"reg_1084": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 0,
+	    "address": "0x1084",
+	    "value": "0x00000040"
+	},
+	"reg_1184": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 1,
+	    "address": "0x1184",
+	    "value": "0x00000040"
+	},
+	"reg_1284": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 2,
+	    "address": "0x1284",
+	    "value": "0x00000040"
+	},
+	"reg_1384": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 3,
+	    "address": "0x1384",
+	    "value": "0x00000040"
+	},
+	"reg_1484": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 4,
+	    "address": "0x1484",
+	    "value": "0x00000040"
+	},
+	"reg_1584": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 5,
+	    "address": "0x1584",
+	    "value": "0x00000040"
+	},
+	"reg_1684": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 6,
+	    "address": "0x1684",
+	    "value": "0x00000040"
+	},
+	"reg_1784": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 7,
+	    "address": "0x1784",
+	    "value": "0x00000040"
+	},
+	"reg_1884": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 8,
+	    "address": "0x1884",
+	    "value": "0x00000040"
+	},
+	"reg_1984": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 9,
+	    "address": "0x1984",
+	    "value": "0x00000040"
+	},
+	"reg_1A84": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 10,
+	    "address": "0x1A84",
+	    "value": "0x00000040"
+	},
+	"reg_1B84": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 11,
+	    "address": "0x1B84",
+	    "value": "0x00000040"
+	},
+	"reg_1C84": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 12,
+	    "address": "0x1C84",
+	    "value": "0x00000040"
+	},
+	"reg_1D84": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 13,
+	    "address": "0x1D84",
+	    "value": "0x00000040"
+	},
+	"reg_1E84": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 14,
+	    "address": "0x1E84",
+	    "value": "0x00000040"
+	},
+	"reg_1F84": {
+	    "name": "Shaped Trigger Width",
+	    "channel": 15,
+	    "address": "0x1F84",
+	    "value": "0x00000040"
+	},
+	"reg_1098": {
+	    "name": "DC offset",
+	    "channel": 0,
+	    "address": "0x1098",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1198": {
+	    "name": "DC offset",
+	    "channel": 1,
+	    "address": "0x1198",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1298": {
+	    "name": "DC offset",
+	    "channel": 2,
+	    "address": "0x1298",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1398": {
+	    "name": "DC offset",
+	    "channel": 3,
+	    "address": "0x1398",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1498": {
+	    "name": "DC offset",
+	    "channel": 4,
+	    "address": "0x1498",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1598": {
+	    "name": "DC offset",
+	    "channel": 5,
+	    "address": "0x1598",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1698": {
+	    "name": "DC offset",
+	    "channel": 6,
+	    "address": "0x1698",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1798": {
+	    "name": "DC offset",
+	    "channel": 7,
+	    "address": "0x1798",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1898": {
+	    "name": "DC offset",
+	    "channel": 8,
+	    "address": "0x1898",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1998": {
+	    "name": "DC offset",
+	    "channel": 9,
+	    "address": "0x1998",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1A98": {
+	    "name": "DC offset",
+	    "channel": 10,
+	    "address": "0x1A98",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1B98": {
+	    "name": "DC offset",
+	    "channel": 11,
+	    "address": "0x1B98",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1C98": {
+	    "name": "DC offset",
+	    "channel": 12,
+	    "address": "0x1C98",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1D98": {
+	    "name": "DC offset",
+	    "channel": 13,
+	    "address": "0x1D98",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1E98": {
+	    "name": "DC offset",
+	    "channel": 14,
+	    "address": "0x1E98",
+	    "value": "0x0000CCCC"
+	},
+	"reg_1F98": {
+	    "name": "DC offset",
+	    "channel": 15,
+	    "address": "0x1F98",
+	    "value": "0x0000CCCC"
+	},
+	"reg_10A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 0,
+	    "address": "0x10A0",
+	    "value": "0x020000260"
+	},
+	"reg_11A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 1,
+	    "address": "0x11A0",
+	    "value": "0x020000260"
+	},
+	"reg_12A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 2,
+	    "address": "0x12A0",
+	    "value": "0x020000260"
+	},
+	"reg_13A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 3,
+	    "address": "0x13A0",
+	    "value": "0x020000260"
+	},
+	"reg_14A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 4,
+	    "address": "0x14A0",
+	    "value": "0x020000260"
+	},
+	"reg_15A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 5,
+	    "address": "0x15A0",
+	    "value": "0x020000260"
+	},
+	"reg_16A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 6,
+	    "address": "0x16A0",
+	    "value": "0x020000260"
+	},
+	"reg_17A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 7,
+	    "address": "0x17A0",
+	    "value": "0x020000260"
+	},
+	"reg_18A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 8,
+	    "address": "0x18A0",
+	    "value": "0x020000260"
+	},
+	"reg_19A0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 9,
+	    "address": "0x19A0",
+	    "value": "0x020000260"
+	},
+	"reg_1AA0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 10,
+	    "address": "0x1AA0",
+	    "value": "0x020000260"
+	},
+	"reg_1BA0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 11,
+	    "address": "0x1BA0",
+	    "value": "0x020000260"
+	},
+	"reg_1CA0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 12,
+	    "address": "0x1CA0",
+	    "value": "0x020000260"
+	},
+	"reg_1DA0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 13,
+	    "address": "0x1DA0",
+	    "value": "0x020000260"
+	},
+	"reg_1EA0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 14,
+	    "address": "0x1EA0",
+	    "value": "0x020000260"
+	},
+	"reg_1FA0": {
+	    "name": "DPP Algorithm Control",
+	    "channel": 15,
+	    "address": "0x1FA0",
+	    "value": "0x020000260"
+	},
+	"reg_10C4": {
+	    "name": "Fine Gain",
+	    "channel": 0,
+	    "address": "0x10C4",
+	    "value": "0x00008108"
+	},
+	"reg_11C4": {
+	    "name": "Fine Gain",
+	    "channel": 1,
+	    "address": "0x11C4",
+	    "value": "0x000097B3"
+	},
+	"reg_12C4": {
+	    "name": "Fine Gain",
+	    "channel": 2,
+	    "address": "0x12C4",
+	    "value": "0x0000CB6F"
+	},
+	"reg_13C4": {
+	    "name": "Fine Gain",
+	    "channel": 3,
+	    "address": "0x13C4",
+	    "value": "0x000097B3"
+	},
+	"reg_14C4": {
+	    "name": "Fine Gain",
+	    "channel": 4,
+	    "address": "0x14C4",
+	    "value": "0x0000FBDE"
+	},
+	"reg_15C4": {
+	    "name": "Fine Gain",
+	    "channel": 5,
+	    "address": "0x15C4",
+	    "value": "0x000097B3"
+	},
+	"reg_16C4": {
+	    "name": "Fine Gain",
+	    "channel": 6,
+	    "address": "0x16C4",
+	    "value": "0x0000FBDE"
+	},
+	"reg_17C4": {
+	    "name": "Fine Gain",
+	    "channel": 7,
+	    "address": "0x17C4",
+	    "value": "0x000097B3"
+	},
+	"reg_18C4": {
+	    "name": "Fine Gain",
+	    "channel": 8,
+	    "address": "0x18C4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_19C4": {
+	    "name": "Fine Gain",
+	    "channel": 9,
+	    "address": "0x19C4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_1AC4": {
+	    "name": "Fine Gain",
+	    "channel": 10,
+	    "address": "0x1AC4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_1BC4": {
+	    "name": "Fine Gain",
+	    "channel": 11,
+	    "address": "0x1BC4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_1CC4": {
+	    "name": "Fine Gain",
+	    "channel": 12,
+	    "address": "0x1CC4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_1DC4": {
+	    "name": "Fine Gain",
+	    "channel": 13,
+	    "address": "0x1DC4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_1EC4": {
+	    "name": "Fine Gain",
+	    "channel": 14,
+	    "address": "0x1EC4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_1FC4": {
+	    "name": "Fine Gain",
+	    "channel": 15,
+	    "address": "0x1FC4",
+	    "value": "0x0000EB1F"
+	},
+	"reg_10D4": {
+	    "name": "Veto Width",
+	    "channel": 0,
+	    "address": "0x10D4",
+	    "value": "0x0000000A"
+	},
+	"reg_11D4": {
+	    "name": "Veto Width",
+	    "channel": 1,
+	    "address": "0x11D4",
+	    "value": "0x0000000A"
+	},
+	"reg_12D4": {
+	    "name": "Veto Width",
+	    "channel": 2,
+	    "address": "0x12D4",
+	    "value": "0x0000000A"
+	},
+	"reg_13D4": {
+	    "name": "Veto Width",
+	    "channel": 3,
+	    "address": "0x13D4",
+	    "value": "0x0000000A"
+	},
+	"reg_14D4": {
+	    "name": "Veto Width",
+	    "channel": 4,
+	    "address": "0x14D4",
+	    "value": "0x0000000A"
+	},
+	"reg_15D4": {
+	    "name": "Veto Width",
+	    "channel": 5,
+	    "address": "0x15D4",
+	    "value": "0x0000000A"
+	},
+	"reg_16D4": {
+	    "name": "Veto Width",
+	    "channel": 6,
+	    "address": "0x16D4",
+	    "value": "0x0000000A"
+	},
+	"reg_17D4": {
+	    "name": "Veto Width",
+	    "channel": 7,
+	    "address": "0x17D4",
+	    "value": "0x0000000A"
+	},
+	"reg_18D4": {
+	    "name": "Veto Width",
+	    "channel": 8,
+	    "address": "0x18D4",
+	    "value": "0x0000000A"
+	},
+	"reg_19D4": {
+	    "name": "Veto Width",
+	    "channel": 9,
+	    "address": "0x19D4",
+	    "value": "0x0000000A"
+	},
+	"reg_1AD4": {
+	    "name": "Veto Width",
+	    "channel": 10,
+	    "address": "0x1AD4",
+	    "value": "0x0000000A"
+	},
+	"reg_1BD4": {
+	    "name": "Veto Width",
+	    "channel": 11,
+	    "address": "0x1BD4",
+	    "value": "0x0000000A"
+	},
+	"reg_1CD4": {
+	    "name": "Veto Width",
+	    "channel": 12,
+	    "address": "0x1CD4",
+	    "value": "0x0000000A"
+	},
+	"reg_1DD4": {
+	    "name": "Veto Width",
+	    "channel": 13,
+	    "address": "0x1DD4",
+	    "value": "0x0000000A"
+	},
+	"reg_1ED4": {
+	    "name": "Veto Width",
+	    "channel": 14,
+	    "address": "0x1ED4",
+	    "value": "0x0000000A"
+	},
+	"reg_1FD4": {
+	    "name": "Veto Width",
+	    "channel": 15,
+	    "address": "0x1FD4",
+	    "value": "0x0000000A"
+	},
+	"reg_8000": {
+	    "name": "Board Configuration",
+	    "channel": 0,
+	    "address": "0x8000",
+	    "value": "0x014E0105"
+	},
+	"reg_800C": {
+	    "name": "Aggregate Organization",
+	    "channel": 0,
+	    "address": "0x800C",
+	    "value": "0x0000000A"
+	},
+	"reg_8100": {
+	    "name": "Acquisition Control",
+	    "channel": 0,
+	    "address": "0x8100",
+	    "value": "0x00000002"
+	},
+	"reg_810C": {
+	    "name": "Global Trigger Mask",
+	    "channel": 0,
+	    "address": "0x810C",
+	    "value": "0xC0000000"
+	},
+	"reg_8110": {
+	    "name": "Fron Panel TRG-OUT (GPO) Enable Mask",
+	    "channel": 0,
+	    "address": "0x8110",
+	    "value": "0x00000000"
+	},
+	"reg_8118": {
+	    "name": "LVDS I/O Data",
+	    "channel": 0,
+	    "address": "0x8118",
+	    "value": "0x0000FFFF"
+	},
+	"reg_811C": {
+	    "name": "Fron Panel I/O Control",
+	    "channel": 0,
+	    "address": "0x811C",
+	    "value": "0x00008100"
+	},
+	"reg_8120": {
+	    "name": "Channel Enable Mask",
+	    "channel": 0,
+	    "address": "0x8120",
+	    "value": "0x000003FF"
+	},
+	"reg_8138": {
+	    "name": "Voltage level Mode Configuration",
+	    "channel": 0,
+	    "address": "0x8138",
+	    "value": "0x00000000"
+	},
+	"reg_8144": {
+	    "name": "Analog Monitor Mode",
+	    "channel": 0,
+	    "address": "0x8144",
+	    "value": "0x00000000"
+	},
+	"reg_8168": {
+	    "name": "Fan Speed Control",
+	    "channel": 0,
+	    "address": "0x8168",
+	    "value": "0x00000020"
+	},
+	"reg_8170": {
+	    "name": "Run/Start/Stop Delay",
+	    "channel": 0,
+	    "address": "0x8170",
+	    "value": "0x00000000"
+	},
+	"reg_817C": {
+	    "name": "Disable external trigger",
+	    "channel": 0,
+	    "address": "0x817C",
+	    "value": "0x00000000"
+	},
+	"reg_8180": {
+	    "name": "Trigger Validation mask (0)",
+	    "channel": 0,
+	    "address": "0x8180",
+	    "value": "0x00000000"
+	},
+	"reg_8184": {
+	    "name": "Trigger Validation mask (1)",
+	    "channel": 0,
+	    "address": "0x8184",
+	    "value": "0x00000000"
+	},
+	"reg_8188": {
+	    "name": "Trigger Validation mask (2)",
+	    "channel": 0,
+	    "address": "0x8188",
+	    "value": "0x00000000"
+	},
+	"reg_818C": {
+	    "name": "Trigger Validation mask (3)",
+	    "channel": 0,
+	    "address": "0x818C",
+	    "value": "0x00000000"
+	},
+	"reg_8190": {
+	    "name": "Trigger Validation mask (4)",
+	    "channel": 0,
+	    "address": "0x8190",
+	    "value": "0x00000000"
+	},
+	"reg_8194": {
+	    "name": "Trigger Validation mask (5)",
+	    "channel": 0,
+	    "address": "0x8194",
+	    "value": "0x00000000"
+	},
+	"reg_8198": {
+	    "name": "Trigger Validation mask (6)",
+	    "channel": 0,
+	    "address": "0x8198",
+	    "value": "0x00000000"
+	},
+	"reg_819C": {
+	    "name": "Trigger Validation mask (7)",
+	    "channel": 0,
+	    "address": "0x819C",
+	    "value": "0x00000000"
+	},
+	"reg_81A0": {
+	    "name": "Front Panel LVDS I/O New Features",
+	    "channel": 0,
+	    "address": "0x81A0",
+	    "value": "0x00001111"
+	},
+	"reg_81B4": {
+	    "name": "Buffer Occupancy Gain",
+	    "channel": 0,
+	    "address": "0x81B4",
+	    "value": "0x00000000"
+	},
+	"reg_81C4": {
+	    "name": "Extended Veto Delay",
+	    "channel": 0,
+	    "address": "0x81C4",
+	    "value": "0x12340014"
+	},
+	"reg_EF00": {
+	    "name": "Readout Control",
+	    "channel": 0,
+	    "address": "0xEF00",
+	    "value": "0x00000010"
+	},
+	"reg_EF08": {
+	    "name": "Board ID",
+	    "channel": 0,
+	    "address": "0xEF08",
+	    "value": "0x00000001"
+	},
+	"reg_EF1C": {
+	    "name": "Aggregate Number per BLT",
+	    "channel": 0,
+	    "address": "0xEF1C",
+	    "value": "0x00000001"
+	}
+    }
+}
