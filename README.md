@@ -1,5 +1,6 @@
 # WebDAQ - LUNA Experiment Data Acquisition System
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/skowrons94/WebDAQ) ![GitHub Release](https://img.shields.io/github/v/release/skowrons94/WebDAQ?include_prereleases)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/skowrons94/WebDAQ) ![GitHub Release](https://img.shields.io/github/v/release/skowrons94/WebDAQ?include_prereleases) ![Static Badge](https://img.shields.io/badge/documentation-up-green?logo=github&link=https%3A%2F%2Fskowrons94.github.io%2FWebDAQ)
+
 
 ![Dashboard](imgs/dashboard.png)
 
