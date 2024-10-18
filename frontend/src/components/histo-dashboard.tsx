@@ -8,6 +8,7 @@ import { loadJSROOT } from '@/lib/load-jsroot'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { useTheme } from 'next-themes'
 
 type BoardData = {
   id: string;
@@ -39,7 +40,7 @@ export default function HistogramDashboard() {
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
-
+  const { theme } = useTheme()
   //First we get the cached ROIs
   useEffect(() => {
     fetchCachedROIs()
@@ -69,12 +70,13 @@ export default function HistogramDashboard() {
 
   useEffect(() => {
     if (jsrootLoaded) {
+      window.JSROOT.settings.DarkMode = theme === 'dark'
       const updateInterval = setInterval(() => {
         setUpdateTrigger(prev => prev + 1)
       }, 2000)
       return () => clearInterval(updateInterval)
     }
-  }, [jsrootLoaded])
+  }, [jsrootLoaded, theme])
 
   const fetchBoardConfiguration = async () => {
     try {
