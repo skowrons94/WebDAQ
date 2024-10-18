@@ -165,7 +165,8 @@ export function RunControl() {
         currentRunNumber,
         runStatus,
         startTimeData,
-        waveformStatus
+        waveformStatus,
+        roiData
       ] = await Promise.all([
         getCoincidenceWindow(),
         getMultiplicity(),
@@ -175,7 +176,8 @@ export function RunControl() {
         getCurrentRunNumber(),
         getRunStatus(),
         getStartTime(),
-        getWaveformStatus()
+        getWaveformStatus(),
+        getRoiValues()
       ])
 
       setCoincidenceTime(coincidenceTimeData.toString())
@@ -187,6 +189,7 @@ export function RunControl() {
       setIsRunning(runStatus)
       setStartTime(startTimeData)
       setWaveformsEnabled(waveformStatus)
+      setRoiValues(roiData)
     } catch (error) {
       console.error('Failed to fetch initial data:', error)
       toast({

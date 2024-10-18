@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useTheme } from 'next-themes'
 import { Button } from "@/components/ui/button"
 
 type BoardData = {
@@ -39,6 +40,7 @@ export default function HistogramDashboard() {
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
+  const { theme } = useTheme()
 
   //First we get the cached ROIs
   useEffect(() => {
@@ -48,6 +50,7 @@ export default function HistogramDashboard() {
   useEffect(() => {
     fetchBoardConfiguration()
     fetchRunStatus()
+    fetchCachedROIs()
     const statusInterval = setInterval(fetchRunStatus, 5000)
 
     loadJSROOT()
@@ -69,12 +72,13 @@ export default function HistogramDashboard() {
 
   useEffect(() => {
     if (jsrootLoaded) {
+      window.JSROOT.settings.DarkMode = theme === 'dark'
       const updateInterval = setInterval(() => {
         setUpdateTrigger(prev => prev + 1)
       }, 2000)
       return () => clearInterval(updateInterval)
     }
-  }, [jsrootLoaded])
+  }, [jsrootLoaded, theme])
 
   const fetchBoardConfiguration = async () => {
     try {
@@ -266,6 +270,10 @@ export default function HistogramDashboard() {
       updateROIIntegrals()
     }
   }, [jsrootLoaded, boards, updateTrigger, updateHistograms, updateROIIntegrals])
+
+  const handleSaveChanges = () => {
+    updateROICache(roiValues)
+  }
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
