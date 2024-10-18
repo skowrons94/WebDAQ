@@ -15,7 +15,7 @@ from app.models.run_metadata import RunMetadata
 from app.utils.jwt_utils import jwt_required_custom, get_current_user
 
 from app.services import xdaq
-from app.services.spy import ru_spy
+from app.services.spy import ru_spy, bu_spy
 
 XDAQ_FLAG = False
 
@@ -126,7 +126,8 @@ if( XDAQ_FLAG ):
     topology.enable_pt( )
     print( "PT enabled...")
 
-spy = ru_spy( )
+r_spy = ru_spy( )
+b_spy = bu_spy( )
 
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
@@ -189,7 +190,8 @@ def start_run( ):
     # Run the Spy to  save the histograms to txt file in run directory
     # Example: ./LunaSpy -d board_name firmware channel -n run_number
     if( XDAQ_FLAG ):
-        spy.start(daq_state)
+        r_spy.start(daq_state)
+        b_spy.start(daq_state)
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
@@ -201,7 +203,8 @@ def stop_run( ):
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     # Stop the XDAQ
     if( XDAQ_FLAG ):
-        spy.stop()
+        r_spy.stop()
+        b_spy.stop()
         topology.halt( )
 
     daq_state['running'] = False
@@ -444,7 +447,7 @@ def get_histo(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = spy.get_object("energy", idx)
+    histo = r_spy.get_object("energy", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -457,7 +460,7 @@ def get_qlong(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = spy.get_object("qlong", idx)
+    histo = r_spy.get_object("qlong", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -470,7 +473,7 @@ def get_qhosrt(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = spy.get_object("qshort", idx)
+    histo = r_spy.get_object("qshort", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -482,7 +485,7 @@ def get_wave1(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = spy.get_object("wave1", idx)
+    histo = r_spy.get_object("wave1", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -494,7 +497,7 @@ def get_wave2(board_id, channel):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = spy.get_object("wave2", idx)
+    histo = r_spy.get_object("wave2", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -559,7 +562,7 @@ def get_roi_histo(board_id, channel, roi_min, roi_max):
             idx += board['chan']
     idx += int(channel)
 
-    histo = spy.get_object("energy", idx)
+    histo = r_spy.get_object("energy", idx)
 
     h1 = TH1F(histo)
     for i in range(0, int(roi_min)):
@@ -586,6 +589,6 @@ def get_roi_integral(board_id, channel, roi_min, roi_max):
         if int(board['id']) < int(board_id):
             idx += board['chan']
     idx += int(channel)
-    histo = spy.get_object("energy", idx)
+    histo = r_spy.get_object("energy", idx)
     integral = histo.Integral(int(roi_min), int(roi_max))
     return jsonify(integral)
