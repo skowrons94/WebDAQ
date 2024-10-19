@@ -317,9 +317,9 @@ export default function HistogramDashboard() {
                         ref={el => { histogramRefs.current[histoId] = el }}
                         className="w-full h-80 border rounded-lg shadow-sm mb-2"
                       ></div>
-                      <div className="flex flex-col items-center gap-2">
+                      <div className="flex flex-col items-center gap-3">
                         <div className="flex gap-4">
-                          <div className="flex flex-col">
+                          <div className="flex flex-col gap-2">
                             <Label htmlFor={`${histoId}-low`}>Low ROI</Label>
                             <Input
                               id={`${histoId}-low`}
@@ -329,7 +329,7 @@ export default function HistogramDashboard() {
                               className="w-24"
                             />
                           </div>
-                          <div className="flex flex-col">
+                          <div className="flex flex-col gap-2">
                             <Label htmlFor={`${histoId}-high`}>High ROI</Label>
                             <Input
                               id={`${histoId}-high`}

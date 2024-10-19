@@ -17,7 +17,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.spy import ru_spy, bu_spy
 
-XDAQ_FLAG = True
+XDAQ_FLAG = False
 
 bp = Blueprint('experiment', __name__)
 

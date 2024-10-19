@@ -218,7 +218,7 @@ export function RunControl() {
     }
   }
 
-  function extractBoardAndChannel(str) {
+  function extractBoardAndChannel(str: string) {
     const match = str.match(/board(\d+)_channel(\d+)/);
     if (match) {
       return {
@@ -242,16 +242,19 @@ export function RunControl() {
         }
 
         const roiTemp = data.roiValues[key]
-        const integral = await getRoiIntegral(boardData.boardId, boardData.channelNumber, roiTemp.low, roiTemp.high)
+        const integral = await getRoiIntegral(boardData.boardId.toString(), boardData.channelNumber.toString(), roiTemp.low, roiTemp.high)
         data.roiValues[key].integral = integral
         const newKey = `Board ${boardData.boardId} Channel ${boardData.channelNumber}`
         data.roiValues[newKey] = data.roiValues[key]
         delete data.roiValues[key]
       }
 
-      const filteredRoiValues = Object.fromEntries(
-        Object.entries(data.roiValues).filter(([_, roi]) => !(roi.low === 0 && roi.high === 0))
-      )
+      const filteredRoiValues: ROIValues = Object.fromEntries(
+        Object.entries(data.roiValues).filter(([_, roi]) => {
+          const roiValue = roi as roi;
+          return !(roiValue.low === 0 && roiValue.high === 0);
+        })
+      ) as ROIValues;
 
       setRoiValues(filteredRoiValues)
     } catch (error) {
