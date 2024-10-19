@@ -184,6 +184,18 @@ def start_run( ):
         rows.append([run, time, None])
         write_csv(rows)
 
+        # Update metadata in the database check first if it exists already
+        run_metadata = RunMetadata.query.filter_by(run_number=run).first()
+        if not run_metadata:
+            run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
+            db.session.add(run_metadata)
+            db.session.commit()
+        else:
+            run_metadata.start_time = time
+            run_metadata.end_time = None
+
+            db.session.commit()
+
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     daq_state['start_time'] = time
     
@@ -192,6 +204,7 @@ def start_run( ):
     if( XDAQ_FLAG ):
         r_spy.start(daq_state)
         b_spy.start(daq_state)
+
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
@@ -216,6 +229,12 @@ def stop_run( ):
         rows[-1][2] = time
         write_csv(rows)
 
+        # Update metadata in the database
+        run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
+        run_metadata.end_time = datetime.now()
+        db.session.commit()
+
+
     daq_state['start_time'] = None
 
     # Update the daq_state file
@@ -237,10 +256,9 @@ def add_note():
         return jsonify({'message': 'Note added successfully'}), 200
     return jsonify({'message': 'Run not found'}), 404
 
-@bp.route("/experiment/get_run_metadata", methods=['GET'])
+@bp.route("/experiment/get_run_metadata/<run_number>", methods=['GET'])
 @jwt_required_custom
-def get_run_metadata():
-    run_number = request.args.get('run_number')
+def get_run_metadata(run_number):
     run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
     if run_metadata:
         return jsonify({
@@ -251,6 +269,25 @@ def get_run_metadata():
             'user_id': run_metadata.user_id
         }), 200
     return jsonify({'message': 'Run not found'}), 404
+
+@bp.route("/experiment/get_run_metadata", methods=['GET'])
+@jwt_required_custom
+def get_all_run_metadata():
+    run_metadata = RunMetadata.query.all()
+    # order by run number reversed
+    run_metadata = sorted(run_metadata, key=lambda x: x.run_number, reverse=True)
+    if run_metadata:
+        metadata = []
+        for run in run_metadata:
+            metadata.append({
+                'run_number': run.run_number,
+                'start_time': run.start_time,
+                'end_time': run.end_time,
+                'notes': run.notes,
+                'user_id': run.user_id
+            })
+        return jsonify(metadata), 200
+    return jsonify({'message': 'No runs found'}), 404
 
 # Route for adding CAEN boards
 @bp.route("/experiment/add_board", methods=['POST'])
@@ -598,7 +635,7 @@ def get_roi_integral(board_id, channel, roi_min, roi_max):
 def get_file_bandwith( ):
     
     # For all xdaq actors in topology get the file bandwith
-    if( daq_state['running'] ):
+    if( daq_state['running'] and XDAQ_FLAG ):
         actors = topology.get_all_actors()
         data = 0
         for actor in actors:
@@ -614,7 +651,7 @@ def get_file_bandwith( ):
 def get_output_bandwith( ):
     
     # For all xdaq actors in topology get the file bandwith
-    if( daq_state['running'] ):
+    if( daq_state['running'] and XDAQ_FLAG ):
         actors = topology.get_all_actors()
         print( actors )
         data = 0

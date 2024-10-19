@@ -29,7 +29,10 @@ export const addNote = (runNumber: number, note: string) =>
     api.post('/experiment/add_note', { run_number: runNumber, note });
 
 export const getRunMetadata = (runNumber: number) =>
-    api.get(`/experiment/get_run_metadata?run_number=${runNumber}`);
+    api.get(`/experiment/get_run_metadata/${runNumber}`);
+
+export const getRunMetadataAll = () =>
+    api.get('/experiment/get_run_metadata');
 
 // Functions for board management
 export const getBoardConfiguration = () =>

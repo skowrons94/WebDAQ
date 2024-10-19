@@ -49,6 +49,7 @@ import {
   DialogTrigger,
   DialogFooter,
 } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Table,
   TableBody,
@@ -438,6 +439,7 @@ export function RunControl() {
   return (
     <div className="flex flex-col bg-background text-foreground">
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-2">
+        <ScrollArea className="h-[320px] rounded-md border p-4">
         <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -526,7 +528,8 @@ export function RunControl() {
               </p>
             </CardContent>
           </Card>
-        </div>
+          </div>
+        </ScrollArea>
         <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
           <Card>
             <CardHeader>

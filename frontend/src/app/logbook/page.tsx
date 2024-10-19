@@ -2,15 +2,17 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect } from 'react';
-import { Logbook } from '@/components/logbook'
 import useAuthStore from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 import { Layout } from '@/components/dashboard-layout';
+import {Logbook} from '@/components/logbook-table/logbook-page';
 
 const queryClient = new QueryClient()
 
-export default function LogbookPage() {
+
+
+export default  function LogbookPage() {
     const router = useRouter();
     const token = useAuthStore((state) => state.token);
     const clearToken = useAuthStore((state) => state.clearToken);
@@ -37,13 +39,15 @@ export default function LogbookPage() {
         }
     }, [token, router]);
 
+
     return (
         <QueryClientProvider client={queryClient}>
         <Layout>
-        <div className="container mx-auto px-4 py-8">
-            <h1 className="text-3xl font-bold mb-6 text-center">Logbook</h1>
-            <Logbook />
-                </div>
+        <div className="container mx-auto px-4 py-">
+                    <div className="container mx-auto py-2">
+                        <Logbook />
+                    </div>
+        </div>
         </Layout>
         </QueryClientProvider>
   )
