@@ -17,7 +17,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.spy import ru_spy, bu_spy
 
-XDAQ_FLAG = False
+XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
 
@@ -592,3 +592,37 @@ def get_roi_integral(board_id, channel, roi_min, roi_max):
     histo = r_spy.get_object("energy", idx)
     integral = histo.Integral(int(roi_min), int(roi_max))
     return jsonify(integral)
+
+@bp.route('/experiment/xdaq/file_bandwidth', methods=['GET'])
+@jwt_required_custom
+def get_file_bandwith( ):
+    
+    # For all xdaq actors in topology get the file bandwith
+    if( daq_state['running'] ):
+        actors = topology.get_all_actors()
+        data = 0
+        for actor in actors:
+            for a in actor:
+                data += float(a.get_file_bandwith( ))
+
+        return jsonify(data)
+    
+    return jsonify(0)
+
+@bp.route('/experiment/xdaq/output_bandwidth', methods=['GET'])
+@jwt_required_custom
+def get_output_bandwith( ):
+    
+    # For all xdaq actors in topology get the file bandwith
+    if( daq_state['running'] ):
+        actors = topology.get_all_actors()
+        print( actors )
+        data = 0
+        for actor in actors:
+            for a in actor:
+                data += float(a.get_output_bandwith( ))
+
+        return jsonify(data)
+    
+    return jsonify(0)
+    

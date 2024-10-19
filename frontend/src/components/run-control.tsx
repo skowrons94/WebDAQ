@@ -18,6 +18,8 @@ import {
   StopCircle,
   Thermometer,
   CircleGauge,
+  HardDrive,
+  Network,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -86,7 +88,9 @@ import {
   activateWaveform,
   deactivateWaveform,
   getWaveformStatus,
-  getRoiIntegral
+  getRoiIntegral,
+  getFileBandwidth,
+  getOutputBandwidth
 } from '@/lib/api'
 
 type BoardData = {
@@ -123,15 +127,19 @@ export function RunControl() {
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [waveformsEnabled, setWaveformsEnabled] = useState(false)
   const [roiValues, setRoiValues] = useState<ROIValues>({})
+  const [fileBandwidth, setFileBandwidth] = useState<number>(0)
+  const [outputBandwidth, setOutputBandwidth] = useState<number>(0)
 
   useEffect(() => {
     fetchInitialData()
     const statusInterval = setInterval(fetchRunStatus, 5000)
     const roiInterval = setInterval(updateROIData, 1000)
+    const bandwidthInterval = setInterval(updateBandwidthData, 1000)
 
     return () => {
       clearInterval(statusInterval)
       clearInterval(roiInterval)
+      clearInterval(bandwidthInterval)
     }
   }, [])
 
@@ -218,7 +226,7 @@ export function RunControl() {
         channelNumber: parseInt(match[2], 10)
       };
     }
-    return null; // Return null if the string doesn't match the expected format
+    return null;
   }
 
   const updateROIData = async () => {
@@ -226,9 +234,6 @@ export function RunControl() {
       const response = await fetch('/api/cache')
       const data = await response.json()
 
-      const boardData = extractBoardAndChannel(Object.keys(data.roiValues)[0])
-
-      // Now we loop through all the keys and update the integral value
       for (const key in data.roiValues) {
         const boardData = extractBoardAndChannel(key)
         if (!boardData) {
@@ -239,21 +244,31 @@ export function RunControl() {
         const roiTemp = data.roiValues[key]
         const integral = await getRoiIntegral(boardData.boardId, boardData.channelNumber, roiTemp.low, roiTemp.high)
         data.roiValues[key].integral = integral
-        // Change the key to "Board 0 Channel 0"
         const newKey = `Board ${boardData.boardId} Channel ${boardData.channelNumber}`
         data.roiValues[newKey] = data.roiValues[key]
         delete data.roiValues[key]
       }
 
-      // Remove values where low and high are both 0 or low is 0 and high is 32
       const filteredRoiValues = Object.fromEntries(
         Object.entries(data.roiValues).filter(([_, roi]) => !(roi.low === 0 && roi.high === 0))
       )
 
-      data.roiValues = filteredRoiValues
-      setRoiValues(data.roiValues)
+      setRoiValues(filteredRoiValues)
     } catch (error) {
       console.error('Failed to update ROI data:', error)
+    }
+  }
+
+  const updateBandwidthData = async () => {
+    try {
+      const [fileBW, outputBW] = await Promise.all([
+        getFileBandwidth(),
+        getOutputBandwidth()
+      ])
+      setFileBandwidth(fileBW)
+      setOutputBandwidth(outputBW)
+    } catch (error) {
+      console.error('Failed to update bandwidth data:', error)
     }
   }
 
@@ -298,7 +313,6 @@ export function RunControl() {
         title: 'Starting Run...',
         description: `Please wait while the run ${runNumber} is being started.`,
       })
-      // Set all variables before starting the run
       await setCoincidenceWindow(parseInt(coincidenceTime))
       await setMultiplicity(parseInt(multiplicity))
       await setSaveData(saveData)
@@ -312,7 +326,6 @@ export function RunControl() {
         await deactivateWaveform()
       }
 
-      // Start the run
       await startRun()
       const newStartTime = await getStartTime()
       setIsRunning(true)
@@ -345,7 +358,6 @@ export function RunControl() {
       })
       setIsRunning(false)
 
-      // Increment run number
       const newRunNumber = await getCurrentRunNumber()
       setRunNumberState(newRunNumber)
     } catch (error) {
@@ -431,6 +443,7 @@ export function RunControl() {
               </CardTitle>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
+            
             <CardContent>
               <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
               <p className="text-xs text-muted-foreground">
@@ -449,6 +462,34 @@ export function RunControl() {
               <div className="text-2xl font-bold">250 uA</div>
               <p className="text-xs text-muted-foreground">
                 +0.5 uA from start
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                XDAQ Bandwidth
+              </CardTitle>
+              <Network className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{outputBandwidth.toFixed(2)} MB/s</div>
+              <p className="text-xs text-muted-foreground">
+                Output Bandwidth
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                File Bandwidth
+              </CardTitle>
+              <HardDrive className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{fileBandwidth.toFixed(2)} MB/s</div>
+              <p className="text-xs text-muted-foreground">
+                Data Writing Speed
               </p>
             </CardContent>
           </Card>

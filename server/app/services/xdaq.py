@@ -184,6 +184,13 @@ class xdaq_actor:
         positionEnd = answer.find("</p:outputBandw")
         positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
         return answer[positionBeg+1:positionEnd]
+    
+    def get_file_bandwith(self):
+        message = self._messenger.create_info_message("fileBandw","xsd:string")
+        answer = self._messenger.send_message(message)
+        positionEnd = answer.find("</p:fileBandw")
+        positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
+        return answer[positionBeg+1:positionEnd]
 
     def get_input_bandwith(self):
         message = self._messenger.create_info_message("inputBandw","xsd:string")

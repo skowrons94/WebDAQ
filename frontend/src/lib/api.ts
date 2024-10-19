@@ -200,5 +200,11 @@ export const getStartTime = () =>
     export const getRoiIntegral = (boardId: string, channel: string, roiMin: number, roiMax: number) =>
         api.get(`/roi/${boardId}/${channel}/${roiMin}/${roiMax}`).then(res => res.data);
 
+    // XDAQ functions
+    export const getFileBandwidth = () =>
+        api.get('/experiment/xdaq/file_bandwidth').then(res => res.data);
+    
+    export const getOutputBandwidth = () =>
+        api.get('/experiment/xdaq/output_bandwidth').then(res => res.data);
 
 export default api;

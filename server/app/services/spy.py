@@ -14,7 +14,7 @@ class ru_spy:
         self.running = False
         self.thread = None
         self.data = { "energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [] }
-        self.histo = ROOT.TH1F("Histogram", "Histogram", 32768, 0, 32768)
+        self.histo = ROOT.TH1F("Histogram 1", "Histogram 1", 32768, 0, 32768)
 
     def connect(self):
         self.socket = ROOT.TSocket(self.host, self.port)
@@ -127,7 +127,7 @@ class bu_spy:
         self.running = False
         self.thread = None
         self.data = { "energyAnti": [], "qshortAnti": [], "qlongAnti": [], "energySum": [], "qshortSum": [], "qlongSum": [] }
-        self.histo = ROOT.TH1F("Histogram", "Histogram", 32768, 0, 32768)
+        self.histo = ROOT.TH1F("Histogram 2", "Histogram 2", 32768, 0, 32768)
 
     def connect(self):
         self.socket = ROOT.TSocket(self.host, self.port)

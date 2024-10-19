@@ -37,11 +37,12 @@ export default function HistogramDashboard() {
   const [roiValues, setRoiValues] = useState<ROIValues>({})
   const [unsavedChanges, setUnsavedChanges] = useState(false)
   const [integrals, setIntegrals] = useState<Integrals>({})
+  const [isLogScale, setIsLogScale] = useState(false)
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
   const { theme } = useTheme()
-  //First we get the cached ROIs
+
   useEffect(() => {
     fetchCachedROIs()
   }, [])
@@ -191,7 +192,7 @@ export default function HistogramDashboard() {
         }
       }
     }
-  }, [boards])
+  }, [boards, isLogScale])
 
   const updateROIIntegrals = useCallback(async () => {
     console.log('Updating ROI integrals...')
@@ -258,6 +259,17 @@ export default function HistogramDashboard() {
 
       canv.fPrimitives.Add(roiHistogram, 'histo');
 
+      // Set logarithmic scale if isLogScale is true
+      if (isLogScale) {
+        canv.fLogx = 0;
+        canv.fLogy = 1;
+        canv.fLogz = 0;
+      } else {
+        canv.fLogx = 0;
+        canv.fLogy = 0;
+        canv.fLogz = 0;
+      }
+
       await window.JSROOT.redraw(element, canv)
     }
   }
@@ -267,10 +279,14 @@ export default function HistogramDashboard() {
       updateHistograms()
       updateROIIntegrals()
     }
-  }, [jsrootLoaded, boards, updateTrigger, updateHistograms, updateROIIntegrals])
+  }, [jsrootLoaded, boards, updateTrigger, updateHistograms, updateROIIntegrals, isLogScale])
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
+  }
+
+  const toggleLogScale = () => {
+    setIsLogScale(!isLogScale)
   }
 
   return (
@@ -284,8 +300,11 @@ export default function HistogramDashboard() {
         </div>
         {boards.map((board) => (
           <Card key={board.id} className="mb-6">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{board.name} (ID: {board.id})</CardTitle>
+              <Button onClick={toggleLogScale} variant="outline">
+                {isLogScale ? "Linear" : "Logarithmic"}
+              </Button>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
