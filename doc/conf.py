@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'WebDAQ'
-copyright = 'workshop participant'
-author = 'workshop participant'
+copyright = 'AC and JS'
+author = 'AC and JS'
 release = '0.1'
 
 
