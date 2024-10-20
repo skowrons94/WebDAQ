@@ -315,7 +315,7 @@ export default function HistogramDashboard() {
                       <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
                       <div
                         ref={el => { histogramRefs.current[histoId] = el }}
-                        className="w-full h-80 border rounded-lg shadow-sm mb-2"
+                        className="w-full h-80 border rounded-lg shadow-md mb-2"
                       ></div>
                       <div className="flex flex-col items-center gap-3">
                         <div className="flex gap-4">
