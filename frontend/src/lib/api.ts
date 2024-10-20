@@ -210,4 +210,8 @@ export const getStartTime = () =>
     export const getOutputBandwidth = () =>
         api.get('/experiment/xdaq/output_bandwidth').then(res => res.data);
 
+    // Reset
+    export const reset = () =>
+        api.post('/experiment/xdaq/reset').then(res => res.data);
+
 export default api;

@@ -17,11 +17,12 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.spy import ru_spy, bu_spy
 
-XDAQ_FLAG = False
+XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
 
-os.system("killall LunaSpy")
+os.system( "killall RUSpy" )
+os.system( "killall BUSpy" )
 
 def update_project( daq_state ):
 
@@ -78,24 +79,30 @@ def check_project( ):
 
 daq_state = check_project( )
 
-# Path to the CSV file
-
 topology = xdaq.topology("conf/topology.xml")
 topology.load_topology( )
 topology.display()
 
+r_spy = ru_spy( )
+b_spy = bu_spy( )
+
 if( XDAQ_FLAG ):
     directory = os.path.dirname(os.path.realpath("./server"))
     container = xdaq.container(directory)
-    container.start()
-    print( "Container started...")
-    topology.configure_pt( )
-    print( "PT configured...")
-    topology.enable_pt( )
-    print( "PT enabled...")
-
-r_spy = ru_spy( )
-b_spy = bu_spy( )
+    try:
+        status = topology.get_daq_status( )
+    except:
+        status = "Unknown"
+    if( status == "Running" ):
+        r_spy.start(daq_state)
+        b_spy.start(daq_state)
+    else:
+        container.start()
+        print( "Container started...")
+        topology.configure_pt( )
+        print( "PT configured...")
+        topology.enable_pt( )
+        print( "PT enabled...")
 
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
@@ -129,9 +136,6 @@ def start_run( ):
         conf_file = f"conf/{board['name']}_{board['id']}.json"
         os.system(f"cp {conf_file} data/run{run}/")
 
-    # Update the daq_state file
-    update_project(daq_state)
-
     # Start the XDAQ
     if( XDAQ_FLAG ):
         topology.set_coincidence_window(coincidence_window)
@@ -153,16 +157,16 @@ def start_run( ):
         write_csv(rows)
 
         # Update metadata in the database check first if it exists already
-        run_metadata = RunMetadata.query.filter_by(run_number=run).first()
-        if not run_metadata:
-            run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
-            db.session.add(run_metadata)
-            db.session.commit()
-        else:
-            run_metadata.start_time = time
-            run_metadata.end_time = None
-
-            db.session.commit()
+        #run_metadata = RunMetadata.query.filter_by(run_number=run).first()
+        #if not run_metadata:
+        #    run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
+        #    db.session.add(run_metadata)
+        #    db.session.commit()
+        #else:
+        #    run_metadata.start_time = time
+        #    run_metadata.end_time = None
+        #
+        #    db.session.commit()
 
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     daq_state['start_time'] = time
@@ -173,6 +177,8 @@ def start_run( ):
         r_spy.start(daq_state)
         b_spy.start(daq_state)
 
+    # Update the daq_state file
+    update_project(daq_state)
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
@@ -198,9 +204,9 @@ def stop_run( ):
         write_csv(rows)
 
         # Update metadata in the database
-        run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
-        run_metadata.end_time = datetime.now()
-        db.session.commit()
+        #run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
+        #run_metadata.end_time = datetime.now()
+        #db.session.commit()
 
 
     daq_state['start_time'] = None
@@ -442,6 +448,14 @@ def check_run_directory():
 @jwt_required_custom
 def get_run_status():
     global daq_state
+    try:
+        status = topology.get_daq_status( )
+        if status == "Running":
+            daq_state['running'] = True
+        else:
+            daq_state['running'] = False
+    except:
+        pass
     return jsonify(daq_state['running'])
 
 @bp.route("/experiment/get_start_time", methods=['GET'])
@@ -632,4 +646,18 @@ def get_output_bandwith( ):
 
         return jsonify(data)
     
+    return jsonify(0)
+
+@bp.route('/experiment/xdaq/reset', methods=['POST'])
+@jwt_required_custom
+def reset( ):
+    topology = xdaq.topology("conf/topology.xml")
+    topology.load_topology( )
+    topology.display()
+    container.start( )
+    print( "Container started...")
+    topology.configure_pt( )
+    print( "PT configured...")
+    topology.enable_pt( )
+    print( "PT enabled...")
     return jsonify(0)

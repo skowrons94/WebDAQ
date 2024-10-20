@@ -91,7 +91,8 @@ import {
   getWaveformStatus,
   getRoiIntegral,
   getFileBandwidth,
-  getOutputBandwidth
+  getOutputBandwidth,
+  reset
 } from '@/lib/api'
 
 type BoardData = {
@@ -374,6 +375,23 @@ export function RunControl() {
     }
   }
 
+  const handleReset = async () => {
+    try {
+      await reset()
+      toast({
+        title: 'XDAQ Reset',
+        description: 'All the XDAQ components restarted.',
+      })
+    } catch (error) {
+      console.error('Failed to reset parameters:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to restart XDAQ. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const formatTime = (seconds: number) => {
     if (seconds < 60) {
       return `${Math.floor(seconds / 10) * 10} seconds`
@@ -555,9 +573,9 @@ export function RunControl() {
                 </Button>
               </div>
               <div className="flex items-center gap-4">
-                <Button className="w-full" variant="outline" disabled>
+                <Button onClick={handleReset} className="w-full" variant="outline">
                   <AlertTriangle className="mr-2 h-4 w-4" />
-                  Emergency Shutdown
+                  Reset
                 </Button>
               </div>
             </CardContent>
