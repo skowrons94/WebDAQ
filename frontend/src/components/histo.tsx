@@ -147,7 +147,7 @@ export default function HistogramsPage() {
 
       <main className="flex-1 container mx-auto p-4">
           {boards.map((board) => (
-                <Card>
+                <Card key={board.id}>
                   <CardContent>
                 <div className="grid grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-4 p-4 md:p-8">
                       {Array.from({ length: parseInt(board.chan) }).map((_, channelIndex) => {

@@ -24,21 +24,10 @@ export default  function LogbookPage() {
         }
     }, [token, router]);
 
-    const handleLogout = () => {
-        clearToken();
-        router.push('/');
-    };
-
     if (!token) {
         return null;
     }
     
-    useEffect(() => {
-        if (!token) {
-            router.push('/auth/login');
-        }
-    }, [token, router]);
-
 
     return (
         <QueryClientProvider client={queryClient}>

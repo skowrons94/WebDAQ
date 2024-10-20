@@ -12,6 +12,7 @@ import {
     getPaginationRowModel,
     useReactTable,
     getSortedRowModel,
+    Row,
 } from "@tanstack/react-table"
 
 import {
@@ -30,14 +31,15 @@ import {
     DropdownMenuContent,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { mkConfig, generateCsv, download } from 'export-to-csv'
 
 
-interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData extends { [k: string]: any; [k: number]: any }, TValue> {
     columns: ColumnDef<TData, TValue>[]
     data: TData[]
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData extends { [k: string]: any;[k: number]: any }, TValue>({
     columns,
     data,
 }: DataTableProps<TData, TValue>) {
@@ -66,6 +68,26 @@ export function DataTable<TData, TValue>({
 
         }
     })
+    const csvConfig = mkConfig({
+        fieldSeparator: ',',
+        filename: 'Logbook', // export file name (without .csv)
+        decimalSeparator: '.',
+        useKeysAsHeaders: true,
+    })
+    // export function
+    const exportExcel = (rows: Row<TData>[]) => {
+        //const rowData = rows.map((row) => row.original)
+        const rowData = rows.map((row) => {
+            return {
+                'Run Number': row.original.run_number,
+                'Start Time': row.original.start_time,
+                'End Time': row.original.end_time,
+                'Notes': row.original.notes,
+            }
+        })
+        const csv = generateCsv(csvConfig)(rowData as { [k: string]: any; [k: number]: any }[])
+        download(csvConfig)(csv)
+    }
 
     return (
         <div>
@@ -107,6 +129,13 @@ export function DataTable<TData, TValue>({
                             })}
                     </DropdownMenuContent>
                 </DropdownMenu>
+                <Button
+                    variant="destructive"
+                    className="ml-2"
+                    onClick={() => exportExcel(table.getFilteredRowModel().rows)}
+                >
+                    Download CSV...
+                </Button>
             </div>
         <div className="rounded-md border">
             <Table>
