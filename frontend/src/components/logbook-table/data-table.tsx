@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { FileDown } from "lucide-react"
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -80,8 +81,10 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
         const rowData = rows.map((row) => {
             return {
                 'Run Number': row.original.run_number,
-                'Start Time': row.original.start_time,
-                'End Time': row.original.end_time,
+                'Start Time': row.original.start_time ?
+                    new Date(row.original.start_time).toLocaleString() : '',
+                'End Time': row.original.end_time ?
+                    new Date(row.original.end_time).toLocaleString() : '',
                 'Notes': row.original.notes,
             }
         })
@@ -134,6 +137,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                     className="ml-2"
                     onClick={() => exportExcel(table.getFilteredRowModel().rows)}
                 >
+                    <FileDown className="h-4 w-4 mr-2" />
                     Download CSV...
                 </Button>
             </div>

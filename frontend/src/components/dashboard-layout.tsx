@@ -197,7 +197,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </header>
                 <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
                     {children}
-                </main>
+            </main>
+            <footer className="flex items-center justify-center h-16 bg-background text-muted-foreground">
+                <span>&copy; 2024 LUNADAQ</span>
+            </footer>
             </div>
 
     )
