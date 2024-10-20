@@ -23,49 +23,14 @@ bp = Blueprint('experiment', __name__)
 
 os.system("killall LunaSpy")
 
-def write_ruconf(state):
-    if not os.path.exists('conf'): 
-        os.makedirs('conf')
-    with open('conf/RUCaen.conf', 'w') as f:
-        f.write(f"NumberOfBoards {len(state['boards'])}\n\n")
-        for board in state['boards']:
-            conf = "/home/xdaq/project/conf/{}_{}.json".format(board['name'], board['id'])
-            link_type = 1 if board['link_type'] == "Optical" else 0
-            if board["dpp"] == "DPP-PHA": dpp = 0
-            elif board["dpp"] == "DPP-PSD": dpp = 1
-            f.write(f"Board {board['name']} {board['id']} {board['vme']} {link_type} {board['link_num']} {dpp}\n")
-            f.write(f"BoardConf {board['id']} {conf}\n")
-
-def write_lfconf(state):
-    if not os.path.exists('conf'):
-        os.makedirs('conf')
-    with open('conf/LocalFilter.conf', 'w') as f:
-        f.write(f"SaveDataDir .\n\n")
-        for board in state['boards']:
-            f.write(f"SpecPrefix {board['id']} {board['name']}\n")
-            if board["dpp"] == "DPP-PHA": dpp = "DPP_PHA"
-            elif board["dpp"] == "DPP-PSD": dpp = "DPP_PSD"
-            f.write(f"Board {board['id']} {board['name']} {dpp} {board['chan']} 0 1 1\n")
-        f.write("GraphiteServer graphite 2003\n")
-
-def write_buconf(state):
-    if not os.path.exists('conf'):
-        os.makedirs('conf')
-    with open('conf/Builder.conf', 'w') as f:
-        for board in state['boards']:
-            # Write all 1 for each channel
-            for i in range(int(board['chan'])):
-                f.write(f"1")
-            f.write("\n")
-
 def update_project( daq_state ):
 
     with open('conf/boards.pkl', 'wb') as f: 
         pkl.dump(daq_state, f)
 
-    write_ruconf(daq_state)
-    write_lfconf(daq_state)
-    write_buconf(daq_state)
+    topology.write_ruconf(daq_state)
+    topology.write_lfconf(daq_state)
+    topology.write_buconf(daq_state)
 
 # Check if CSV exists, if not, create it with predefined columns
 def read_csv():
@@ -87,6 +52,9 @@ def check_project( ):
     # Check if directory exists, if not create it
     if not os.path.exists('conf'): 
         os.makedirs('conf')
+    # Check if directory exists, if not create it
+    if not os.path.exists('calib'): 
+        os.makedirs('calib')
     # Check if exists, if not create it
     if os.path.exists('conf/boards.pkl'):
         with open('conf/boards.pkl', 'rb') as f: 
@@ -273,6 +241,12 @@ def add_caen():
         # Copy to "conf" directory
         os.system(f"cp json/{board_name}_{dpp}.json conf/{board_name}_{board['id']}.json")
 
+    # Create the calibration file
+    os.system(f"touch calib/{board_name}_{board['id']}.cal")
+    with open(f"calib/{board_name}_{board['id']}.cal", 'w') as f:
+        for i in range( board['chan'] ):
+            f.write(f"0.0 1.0\n")
+
     # Update the project
     update_project(daq_state)
 
@@ -290,6 +264,7 @@ def remove_caen():
 
     # Remove the board based on its index in the list
     if 0 <= index < len(daq_state['boards']):
+        os.system(f"rm calib/{daq_state['boards'][index]['name']}_{daq_state['boards'][index]['id']}.cal")
         _ = daq_state['boards'].pop(index)
 
     # Update the project
@@ -547,9 +522,8 @@ def wave_status():
         string = data['registers']['reg_8000']["value"]
         value = int(string, 16)
         if (value & (1 << 16)) == 0:
-            print( "Waveforms are disabled")
             return jsonify(False)
-    print( "Waveforms are enabled")
+
     return jsonify(True)
 
 # Route to serve all the data for a given run number
@@ -565,10 +539,8 @@ def get_roi_histo(board_id, channel, roi_min, roi_max):
     histo = r_spy.get_object("energy", idx)
 
     h1 = TH1F(histo)
-    for i in range(0, int(roi_min)):
-        h1.SetBinContent(i, 0)
-    for i in range(int(roi_max), 32768):
-        h1.SetBinContent(i, 0)
+
+    h1.GetXaxis( ).SetRange(int(roi_min), int(roi_max))
 
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
@@ -616,7 +588,6 @@ def get_output_bandwith( ):
     # For all xdaq actors in topology get the file bandwith
     if( daq_state['running'] ):
         actors = topology.get_all_actors()
-        print( actors )
         data = 0
         for actor in actors:
             for a in actor:
@@ -625,4 +596,3 @@ def get_output_bandwith( ):
         return jsonify(data)
     
     return jsonify(0)
-    

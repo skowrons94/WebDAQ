@@ -585,6 +585,54 @@ class topology:
             return True
         else :
             return False
+        
+    def write_ruconf(self, state):
+        if not os.path.exists('conf'): 
+            os.makedirs('conf')
+        with open('conf/RUCaen.conf', 'w') as f:
+            f.write(f"NumberOfBoards {len(state['boards'])}\n\n")
+            for board in state['boards']:
+                conf = "/home/xdaq/project/conf/{}_{}.json".format(board['name'], board['id'])
+                link_type = 1 if board['link_type'] == "Optical" else 0
+                if board["dpp"] == "DPP-PHA": dpp = 0
+                elif board["dpp"] == "DPP-PSD": dpp = 1
+                f.write(f"Board {board['name']} {board['id']} {board['vme']} {link_type} {board['link_num']} {dpp}\n")
+                f.write(f"BoardConf {board['id']} {conf}\n")
+
+    def write_lfconf(self, state):
+        if not os.path.exists('conf'):
+            os.makedirs('conf')
+        with open('conf/LocalFilter.conf', 'w') as f:
+            f.write(f"SaveDataDir .\n\n")
+            for board in state['boards']:
+                f.write(f"SpecPrefix {board['id']} {board['name']}\n")
+                if board["dpp"] == "DPP-PHA": dpp = "DPP_PHA"
+                elif board["dpp"] == "DPP-PSD": dpp = "DPP_PSD"
+                name = board['name']
+                if( "DT5781" in name or "V1724" in name ):
+                    timestamp = 10
+                    sampling = 10
+                elif( "V1730" in name ):
+                    timestamp = 2
+                    sampling = 2
+                elif( "V1725" in name ):
+                    timestamp = 4
+                    sampling = 4
+                else:
+                    timestamp = 1
+                    sampling = 1
+                f.write(f"Board {board['id']} {board['name']} {dpp} {board['chan']} 0 {timestamp} {sampling}\n")
+            f.write("GraphiteServer graphite 2003\n")
+
+    def write_buconf(self, state):
+        if not os.path.exists('conf'):
+            os.makedirs('conf')
+        with open('conf/Builder.conf', 'w') as f:
+            for board in state['boards']:
+                # Write all 1 for each channel
+                for i in range(int(board['chan'])):
+                    f.write(f"1")
+                f.write("\n")
     
     def set_files(self,runNumber):
         enaFiles=[self._writeRU,
