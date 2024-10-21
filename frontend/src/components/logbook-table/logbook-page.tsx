@@ -26,6 +26,7 @@ export function Logbook() {
 
     return (
         <div className="container mx-auto py-10">
+            <h1 className="text-3xl font-bold mb-5">Logbook</h1>
             <DataTable columns={columns} data={data} />
         </div>
     )
