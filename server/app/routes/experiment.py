@@ -15,7 +15,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.spy import ru_spy, bu_spy
 
-XDAQ_FLAG = False
+XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
 
@@ -733,3 +733,37 @@ def get_roi_integral_anti(board_id, channel, roi_min, roi_max):
         histo = b_spy.get_object("qlongAnti", idx)
     integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
     return jsonify(integral)
+
+@bp.route('/experiment/boards/<id>/<setting>', methods=['GET'])
+@jwt_required_custom
+def get_setting( id, setting ):
+    key = "reg_{}".format(setting)
+    for board in daq_state['boards']:
+        if board['id'] == id:
+            filename = "conf/{}_{}.json".format(board['name'], board['id'])
+            with open(filename, 'r') as f:
+                data = json.load(f)
+            value = data['registers'][key]['value']
+            # Convert from hex 0x to int
+            return jsonify(int(value, 16))
+    return jsonify(-1)
+
+@bp.route('/experiment/boards/<id>/<setting>/<value>', methods=['GET'])
+@jwt_required_custom
+def set_setting( id, setting, value ):
+    key = "reg_{}".format(setting)
+    try:
+        for board in daq_state['boards']:
+            if board['id'] == id:
+                filename = "conf/{}_{}.json".format(board['name'], board['id'])
+                with open(filename, 'r') as f:
+                    data = json.load(f)
+                data['registers'][key]['value'] = hex(int(value))
+                with open(filename, 'w') as f:
+                    json.dump(data, f, indent=4)
+        # Return success
+        return jsonify(0)
+    except:
+        # Return failure
+        return jsonify(-1)
+    

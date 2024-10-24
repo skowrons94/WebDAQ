@@ -203,4 +203,11 @@ export const getDataCurrent = () =>
 export const getAccumulatedCharge = () =>
     api.get('/current/accumulated').then(res => res.data);
 
+// Get boards JSON
+export const getSetting = (id: string, setting: string) =>
+    api.get(`/experiment/boards/${id}/${setting}`).then(res => res.data);
+
+export const setSetting = (id: string, setting: string, value: string) =>
+    api.get(`/experiment/boards/${id}/${setting}/${value}`);
+
 export default api;

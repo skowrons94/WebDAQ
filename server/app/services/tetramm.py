@@ -106,7 +106,6 @@ class tetram_controller:
 
     def start_acquisition(self):
         if not self.is_acquiring:
-            self.start = datetime.now().timestamp()
             self.is_acquiring = True
             self.acquisition_thread = threading.Thread(target=self._acquisition_loop)
             self.acquisition_thread.start()
@@ -153,6 +152,7 @@ class tetram_controller:
 
     def set_save_data(self, save_data, save_folder=''):
         with self.lock:
+            self.start = datetime.now().timestamp()
             self.save_data = save_data
             self.save_folder = save_folder
 

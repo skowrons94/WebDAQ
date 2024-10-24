@@ -11,6 +11,7 @@ import WaveformDashboard from '@/components/wave-dashboard';
 import CalibrationDashboard from '@/components/calib-dashboard';
 import AntiCoincidenceDashboard from '@/components/anti-dashboard';
 import CoincidenceDashboard from '@/components/coin-dashboard';
+import CAENDashboard from '@/components/caen-dashboard';
 import { Layout } from '@/components/dashboard-layout'; import {
   Tabs,
   TabsContent,
@@ -52,6 +53,7 @@ export default function DashboardPage() {
             <div className="flex items-center">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="caen">CAEN</TabsTrigger>
                 <TabsTrigger value="stats">Stats</TabsTrigger>
                 <TabsTrigger value="histograms">Histograms</TabsTrigger>
                 <TabsTrigger value="coincidence">Coincidence</TabsTrigger>
@@ -62,6 +64,9 @@ export default function DashboardPage() {
             </div>
           <TabsContent value="overview">
             <RunControl />
+          </TabsContent>
+          <TabsContent value="caen">
+            <CAENDashboard />
           </TabsContent>
           <TabsContent value="stats">
             <Stats />
