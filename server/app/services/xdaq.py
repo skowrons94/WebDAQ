@@ -816,10 +816,14 @@ class topology:
 
     def set_enable_files(self,flag):
         self.enableRU_file(flag)
-        self.enableLF_file(flag)
-        self.enableBU_file(flag)
-        self.enableMU_file(flag)
-        self.enableGF_file(flag)
+        #self.enableLF_file(flag)
+        #self.enableBU_file(flag)
+        #self.enableMU_file(flag)
+        #self.enableGF_file(flag)
+        self.enableLF_file(False)
+        self.enableBU_file(False)
+        self.enableMU_file(False)
+        self.enableGF_file(False)
 
     def set_file_size_limit(self,filelimit):
         for actors in self._ru_actors:

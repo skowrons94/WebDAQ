@@ -142,9 +142,9 @@ class tetram_controller:
                         self.send_metric(f"tetram.ch{i}", self.values[str(i)][-1], timestamp)
                     if( self.save_data ):
                         with open(os.path.join(self.save_folder, f'current.txt'), 'a') as f:
-                            f.write(f'{timestamp - self.start}\t')
+                            f.write(f'{timestamp - self.start:.2e}\t')
                             for i in range(int(self.settings['CHN'])):
-                                f.write(f'{self.values[str(i)][-1]}\t')
+                                f.write(f'{self.values[str(i)][-1]:.2e}\t')
                             f.write('\n')
                 time.sleep(0.5)
             except socket.timeout:
