@@ -28,12 +28,6 @@ export default function JsonEditorPage() {
         return null;
     }
     
-    useEffect(() => {
-        if (!token) {
-            router.push('/auth/login');
-        }
-    }, [token, router]);
-
     return (
         <Layout>
             <JsonEditor />

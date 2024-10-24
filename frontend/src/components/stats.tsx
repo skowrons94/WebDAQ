@@ -1,8 +1,28 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { getBoardConfiguration, getTerminalVoltage, getExtractionVoltage, getColumnCurrent, getBoardRates } from '@/lib/api'
+import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
+
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle
+} from "@/components/ui/card"
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartConfig
+} from "@/components/ui/chart"
+
+import {
+  getBoardConfiguration,
+  getTerminalVoltage,
+  getExtractionVoltage,
+  getColumnCurrent,
+  getBoardRates
+} from '@/lib/api'
 
 type BoardData = {
   id: string;
@@ -16,7 +36,7 @@ type BoardData = {
 
 type StatData = {
   name: string;
-  value: number | null;
+  data: { time: string, value: number }[];
   unit: string;
 }
 
@@ -27,7 +47,6 @@ export function Stats() {
   const fetchBoardConfiguration = useCallback(async () => {
     try {
       const response = await getBoardConfiguration()
-      console.log('Board configuration:', response.data)
       setBoards(response.data)
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
@@ -36,18 +55,25 @@ export function Stats() {
 
   const fetchStats = useCallback(async () => {
     if (boards.length === 0) {
-      console.log('No boards available, skipping stats fetch')
       return
     }
 
     try {
-      const [terminalVoltageResult, extractionVoltageResult, columnCurrentResult, ...boardRatesResults] = await Promise.allSettled([
-        getTerminalVoltage(),
-        getExtractionVoltage(),
-        getColumnCurrent(),
-        ...boards.flatMap(board => 
-          Array.from({ length: parseInt(board.chan) }, (_, i) => 
-            getBoardRates(board.id, board.name, i.toString())
+      const from = '-90000s'
+      const until = 'now'
+
+      const [
+        terminalVoltageResult,
+        extractionVoltageResult,
+        columnCurrentResult,
+        ...boardRatesResults
+      ] = await Promise.allSettled([
+        getTerminalVoltage(from, until),
+        getExtractionVoltage(from, until),
+        getColumnCurrent(from, until),
+        ...boards.flatMap(board =>
+          Array.from({ length: parseInt(board.chan) }, (_, i) =>
+            getBoardRates(board.id, board.name, i.toString(), from, until)
           )
         )
       ])
@@ -55,21 +81,27 @@ export function Stats() {
       const newStats: StatData[] = []
 
       if (terminalVoltageResult.status === 'fulfilled') {
-        newStats.push({ name: 'Terminal Voltage', value: terminalVoltageResult.value[0]?.[1] ?? null, unit: 'V' })
-      } else {
-        console.error('Failed to fetch Terminal Voltage:', terminalVoltageResult.reason)
+        newStats.push({
+          name: 'Terminal Voltage',
+          data: terminalVoltageResult.value.map((item: any) => ({ time: item[0], value: item[1] })),
+          unit: 'V'
+        })
       }
 
       if (extractionVoltageResult.status === 'fulfilled') {
-        newStats.push({ name: 'Extraction Voltage', value: extractionVoltageResult.value[0]?.[1] ?? null, unit: 'V' })
-      } else {
-        console.error('Failed to fetch Extraction Voltage:', extractionVoltageResult.reason)
+        newStats.push({
+          name: 'Extraction Voltage',
+          data: extractionVoltageResult.value.map((item: any) => ({ time: item[0], value: item[1] })),
+          unit: 'V'
+        })
       }
 
       if (columnCurrentResult.status === 'fulfilled') {
-        newStats.push({ name: 'Column Current', value: columnCurrentResult.value[0]?.[1] ?? null, unit: 'µA' })
-      } else {
-        console.error('Failed to fetch Column Current:', columnCurrentResult.reason)
+        newStats.push({
+          name: 'Column Current',
+          data: columnCurrentResult.value.map((item: any) => ({ time: item[0], value: item[1] })),
+          unit: 'µA'
+        })
       }
 
       boards.forEach((board, boardIndex) => {
@@ -78,14 +110,7 @@ export function Stats() {
           if (rateResult.status === 'fulfilled') {
             newStats.push({
               name: `${board.name} Channel ${channelIndex}`,
-              value: rateResult.value[0]?.[1] ?? null,
-              unit: 'Hz'
-            })
-          } else {
-            console.error(`Failed to fetch rate for ${board.name} Channel ${channelIndex}:`, rateResult.reason)
-            newStats.push({
-              name: `${board.name} Ch${channelIndex}`,
-              value: null,
+              data: rateResult.value.map((item: any) => ({ time: item[0], value: item[1] })),
               unit: 'Hz'
             })
           }
@@ -111,20 +136,52 @@ export function Stats() {
   }, [boards, fetchStats])
 
   return (
-    
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 p-4 md:gap-8 md:p-8">
+    <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-5 gap-4 p-2 ">
       {stats.map((stat, index) => (
         <Card key={index}>
           <CardHeader>
             <CardTitle className="text-sm font-medium">{stat.name}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {stat.value !== null ? `${stat.value.toFixed(2)} ${stat.unit}` : 'N/A'}
-            </div>
+            <ChartContainer className='min-h-[200px] w-full' config={getChartConfig(stat)}>
+              <AreaChart
+                accessibilityLayer
+                data={stat.data}
+                margin={{ left: 12, right: 12 }}
+                >
+                <CartesianGrid vertical={false} />
+                <XAxis
+                  dataKey="time"
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  tickFormatter={(value) => new Date(value).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                />
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent indicator="dot" />}
+                />
+                <Area
+                  dataKey="value"
+                  type="natural"
+                  fill="var(--color-value)"
+                  fillOpacity={0.4}
+                  stroke="var(--color-value)"
+                  isAnimationActive={true}
+                  animationDuration={400}
+                />
+              </AreaChart>
+            </ChartContainer>
           </CardContent>
         </Card>
       ))}
     </div>
   )
 }
+
+const getChartConfig = (stat: StatData): ChartConfig => ({
+  value: {
+    label: `${stat.name} (${stat.unit})`,
+    color: "hsl(var(--chart-5))"
+  }
+})
