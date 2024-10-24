@@ -230,6 +230,6 @@ class bu_spy:
     
     def get_object(self, name, idx):
         try:
-            return self.data[name][idx].Clone( )
+            return self.data[name][int(idx)].Clone( )
         except:
             return self.histo

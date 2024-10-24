@@ -1,21 +1,70 @@
 import socket
-import struct
 import threading
 import time
+import json
 import os
+
+import numpy as np
+
 from datetime import datetime
 
-class TetrAMMController:
-    def __init__(self, ip='192.168.0.10', port=10001):
+class tetram_controller:
+    def __init__(self, ip='127.0.0.1', port=10001, graphite_host='172.18.9.54', graphite_port=2003):
         self.ip = ip
         self.port = port
+        self.graphite_host = graphite_host
+        self.graphite_port = graphite_port
         self.socket = None
         self.acquisition_thread = None
         self.is_acquiring = False
         self.save_data = False
         self.save_folder = ''
         self.buffer = b''
+        self.start = 0
+        self.times = np.zeros(100000)
+        self.values = { "0": np.zeros(100000), "1": np.zeros(100000), "2": np.zeros(100000), "3": np.zeros(100000) }
         self.lock = threading.Lock()
+        self.load_settings()
+
+    def send_metric(self, metric_path, value, timestamp):
+        # Create a socket connection to the Graphite server
+        try:
+            # Open a socket to Graphite
+            sock = socket.create_connection((self.graphite_host, self.graphite_port))
+            
+            # Prepare the metric in the format: metric_path value timestamp
+            message = f"{metric_path} {value} {timestamp}\n"
+            
+            # Send the message to Graphite
+            sock.sendall(message.encode('utf-8'))
+            
+        except Exception as e:
+            pass
+        finally:
+            # Ensure the socket is closed properly
+            if 'sock' in locals():
+                sock.close()
+
+    def initialize(self):
+        try:
+            self.connect()
+            for setting, value in self.settings.items():
+                self.set_setting(setting, value)
+            self.start_acquisition()
+        except Exception as e:
+            print(f"Failed to initialize TetrAMM: {e}")
+
+    def write_settings(self):
+        with open('conf/tetram.json', 'w') as f:
+            json.dump(self.settings, f)
+
+    def load_settings(self):
+        if not os.path.exists('conf/tetram.json'):
+            self.settings = { 'CHN': "4", 'RNG': "AUTO", 'ASCII': "ON", 'NRSAMP': "1000", 'TRG': "OFF", 'NAQ': "1" }
+            self.write_settings()
+        else:
+            with open('conf/tetram.json', 'r') as f:
+                self.settings = json.load(f)
 
     def connect(self):
         self.socket = socket.socket()
@@ -34,9 +83,15 @@ class TetrAMMController:
         return self.socket.recv(1024)
 
     def set_setting(self, setting, value):
+        if( setting in self.settings ):
+            self.settings[setting] = value
+            self.write_settings()
+        else:
+            return -1
         if self.is_acquiring:
             self.stop_acquisition()
         response = self._send_command(f'{setting}:{value}')
+        response = response.decode().split( )[0]
         self.start_acquisition()
         return response
 
@@ -44,54 +99,68 @@ class TetrAMMController:
         if self.is_acquiring:
             self.stop_acquisition()
         response = self._send_command(f'{setting}:?')
+        response = response.decode()
+        response = response.split(':')[1][:-2]
         self.start_acquisition()
         return response
 
     def start_acquisition(self):
         if not self.is_acquiring:
+            self.start = datetime.now().timestamp()
             self.is_acquiring = True
-            self._send_command('ACQ:ON')
             self.acquisition_thread = threading.Thread(target=self._acquisition_loop)
             self.acquisition_thread.start()
 
     def stop_acquisition(self):
         if self.is_acquiring:
             self.is_acquiring = False
-            self._send_command('ACQ:OFF')
             self.acquisition_thread.join()
+            while( True ):
+                try:
+                    recv = self.socket.recv(1024)
+                    if recv[-5:] == b'ACK\r\n':
+                        break
+                except:
+                    break
 
     def _acquisition_loop(self):
         while self.is_acquiring:
             try:
-                data = self.socket.recv(40)
+                data = self._send_command('ACQ:ON')
+                data = data.decode().split( )
+                if( data[0] == 'ACK' ):
+                    continue
+                now = datetime.now()
+                timestamp = now.timestamp()
                 with self.lock:
-                    self.buffer += data
-                if self.save_data:
-                    self._save_buffer()
+                    for i in range(int(self.settings['CHN'])):
+                        self.values[str(i)] = np.roll(self.values[str(i)], -1)
+                        self.values[str(i)][-1] = float(data[i]) * 1e6 # Convert to uA
+                    self.times = np.roll(self.times, -1)
+                    self.times[-1] = timestamp
+                    for i in range(int(self.settings['CHN'])):
+                        self.send_metric(f"tetram.ch{i}", self.values[str(i)][-1], timestamp)
+                    if( self.save_data ):
+                        with open(os.path.join(self.save_folder, f'current.txt'), 'a') as f:
+                            f.write(f'{timestamp - self.start}\t')
+                            for i in range(int(self.settings['CHN'])):
+                                f.write(f'{self.values[str(i)][-1]}\t')
+                            f.write('\n')
+                time.sleep(0.5)
             except socket.timeout:
-                print("Timeout occurred for TetrAMM")
+                data = self._send_command('ACQ:OFF')
                 pass
 
-    def _save_buffer(self):
-        if not os.path.exists(self.save_folder):
-            os.makedirs(self.save_folder)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = os.path.join(self.save_folder, f'data_{timestamp}.bin')
-        with open(filename, 'wb') as f:
-            f.write(self.buffer)
-        self.buffer = b''
-
     def set_save_data(self, save_data, save_folder=''):
-        self.save_data = save_data
-        self.save_folder = save_folder
+        with self.lock:
+            self.save_data = save_data
+            self.save_folder = save_folder
 
     def get_data(self):
         with self.lock:
-            data = self.buffer
-            self.buffer = b''
-        return struct.unpack('>' + 'd' * (len(data) // 8), data)
+            return { "0" : self.values["0"][-1], "1" : self.values["1"][-1], "2" : self.values["2"][-1], "3" : self.values["3"][-1] }
 
     def reset(self):
-        self.disconnect()
-        self.connect()
-        self.start_acquisition()
+        if( self.is_acquiring ):
+            self.stop_acquisition()
+        self.initialize()

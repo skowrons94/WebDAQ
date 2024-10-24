@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getRoiHistogram, getRoiIntegral } from '@/lib/api'
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getAntiHistogram, getRoiHistogramAnti, getRoiIntegralAnti } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
@@ -28,7 +28,7 @@ type Integrals = {
   [key: string]: number;
 }
 
-export default function HistogramDashboard() {
+export default function AntiCoincidenceDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [runNumber, setRunNumber] = useState<number | null>(null)
@@ -177,7 +177,7 @@ export default function HistogramDashboard() {
         const histoElement = histogramRefs.current[histoId]
         if (histoElement && window.JSROOT) {
           try {
-            const histogramData = await getHistogram(board.id, i.toString())
+            const histogramData = await getAntiHistogram(board.id, i.toString())
             const histogram = window.JSROOT.parse(histogramData)
             await drawHistogramWithROI(histoElement, histogram, histoId, i.toString(), board.id)
           } catch (error) {
@@ -200,7 +200,7 @@ export default function HistogramDashboard() {
         const histoId = `board${board.id}_channel${i}`
         const { low, high } = roiValues[histoId] || { low: 0, high: 0 }
         try {
-          const integral = await getRoiIntegral(board.id, i.toString(), low, high)
+          const integral = await getRoiIntegralAnti(board.id, i.toString(), low, high)
           updatedIntegrals[histoId] = integral
         } catch (error) {
           console.error(`Failed to get ROI integral for ${histoId}:`, error)
@@ -251,7 +251,7 @@ export default function HistogramDashboard() {
 
       const { low, high } = roiValues[histoId] || { low: 0, high: 0 }
 
-      const roiObj = await getRoiHistogram(id, chan, low, high)
+      const roiObj = await getRoiHistogramAnti(id, chan, low, high)
       const roiHistogram = window.JSROOT.parse(roiObj)
 
       canv.fPrimitives.Add(roiHistogram, 'histo');
@@ -290,7 +290,7 @@ export default function HistogramDashboard() {
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Histogram Dashboard</h1>
+          <h1 className="text-2xl font-bold">Anticoincidence Histogram Dashboard</h1>
           <Button onClick={handleSaveChanges} disabled={!unsavedChanges}>
             Save Changes
           </Button>

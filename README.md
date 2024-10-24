@@ -60,7 +60,6 @@ This repository contains a server and a React Next.js frontend designed for data
     flask db init
     flask db migrate -m "Initial migration."
     flask db upgrade
-
     ```
 
 3. **Create a new user:**

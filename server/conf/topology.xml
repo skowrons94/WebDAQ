@@ -100,9 +100,9 @@
 	<detconfFilepath xsi:type="xsd:string">/home/xdaq/project/conf/Builder.conf</detconfFilepath>
 	<dataOutput soapenc:arrayType="xsd:ur-type[2]" xsi:type="soapenc:Array">
 	  <item soapenc:position="[0]" xsi:type="xsd:string">local</item>
-    	  <item soapenc:position="[1]" xsi:type="xsd:string">spy</item>
+    <item soapenc:position="[1]" xsi:type="xsd:string">spy</item>
 	</dataOutput>
-	<spyPort xsi:type="xsd:unsignedInt">10003</spyPort>
+	<spyPort xsi:type="xsd:unsignedInt">10000</spyPort>
 	<merge_window xsi:type="xsd:unsignedInt">50</merge_window>
         <multiplicity xsi:type="xsd:unsignedInt">1</multiplicity>
         <dataKey xsi:type="xsd:string">CA020100</dataKey>

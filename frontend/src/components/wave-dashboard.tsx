@@ -123,7 +123,6 @@ export default function WaveformDashboard() {
   }, [createBlankHistogram])
 
   const updateHistograms = useCallback(async () => {
-    console.log('Updating histograms...')
     for (const board of boards) {
       for (let i = 0; i < parseInt(board.chan); i++) {
         const histoId = `board${board.id}_channel${i}`

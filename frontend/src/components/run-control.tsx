@@ -92,7 +92,12 @@ import {
   getRoiIntegral,
   getFileBandwidth,
   getOutputBandwidth,
-  reset
+  reset,
+  resetDeviceCurrent,
+  getDataCurrent,
+  startAcquisitionCurrent,
+  stopAcquisitionCurrent,
+  getAccumulatedCharge
 } from '@/lib/api'
 
 type BoardData = {
@@ -131,17 +136,24 @@ export function RunControl() {
   const [roiValues, setRoiValues] = useState<ROIValues>({})
   const [fileBandwidth, setFileBandwidth] = useState<number>(0)
   const [outputBandwidth, setOutputBandwidth] = useState<number>(0)
+  const [beamCurrent, setBeamCurrent] = useState<number>(0)
+  const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
+  const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
 
   useEffect(() => {
     fetchInitialData()
     const statusInterval = setInterval(fetchRunStatus, 5000)
+    const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
     const bandwidthInterval = setInterval(updateBandwidthData, 1000)
+    const accumulatedChargeInterval = setInterval(updateAccumulatedCharge, 1000)
 
     return () => {
       clearInterval(statusInterval)
       clearInterval(roiInterval)
       clearInterval(bandwidthInterval)
+      clearInterval(beamCurrentInterval)
+      clearInterval(accumulatedChargeInterval)
     }
   }, [])
 
@@ -277,6 +289,28 @@ export function RunControl() {
     }
   }
 
+  const updateBeamCurrent = async () => {
+    try {
+      const currentData = await getDataCurrent()
+      setBeamCurrent(currentData)
+      if (isRunning && startTime) {
+        const initialCurrent = parseFloat(localStorage.getItem('initialBeamCurrent') || '0')
+        setBeamCurrentChange(Math.abs(currentData - initialCurrent))
+      }
+    } catch (error) {
+      console.error('Failed to update beam current:', error)
+    }
+  }
+
+  const updateAccumulatedCharge = async () => {
+    try {
+      const charge = await getAccumulatedCharge()
+      setAccumulatedCharge(charge)
+    } catch (error) {
+      console.error('Failed to update accumulated charge:', error)
+    }
+  }
+
   const handleLogout = () => {
     clearToken()
     router.push('/')
@@ -301,7 +335,14 @@ export function RunControl() {
         return
       }
 
+      // If save data is on, startAcqusiitonCurrent
+      if (saveData) {
+        await startAcquisitionCurrent(runNumber.toString())
+      }
+
       await startRunProcess()
+      const initialCurrent = await getDataCurrent()
+      localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
     } catch (error) {
       console.error('Failed to start run:', error)
       toast({
@@ -356,6 +397,9 @@ export function RunControl() {
         title: 'Stopping Run...',
         description: 'Please wait while the run is being stopped.',
       })
+      if(saveData) {
+        await stopAcquisitionCurrent()
+      }
       await stopRun()
       toast({
         title: 'Run Stopped',
@@ -377,6 +421,7 @@ export function RunControl() {
 
   const handleReset = async () => {
     try {
+      await resetDeviceCurrent()
       await reset()
       toast({
         title: 'XDAQ Reset',
@@ -482,9 +527,23 @@ export function RunControl() {
               <Thermometer className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">250 uA</div>
+              <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
               <p className="text-xs text-muted-foreground">
-                +0.5 uA from start
+                {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from start
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">
+                Accumulated Charge
+              </CardTitle>
+              <Thermometer className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{accumulatedCharge.toFixed(2)} uC</div>
+              <p className="text-xs text-muted-foreground">
+                Total charge accumulated
               </p>
             </CardContent>
           </Card>

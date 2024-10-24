@@ -629,7 +629,6 @@ class topology:
             os.makedirs('conf')
         with open('conf/Builder.conf', 'w') as f:
             for board in state['boards']:
-                # Write all 1 for each channel
                 for i in range(int(board['chan'])):
                     f.write(f"1")
                 f.write("\n")
@@ -794,6 +793,7 @@ class topology:
         '''For the moment we set the same time window for all the builders/merger'''
         for actors in self._bu_actors:
             actors.set_coinc_window(window)
+            print("Builder coincidence window",actors.get_coinc_window())
         for actors in self._mu_actors:
             actors.set_coinc_window(window)
             print("Merger coincidence window",actors.get_coinc_window())
@@ -820,6 +820,18 @@ class topology:
         self.enableBU_file(flag)
         self.enableMU_file(flag)
         self.enableGF_file(flag)
+
+    def set_file_size_limit(self,filelimit):
+        for actors in self._ru_actors:
+            actors.set_file_size_limit(filelimit)
+        for actors in self._lf_actors:
+            actors.set_file_size_limit(filelimit)
+        for actors in self._bu_actors:
+            actors.set_file_size_limit(filelimit)
+        for actors in self._mu_actors:
+            actors.set_file_size_limit(filelimit)
+        for actors in self._gf_actors:
+            actors.set_file_size_limit(filelimit)
 
     def return_coincidence_window(self):
         return self._mu_actors[0].get_coinc_window()
@@ -860,12 +872,12 @@ class container:
         self.client.networks.create("xdaq_net", driver="bridge")
 
         # Run container xdaq
-        self.client.containers.run( "skowrons/xdaq:v3.0", "sleep infinity", 
+        self.client.containers.run( "skowrons/xdaq:v2.0", "sleep infinity", 
                                     hostname="xdaq", 
                                     name="xdaq", 
                                     ports={'50000': 50000, '51000': 51000, '52000': 52000,
                                            '40000': 40000, '41000': 41000, '42000': 42000,
-                                           '10002': 10002, '10003': 10003},
+                                           '10002': 10002, '10000': 10000},
                                     volumes={curr_dir: {'bind': '/home/xdaq/project', 'mode': 'rw'},
                                                 '/dev': {'bind': '/dev', 'mode': 'rw'}, 
                                                 '/lib/modules': {'bind': '/lib/modules', 'mode': 'rw'}},
