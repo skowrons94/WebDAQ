@@ -1,7 +1,7 @@
 {
-    "running": true,
-    "start_time": "2024-10-25 10:45:13",
-    "run": 134,
+    "running": false,
+    "start_time": null,
+    "run": 138,
     "coincidence_window": 50,
     "multiplicity": 1,
     "save": true,

@@ -170,16 +170,16 @@ def start_run( ):
         write_csv(rows)
 
         # Update metadata in the database check first if it exists already
-        #run_metadata = RunMetadata.query.filter_by(run_number=run).first()
-        #if not run_metadata:
-        #    run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
-        #    db.session.add(run_metadata)
-        #    db.session.commit()
-        #else:
-        #    run_metadata.start_time = time
-        #    run_metadata.end_time = None
-        #
-        #    db.session.commit()
+        run_metadata = RunMetadata.query.filter_by(run_number=run).first()
+        if not run_metadata:
+            run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
+            db.session.add(run_metadata)
+            db.session.commit()
+        else:
+            run_metadata.start_time = time
+            run_metadata.end_time = None
+        
+            db.session.commit()
 
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     daq_state['start_time'] = time
@@ -217,9 +217,9 @@ def stop_run( ):
         write_csv(rows)
 
         # Update metadata in the database
-        #run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
-        #run_metadata.end_time = datetime.now()
-        #db.session.commit()
+        run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
+        run_metadata.end_time = datetime.now()
+        db.session.commit()
 
 
     daq_state['start_time'] = None
