@@ -113,7 +113,7 @@ export default function AntiCoincidenceDashboard() {
 
   const fetchCachedROIs = async () => {
     try {
-      const response = await fetch('/api/cache')
+      const response = await fetch('/api/cache/anti')
       const data = await response.json()
       if (data && data.roiValues) {
         setRoiValues(data.roiValues)
@@ -212,7 +212,7 @@ export default function AntiCoincidenceDashboard() {
 
   const updateROICache = async (roiValues: ROIValues) => {
     try {
-      await fetch('/api/cache', {
+      await fetch('/api/cache/anti', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -280,6 +280,7 @@ export default function AntiCoincidenceDashboard() {
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
+    //window.location.reload()
   }
 
   const toggleLogScale = () => {

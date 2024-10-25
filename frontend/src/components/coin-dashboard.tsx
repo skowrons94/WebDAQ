@@ -109,7 +109,7 @@ export default function CoincidenceDashboard() {
 
   const fetchCachedROIs = async () => {
     try {
-      const response = await fetch('/api/cache')
+      const response = await fetch('/api/cache/sum')
       const data = await response.json()
       if (data && data.roiValues) {
         setRoiValues(data.roiValues)
@@ -202,7 +202,7 @@ export default function CoincidenceDashboard() {
 
   const updateROICache = async (roiValues: ROIValues) => {
     try {
-      await fetch('/api/cache', {
+      await fetch('/api/cache/sum', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -270,6 +270,7 @@ export default function CoincidenceDashboard() {
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
+    //window.location.reload()
   }
 
   const toggleLogScale = () => {

@@ -97,7 +97,9 @@ import {
   getDataCurrent,
   startAcquisitionCurrent,
   stopAcquisitionCurrent,
-  getAccumulatedCharge
+  getAccumulatedCharge,
+  getRoiIntegralCoinc,
+  getRoiIntegralAnti
 } from '@/lib/api'
 
 type BoardData = {
@@ -256,15 +258,82 @@ export function RunControl() {
         }
 
         const roiTemp = data.roiValues[key]
-        const integral = await getRoiIntegral(boardData.boardId.toString(), boardData.channelNumber.toString(), roiTemp.low, roiTemp.high)
-        data.roiValues[key].integral = integral
-        const newKey = `Board ${boardData.boardId} Channel ${boardData.channelNumber}`
-        data.roiValues[newKey] = data.roiValues[key]
-        delete data.roiValues[key]
+
+        if (key === 'board0') {
+          const integral = await getRoiIntegralCoinc(boardData.boardId.toString(), roiTemp.low, roiTemp.high)
+          data.roiValues[key].integral = integral
+          const newKey = `BGO Sum ${boardData.boardId}`
+        }
+        else {
+          const integral = await getRoiIntegral(boardData.boardId.toString(), boardData.channelNumber.toString(), roiTemp.low, roiTemp.high)
+          data.roiValues[key].integral = integral
+          if (boardData.channelNumber === 0) {
+            const newKey = `Pulser`
+            data.roiValues[newKey] = data.roiValues[key]
+            delete data.roiValues[key]
+          }
+          else if (boardData.channelNumber === 7) {
+            const newKey = `Channel 7`
+            data.roiValues[newKey] = data.roiValues[key]
+            delete data.roiValues[key]
+          }
+          else {
+            const newKey = `BGO ${boardData.channelNumber}`
+            data.roiValues[newKey] = data.roiValues[key]
+            delete data.roiValues[key]
+          }
+        }
       }
 
+      // Now fetch from /api/cache/anti and add to existing roiValues
+      const responseAnti = await fetch('/api/cache/anti')
+      const dataAnti = await responseAnti.json()
+
+      const keys = dataAnti.roiValues
+      for (const key in keys) {
+        const boardData = extractBoardAndChannel(key)
+        if (!boardData) {
+          console.error('Failed to extract board and channel data:', key)
+          continue
+        }
+        const roiTemp = dataAnti.roiValues[key]
+        const integral = await getRoiIntegralAnti(boardData.boardId.toString(), boardData.channelNumber.toString(), roiTemp.low, roiTemp.high)
+        if( boardData.channelNumber === 0) {
+          const newKey = `Pulser - Single`
+          dataAnti.roiValues[key].integral = integral
+          dataAnti.roiValues[newKey] = dataAnti.roiValues[key]
+          delete dataAnti.roiValues[key]
+        }
+        else if (boardData.channelNumber === 7) {
+          const newKey = `Channel 7 - Single`
+          dataAnti.roiValues[key].integral = integral
+        dataAnti.roiValues[newKey] = dataAnti.roiValues[key]
+        delete dataAnti.roiValues[key]
+        }
+        else {
+          const newKey = `BGO ${boardData.channelNumber} - Single`
+          dataAnti.roiValues[key].integral = integral
+        dataAnti.roiValues[newKey] = dataAnti.roiValues[key]
+        delete dataAnti.roiValues[key]
+        }
+      }
+
+      // Now fetch from /api/cache/sum and add to existing roiValues
+      const responseSum = await fetch('/api/cache/sum')
+      const dataSum = await responseSum.json()
+
+      const roiTemp = dataSum.roiValues['board0']
+      const integral = await getRoiIntegralCoinc('0', roiTemp.low, roiTemp.high)
+      dataSum.roiValues['board0'].integral = integral
+      const newKey = `BGO Sum`
+      dataSum.roiValues[newKey] = dataSum.roiValues['board0']
+      delete dataSum.roiValues['board0']
+
+      // Combine the two objects
+      const roiValues = { ...data.roiValues, ...dataAnti.roiValues, ...dataSum.roiValues }
+
       const filteredRoiValues: ROIValues = Object.fromEntries(
-        Object.entries(data.roiValues).filter(([_, roi]) => {
+        Object.entries(roiValues).filter(([_, roi]) => {
           const roiValue = roi as roi;
           return !(roiValue.low === 0 && roiValue.high === 0);
         })

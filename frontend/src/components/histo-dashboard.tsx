@@ -220,6 +220,7 @@ export default function HistogramDashboard() {
         body: JSON.stringify(roiValues),
       })
       setUnsavedChanges(false)
+      setRoiValues(roiValues)
       toast({
         title: "Success",
         description: "ROI values have been saved.",
@@ -280,6 +281,8 @@ export default function HistogramDashboard() {
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
+    // Reload the page to ensure the new ROIs are used in the histograms
+    //window.location.reload()
   }
 
   const toggleLogScale = () => {

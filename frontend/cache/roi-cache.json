@@ -1,1 +1,1 @@
-{"board0":{"low":0,"high":0,"integral":0},"board0_channel0":{"low":10,"high":100000,"integral":261348},"board0_channel1":{"low":110,"high":150000,"integral":22358},"board0_channel2":{"low":0,"high":0,"integral":0},"board0_channel3":{"low":0,"high":0,"integral":0}}
+{"board0_channel0":{"low":10,"high":10000,"integral":261348},"board0_channel1":{"low":110,"high":150000,"integral":22358},"board0_channel2":{"low":0,"high":0,"integral":0},"board0_channel3":{"low":0,"high":0,"integral":0}}
