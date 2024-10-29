@@ -29,11 +29,14 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useVisualizationStore } from '@/store/visualization-settings-store'
+
 
 const queryClient = new QueryClient()
 
 export default function DashboardPage() {
   const token = useAuthStore((state) => state.token);
+  const { settings } = useVisualizationStore()
   const router = useRouter();
 
   useEffect(() => {
@@ -53,12 +56,12 @@ export default function DashboardPage() {
             <div className="flex items-center">
               <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                {settings.showStats && <TabsTrigger value="stats">Stats</TabsTrigger>}
+                {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
+                {settings.showCoincidence && <TabsTrigger value="coincidence">Coincidence</TabsTrigger>}
+                {settings.showAnticoincidence && <TabsTrigger value="anticoincidence">Anticoincidence</TabsTrigger>}
+                {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
                 <TabsTrigger value="caen">CAEN</TabsTrigger>
-                <TabsTrigger value="stats">Stats</TabsTrigger>
-                <TabsTrigger value="histograms">Histograms</TabsTrigger>
-                <TabsTrigger value="coincidence">Coincidence</TabsTrigger>
-                <TabsTrigger value="anticoincidence">Anticoincidence</TabsTrigger>
-                <TabsTrigger value="waveforms">Waveforms</TabsTrigger>
                 <TabsTrigger value="calibration">Calibration</TabsTrigger>
               </TabsList>
             </div>

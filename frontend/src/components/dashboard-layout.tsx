@@ -188,7 +188,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem>Profile</DropdownMenuItem>
-                                <DropdownMenuItem>Settings</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push('/settings')}>Settings</DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
                             </DropdownMenuContent>

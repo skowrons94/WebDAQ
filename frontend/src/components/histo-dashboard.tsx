@@ -307,7 +307,7 @@ export default function HistogramDashboard() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 xl:grid-cols-2 gap-6">
                 {Array.from({ length: parseInt(board.chan) }).map((_, channelIndex) => {
                   const histoId = `board${board.id}_channel${channelIndex}`
                   return (
