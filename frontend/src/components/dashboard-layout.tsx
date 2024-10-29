@@ -37,54 +37,55 @@ import {
 } from "@/components/ui/command"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import useAuthStore from '@/store/auth-store';
-import { useRouter } from 'next/navigation';
-import { ModeToggle } from '@/components/ui/mode-toggle';
+import useAuthStore from '@/store/auth-store'
+import { useRouter } from 'next/navigation'
+import { ModeToggle } from '@/components/ui/mode-toggle'
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 
 export function Layout({ children }: { children: React.ReactNode }) {
     const clearToken = useAuthStore((state) => state.clearToken)
-    const router = useRouter();
+    const router = useRouter()
     const [open, setOpen] = useState(false)
 
     const handleLogout = () => {
         clearToken()
         router.push('/')
     }
+
     const handleSearch = (searchTerm: string) => {
-        // Implement search functionality here
         console.log('Searching for:', searchTerm)
         setOpen(false)
     }
+
     return (
-            <div className="flex min-h-screen w-full flex-col">
-                <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-                    <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
-                        <Link
-                            href="/dashboard"
-                            className="flex items-center gap-2 text-lg font-semibold md:text-base"
-                        >
+        <div className="flex min-h-screen w-full flex-col">
+            <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6 z-50">
+                <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
+                    <Link
+                        href="/dashboard"
+                        className="flex items-center gap-2 text-lg font-semibold md:text-base"
+                    >
                         <MoonStarIcon className="w-8 h-8 text-primary" />
-                            <span>LUNADAQ</span>
-                        </Link>
-                        <Link
-                            href="/dashboard"
-                            className="text-foreground transition-colors hover:text-foreground"
-                        >
-                            Dashboard
-                        </Link>
-                        <Link
-                            href="/logbook"
-                            className="text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                            Logbook
-                        </Link>
-                        <Link
-                            href="http://lunaserver:3000"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-muted-foreground transition-colors hover:text-foreground"
-                        >
+                        <span>LUNADAQ</span>
+                    </Link>
+                    <Link
+                        href="/dashboard"
+                        className="text-foreground transition-colors hover:text-foreground"
+                    >
+                        Dashboard
+                    </Link>
+                    <Link
+                        href="/logbook"
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                        Logbook
+                    </Link>
+                    <Link
+                        href="http://lunaserver:3000"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
                         Grafana
                     </Link>
                     <Link
@@ -93,43 +94,43 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     >
                         Settings
                     </Link>
-                    </nav>
-                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="shrink-0 md:hidden"
+                </nav>
+                <Sheet>
+                    <SheetTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="shrink-0 md:hidden"
+                        >
+                            <Menu className="h-5 w-5" />
+                            <span className="sr-only">Toggle navigation menu</span>
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left">
+                        <nav className="grid gap-6 text-lg font-medium">
+                            <Link
+                                href="#"
+                                className="flex items-center gap-2 text-lg font-semibold"
                             >
-                                <Menu className="h-5 w-5" />
-                                <span className="sr-only">Toggle navigation menu</span>
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="left">
-                            <nav className="grid gap-6 text-lg font-medium">
-                                <Link
-                                    href="#"
-                                    className="flex items-center gap-2 text-lg font-semibold"
-                                >
                                 <MoonStarIcon className="w-8 h-8 text-primary" />
-                                    <span>LUNADAQ</span>
-                                </Link>
-                                <Link href="/dashboard" className="hover:text-foreground">
-                                    Dashboard
-                                </Link>
-                                <Link
-                                    href="/logbook"
-                                    className="text-muted-foreground hover:text-foreground"
-                                >
-                                    Logbook
-                                </Link>
-                                <Link
-                                    href="http://lunaserver:3000"
-                                    className="text-muted-foreground hover:text-foreground"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                >
-                                    Grafana
+                                <span>LUNADAQ</span>
+                            </Link>
+                            <Link href="/dashboard" className="hover:text-foreground">
+                                Dashboard
+                            </Link>
+                            <Link
+                                href="/logbook"
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                Logbook
+                            </Link>
+                            <Link
+                                href="http://lunaserver:3000"
+                                className="text-muted-foreground hover:text-foreground"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                Grafana
                             </Link>
                             <Link
                                 href="/settings"
@@ -137,9 +138,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             >
                                 Settings
                             </Link>
-                            </nav>
-                        </SheetContent>
-                    </Sheet>
+                        </nav>
+                    </SheetContent>
+                </Sheet>
                 <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
                     <Button
                         variant="outline"
@@ -177,35 +178,33 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         </CommandList>
                     </CommandDialog>
                     <ModeToggle />
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="secondary" size="icon" className="rounded-full">
-                                    <CircleUser className="h-5 w-5" />
-                                    <span className="sr-only">Toggle user menu</span>
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem>Profile</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => router.push('/settings')}>Settings</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="secondary" size="icon" className="rounded-full">
+                                <CircleUser className="h-5 w-5" />
+                                <span className="sr-only">Toggle user menu</span>
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem>Profile</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push('/settings')}>Settings</DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </div>
             </header>
-                <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-8">
-                    {children}
+            <main className="flex-1 pt-4 md:pt-8 px-4 md:px-8">
+                {children}
             </main>
-            <footer className="flex items-center justify-center h-16 bg-background text-muted-foreground">
+            <footer className="mt-auto flex items-center justify-center h-16 bg-background text-muted-foreground">
                 <span>&copy; 2024 LUNADAQ</span>
             </footer>
-            </div>
-
+        </div>
     )
 }
-
 
 function MoonStarIcon(props: React.SVGProps<SVGSVGElement>) {
     return (
