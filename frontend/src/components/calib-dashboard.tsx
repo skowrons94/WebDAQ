@@ -7,6 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { getBoardConfiguration, getCalib, setCalib } from '@/lib/api'
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel"
+
 
 type BoardData = {
   id: string
@@ -97,57 +105,70 @@ export default function CalibrationDashboard() {
             <CardTitle>{board.name} (ID: {board.id})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {Array.from({ length: parseInt(board.chan) }, (_, i) => i).map((channel) => (
-                <div key={channel} className="space-y-2">
-                  <h3 className="font-semibold">Channel {channel}</h3>
-                  <div className="flex space-x-2">
-                    <div>
-                      <Label htmlFor={`a-${board.id}-${channel}`}>A</Label>
-                      <Input
-                        id={`a-${board.id}-${channel}`}
-                        value={calibrations[board.id]?.[channel]?.a || ''}
-                        onChange={(e) => {
-                          const newValue = e.target.value
-                          setCalibrations(prev => ({
-                            ...prev,
-                            [board.id]: prev[board.id].map((calib, idx) => 
-                              idx === channel ? { ...calib, a: newValue } : calib
-                            )
-                          }))
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor={`b-${board.id}-${channel}`}>B</Label>
-                      <Input
-                        id={`b-${board.id}-${channel}`}
-                        value={calibrations[board.id]?.[channel]?.b || ''}
-                        onChange={(e) => {
-                          const newValue = e.target.value
-                          setCalibrations(prev => ({
-                            ...prev,
-                            [board.id]: prev[board.id].map((calib, idx) => 
-                              idx === channel ? { ...calib, b: newValue } : calib
-                            )
-                          }))
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <Button 
-                    onClick={() => handleCalibrationUpdate(
-                      board.id, 
-                      board.name, 
-                      channel.toString(), 
-                      calibrations[board.id][channel].a, 
-                      calibrations[board.id][channel].b
-                    )}
-                  >
-                    Update
-                  </Button>
-                </div>
-              ))}
+            <div className=" p-8 mx-auto">
+              <Carousel>
+                <CarouselContent>
+                  {Array.from({ length: parseInt(board.chan) }, (_, i) => i).map((channel) => (
+
+                    <CarouselItem key={channel} className="basis-full sm:basis-1/2 md:basis-1/3 lg:basis-1/3">
+                      <Card className="p-4">
+                        <div key={channel} className="space-y-2">
+                          <h3 className="font-semibold">Channel {channel}</h3>
+                          <div className="flex space-x-2">
+                            <div>
+                              <Label htmlFor={`a-${board.id}-${channel}`}>A</Label>
+                              <Input
+                                id={`a-${board.id}-${channel}`}
+                                value={calibrations[board.id]?.[channel]?.a || ''}
+                                onChange={(e) => {
+                                  const newValue = e.target.value
+                                  setCalibrations(prev => ({
+                                    ...prev,
+                                    [board.id]: prev[board.id].map((calib, idx) => 
+                                      idx === channel ? { ...calib, a: newValue } : calib
+                                    )
+                                  }))
+                                }}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor={`b-${board.id}-${channel}`}>B</Label>
+                              <Input
+                                id={`b-${board.id}-${channel}`}
+                                value={calibrations[board.id]?.[channel]?.b || ''}
+                                onChange={(e) => {
+                                  const newValue = e.target.value
+                                  setCalibrations(prev => ({
+                                    ...prev,
+                                    [board.id]: prev[board.id].map((calib, idx) => 
+                                      idx === channel ? { ...calib, b: newValue } : calib
+                                    )
+                                  }))
+                                }}
+                              />
+                            </div>
+                          </div>
+                          <Button 
+                            onClick={() => handleCalibrationUpdate(
+                              board.id, 
+                              board.name, 
+                              channel.toString(), 
+                              calibrations[board.id][channel].a, 
+                              calibrations[board.id][channel].b
+                            )}
+                          >
+                            Update
+                          </Button>
+                        </div>
+                      </Card>
+
+                    </CarouselItem>
+                  ))}
+
+                </CarouselContent>
+                <CarouselPrevious />
+                <CarouselNext />
+              </Carousel>
             </div>
           </CardContent>
         </Card>

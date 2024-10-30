@@ -34,6 +34,7 @@
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.0",
+    "embla-carousel-react": "^8.3.1",
     "export-to-csv": "^1.4.0",
     "fflate": "^0.8.2",
     "link": "^2.1.1",

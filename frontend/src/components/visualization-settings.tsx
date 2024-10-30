@@ -25,8 +25,8 @@ export function VisualizationSettings() {
 
                 <div className="grid gap-4">
 
-                    <p className="text-lg font-semibold">General settings</p>
-                    <div className="space-y-2">
+                    <p className="text-lg font-bold">General settings</p>
+                    <div className="space-y-2 p-2">
                         <Label htmlFor="theme">Theme</Label>
                         <Select
                             value={settings.theme}
@@ -42,9 +42,8 @@ export function VisualizationSettings() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <p className="text-lg font-semibold">Show/Hide tabs</p>
-                    
-                    <div className="flex items-center justify-between">
+                    <p className="text-xl font-bold">Show/Hide tabs</p>
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showStats">Show Stats</Label>
                         <Switch
                             id="showStats"
@@ -53,7 +52,7 @@ export function VisualizationSettings() {
                         />
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showHistograms">Show Histograms</Label>
                         <Switch
                             id="showHistograms"
@@ -62,7 +61,7 @@ export function VisualizationSettings() {
                         />
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showCoincidence">Show Coincidence</Label>
                         <Switch
                             id="showCoincidence"
@@ -71,7 +70,7 @@ export function VisualizationSettings() {
                         />
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showAnticoincidence">Show Anticoincidence</Label>
                         <Switch
                             id="showAnticoincidence"
@@ -80,7 +79,7 @@ export function VisualizationSettings() {
                         />
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showWaveforms">Show Waveforms</Label>
                         <Switch
                             id="showWaveforms"
@@ -88,9 +87,9 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ showWaveforms: checked })}
                         />
                     </div>
-                    <p className="text-lg font-semibold">Show/Hide cards in dashboard</p>
+                    <p className="text-lg font-bold">Show/Hide cards in dashboard</p>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showStatus">Show Run status</Label>
                         <Switch
                             id="showStatus"
@@ -98,7 +97,7 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ showStatus: checked })}
                         />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showCurrent">Show Current and Accumulated charge</Label>
                         <Switch
                             id="showCurrent"
@@ -106,7 +105,7 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ showCurrent: checked })}
                         />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showXDAQ">Show XDAQ metrics</Label>
                         <Switch
                             id="showXDAQ"
@@ -114,7 +113,7 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ showXDAQ: checked })}
                         />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showROIs">Show Monitored ROIs</Label>
                         <Switch
                             id="showROIs"
@@ -122,7 +121,7 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ showROIs: checked })}
                         />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showMetrics">Show Monitored Metrics</Label>
                         <Switch
                             id="showMetrics"

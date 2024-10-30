@@ -89,6 +89,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         Grafana
                     </Link>
                     <Link
+                        href="/DAQ"
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                        DAQ
+                    </Link>
+                    <Link
                         href="/settings"
                         className="text-muted-foreground transition-colors hover:text-foreground"
                     >
@@ -131,6 +137,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 rel="noopener noreferrer"
                             >
                                 Grafana
+                            </Link>
+                            <Link
+                                href="/DAQ"
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                DAQ
                             </Link>
                             <Link
                                 href="/settings"
