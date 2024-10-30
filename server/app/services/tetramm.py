@@ -163,4 +163,7 @@ class tetram_controller:
     def reset(self):
         if( self.is_acquiring ):
             self.stop_acquisition()
+            time.sleep(0.5)
+        self.disconnect()
+        time.sleep(0.5)
         self.initialize()

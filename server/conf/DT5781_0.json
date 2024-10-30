@@ -422,7 +422,7 @@
             "address": "0x8000",
             "channel": 0,
             "name": "Board Configuration",
-            "value": "0x1470105"
+            "value": "0x1460105"
         },
         "reg_800c": {
             "address": "0x800c",

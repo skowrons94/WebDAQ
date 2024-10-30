@@ -876,7 +876,7 @@ class container:
         self.client.networks.create("xdaq_net", driver="bridge")
 
         # Run container xdaq
-        self.client.containers.run( "skowrons/xdaq:v2.0", "sleep infinity", 
+        self.client.containers.run( "skowrons/xdaq:v4.0", "sleep infinity", 
                                     hostname="xdaq", 
                                     name="xdaq", 
                                     ports={'50000': 50000, '51000': 51000, '52000': 52000,

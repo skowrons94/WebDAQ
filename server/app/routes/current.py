@@ -65,7 +65,10 @@ def get_setting(settings):
 @bp.route('/current/reset', methods=['POST'])
 @jwt_required_custom
 def reset_device():
+    global running
+    controller.set_save_data(False, "./")
     controller.reset()
+    running = False
     return jsonify({"message": "Device reset"}), 200
 
 @bp.route('/current/data', methods=['GET'])
