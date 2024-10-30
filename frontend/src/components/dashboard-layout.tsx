@@ -78,6 +78,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         href="/logbook"
                         className="text-muted-foreground transition-colors hover:text-foreground"
                     >
+                        
                         Logbook
                     </Link>
                     <Link
