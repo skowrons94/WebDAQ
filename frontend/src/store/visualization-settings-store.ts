@@ -9,6 +9,12 @@ export interface VisualizationSettings {
     showCoincidence: boolean
     showAnticoincidence: boolean
     showWaveforms: boolean
+    showStatus: boolean
+    showCurrent: boolean
+    showXDAQ: boolean
+    showROIs: boolean
+    showMetrics: boolean
+
 }
 
 interface VisualizationStore {
@@ -24,6 +30,11 @@ const DEFAULT_SETTINGS: VisualizationSettings = {
     showCoincidence: true,
     showAnticoincidence: true,
     showWaveforms: true,
+    showStatus: true,
+    showCurrent: true,
+    showXDAQ: true,
+    showROIs: true,
+    showMetrics: true
 }
 
 export const useVisualizationStore = create<VisualizationStore>()(

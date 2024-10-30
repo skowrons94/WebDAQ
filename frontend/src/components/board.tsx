@@ -100,8 +100,7 @@ export function Board() {
 
   return (
     <div className="flex flex-col min-h-screen text-foreground">
-      <main className="flex-1 container mx-auto p-4">
-        <Card className="w-full max-w-2xl mx-auto">
+        <Card className="w-full mx-auto">
           <CardHeader>
             <CardTitle>Add CAEN Board</CardTitle>
             <CardDescription>Enter the details of the CAEN board you want to add.</CardDescription>
@@ -240,7 +239,7 @@ export function Board() {
           </CardContent>
         </Card>
 
-        <Card className="w-full max-w-2xl mx-auto mt-8">
+        <Card className="w-full mx-auto mt-8">
           <CardHeader>
             <CardTitle>Added CAEN Boards</CardTitle>
           </CardHeader>
@@ -267,7 +266,6 @@ export function Board() {
             </ul>
           </CardContent>
         </Card>
-      </main>
     </div>
   )
 }

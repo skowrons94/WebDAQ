@@ -50,16 +50,7 @@ export default function SettingsPage() {
                 return <JsonEditor />;
             default:
                 return (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>General Settings</CardTitle>
-                            <CardDescription>Manage your general account settings here.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {/* Add your general settings content here */}
-                            <p>General settings content goes here.</p>
-                        </CardContent>
-                    </Card>
+                    < VisualizationSettings />
                 );
         }
     };

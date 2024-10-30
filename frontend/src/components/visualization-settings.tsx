@@ -18,11 +18,14 @@ export function VisualizationSettings() {
             <CardHeader>
                 <CardTitle>Visualization Settings</CardTitle>
                 <CardDescription>
-                    Customize how charts and data are displayed across the dashboard
+                    Customize how the main dashboard is displayed
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+
                 <div className="grid gap-4">
+
+                    <p className="text-lg font-semibold">General settings</p>
                     <div className="space-y-2">
                         <Label htmlFor="theme">Theme</Label>
                         <Select
@@ -39,53 +42,94 @@ export function VisualizationSettings() {
                             </SelectContent>
                         </Select>
                     </div>
-
+                    <p className="text-lg font-semibold">Show/Hide tabs</p>
+                    
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="showLegend">Show Stats</Label>
+                        <Label htmlFor="showStats">Show Stats</Label>
                         <Switch
-                            id="showLegend"
+                            id="showStats"
                             checked={settings.showStats}
                             onCheckedChange={(checked) => updateSettings({ showStats: checked })}
                         />
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="showGrid">Show Histograms</Label>
+                        <Label htmlFor="showHistograms">Show Histograms</Label>
                         <Switch
-                            id="showGrid"
+                            id="showHistograms"
                             checked={settings.showHistograms}
                             onCheckedChange={(checked) => updateSettings({ showHistograms: checked })}
                         />
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="showGrid">Show Coincidence</Label>
+                        <Label htmlFor="showCoincidence">Show Coincidence</Label>
                         <Switch
-                            id="showGrid"
+                            id="showCoincidence"
                             checked={settings.showCoincidence}
                             onCheckedChange={(checked) => updateSettings({ showCoincidence: checked })}
                         />
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="showGrid">Show Anticoincidence</Label>
+                        <Label htmlFor="showAnticoincidence">Show Anticoincidence</Label>
                         <Switch
-                            id="showGrid"
+                            id="showAnticoincidence"
                             checked={settings.showAnticoincidence}
                             onCheckedChange={(checked) => updateSettings({ showAnticoincidence: checked })}
                         />
                     </div>
 
                     <div className="flex items-center justify-between">
-                        <Label htmlFor="showGrid">Show Waveforms</Label>
+                        <Label htmlFor="showWaveforms">Show Waveforms</Label>
                         <Switch
-                            id="showGrid"
+                            id="showWaveforms"
                             checked={settings.showWaveforms}
                             onCheckedChange={(checked) => updateSettings({ showWaveforms: checked })}
                         />
                     </div>
+                    <p className="text-lg font-semibold">Show/Hide cards in dashboard</p>
 
-
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="showStatus">Show Run status</Label>
+                        <Switch
+                            id="showStatus"
+                            checked={settings.showStatus}
+                            onCheckedChange={(checked) => updateSettings({ showStatus: checked })}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="showCurrent">Show Current and Accumulated charge</Label>
+                        <Switch
+                            id="showCurrent"
+                            checked={settings.showCurrent}
+                            onCheckedChange={(checked) => updateSettings({ showCurrent: checked })}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="showXDAQ">Show XDAQ metrics</Label>
+                        <Switch
+                            id="showXDAQ"
+                            checked={settings.showXDAQ}
+                            onCheckedChange={(checked) => updateSettings({ showXDAQ: checked })}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="showROIs">Show Monitored ROIs</Label>
+                        <Switch
+                            id="showROIs"
+                            checked={settings.showROIs}
+                            onCheckedChange={(checked) => updateSettings({ showROIs: checked })}
+                        />
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="showMetrics">Show Monitored Metrics</Label>
+                        <Switch
+                            id="showMetrics"
+                            checked={settings.showMetrics}
+                            onCheckedChange={(checked) => updateSettings({ showMetrics: checked })}
+                        />
+                    </div>
                 </div>
 
                 <div className="flex justify-end space-x-2">

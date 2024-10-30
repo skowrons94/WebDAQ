@@ -101,6 +101,8 @@ import {
   getRoiIntegralCoinc,
   getRoiIntegralAnti
 } from '@/lib/api'
+import { useVisualizationStore } from '@/store/visualization-settings-store'
+
 
 type BoardData = {
   id: string;
@@ -122,6 +124,7 @@ export function RunControl() {
   const clearToken = useAuthStore((state) => state.clearToken)
   const router = useRouter()
   const { toast } = useToast()
+  const { settings } = useVisualizationStore()
 
   const [coincidenceTime, setCoincidenceTime] = useState("")
   const [multiplicity, setMultiplicityBox] = useState("")
@@ -573,36 +576,36 @@ export function RunControl() {
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-2">
         <ScrollArea className="h-[320px] rounded-md border p-4">
         <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Run Status
-              </CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
+            {settings.showStatus && <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Run Status
+                </CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
             
-            <CardContent>
-              <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
-              <p className="text-xs text-muted-foreground">
-                {isRunning ? `Started ${formatTime(timer)} ago` : "Stopped"}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Beam Current
-              </CardTitle>
-              <Thermometer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
-              <p className="text-xs text-muted-foreground">
-                {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from start
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
+              <CardContent>
+                <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
+                <p className="text-xs text-muted-foreground">
+                  {isRunning ? `Started ${formatTime(timer)} ago` : "Stopped"}
+                </p>
+              </CardContent>
+            </Card>}
+            {settings.showCurrent && <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Beam Current
+                </CardTitle>
+                <Thermometer className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
+                <p className="text-xs text-muted-foreground">
+                  {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from start
+                </p>
+              </CardContent>
+            </Card>}
+            {settings.showCurrent && <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Accumulated Charge
@@ -615,65 +618,67 @@ export function RunControl() {
                 Total charge accumulated
               </p>
             </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                XDAQ Bandwidth
-              </CardTitle>
-              <Network className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{outputBandwidth.toFixed(2)} MB/s</div>
-              <p className="text-xs text-muted-foreground">
-                Output Bandwidth
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                File Bandwidth
-              </CardTitle>
-              <HardDrive className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{fileBandwidth.toFixed(2)} MB/s</div>
-              <p className="text-xs text-muted-foreground">
-                Data Writing Speed
-              </p>
-            </CardContent>
-          </Card>
-          {Object.entries(roiValues).map(([histoId, roi]) => (
-            <Card key={histoId}>
+            </Card>}
+            {settings.showXDAQ && <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  XDAQ Bandwidth
+                </CardTitle>
+                <Network className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{outputBandwidth.toFixed(2)} MB/s</div>
+                <p className="text-xs text-muted-foreground">
+                  Output Bandwidth
+                </p>
+              </CardContent>
+            </Card>}
+            {settings.showXDAQ && <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  File Bandwidth
+                </CardTitle>
+                <HardDrive className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{fileBandwidth.toFixed(2)} MB/s</div>
+                <p className="text-xs text-muted-foreground">
+                  Data Writing Speed
+                </p>
+              </CardContent>
+            </Card>}
+            {settings.showROIs && 
+              Object.entries(roiValues).map(([histoId, roi]) => (
+              <Card key={histoId}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
                   {histoId}
                 </CardTitle>
                 <BarChart className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
+                </CardHeader>
+                <CardContent>
                 <div className="text-2xl font-bold">{roi.integral}</div>
                 <p className="text-xs text-muted-foreground">
                   ROI: {roi.low} - {roi.high}
                 </p>
+                </CardContent>
+              </Card>
+              ))
+            }
+            {settings.showMetrics && <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  BL1 Pressure
+                </CardTitle>
+                <CircleGauge className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">2.3e-7 mBar</div>
+                <p className="text-xs text-muted-foreground">
+                  -0.1e-7 mBar from start
+                </p>
               </CardContent>
-            </Card>
-          ))}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                BL1 Pressure
-              </CardTitle>
-              <CircleGauge  className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">2.3e-7 mBar</div>
-              <p className="text-xs text-muted-foreground">
-                -0.1e-7 mBar from start
-              </p>
-            </CardContent>
-          </Card>
+            </Card>}
           </div>
         </ScrollArea>
         <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
