@@ -11,6 +11,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ReloadIcon } from "@radix-ui/react-icons"
 import { useToast } from "@/components/ui/use-toast"
 import { getBoardConfiguration, getSetting, setSetting } from '@/lib/api'
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel"
+
 
 interface BoardData {
   id: string
@@ -80,22 +88,18 @@ export default function Dashboard() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-3xl font-bold mb-6">Boards Dashboard</h1>
-      <Button onClick={fetchBoardConfiguration} className="mb-4">Refresh Boards Data</Button>
-      <Tabs defaultValue={boards[0]?.id}>
-        <TabsList>
-          {boards.map((board) => (
-            <TabsTrigger key={board.id} value={board.id}>
-              Board {board.id}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        {boards.map((board) => (
-          <TabsContent key={board.id} value={board.id}>
-            <BoardComponent boardData={board} />
-          </TabsContent>
-        ))}
-      </Tabs>
+      <div className="flex justify-between items-center mb-6">
+      <h1 className="text-2xl font-bold">Boards Configuration</h1>
+      <Button onClick={fetchBoardConfiguration}>Refresh Boards Data</Button>
+      </div>
+      <ul>
+      {boards.map((board) => (
+        <li key={board.id} className="mb-4">
+        <h2 className="text-xl font-bold">{board.name} (ID: {board.id})</h2>
+        <BoardComponent boardData={board} />
+        </li>
+      ))}
+      </ul>
     </div>
   )
 }
@@ -199,35 +203,41 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   }
 
   return (
-    <div>
-      <h2 className="text-2xl font-bold mb-4">{boardData.name} - Board {boardData.id}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {settings.map((channelSettings, channel) => (
-          <Card key={channel}>
-            <CardHeader>
-              <CardTitle>Channel {channel}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {Object.entries(channelSettings).map(([key, setting]) => (
-                <div key={key} className="mb-4">
-                  <Label htmlFor={`${channel}-${key}`}>{setting.name}</Label>
-                  <Input
-                    id={`${channel}-${key}`}
-                    value={setting.value}
-                    onChange={(e) => handleSettingChange(channel, key, e.target.value)}
-                  />
-                </div>
-              ))}
-              <div className="flex justify-between mt-4">
-                <Button onClick={() => handleSave(channel)}>Save</Button>
-                <Button variant="outline" onClick={() => handleApplyToAll('Trigger Threshold')}>
-                  Apply Threshold to All
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+
+      <div className="max-w-[800px] p-8 mx-auto">
+        <Carousel>
+          <CarouselContent>
+            {settings.map((channelSettings, channel) => (
+              <CarouselItem key={channel} >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Channel {channel}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {Object.entries(channelSettings).map(([key, setting]) => (
+                      <div key={key} className="mb-4">
+                        <Label htmlFor={`${channel}-${key}`}>{setting.name}</Label>
+                        <Input
+                          id={`${channel}-${key}`}
+                          value={setting.value}
+                          onChange={(e) => handleSettingChange(channel, key, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap justify-between mt-4">
+                      <Button className="mb-2" onClick={() => handleSave(channel)}>Save</Button>
+                      <Button className="mb-2" variant="outline" onClick={() => handleApplyToAll('Trigger Threshold')}>
+                      Apply Threshold to All
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          <CarouselPrevious />
+          <CarouselNext />
+        </Carousel>
       </div>
-    </div>
   )
 }

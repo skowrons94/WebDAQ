@@ -9,7 +9,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useTheme } from 'next-themes'
+import { Settings } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog"
 
+// Types
 type BoardData = {
   id: string;
   name: string;
@@ -28,6 +38,67 @@ type Integrals = {
   [key: string]: number;
 }
 
+type ROIDialogProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  histoId: string;
+  currentValues: { low: number; high: number };
+  onSave: (histoId: string, low: number, high: number) => void;
+}
+
+// ROI Settings Dialog Component
+const ROISettingsDialog = ({ isOpen, onClose, histoId, currentValues, onSave }: ROIDialogProps) => {
+  const [low, setLow] = useState(currentValues.low);
+  const [high, setHigh] = useState(currentValues.high);
+
+  useEffect(() => {
+    setLow(currentValues.low);
+    setHigh(currentValues.high);
+  }, [currentValues]);
+
+  const handleSave = () => {
+    onSave(histoId, low, high);
+    onClose();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>ROI Settings</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="roi-low">Low ROI</Label>
+            <Input
+              id="roi-low"
+              type="number"
+              value={low}
+              onChange={(e) => setLow(Number(e.target.value))}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="roi-high">High ROI</Label>
+            <Input
+              id="roi-high"
+              type="number"
+              value={high}
+              onChange={(e) => setHigh(Number(e.target.value))}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button onClick={handleSave}>Save Changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Main Dashboard Component
 export default function HistogramDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [isRunning, setIsRunning] = useState(false)
@@ -38,11 +109,13 @@ export default function HistogramDashboard() {
   const [unsavedChanges, setUnsavedChanges] = useState(false)
   const [integrals, setIntegrals] = useState<Integrals>({})
   const [isLogScale, setIsLogScale] = useState(false)
-  const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
+  const [activeDialog, setActiveDialog] = useState<string | null>(null)
+  const histogramRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
   const { toast } = useToast()
-  const initialFetchDone = useRef(false)
   const { theme } = useTheme()
+  const initialFetchDone = useRef(false)
 
+  // Initial setup
   useEffect(() => {
     fetchCachedROIs()
   }, [])
@@ -69,6 +142,7 @@ export default function HistogramDashboard() {
     return () => clearInterval(statusInterval)
   }, [])
 
+  // JSROOT theme handling
   useEffect(() => {
     if (jsrootLoaded) {
       window.JSROOT.settings.DarkMode = theme === 'dark'
@@ -79,6 +153,7 @@ export default function HistogramDashboard() {
     }
   }, [jsrootLoaded, theme])
 
+  // API calls
   const fetchBoardConfiguration = async () => {
     try {
       const response = await getBoardConfiguration()
@@ -126,6 +201,7 @@ export default function HistogramDashboard() {
     }
   }
 
+  // Histogram initialization
   const createBlankHistogram = useCallback((name: string) => {
     if (window.JSROOT) {
       const hist = window.JSROOT.createHistogram("TH1F", 100)
@@ -150,6 +226,7 @@ export default function HistogramDashboard() {
     }
   }, [createBlankHistogram])
 
+  // ROI handling
   const initializeROIValues = useCallback(() => {
     const initialROIValues: ROIValues = {}
     boards.forEach(board => {
@@ -160,7 +237,7 @@ export default function HistogramDashboard() {
     })
     setRoiValues(prevValues => ({
       ...initialROIValues,
-      ...prevValues // This ensures we keep any existing values
+      ...prevValues
     }))
   }, [boards])
 
@@ -170,6 +247,7 @@ export default function HistogramDashboard() {
     }
   }, [boards, initializeROIValues])
 
+  // Histogram updates
   const updateHistograms = useCallback(async () => {
     for (const board of boards) {
       for (let i = 0; i < parseInt(board.chan); i++) {
@@ -208,8 +286,9 @@ export default function HistogramDashboard() {
       }
     }
     setIntegrals(updatedIntegrals)
-  }, [boards])
+  }, [boards, roiValues])
 
+  // ROI cache management
   const updateROICache = async (roiValues: ROIValues) => {
     try {
       await fetch('/api/cache', {
@@ -235,10 +314,11 @@ export default function HistogramDashboard() {
     }
   }
 
-  const handleROIChange = async (histoId: string, type: 'low' | 'high', value: number) => {
+  // Event handlers
+  const handleROIChange = async (histoId: string, low: number, high: number) => {
     setRoiValues(prev => ({
       ...prev,
-      [histoId]: { ...prev[histoId], [type]: value }
+      [histoId]: { ...prev[histoId], low, high }
     }))
     setUnsavedChanges(true)
   }
@@ -257,7 +337,6 @@ export default function HistogramDashboard() {
 
       canv.fPrimitives.Add(roiHistogram, 'histo');
 
-      // Set logarithmic scale if isLogScale is true
       if (isLogScale) {
         canv.fLogx = 0;
         canv.fLogy = 1;
@@ -272,6 +351,7 @@ export default function HistogramDashboard() {
     }
   }
 
+  // Update effects
   useEffect(() => {
     if (jsrootLoaded && boards.length > 0) {
       updateHistograms()
@@ -281,14 +361,19 @@ export default function HistogramDashboard() {
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
-    // Reload the page to ensure the new ROIs are used in the histograms
-    //window.location.reload()
   }
 
   const toggleLogScale = () => {
     setIsLogScale(!isLogScale)
   }
 
+  const handleDialogOpen = (histoId: string) => {
+    setActiveDialog(histoId);
+  };
+
+  const handleDialogClose = () => {
+    setActiveDialog(null);
+  };
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">
@@ -307,43 +392,41 @@ export default function HistogramDashboard() {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-6">
                 {Array.from({ length: parseInt(board.chan) }).map((_, channelIndex) => {
                   const histoId = `board${board.id}_channel${channelIndex}`
+                  const roi = roiValues[histoId] || { low: 0, high: 0 }
+                  const integral = integrals[histoId]
+
                   return (
                     <div key={histoId} className="relative">
-                      <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-lg font-semibold">
+                          Channel {channelIndex} - ROI ({roi.low} - {roi.high})
+                          {integral !== undefined && ` Integral: ${integral}`}
+                        </h3>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDialogOpen(histoId)}
+                          className="h-8 w-8"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      </div>
+
                       <div
                         ref={el => { histogramRefs.current[histoId] = el }}
                         className="w-full h-80 border rounded-lg shadow-md mb-2"
-                      ></div>
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="flex gap-4">
-                          <div className="flex flex-col gap-2">
-                            <Label htmlFor={`${histoId}-low`}>Low ROI</Label>
-                            <Input
-                              id={`${histoId}-low`}
-                              type="number"
-                              value={roiValues[histoId]?.low ?? 0}
-                              onChange={(e) => handleROIChange(histoId, 'low', Number(e.target.value))}
-                              className="w-24"
-                            />
-                          </div>
-                          <div className="flex flex-col gap-2">
-                            <Label htmlFor={`${histoId}-high`}>High ROI</Label>
-                            <Input
-                              id={`${histoId}-high`}
-                              type="number"
-                              value={roiValues[histoId]?.high ?? 0}
-                              onChange={(e) => handleROIChange(histoId, 'high', Number(e.target.value))}
-                              className="w-24"
-                            />
-                          </div>
-                        </div>
-                        <div className="text-sm font-medium">
-                          Integral: {integrals[histoId] || 'N/A'}
-                        </div>
-                      </div>
+                      />
+
+                      <ROISettingsDialog
+                        isOpen={activeDialog === histoId}
+                        onClose={handleDialogClose}
+                        histoId={histoId}
+                        currentValues={roi}
+                        onSave={handleROIChange}
+                      />
                     </div>
                   )
                 })}

@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
 import { JsonEditor } from '@/components/json';
+import { VisualizationSettings } from '@/components/visualization-settings';
 
 const queryClient = new QueryClient()
 
@@ -41,22 +42,15 @@ export default function SettingsPage() {
 
     const renderActiveView = () => {
         switch (activeView) {
+            case 'appearance':
+                return < VisualizationSettings />;
             case 'boards':
                 return <Board />;
             case 'json':
                 return <JsonEditor />;
             default:
                 return (
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>General Settings</CardTitle>
-                            <CardDescription>Manage your general account settings here.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {/* Add your general settings content here */}
-                            <p>General settings content goes here.</p>
-                        </CardContent>
-                    </Card>
+                    < VisualizationSettings />
                 );
         }
     };
@@ -72,10 +66,10 @@ export default function SettingsPage() {
                         <nav className="grid gap-4 text-sm text-muted-foreground">
                             <Link
                                 href="#"
-                                className={`font-semibold ${activeView === 'general' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('general')}
+                                className={`font-semibold ${activeView === 'appearance' ? 'text-primary' : ''}`}
+                                onClick={() => setActiveView('appearance')}
                             >
-                                General
+                                Appearance
                             </Link>
                             <Link
                                 href="#"
