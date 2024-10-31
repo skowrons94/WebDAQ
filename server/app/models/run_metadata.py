@@ -8,6 +8,7 @@ class RunMetadata(db.Model):
     start_time = db.Column(db.DateTime, default=datetime.utcnow)
     end_time = db.Column(db.DateTime)
     notes = db.Column(db.Text)
+    accumulated_charge = db.Column(db.Float)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     
     user = db.relationship('User', backref=db.backref('runs', lazy='dynamic'))

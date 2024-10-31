@@ -253,6 +253,7 @@ def get_run_metadata(run_number):
             'start_time': run_metadata.start_time,
             'end_time': run_metadata.end_time,
             'notes': run_metadata.notes,
+            'accumulated_charge': run_metadata.accumulated_charge,
             'user_id': run_metadata.user_id
         }), 200
     return jsonify({'message': 'Run not found'}), 404
@@ -271,6 +272,7 @@ def get_all_run_metadata():
                 'start_time': run.start_time,
                 'end_time': run.end_time,
                 'notes': run.notes,
+                'accumulated_charge': run.accumulated_charge,
                 'user_id': run.user_id
             })
         return jsonify(metadata), 200
