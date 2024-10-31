@@ -22,6 +22,7 @@ export type RunMetadata = {
     start_time: string
     end_time: string
     notes: string
+    accumulated_charge: number
     user_id: number
 }
 
@@ -72,6 +73,10 @@ export const columns: ColumnDef<RunMetadata>[] = [
                 </div>
             )
         }
+    },
+    {
+        accessorKey: "accumulated_charge",
+        header: "Accumulated Charge"
     },
     {
         accessorKey: "notes",
