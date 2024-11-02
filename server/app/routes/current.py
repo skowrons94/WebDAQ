@@ -5,6 +5,8 @@ from flask import Blueprint, jsonify, request
 from flask_cors import CORS
 from app.services.tetramm import tetram_controller
 
+from app import db
+from app.models.run_metadata import RunMetadata
 from app.utils.jwt_utils import jwt_required_custom
 
 from datetime import datetime
@@ -17,6 +19,7 @@ TEST_FLAG = False
 accumulated = 0
 total_accumulated = 0
 previous_time = 0
+current_accumulating_run_number = 0
 running = False
 
 # Open conf/settings.json if exists
@@ -34,8 +37,9 @@ controller.initialize( )
 @bp.route('/current/start/<run_number>', methods=['GET'])
 @jwt_required_custom
 def start_acquisition(run_number):
-    global accumulated, running, previous_time
+    global accumulated, running, previous_time, current_accumulating_run_number
     accumulated = 0
+    current_accumulating_run_number = int(run_number)
     previous_time = datetime.now().timestamp()
     run = int(run_number)
     if( not controller.is_acquiring ):
@@ -49,9 +53,9 @@ def start_acquisition(run_number):
 @bp.route('/current/stop', methods=['POST'])
 @jwt_required_custom
 def stop_acquisition():
-    global running
-    if( not controller.is_acquiring ):
-        return jsonify({"message": "Can not stop TetrAMM. Device not initialized"}), 400
+    global running, current_accumulating_run_number, accumulated
+    #if( not controller.is_acquiring):
+    #    return jsonify({"message": "Can not stop acquisition. Device not initialized"}), 400
     controller.set_save_data(False, "./")
     running = False
     # Open conf/settings.json if exists
@@ -62,6 +66,10 @@ def stop_acquisition():
         with open("conf/settings.json", "w") as f:
             json.dump(settings, f)
 
+    run_number = current_accumulating_run_number
+    run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
+    run_metadata.accumulated_charge = accumulated
+    db.session.commit()
     return jsonify({"message": "Acquisition stopped"}), 200
 
 @bp.route('/current/set/<settings>/<value>', methods=['GET'])

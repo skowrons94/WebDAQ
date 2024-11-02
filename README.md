@@ -1,5 +1,5 @@
 # WebDAQ - LUNA Experiment Data Acquisition System
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/skowrons94/WebDAQ) ![GitHub Release](https://img.shields.io/github/v/release/skowrons94/WebDAQ?include_prereleases) ![Static Badge](https://img.shields.io/badge/documentation-up-green?logo=github&link=https%3A%2F%2Fskowrons94.github.io%2FWebDAQ)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/skowrons94/WebDAQ) ![GitHub Release](https://img.shields.io/github/v/release/skowrons94/WebDAQ?include_prereleases) <img alt="Static Badge" src="https://img.shields.io/badge/Documentation-up-green?logo=Github&link=https%3A%2F%2Fskowrons94.github.io%2FWebDAQ%2Findex.html">
 
 
 ![Dashboard](imgs/dashboard.png)
@@ -28,7 +28,7 @@ This repository contains a server and a React Next.js frontend designed for data
 - Node.js (v14 or higher)
 - Python (v3.7 or higher)
 - Flask
-- PostgreSQL (or other supported database)
+- SQLite (or other supported database)
 
 ### Installation
 
