@@ -289,17 +289,17 @@ export default function HistogramDashboard() {
   }, [boards, roiValues])
 
   // ROI cache management
-  const updateROICache = async (roiValues: ROIValues) => {
+  const updateROICache = async (roiVal: ROIValues) => {
     try {
       await fetch('/api/cache', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(roiValues),
+        body: JSON.stringify(roiVal),
       })
       setUnsavedChanges(false)
-      setRoiValues(roiValues)
+      await setRoiValues(roiVal)
       toast({
         title: "Success",
         description: "ROI values have been saved.",
@@ -316,24 +316,43 @@ export default function HistogramDashboard() {
 
   // Event handlers
   const handleROIChange = async (histoId: string, low: number, high: number) => {
-    setRoiValues(prev => ({
-      ...prev,
-      [histoId]: { ...prev[histoId], low, high }
-    }))
+    //setRoiValues(prev => ({
+    //  ...prev,
+    //  [histoId]: { ...prev[histoId], low, high }
+    //}))
+    roiValues[histoId] = { low, high, integral: 0 }
     setUnsavedChanges(true)
+    // Update the cache immediately
+    updateROICache(roiValues)
+    // Clean the histogram JSROOT object
+    const histoElement = histogramRefs.current[histoId]
+    if (histoElement) {
+      const blankHist = createBlankHistogram(histoId)
+    }
+
   }
 
   const drawHistogramWithROI = async (element: HTMLDivElement, histogram: any, histoId: string, chan: string, id: string) => {
     if (window.JSROOT) {
       const canv = window.JSROOT.create('TCanvas');
 
+      // Make histogram blue fill with alpha of 0.3
+      histogram.fLineColor = 4;
+      histogram.fFillColor = 4;
+      histogram.fFillStyle = 3001;
+
       canv.fName = 'c1';
       canv.fPrimitives.Add(histogram, 'histo');
 
       const { low, high } = roiValues[histoId] || { low: 0, high: 0 }
 
+      console.log('Drawing histogram with ROI:', histoId, low, high)
       const roiObj = await getRoiHistogram(id, chan, low, high)
       const roiHistogram = window.JSROOT.parse(roiObj)
+
+      roiHistogram.fLineColor = 2;
+      roiHistogram.fFillColor = 2;
+      roiHistogram.fFillStyle = 3001;
 
       canv.fPrimitives.Add(roiHistogram, 'histo');
 
@@ -379,9 +398,6 @@ export default function HistogramDashboard() {
       <main className="flex-1 container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Histogram Dashboard</h1>
-          <Button onClick={handleSaveChanges} disabled={!unsavedChanges}>
-            Save Changes
-          </Button>
         </div>
         {boards.map((board) => (
           <Card key={board.id} className="mb-6">

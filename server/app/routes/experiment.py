@@ -15,7 +15,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.spy import ru_spy, bu_spy
 
-XDAQ_FLAG = False
+XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
 
@@ -25,7 +25,7 @@ os.system( "killall BUSpy" )
 def update_project( daq_state ):
 
     # Save as JSON
-    with open('conf/boards.json', 'w') as f:
+    with open('conf/settings.json', 'w') as f:
         json.dump(daq_state, f, indent=4)
 
     topology.write_ruconf(daq_state)
@@ -66,8 +66,8 @@ def check_project( ):
     if not os.path.exists('calib'): 
         os.makedirs('calib')
     # Check if exists, if not create it
-    if os.path.exists('conf/boards.json'):
-        with open('conf/boards.json', 'r') as f: 
+    if os.path.exists('conf/settings.json'):
+        with open('conf/settings.json', 'r') as f: 
             daq_state = json.load(f)
     else:
         # Variables to store the current DAQ system state and CAEN boards
@@ -82,7 +82,7 @@ def check_project( ):
             'file_size_limit': 0,
             'boards': []
         }
-        with open('conf/boards.json', 'w') as f: 
+        with open('conf/settings.json', 'w') as f: 
             json.dump(daq_state, f)
     return daq_state
 
@@ -106,7 +106,7 @@ if( XDAQ_FLAG ):
         r_spy.start(daq_state)
         b_spy.start(daq_state)
     else:
-        container.start()
+        container.initialize()
         print( "Container started...")
         topology.configure_pt( )
         print( "PT configured...")
@@ -594,7 +594,7 @@ def reset( ):
     topology = xdaq.topology("conf/topology.xml")
     topology.load_topology( )
     topology.display()
-    container.start( )
+    container.reset( )
     print( "Container started...")
     topology.configure_pt( )
     print( "PT configured...")
@@ -611,6 +611,11 @@ def get_histo(board_id, channel):
         histo = r_spy.get_object("energy", idx)
     else:
         histo = r_spy.get_object("qlong", idx)
+
+    # Fill the histogram with random numbers
+    if( not XDAQ_FLAG ):
+        histo.FillRandom("gaus", 1000)
+
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -623,8 +628,13 @@ def get_roi_histo(board_id, channel, roi_min, roi_max):
         histo = r_spy.get_object("energy", idx)
     else:
         histo = r_spy.get_object("qlong", idx)
+
+    # Fill the histogram with random numbers
+    if( not XDAQ_FLAG ):
+        histo.FillRandom("gaus", 1000)
+
     h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(int(roi_min), int(roi_max))
+    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(2, 0.3)
@@ -668,7 +678,7 @@ def get_roi_histo_sum(board_id, roi_min, roi_max):
     else:
         histo = b_spy.get_object("qlongSum", board_id)
     h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(int(roi_min), int(roi_max))
+    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(2, 0.3)
@@ -688,7 +698,7 @@ def get_roi_histo_anti(board_id, channel, roi_min, roi_max):
     else:
         histo = b_spy.get_object("qlongAnti", idx)
     h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(int(roi_min), int(roi_max))
+    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(2, 0.3)

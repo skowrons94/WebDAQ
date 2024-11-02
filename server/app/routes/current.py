@@ -1,4 +1,5 @@
 import os
+import json
 
 from flask import Blueprint, jsonify, request
 from flask_cors import CORS
@@ -14,8 +15,17 @@ TEST_FLAG = False
 
 # Default settings
 accumulated = 0
+total_accumulated = 0
 previous_time = 0
 running = False
+
+# Open conf/settings.json if exists
+if( os.path.exists("conf/settings.json") ):
+    with open("conf/settings.json") as f:
+        settings = json.load(f)
+    # If total_accumulated is in settings, set it
+    if( "total_accumulated" in settings ):
+        total_accumulated = settings["total_accumulated"]
 
 # Initialize TetrAMMController
 controller = tetram_controller()
@@ -28,8 +38,8 @@ def start_acquisition(run_number):
     accumulated = 0
     previous_time = datetime.now().timestamp()
     run = int(run_number)
-    #if( not controller.is_acquiring):
-    #    return jsonify({"message": "Can not start acquisition. Device not initialized"}), 400
+    if( not controller.is_acquiring ):
+        return jsonify({"message": "Can not start TetrAMM. Device not initialized"}), 400
     if( not os.path.exists("./data/run{}".format(run)) ):
         os.makedirs("./data/run{}".format(run))
     controller.set_save_data(True, "./data/run{}/".format(run))
@@ -40,10 +50,18 @@ def start_acquisition(run_number):
 @jwt_required_custom
 def stop_acquisition():
     global running
-    #if( not controller.is_acquiring):
-    #    return jsonify({"message": "Can not stop acquisition. Device not initialized"}), 400
+    if( not controller.is_acquiring ):
+        return jsonify({"message": "Can not stop TetrAMM. Device not initialized"}), 400
     controller.set_save_data(False, "./")
     running = False
+    # Open conf/settings.json if exists
+    if( os.path.exists("conf/settings.json") ):
+        with open("conf/settings.json") as f:
+            settings = json.load(f)
+        settings["total_accumulated"] = total_accumulated
+        with open("conf/settings.json", "w") as f:
+            json.dump(settings, f)
+
     return jsonify({"message": "Acquisition stopped"}), 200
 
 @bp.route('/current/set/<settings>/<value>', methods=['GET'])
@@ -80,10 +98,31 @@ def get_data():
 @bp.route('/current/accumulated', methods=['GET'])
 @jwt_required_custom
 def get_accumulated():
-    global accumulated, previous_time, running
-    if( not running):
+    global accumulated, previous_time, running, total_accumulated
+    # If not running, return accumulated value
+    if( not running ):
+        current_time = datetime.now().timestamp()
+        total_accumulated += (current_time - previous_time) * controller.get_data()['0'] * 1e5
+        previous_time = current_time
         return jsonify(accumulated)
+    # If thread dead, reset controller
+    if( not controller.check_thread() ):
+        controller.reset( )
     current_time = datetime.now().timestamp()
     accumulated += (current_time - previous_time) * controller.get_data()['0'] * 1e5
+    total_accumulated += (current_time - previous_time) * controller.get_data()['0'] * 1e5
     previous_time = current_time
     return jsonify(accumulated)
+
+@bp.route('/current/total_accumulated', methods=['GET'])
+@jwt_required_custom
+def get_total_accumulated():
+    return jsonify(total_accumulated)
+
+# Reset total accumulated
+@bp.route('/current/reset_total_accumulated', methods=['POST'])
+@jwt_required_custom
+def reset_total_accumulated():
+    global total_accumulated
+    total_accumulated = 0
+    return jsonify({"message": "Total accumulated reset"}), 200

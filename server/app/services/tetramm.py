@@ -167,3 +167,9 @@ class tetram_controller:
         self.disconnect()
         time.sleep(0.5)
         self.initialize()
+
+    def check_thread(self):
+        if self.acquisition_thread:
+            if self.acquisition_thread.is_alive():
+                return True
+        return False

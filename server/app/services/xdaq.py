@@ -852,7 +852,59 @@ class container:
         self.client = docker.from_env()
         self.directory = directory
 
-    def start( self ):
+    def initialize(self):
+
+        try: self.client.networks.get("xdaq_net")
+        except docker.errors.NotFound: self.client.networks.create("xdaq_net", driver="bridge")
+
+        try: self.client.volumes.get("graphite")
+        except docker.errors.NotFound: self.client.volumes.create("graphite")
+
+        try: self.client.containers.get("graphite")
+        except docker.errors.NotFound:
+            self.client.containers.run( "graphiteapp/graphite-statsd", 
+                                        hostname="graphite", 
+                                        name="graphite", 
+                                        ports={'2003': 2003, '8125': 8125, '80': 80},
+                                        network="xdaq_net",
+                                        volumes={'graphite': {'bind': '/opt/graphite/storage', 'mode': 'rw'}},
+                                        environment=["TZ=Europe/Rome"],
+                                        detach=True, 
+                                        remove=True )
+            
+        try: self.client.containers.get("xdaq")
+        except docker.errors.NotFound:
+            self.client.containers.run( "skowrons/xdaq:v4.0", "sleep infinity", 
+                                        hostname="xdaq", 
+                                        name="xdaq", 
+                                        ports={'50000': 50000, '51000': 51000, '52000': 52000,
+                                               '40000': 40000, '41000': 41000, '42000': 42000,
+                                               '10002': 10002, '10000': 10000},
+                                        volumes={self.directory: {'bind': '/home/xdaq/project', 'mode': 'rw'},
+                                                    '/dev': {'bind': '/dev', 'mode': 'rw'}, 
+                                                    '/lib/modules': {'bind': '/lib/modules', 'mode': 'rw'}},
+                                        environment=["TZ=Europe/Rome"],
+                                        network="xdaq_net",
+                                        detach=True, 
+                                        remove=True, 
+                                        privileged=True )
+            
+            cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
+            self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+            time.sleep(0.1)
+
+            cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
+            self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+            time.sleep(0.1)
+
+            cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
+            self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+            time.sleep(0.1)
+
+    def reset( self ):
 
         # If container xdaq exists, remove it
         try: self.client.containers.get("xdaq").remove(force=True)
@@ -873,6 +925,7 @@ class container:
         try: self.client.networks.get("xdaq_net").remove()
         except docker.errors.NotFound: pass
 
+        # Create the network
         self.client.networks.create("xdaq_net", driver="bridge")
 
         # Run container xdaq
@@ -906,19 +959,19 @@ class container:
         cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(1)
+        time.sleep(0.1)
 
         # Start LocalFilter in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(1)
+        time.sleep(0.1)
 
         # Start BuilderUnit in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(1)
+        time.sleep(0.1)
 
     def stop( self ):
         # If container xdaq exists, remove it

@@ -210,4 +210,12 @@ export const getSetting = (id: string, setting: string) =>
 export const setSetting = (id: string, setting: string, value: string) =>
     api.get(`/experiment/boards/${id}/${setting}/${value}`);
 
+// Get total accumulated charge
+export const getTotalAccumulatedCharge = () =>
+    api.get('/current/total_accumulated').then(res => res.data);
+
+// Reset the total accumulated charge
+export const resetTotalAccumulatedCharge = () =>
+    api.post('/current/reset_total_accumulated');
+
 export default api;
