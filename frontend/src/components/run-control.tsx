@@ -99,9 +99,11 @@ import {
   stopAcquisitionCurrent,
   getAccumulatedCharge,
   getRoiIntegralCoinc,
-  getRoiIntegralAnti
+  getRoiIntegralAnti,
+  getMetricData
 } from '@/lib/api'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
+import { useMetricsStore } from '@/store/metrics-store'
 
 
 type BoardData = {
@@ -125,6 +127,8 @@ export function RunControl() {
   const router = useRouter()
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
+  const { metrics } = useMetricsStore()
+  const visibleMetrics = metrics.filter(metric => metric.isVisible)
 
   const [coincidenceTime, setCoincidenceTime] = useState("")
   const [multiplicity, setMultiplicityBox] = useState("")
@@ -144,6 +148,7 @@ export function RunControl() {
   const [beamCurrent, setBeamCurrent] = useState<number>(0)
   const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
   const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
+  const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
 
   useEffect(() => {
     fetchInitialData()
@@ -180,6 +185,34 @@ export function RunControl() {
       if (interval) clearInterval(interval)
     }
   }, [isRunning, startTime])
+
+  useEffect(() => {
+    const metricIntervals: { [key: string]: NodeJS.Timeout } = {}
+
+    visibleMetrics.forEach(metric => {
+      const fetchMetricData = async () => {
+        try {
+          const data = await getMetricData(metric.entityName, metric.metricName)
+          setMetricValues(prev => ({
+            ...prev,
+            [metric.id]: data
+          }))
+        } catch (error) {
+          console.error(`Failed to fetch metric ${metric.entityName}/${metric.metricName}:`, error)
+        }
+      }
+
+      fetchMetricData()
+
+      if (metric.refreshInterval) {
+        metricIntervals[metric.id] = setInterval(fetchMetricData, metric.refreshInterval * 1000)
+      }
+    })
+
+    return () => {
+      Object.values(metricIntervals).forEach(interval => clearInterval(interval))
+    }
+  }, [visibleMetrics])
 
   const fetchInitialData = async () => {
     try {
@@ -469,10 +502,12 @@ export function RunControl() {
         title: 'Stopping Run...',
         description: 'Please wait while the run is being stopped.',
       })
-      if(saveData) {
-        await stopAcquisitionCurrent()
-      }
-      await stopRun()
+      
+      await Promise.all([
+        saveData && stopAcquisitionCurrent(),
+        stopRun()
+      ])
+
       toast({
         title: 'Run Stopped',
         description: 'The experiment run has been stopped successfully.',
@@ -665,20 +700,24 @@ export function RunControl() {
               </Card>
               ))
             }
-            {settings.showMetrics && <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  BL1 Pressure
-                </CardTitle>
-                <CircleGauge className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">2.3e-7 mBar</div>
-                <p className="text-xs text-muted-foreground">
-                  -0.1e-7 mBar from start
-                </p>
-              </CardContent>
-            </Card>}
+            {visibleMetrics.map(metric => (
+              <Card key={metric.id}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    {metric.metricName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                  </CardTitle>
+                  <Activity className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {metricValues[metric.id]?.toFixed(2) ?? 'Loading...'} {metric.unit}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Last updated: {new Date().toLocaleTimeString()}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </ScrollArea>
         <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">

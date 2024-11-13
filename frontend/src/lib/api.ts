@@ -210,4 +210,8 @@ export const getSetting = (id: string, setting: string) =>
 export const setSetting = (id: string, setting: string, value: string) =>
     api.get(`/experiment/boards/${id}/${setting}/${value}`);
 
+// Generic metric data fetching function
+export const getMetricData = (entityName: string, metricName: string, from: string = '-10s', until: string = 'now') =>
+    api.get(`/stats/${entityName}/${metricName}`, { params: { from, until } }).then(res => res.data);
+
 export default api;
