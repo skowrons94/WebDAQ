@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Activity,
   AlertTriangle,
@@ -128,7 +128,11 @@ export function RunControl() {
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
   const { metrics } = useMetricsStore()
-  const visibleMetrics = metrics.filter(metric => metric.isVisible)
+  const [visibleMetrics, setVisibleMetrics] = useState(() => metrics.filter(metric => metric.isVisible))
+
+  useEffect(() => {
+    setVisibleMetrics(metrics.filter(metric => metric.isVisible))
+  }, [metrics])
 
   const [coincidenceTime, setCoincidenceTime] = useState("")
   const [multiplicity, setMultiplicityBox] = useState("")
@@ -149,6 +153,7 @@ export function RunControl() {
   const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
   const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
+  const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
 
   useEffect(() => {
     fetchInitialData()
@@ -187,15 +192,19 @@ export function RunControl() {
   }, [isRunning, startTime])
 
   useEffect(() => {
-    const metricIntervals: { [key: string]: NodeJS.Timeout } = {}
-
     visibleMetrics.forEach(metric => {
+      if (intervalRefs.current[metric.id]) return
+
       const fetchMetricData = async () => {
         try {
           const data = await getMetricData(metric.entityName, metric.metricName)
+          const latestValue = Array.isArray(data) && data.length > 0 ? 
+            data[0][1] : 
+            0;
+          
           setMetricValues(prev => ({
             ...prev,
-            [metric.id]: data
+            [metric.id]: latestValue * (metric.multiplier || 1)
           }))
         } catch (error) {
           console.error(`Failed to fetch metric ${metric.entityName}/${metric.metricName}:`, error)
@@ -204,15 +213,23 @@ export function RunControl() {
 
       fetchMetricData()
 
-      if (metric.refreshInterval) {
-        metricIntervals[metric.id] = setInterval(fetchMetricData, metric.refreshInterval * 1000)
+      if (metric.refreshInterval && metric.refreshInterval > 0) {
+        const intervalMs = metric.refreshInterval * 1000
+        intervalRefs.current[metric.id] = setInterval(fetchMetricData, intervalMs)
       }
     })
 
     return () => {
-      Object.values(metricIntervals).forEach(interval => clearInterval(interval))
+      Object.keys(intervalRefs.current).forEach(clearMetricInterval)
     }
   }, [visibleMetrics])
+
+  const clearMetricInterval = (metricId: string) => {
+    if (intervalRefs.current[metricId]) {
+      clearInterval(intervalRefs.current[metricId])
+      delete intervalRefs.current[metricId]
+    }
+  }
 
   const fetchInitialData = async () => {
     try {
@@ -710,7 +727,9 @@ export function RunControl() {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
-                    {metricValues[metric.id]?.toFixed(2) ?? 'Loading...'} {metric.unit}
+                    {metricValues[metric.id] !== undefined
+                      ? (Number(metricValues[metric.id])).toFixed(2)
+                      : 'Loading...'} {metric.unit}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Last updated: {new Date().toLocaleTimeString()}

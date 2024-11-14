@@ -8,10 +8,7 @@ export interface Metric {
     unit: string
     isVisible?: boolean
     refreshInterval?: number // in seconds
-    threshold?: {
-        warning?: number
-        critical?: number
-    }
+    multiplier?: number // Added multiplier
 }
 
 interface MetricsStore {

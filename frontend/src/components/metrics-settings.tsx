@@ -18,29 +18,37 @@ export function MetricsSettings() {
         metricName: '',
         unit: '',
         refreshInterval: 60,
-        threshold: {
-            warning: 70,
-            critical: 90
-        }
+        multiplier: '1'
     })
 
     const handleAddMetric = () => {
         if (newMetric.entityName && newMetric.metricName && newMetric.unit) {
-            addMetric(newMetric)
+            const parsedMultiplier = Number(newMetric.multiplier);
+            if (isNaN(parsedMultiplier)) {
+                toast({
+                    title: "Invalid Multiplier",
+                    description: "Please enter a valid number for the multiplier.",
+                    variant: "destructive"
+                });
+                return;
+            }
+            
+            const metricToAdd = {
+                ...newMetric,
+                multiplier: parsedMultiplier
+            };
+            addMetric(metricToAdd);
             setNewMetric({
                 entityName: '',
                 metricName: '',
                 unit: '',
                 refreshInterval: 60,
-                threshold: {
-                    warning: 70,
-                    critical: 90
-                }
-            })
+                multiplier: '1'
+            });
             toast({
                 title: "Metric Added",
                 description: `${newMetric.metricName} has been added to your dashboard.`
-            })
+            });
         }
     }
 
@@ -84,6 +92,16 @@ export function MetricsSettings() {
                             </div>
                         </div>
 
+                        <div>
+                            <Label htmlFor="multiplier">Multiplier</Label>
+                            <Input
+                                id="multiplier"
+                                value={newMetric.multiplier}
+                                onChange={(e) => setNewMetric({ ...newMetric, multiplier: e.target.value })}
+                                placeholder="e.g., 1.5 or 1e-6"
+                            />
+                        </div>
+
                         <div className="space-y-4">
                             <div>
                                 <Label>Refresh Interval (seconds)</Label>
@@ -97,33 +115,6 @@ export function MetricsSettings() {
                                 />
                                 <div className="text-sm text-muted-foreground mt-1">
                                     {newMetric.refreshInterval} seconds
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <Label htmlFor="warningThreshold">Warning Threshold</Label>
-                                    <Input
-                                        id="warningThreshold"
-                                        type="number"
-                                        value={newMetric.threshold.warning}
-                                        onChange={(e) => setNewMetric({
-                                            ...newMetric,
-                                            threshold: { ...newMetric.threshold, warning: Number(e.target.value) }
-                                        })}
-                                    />
-                                </div>
-                                <div>
-                                    <Label htmlFor="criticalThreshold">Critical Threshold</Label>
-                                    <Input
-                                        id="criticalThreshold"
-                                        type="number"
-                                        value={newMetric.threshold.critical}
-                                        onChange={(e) => setNewMetric({
-                                            ...newMetric,
-                                            threshold: { ...newMetric.threshold, critical: Number(e.target.value) }
-                                        })}
-                                    />
                                 </div>
                             </div>
                         </div>
@@ -156,8 +147,7 @@ export function MetricsSettings() {
                                                 </div>
                                                 <div className="text-sm text-muted-foreground">
                                                     Unit: {metric.unit} | Refresh: {metric.refreshInterval}s |
-                                                    Warning: {metric.threshold?.warning}% |
-                                                    Critical: {metric.threshold?.critical}%
+                                                    Multiplier: {metric.multiplier}
                                                 </div>
                                             </div>
                                         </div>
