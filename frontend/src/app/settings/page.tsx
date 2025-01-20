@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
 import { JsonEditor } from '@/components/json';
 import { VisualizationSettings } from '@/components/visualization-settings';
+import { MetricsSettings } from '@/components/metrics-settings'
 
 const queryClient = new QueryClient()
 
@@ -47,6 +48,8 @@ export default function SettingsPage() {
                 return <Board />;
             case 'json':
                 return <JsonEditor />;
+            case 'metrics':
+                return <MetricsSettings />;
             default:
                 return (
                     < VisualizationSettings />
@@ -84,6 +87,14 @@ export default function SettingsPage() {
                             >
                                 Caen JSON editor
                             </Link>
+                            <Link
+                                href="#"
+                                className={`font-semibold ${activeView === 'metrics' ? 'text-primary' : ''}`}
+                                onClick={() => setActiveView('metrics')}
+                            >
+                                Metrics
+                            </Link>
+                            
                         </nav>
                         <div className="grid gap-6">
                             {renderActiveView()}

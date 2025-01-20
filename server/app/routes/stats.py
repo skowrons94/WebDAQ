@@ -54,6 +54,16 @@ def get_column_current():
     else:
         return jsonify({'error': result['error']}), 500
 
+@bp.route('/stats/<entity>/<metric>', methods=['GET'])
+def get_metric(entity, metric):
+    from_time = request.args.get('from', '-10s')
+    until_time = request.args.get('until', 'now')
+    result = get_metric_data(f'{entity}.{metric}', client_mv, from_time, until_time)
+    if result['success']:
+        return jsonify(result['data']), 200
+    else:
+        return jsonify({'error': result['error']}), 500
+
 @bp.route('/stats/board_rates', methods=['GET'])
 def get_board_rates():
     board_id = request.args.get('board_id')
