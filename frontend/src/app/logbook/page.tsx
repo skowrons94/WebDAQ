@@ -10,8 +10,6 @@ import {Logbook} from '@/components/logbook-table/logbook-page';
 
 const queryClient = new QueryClient()
 
-
-
 export default  function LogbookPage() {
     const router = useRouter();
     const token = useAuthStore((state) => state.token);

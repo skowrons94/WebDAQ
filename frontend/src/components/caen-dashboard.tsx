@@ -112,10 +112,11 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
   const settingsToFetch = [
     { name: "Trigger Threshold", address: "0x106c" },
+    { name: "Input Rise Time", address: "0x1058" },
+    { name: "DC Offset", address: "0x1098" },
     { name: "Trapezoid Rise Time", address: "0x105c" },
     { name: "Trapezoid Flat Top", address: "0x1060" },
-    { name: "DC Offset", address: "0x1098" },
-    { name: "Input Rise Time", address: "0x1058" }
+    { name: "Trapezoid Decay Time", address: "0x1068" }
   ]
 
   useEffect(() => {

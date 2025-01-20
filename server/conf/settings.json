@@ -1,0 +1,1 @@
+{"running": true, "start_time": "2024-11-03 17:16:51", "run": 6, "coincidence_window": 50, "multiplicity": 1, "save": true, "limit_size": false, "file_size_limit": 0, "boards": [{"id": "0", "name": "DT5781", "vme": "0", "link_type": "Optical", "link_num": "3", "dpp": "DPP-PHA", "chan": "4"}], "total_accumulated": 0.0}

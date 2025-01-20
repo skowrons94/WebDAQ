@@ -73,12 +73,6 @@ export const getDataSizeLimit = () =>
 export const setDataSizeLimit = (value: number) => 
     api.post('/experiment/set_data_size_limit', { value: value });
 
-// Functions for logbook management
-export const getCSV = () => 
-    api.get('/experiment/get_csv').then(res => res.data);
-export const saveCSV = (csvData: string[][]) =>
-    api.post('/experiment/save_csv', { csvData });
-
 // DAQ State
 export const getCurrentRunNumber = () => 
     api.get('/experiment/get_run_number').then(res => res.data);
@@ -213,5 +207,13 @@ export const setSetting = (id: string, setting: string, value: string) =>
 // Generic metric data fetching function
 export const getMetricData = (entityName: string, metricName: string, from: string = '-10s', until: string = 'now') =>
     api.get(`/stats/${entityName}/${metricName}`, { params: { from, until } }).then(res => res.data);
+
+// Get total accumulated charge
+export const getTotalAccumulatedCharge = () =>
+    api.get('/current/total_accumulated').then(res => res.data);
+
+// Reset the total accumulated charge
+export const resetTotalAccumulatedCharge = () =>
+    api.post('/current/reset_total_accumulated');
 
 export default api;

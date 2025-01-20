@@ -9,7 +9,7 @@ import numpy as np
 from datetime import datetime
 
 class tetram_controller:
-    def __init__(self, ip='127.0.0.1', port=10001, graphite_host='172.18.9.54', graphite_port=2003):
+    def __init__(self, ip='169.254.145.10', port=10001, graphite_host='172.18.9.54', graphite_port=2003):
         self.ip = ip
         self.port = port
         self.graphite_host = graphite_host
@@ -60,7 +60,7 @@ class tetram_controller:
 
     def load_settings(self):
         if not os.path.exists('conf/tetram.json'):
-            self.settings = { 'CHN': "4", 'RNG': "AUTO", 'ASCII': "ON", 'NRSAMP': "1000", 'TRG': "OFF", 'NAQ': "1" }
+            self.settings = { 'CHN': "1", 'RNG': "AUTO", 'ASCII': "ON", 'NRSAMP': "10000", 'TRG': "OFF", 'NAQ': "1" }
             self.write_settings()
         else:
             with open('conf/tetram.json', 'r') as f:
@@ -139,6 +139,7 @@ class tetram_controller:
                     self.times[-1] = timestamp
                     for i in range(int(self.settings['CHN'])):
                         self.send_metric(f"tetram.ch{i}", self.values[str(i)][-1], timestamp)
+                    print(self.save_data)
                     if( self.save_data ):
                         with open(os.path.join(self.save_folder, f'current.txt'), 'a') as f:
                             f.write(f'{timestamp - self.start:.2e}\t')
@@ -167,3 +168,9 @@ class tetram_controller:
         self.disconnect()
         time.sleep(0.5)
         self.initialize()
+
+    def check_thread(self):
+        if self.acquisition_thread:
+            if self.acquisition_thread.is_alive():
+                return True
+        return False

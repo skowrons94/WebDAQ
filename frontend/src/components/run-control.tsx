@@ -20,6 +20,7 @@ import {
   CircleGauge,
   HardDrive,
   Network,
+  RefreshCw,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -100,7 +101,9 @@ import {
   getAccumulatedCharge,
   getRoiIntegralCoinc,
   getRoiIntegralAnti,
-  getMetricData
+  getMetricData,
+  getTotalAccumulatedCharge,
+  resetTotalAccumulatedCharge
 } from '@/lib/api'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
@@ -152,8 +155,6 @@ export function RunControl() {
   const [beamCurrent, setBeamCurrent] = useState<number>(0)
   const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
   const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
-  const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
-  const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
 
   useEffect(() => {
     fetchInitialData()
@@ -162,6 +163,7 @@ export function RunControl() {
     const roiInterval = setInterval(updateROIData, 1000)
     const bandwidthInterval = setInterval(updateBandwidthData, 1000)
     const accumulatedChargeInterval = setInterval(updateAccumulatedCharge, 1000)
+    const totalAccumulatedChargeInterval = setInterval(updateTotalAccumulatedCharge, 1000)
 
     return () => {
       clearInterval(statusInterval)
@@ -433,6 +435,15 @@ export function RunControl() {
     }
   }
 
+  const updateTotalAccumulatedCharge = async () => {
+    try {
+      const totalCharge = await getTotalAccumulatedCharge()
+      setTotalAccumulatedCharge(totalCharge)
+    } catch (error) {
+      console.error('Failed to update total accumulated charge:', error)
+    }
+  }
+
   const handleLogout = () => {
     clearToken()
     router.push('/')
@@ -457,11 +468,9 @@ export function RunControl() {
         return
       }
 
-      // If save data is on, startAcqusiitonCurrent
       if (saveData) {
         await startAcquisitionCurrent(runNumber.toString())
       }
-
       await startRunProcess()
       const initialCurrent = await getDataCurrent()
       localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
@@ -519,16 +528,17 @@ export function RunControl() {
         title: 'Stopping Run...',
         description: 'Please wait while the run is being stopped.',
       })
-      
-      await Promise.all([
-        saveData && stopAcquisitionCurrent(),
-        stopRun()
-      ])
-
+      if(saveData) {
+        await stopAcquisitionCurrent()
+      }
+      await stopRun()
       toast({
         title: 'Run Stopped',
         description: 'The experiment run has been stopped successfully.',
       })
+      if(saveData) {
+        await stopAcquisitionCurrent()
+      }
       setIsRunning(false)
 
       const newRunNumber = await getCurrentRunNumber()
@@ -545,17 +555,43 @@ export function RunControl() {
 
   const handleReset = async () => {
     try {
-      await resetDeviceCurrent()
-      await reset()
       toast({
         title: 'XDAQ Reset',
-        description: 'All the XDAQ components restarted.',
+        description: 'Resetting TetrAMM...',
       })
+      await resetDeviceCurrent()
+      toast({
+        title: 'XDAQ Reset',
+        description: 'Resetting XDAQ...',
+      })
+      await reset()
     } catch (error) {
       console.error('Failed to reset parameters:', error)
       toast({
         title: 'Error',
         description: 'Failed to restart XDAQ. Please try again.',
+        variant: 'destructive',
+      })
+    }
+    toast({
+      title: 'XDAQ Reset',
+      description: 'All the XDAQ components restarted.',
+    })
+  }
+
+  const handleResetTotalAccumulatedCharge = async () => {
+    try {
+      await resetTotalAccumulatedCharge()
+      toast({
+        title: 'Success',
+        description: 'Total accumulated charge has been reset.',
+      })
+      updateTotalAccumulatedCharge()
+    } catch (error) {
+      console.error('Failed to reset total accumulated charge:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to reset total accumulated charge. Please try again.',
         variant: 'destructive',
       })
     }
@@ -651,7 +687,7 @@ export function RunControl() {
                 <Thermometer className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
+              <div className="text-2xl font-bold">{beamCurrent < 1 ? (beamCurrent * 1000).toFixed(2) + " nA" : beamCurrent.toFixed(2) + " uA"}</div>
                 <p className="text-xs text-muted-foreground">
                   {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from start
                 </p>
@@ -665,12 +701,28 @@ export function RunControl() {
               <Thermometer className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{accumulatedCharge.toFixed(2)} uC</div>
+              <div className="text-2xl font-bold">{accumulatedCharge > 1000000 ? (accumulatedCharge/1000000).toFixed(2) + " C" : accumulatedCharge.toFixed(2) + " uC"}</div>
               <p className="text-xs text-muted-foreground">
                 Total charge accumulated
               </p>
             </CardContent>
             </Card>}
+            {settings.showCurrent && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">
+                    Total Accumulated Charge
+                  </CardTitle>
+                  <Database className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                <div className="text-2xl font-bold">{totalAccumulatedCharge > 1000000 ? (totalAccumulatedCharge/1000000).toFixed(2) + " C" : totalAccumulatedCharge.toFixed(2) + " uC"}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Total charge accumulated since last reset
+                  </p>
+                </CardContent>
+              </Card>
+            )}
             {settings.showXDAQ && <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -717,26 +769,20 @@ export function RunControl() {
               </Card>
               ))
             }
-            {visibleMetrics.map(metric => (
-              <Card key={metric.id}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {metric.metricName.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                  </CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {metricValues[metric.id] !== undefined
-                      ? (Number(metricValues[metric.id])).toFixed(2)
-                      : 'Loading...'} {metric.unit}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Last updated: {new Date().toLocaleTimeString()}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+            {settings.showMetrics && <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  BL1 Pressure
+                </CardTitle>
+                <CircleGauge className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">2.3e-7 mBar</div>
+                <p className="text-xs text-muted-foreground">
+                  -0.1e-7 mBar from start
+                </p>
+              </CardContent>
+            </Card>}
           </div>
         </ScrollArea>
         <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
@@ -755,6 +801,12 @@ export function RunControl() {
                 <Button onClick={handleStopRun} variant="outline" className="w-full" disabled={!isRunning}>
                   <StopCircle className="mr-2 h-4 w-4" />
                   Stop Run
+                </Button>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button onClick={handleResetTotalAccumulatedCharge} className="w-full" variant="outline">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Reset Total Charge
                 </Button>
               </div>
               <div className="flex items-center gap-4">

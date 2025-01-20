@@ -1,7 +1,9 @@
 # app/routes/experiment.py
 import os
+import gc
 import csv
 import json
+import time as time_lib
 
 from ROOT import TBufferJSON, TH1F
 
@@ -15,17 +17,23 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 from app.services import xdaq
 from app.services.spy import ru_spy, bu_spy
 
-XDAQ_FLAG = False
+import threading
+
+XDAQ_FLAG = True
 
 bp = Blueprint('experiment', __name__)
 
 os.system( "killall RUSpy" )
 os.system( "killall BUSpy" )
+os.system( "docker stop xdaq" )
+
+#start_thread = False
+#t_crash = None
 
 def update_project( daq_state ):
 
     # Save as JSON
-    with open('conf/boards.json', 'w') as f:
+    with open('conf/settings.json', 'w') as f:
         json.dump(daq_state, f, indent=4)
 
     topology.write_ruconf(daq_state)
@@ -42,22 +50,6 @@ def get_info( board_id, channel, boards ):
     dpp = boards[int(board_id)]['dpp']
     return idx, dpp
 
-# Check if CSV exists, if not, create it with predefined columns
-def read_csv():
-    CSV_FILE = 'logbook.csv'
-    if not os.path.exists(CSV_FILE):
-        return [['Run Number', 'Start Time', 'Stop Time']]
-    else:
-        with open(CSV_FILE, mode='r') as file:
-            reader = csv.reader(file)
-            rows = list(reader)
-            return rows
-        
-def write_csv(rows):
-    with open('logbook.csv', mode='w') as file:
-        writer = csv.writer(file)
-        writer.writerows(rows)
-
 def check_project( ):
     # Check if directory exists, if not create it
     if not os.path.exists('conf'): 
@@ -66,8 +58,8 @@ def check_project( ):
     if not os.path.exists('calib'): 
         os.makedirs('calib')
     # Check if exists, if not create it
-    if os.path.exists('conf/boards.json'):
-        with open('conf/boards.json', 'r') as f: 
+    if os.path.exists('conf/settings.json'):
+        with open('conf/settings.json', 'r') as f: 
             daq_state = json.load(f)
     else:
         # Variables to store the current DAQ system state and CAEN boards
@@ -82,7 +74,7 @@ def check_project( ):
             'file_size_limit': 0,
             'boards': []
         }
-        with open('conf/boards.json', 'w') as f: 
+        with open('conf/settings.json', 'w') as f: 
             json.dump(daq_state, f)
     return daq_state
 
@@ -106,17 +98,75 @@ if( XDAQ_FLAG ):
         r_spy.start(daq_state)
         b_spy.start(daq_state)
     else:
-        container.start()
+        container.initialize()
         print( "Container started...")
         topology.configure_pt( )
         print( "PT configured...")
         topology.enable_pt( )
         print( "PT enabled...")
 
+update_project(daq_state)
+
+# FIX: Function to recover from a crash
+#def recover_crash( cycle ):
+#    global daq_state, r_spy, b_spy, topology, container
+#
+#    run = daq_state['run']
+#    save = daq_state['save']
+#   multiplicity = daq_state['multiplicity']
+#    coincidence_window = daq_state['coincidence_window']
+#    running = daq_state['running']
+#    limit_size = daq_state['limit_size']
+#    file_size_limit = daq_state['file_size_limit']
+#
+#    r_spy.stop( )
+#    b_spy.stop( )
+#    time_lib.sleep( 5 )
+#    container.restart( )
+#    time_lib.sleep( 50 )
+#    topology.configure_pt( )
+#    time_lib.sleep( 5 )
+#    topology.enable_pt( )
+#    time_lib.sleep( 5 )
+#    time_lib.sleep( 5 )
+#    topology.set_coincidence_window(coincidence_window)
+#    topology.set_multiplicity(multiplicity)
+#    topology.set_cycle_counter(cycle)
+#    if( limit_size ): topology.set_file_size_limit(file_size_limit)
+#    else: topology.set_file_size_limit(0)
+#    topology.set_run_number(run)
+#    topology.set_enable_files(save)
+#    try:
+#        topology.set_file_paths(f"/home/xdaq/project/data/run{run}/",idx=cycle)
+#    except:
+#        topology.set_file_paths(f"/home/xdaq/project/data/run{run}/")
+#    topology.configure( )
+#    topology.start( )
+#    r_spy.start( daq_state )
+#    b_spy.start( daq_state )
+#    return
+
+# FIX: Function to check daq status
+#def detect_crash( ):
+#    cycle = 0
+#    while( start_thread ):
+#        time_lib.sleep( 1 )
+#        try:
+#            status = topology.get_daq_status( )
+#            if status == "Running":
+#                pass
+#            else:
+#                cycle += 1
+#                recover_crash( cycle )
+#        except:
+#            cycle += 1
+#            recover_crash( cycle )
+#    return
+
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
 def start_run( ):
-    global daq_state
+    global daq_state, t_crash, start_thread
 
     run = daq_state['run']
     save = daq_state['save']
@@ -151,6 +201,7 @@ def start_run( ):
     if( XDAQ_FLAG ):
         topology.set_coincidence_window(coincidence_window)
         topology.set_multiplicity(multiplicity)
+        topology.set_cycle_counter(0)
         if( limit_size ): topology.set_file_size_limit(file_size_limit)
         else: topology.set_file_size_limit(0)
         topology.set_run_number(run)
@@ -160,72 +211,79 @@ def start_run( ):
         topology.start( )
 
     daq_state['running'] = True
-    
-    # If we save the data, add the run to database
-    if( save or not XDAQ_FLAG ):
-        run = daq_state['run']
-        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        rows = read_csv()
-        rows.append([run, time, None])
-        write_csv(rows)
 
-        # Update metadata in the database check first if it exists already
-        run_metadata = RunMetadata.query.filter_by(run_number=run).first()
-        if not run_metadata:
-            run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
-            db.session.add(run_metadata)
-            db.session.commit()
-        else:
-            run_metadata.start_time = time
-            run_metadata.end_time = None
-        
-            db.session.commit()
-
-    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    daq_state['start_time'] = time
-    
     # Run the Spy to  save the histograms to txt file in run directory
     # Example: ./LunaSpy -d board_name firmware channel -n run_number
     if( XDAQ_FLAG ):
         r_spy.start(daq_state)
         b_spy.start(daq_state)
+    
+    # If we save the data, add the run to database
+    if( save or not XDAQ_FLAG ):
+        run = daq_state['run']
+        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # Update metadata in the database check first if it exists already
+        try:
+            run_metadata = RunMetadata.query.filter_by(run_number=run).first()
+            if not run_metadata:
+                run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
+                db.session.add(run_metadata)
+                db.session.commit()
+            else:
+                run_metadata.start_time = time
+                run_metadata.end_time = None
+            
+                db.session.commit()
+        except:
+            pass
+
+    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    daq_state['start_time'] = time
 
     # Update the daq_state file
     update_project(daq_state)
+
+    # FIX: Start the thread to check for crashes
+    #start_thread = True
+    #t_crash = threading.Thread(target=detect_crash)
+    #t_crash.start()
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
 @bp.route("/experiment/stop_run", methods=['POST'])
 @jwt_required_custom
 def stop_run( ):
-    global daq_state
+    global daq_state, r_spy, b_spy, start_thread, t_crash
+
+    # First stop the spy
+    r_spy.stop()
+    b_spy.stop()
     
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     # Stop the XDAQ
     if( XDAQ_FLAG ):
         topology.halt( )
-        r_spy.stop()
-        b_spy.stop()
-
-    daq_state['running'] = False
 
     # If we save the data, update the run in the database
-    if( daq_state['save'] or not XDAQ_FLAG ):
+    if( daq_state['save'] or not XDAQ_FLAG and daq_state['running'] ):
         daq_state['run'] += 1
-        rows = read_csv()
-        rows[-1][2] = time
-        write_csv(rows)
 
-        # Update metadata in the database
-        run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
-        run_metadata.end_time = datetime.now()
-        db.session.commit()
-
-
+    daq_state['running'] = False
     daq_state['start_time'] = None
 
     # Update the daq_state file
     update_project(daq_state)
+
+    # Update metadata in the database
+    try:
+        if( daq_state['save'] or not XDAQ_FLAG ):
+            run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
+            run_metadata.end_time = datetime.now()
+            db.session.commit()
+    except:
+        pass
 
     return jsonify({'message': 'Run stopped successfully !'}), 200
 
@@ -417,20 +475,6 @@ def get_board_configuration():
     global daq_state
     return jsonify(daq_state['boards'])
 
-# Route to get the csv file
-@bp.route("/experiment/get_csv", methods=['GET'])
-@jwt_required_custom
-def get_csv():
-    return jsonify(read_csv())
-
-# Route to save the csv file
-@bp.route("/experiment/save_csv", methods=['POST'])
-@jwt_required_custom
-def save_csv():
-    data = request.get_json()["csvData"]
-    write_csv(data)
-    return jsonify({'message': 'CSV saved successfully !'}), 200
-
 # Get run number from the database
 @bp.route("/experiment/get_run_number", methods=['GET'])
 @jwt_required_custom
@@ -470,6 +514,7 @@ def get_run_status():
         else:
             daq_state['running'] = False
     except:
+        daq_state['running'] = False
         pass
     return jsonify(daq_state['running'])
 
@@ -501,6 +546,7 @@ def get_wave2(board_id, channel):
     idx += int(channel)
     histo = r_spy.get_object("wave2", idx)
     obj = TBufferJSON.ConvertToJSON(histo)
+
     return str(obj.Data())
 
 @bp.route('/waveforms/activate', methods=['POST'])
@@ -596,7 +642,7 @@ def reset( ):
     topology = xdaq.topology("conf/topology.xml")
     topology.load_topology( )
     topology.display()
-    container.start( )
+    container.reset( )
     print( "Container started...")
     topology.configure_pt( )
     print( "PT configured...")
@@ -613,6 +659,13 @@ def get_histo(board_id, channel):
         histo = r_spy.get_object("energy", idx)
     else:
         histo = r_spy.get_object("qlong", idx)
+
+    histo.Rebin( 16 )
+
+    # Fill the histogram with random numbers
+    if( not XDAQ_FLAG ):
+        histo.FillRandom("gaus", 1000)
+
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -625,8 +678,15 @@ def get_roi_histo(board_id, channel, roi_min, roi_max):
         histo = r_spy.get_object("energy", idx)
     else:
         histo = r_spy.get_object("qlong", idx)
+
+    histo.Rebin( 16 )
+
+    # Fill the histogram with random numbers
+    if( not XDAQ_FLAG ):
+        histo.FillRandom("gaus", 1000)
+
     h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(int(roi_min), int(roi_max))
+    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(2, 0.3)
@@ -645,6 +705,7 @@ def get_histo_anti(board_id, channel):
         histo = b_spy.get_object("energyAnti", idx)
     else:
         histo = b_spy.get_object("qlongAnti", idx)
+    histo.Rebin( 16 )
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -657,6 +718,7 @@ def get_histo_sum(board_id):
         histo = b_spy.get_object("energySum", board_id)
     else:
         histo = b_spy.get_object("qlongSum", board_id)
+    histo.Rebin( 16 )
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -669,8 +731,9 @@ def get_roi_histo_sum(board_id, roi_min, roi_max):
         histo = b_spy.get_object("energySum", board_id)
     else:
         histo = b_spy.get_object("qlongSum", board_id)
+    histo.Rebin( 16 )
     h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(int(roi_min), int(roi_max))
+    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(2, 0.3)
@@ -689,8 +752,9 @@ def get_roi_histo_anti(board_id, channel, roi_min, roi_max):
         histo = b_spy.get_object("energyAnti", idx)
     else:
         histo = b_spy.get_object("qlongAnti", idx)
+    histo.Rebin( 16 )
     h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(int(roi_min), int(roi_max))
+    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(2, 0.3)
@@ -709,6 +773,7 @@ def get_roi_integral(board_id, channel, roi_min, roi_max):
         histo = r_spy.get_object("energy", idx)
     else:
         histo = r_spy.get_object("qlong", idx)
+    histo.Rebin( 16 )
     integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
     return jsonify(integral)
 
@@ -721,6 +786,7 @@ def get_roi_integral_sum(board_id, roi_min, roi_max):
         histo = b_spy.get_object("energySum", board_id)
     else:
         histo = b_spy.get_object("qlongSum", board_id)
+    histo.Rebin( 16 )
     integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
     return jsonify(integral)
 
@@ -733,6 +799,7 @@ def get_roi_integral_anti(board_id, channel, roi_min, roi_max):
         histo = b_spy.get_object("energyAnti", idx)
     else:
         histo = b_spy.get_object("qlongAnti", idx)
+    histo.Rebin( 16 )
     integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
     return jsonify(integral)
 
@@ -768,4 +835,3 @@ def set_setting( id, setting, value ):
     except:
         # Return failure
         return jsonify(-1)
-    

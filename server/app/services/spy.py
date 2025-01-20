@@ -13,32 +13,42 @@ class ru_spy:
         self.socket = None
         self.running = False
         self.thread = None
-        self.data = { "energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [] }
         self.histo = ROOT.TH1F("Histogram 1", "Histogram 1", 32768, 0, 32768)
+        self.msg = ROOT.TMessage( )
+        self.obj = ROOT.MakeNullPointer(ROOT.TH1F)  
+        # Prepare the buffer
+        self.buff = { "energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [] }
+        for key in self.buff.keys():
+            for i in range(32):
+                self.buff[key].append(ROOT.MakeNullPointer(ROOT.TH1F))
+        # Prepare the data
+        self.data = { "energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [] }
+        for key in self.data.keys():
+            for i in range(32):
+                self.data[key].append(ROOT.TH1F("{} {}".format(key,i), "{} {}".format(key,i), 32768, 0, 32768))      
 
     def connect(self):
         self.socket = ROOT.TSocket(self.host, self.port)
         if not self.socket.IsValid():
             raise ConnectionError(f"Error connecting to {self.host}:{self.port}")
+        return
 
     def disconnect(self):
         self.socket.Close()
+        return
 
     def send(self, msg):
         if self.socket.Send(msg) <= 0: return False
         return
 
     def receive(self):
-        msg = ROOT.TMessage()
-        if self.socket.Recv(msg) <= 0:
+        self.obj = ROOT.MakeNullPointer(ROOT.TH1F)
+        nbytes = self.socket.Recv(self.msg)
+        if nbytes <= 0:
             return False
-        
-        if msg.GetClass().GetName() in ["TH1F"]:
-            obj = msg.ReadObject(msg.GetClass())
-            msg.Delete()
-            return obj
-        
-        return False
+        self.obj = self.msg.ReadObject(self.msg.GetClass())
+        self.msg.Delete( )
+        return self.obj
         
     def start(self, state):
         cmd = "RUSpy"
@@ -51,59 +61,59 @@ class ru_spy:
         time.sleep(1)
         
         self.running = True
-        if( self.thread != None ): self.thread.join()
         self.thread = threading.Thread(target=self.run)
         self.thread.start()
 
-    def delete(self, array):
-        if( array == None ): return
-        if( len(array) == 0 ): return
-        for obj in array:
-            obj.Delete()
-
-    def free(self, dict):
-        for key in dict.keys():
-            self.delete(dict[key])
-            dict[key] = []
-
     def run(self):
-
         while self.running:
-            self.connect()
-            self.send("get")
-            buff = { "energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [] }
-            try:
-                while True:
-                    obj = self.receive()
-                    if( obj == False ): break
-                    if "Wave1" in obj.GetName():
-                        buff["wave1"].append(obj)
-                    elif "Wave2" in obj.GetName():
-                        buff["wave2"].append(obj)
-                    elif "Qshort" in obj.GetName():
-                        buff["qshort"].append(obj)
-                    elif "Qlong" in obj.GetName():
-                        buff["qlong"].append(obj)
-                    elif "Energy" in obj.GetName():
-                        buff["energy"].append(obj)
-                    else: pass
-            except Exception as e:
-                print(f"Error receiving histogram: {e}")
+            self.collect()
+            time.sleep(1)
+        return
 
-            with threading.Lock():
-                for key in buff.keys():
-                    self.free(self.data)
-                    for key in buff.keys():
-                        for obj in buff[key]:
-                            self.data[key].append(obj.Clone())
-            self.free(buff)
+    def collect(self):
+        indexes = { "energy": 0, "qshort": 0, "qlong": 0, "wave1": 0, "wave2": 0 }
+        self.connect()
+        self.send("get")
+        try:
+            while True:
+                obj = self.receive()                
+                if( obj == False ): break
+                if "Wave1" in obj.GetName():
+                    self.buff["wave1"][indexes["wave1"]] = obj
+                    indexes["wave1"] += 1
+                elif "Wave2" in obj.GetName():
+                    self.buff["wave2"][indexes["wave2"]] = obj
+                    indexes["wave2"] += 1
+                elif "QShort" in obj.GetName():
+                    self.buff["qshort"][indexes["qshort"]] = obj
+                    indexes["qshort"] += 1
+                elif "QLong" in obj.GetName():
+                    self.buff["qlong"][indexes["qlong"]] = obj
+                    indexes["qlong"] += 1
+                elif "Energy" in obj.GetName():
+                    self.buff["energy"][indexes["energy"]] = obj
+                    indexes["energy"] += 1
+                else:
+                    obj.Delete()
+        except Exception as e:
+            print(f"Error receiving histogram: {e}")
 
-            self.disconnect()
-            time.sleep(1)  # Wait for 1 second before next acquisition
+        # Fill histograms and delete the buffer
+        for key in self.buff.keys():
+            for i in range(len(self.buff[key])):
+                try:
+                    # Set the bins of data to buff
+                    for j in range(32768):
+                        self.data[key][i].SetBinContent(j, self.buff[key][i].GetBinContent(j))
+                    self.buff[key][i].Delete()
+                except:
+                    pass
+
+        self.disconnect()
+        return
 
     def stop(self):
         self.running = False
-        self.thread.join()
         self.thread = None
 
         try:
@@ -118,7 +128,7 @@ class ru_spy:
             return self.data[name][idx].Clone( )
         except:
             return self.histo
-        
+
 class bu_spy:
     def __init__(self, host='localhost', port=7070):
         self.host = host
@@ -126,32 +136,42 @@ class bu_spy:
         self.socket = None
         self.running = False
         self.thread = None
-        self.data = { "energyAnti": [], "qshortAnti": [], "qlongAnti": [], "energySum": [], "qshortSum": [], "qlongSum": [] }
         self.histo = ROOT.TH1F("Histogram 2", "Histogram 2", 32768, 0, 32768)
+        self.msg = ROOT.TMessage( )
+        self.obj = ROOT.MakeNullPointer(ROOT.TH1F)
+        # Prepare the data
+        self.data = { "energyAnti": [], "qshortAnti": [], "qlongAnti": [], "energySum": [], "qshortSum": [], "qlongSum": [] }
+        for key in self.data.keys():
+            for i in range(32):
+                self.data[key].append(ROOT.TH1F("{} {}".format(key,i), "{} {}".format(key,i), 32768, 0, 32768))
+        # Prepare the buffer
+        self.buff = { "energyAnti": [], "qshortAnti": [], "qlongAnti": [], "energySum": [], "qshortSum": [], "qlongSum": [] }
+        for key in self.buff.keys():
+            for i in range(32):
+                self.buff[key].append(ROOT.MakeNullPointer(ROOT.TH1F))
 
     def connect(self):
         self.socket = ROOT.TSocket(self.host, self.port)
         if not self.socket.IsValid():
             raise ConnectionError(f"Error connecting to {self.host}:{self.port}")
+        return
 
     def disconnect(self):
         self.socket.Close()
+        return
 
     def send(self, msg):
         if self.socket.Send(msg) <= 0: return False
         return
 
     def receive(self):
-        msg = ROOT.TMessage()
-        if self.socket.Recv(msg) <= 0:
+        self.obj = ROOT.MakeNullPointer(ROOT.TH1F)
+        nbytes = self.socket.Recv(self.msg)
+        if nbytes <= 0:
             return False
-        
-        if msg.GetClass().GetName() in ["TH1F"]:
-            obj = msg.ReadObject(msg.GetClass())
-            msg.Delete()
-            return obj
-        
-        return False
+        self.obj = self.msg.ReadObject(self.msg.GetClass())
+        self.msg.Delete( )
+        return self.obj
         
     def start(self, state):
         cmd = "BUSpy"
@@ -164,61 +184,61 @@ class bu_spy:
         time.sleep(1)
         
         self.running = True
-        if( self.thread != None ): self.thread.join()
         self.thread = threading.Thread(target=self.run)
         self.thread.start()
 
-    def delete(self, array):
-        if( array == None ): return
-        if( len(array) == 0 ): return
-        for obj in array:
-            obj.Delete()
-
-    def free(self, dict):
-        for key in dict.keys():
-            self.delete(dict[key])
-            dict[key] = []
-
     def run(self):
-
         while self.running:
-            self.connect()
-            self.send("get")
-            buff = { "energyAnti": [], "qshortAnti": [], "qlongAnti": [], "energySum": [], "qshortSum": [], "qlongSum": [] }
-            try:
-                while True:
-                    obj = self.receive()
-                    if( obj == False ): break
-                    if "EnergyAnti" in obj.GetName():
-                        buff["energyAnti"].append(obj)
-                    elif "QshortAnti" in obj.GetName():
-                        buff["qshortAnti"].append(obj)
-                    elif "QlongAnti" in obj.GetName():
-                        buff["qlongAnti"].append(obj)
-                    elif "EnergySum" in obj.GetName():
-                        buff["energySum"].append(obj)
-                    elif "QshortSum" in obj.GetName():
-                        buff["qshortSum"].append(obj)
-                    elif "QlongSum" in obj.GetName():
-                        buff["qlongSum"].append(obj)
-                    else: pass
-            except Exception as e:
-                print(f"Error receiving histogram: {e}")
+            self.collect()
+            time.sleep(1)
+        return
 
-            with threading.Lock():
-                for key in buff.keys():
-                    self.free(self.data)
-                    for key in buff.keys():
-                        for obj in buff[key]:
-                            self.data[key].append(obj.Clone())
-            self.free(buff)
+    def collect(self):
+        indexes = { "energyAnti": 0, "qshortAnti": 0, "qlongAnti": 0, "energySum": 0, "qshortSum": 0, "qlongSum": 0 }
+        self.connect()
+        self.send("get")
+        try:
+            while True:
+                obj = self.receive()                
+                if( obj == False ): break
+                if "EnergyAnti" in obj.GetName():
+                    self.buff["energyAnti"][indexes["energyAnti"]] = obj
+                    indexes["energyAnti"] += 1
+                elif "QshortAnti" in obj.GetName():
+                    self.buff["qshortAnti"][indexes["qshortAnti"]] = obj
+                    indexes["qshortAnti"] += 1
+                elif "QlongAnti" in obj.GetName():
+                    self.buff["qlongAnti"][indexes["qlongAnti"]] = obj
+                    indexes["qlongAnti"] += 1
+                elif "EnergySum" in obj.GetName():
+                    self.buff["energySum"][indexes["energySum"]] = obj
+                    indexes["energySum"] += 1
+                elif "QshortSum" in obj.GetName():
+                    self.buff["qshortSum"][indexes["qshortSum"]] = obj
+                    indexes["qshortSum"] += 1
+                elif "QlongSum" in obj.GetName():
+                    self.buff["qlongSum"][indexes["qlongSum"]] = obj
+                    indexes["qlongSum"] += 1
+                else:
+                    obj.Delete()
+        except Exception as e:
+            print(f"Error receiving histogram: {e}")
 
-            self.disconnect()
-            time.sleep(1)  # Wait for 1 second before next acquisition
+        # Delete the buffer
+        for key in self.buff.keys():
+            for i in range(len(self.buff[key])):
+                try:
+                    for j in range(32768):
+                        self.data[key][i].SetBinContent(j, self.buff[key][i].GetBinContent(j))
+                    self.buff[key][i].Delete()
+                except:
+                    pass
+
+        self.disconnect()
+        return
 
     def stop(self):
         self.running = False
-        self.thread.join()
         self.thread = None
 
         try:

@@ -9,7 +9,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { useTheme } from 'next-themes'
+import { Settings } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog"
 
+// Types
 type BoardData = {
   id: string;
   name: string;
@@ -28,7 +38,68 @@ type Integrals = {
   [key: string]: number;
 }
 
-export default function CoincidenceDashboard() {
+type ROIDialogProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  histoId: string;
+  currentValues: { low: number; high: number };
+  onSave: (histoId: string, low: number, high: number) => void;
+}
+
+// ROI Settings Dialog Component
+const ROISettingsDialog = ({ isOpen, onClose, histoId, currentValues, onSave }: ROIDialogProps) => {
+  const [low, setLow] = useState(currentValues.low);
+  const [high, setHigh] = useState(currentValues.high);
+
+  useEffect(() => {
+    setLow(currentValues.low);
+    setHigh(currentValues.high);
+  }, [currentValues]);
+
+  const handleSave = () => {
+    onSave(histoId, low, high);
+    onClose();
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>ROI Settings</DialogTitle>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="roi-low">Low ROI</Label>
+            <Input
+              id="roi-low"
+              type="number"
+              value={low}
+              onChange={(e) => setLow(Number(e.target.value))}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="roi-high">High ROI</Label>
+            <Input
+              id="roi-high"
+              type="number"
+              value={high}
+              onChange={(e) => setHigh(Number(e.target.value))}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button onClick={handleSave}>Save Changes</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+// Main Dashboard Component
+export default function HistogramDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [runNumber, setRunNumber] = useState<number | null>(null)
@@ -38,10 +109,12 @@ export default function CoincidenceDashboard() {
   const [unsavedChanges, setUnsavedChanges] = useState(false)
   const [integrals, setIntegrals] = useState<Integrals>({})
   const [isLogScale, setIsLogScale] = useState(false)
-  const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
+  const [activeDialog, setActiveDialog] = useState<string | null>(null)
+  const histogramRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
   const { toast } = useToast()
   const { theme } = useTheme()
 
+  // Initial setup
   useEffect(() => {
     fetchCachedROIs()
     fetchBoardConfiguration()
@@ -65,6 +138,7 @@ export default function CoincidenceDashboard() {
     return () => clearInterval(statusInterval)
   }, [])
 
+  // JSROOT theme handling
   useEffect(() => {
     if (jsrootLoaded) {
       window.JSROOT.settings.DarkMode = theme === 'dark'
@@ -75,6 +149,7 @@ export default function CoincidenceDashboard() {
     }
   }, [jsrootLoaded, theme])
 
+  // API calls
   const fetchBoardConfiguration = async () => {
     try {
       const response = await getBoardConfiguration()
@@ -122,11 +197,12 @@ export default function CoincidenceDashboard() {
     }
   }
 
+  // Histogram initialization
   const createBlankHistogram = useCallback((name: string) => {
     if (window.JSROOT) {
       const hist = window.JSROOT.createHistogram("TH1F", 100)
       hist.fName = name
-      hist.fTitle = `Sum Histogram for ${name}`
+      hist.fTitle = `Histogram for ${name}`
       return hist
     }
     return null
@@ -146,6 +222,7 @@ export default function CoincidenceDashboard() {
     }
   }, [createBlankHistogram])
 
+  // ROI handling
   const initializeROIValues = useCallback(() => {
     const initialROIValues: ROIValues = {}
     boards.forEach(board => {
@@ -154,7 +231,7 @@ export default function CoincidenceDashboard() {
     })
     setRoiValues(prevValues => ({
       ...initialROIValues,
-      ...prevValues // This ensures we keep any existing values
+      ...prevValues
     }))
   }, [boards])
 
@@ -164,6 +241,7 @@ export default function CoincidenceDashboard() {
     }
   }, [boards, initializeROIValues])
 
+  // Histogram updates
   const updateHistograms = useCallback(async () => {
     for (const board of boards) {
       const histoId = `board${board.id}`
@@ -198,18 +276,20 @@ export default function CoincidenceDashboard() {
       }
     }
     setIntegrals(updatedIntegrals)
-  }, [boards])
+  }, [boards, roiValues])
 
-  const updateROICache = async (roiValues: ROIValues) => {
+  // ROI cache management
+  const updateROICache = async (roiVal: ROIValues) => {
     try {
       await fetch('/api/cache/sum', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(roiValues),
+        body: JSON.stringify(roiVal),
       })
       setUnsavedChanges(false)
+      setRoiValues(roiVal)
       toast({
         title: "Success",
         description: "ROI values have been saved.",
@@ -224,17 +304,34 @@ export default function CoincidenceDashboard() {
     }
   }
 
-  const handleROIChange = async (histoId: string, type: 'low' | 'high', value: number) => {
-    setRoiValues(prev => ({
-      ...prev,
-      [histoId]: { ...prev[histoId], [type]: value }
-    }))
+  // Event handlers
+  const handleROIChange = async (histoId: string, low: number, high: number) => {
+    const updatedRoiValues = {
+      ...roiValues,
+      [histoId]: { ...roiValues[histoId], low, high }
+    }
+    setRoiValues(updatedRoiValues)
     setUnsavedChanges(true)
+    // Update the cache immediately
+    await updateROICache(updatedRoiValues)
+    // Clean the histogram JSROOT object
+    const histoElement = histogramRefs.current[histoId]
+    if (histoElement) {
+      const blankHist = createBlankHistogram(histoId)
+      if (blankHist) {
+        window.JSROOT.redraw(histoElement, blankHist, "hist")
+      }
+    }
   }
 
   const drawHistogramWithROI = async (element: HTMLDivElement, histogram: any, histoId: string, boardId: string) => {
     if (window.JSROOT) {
       const canv = window.JSROOT.create('TCanvas');
+
+      // Make histogram blue fill with alpha of 0.3
+      histogram.fLineColor = 4;
+      histogram.fFillColor = 4;
+      histogram.fFillStyle = 3001;
 
       canv.fName = 'c1';
       canv.fPrimitives.Add(histogram, 'histo');
@@ -243,6 +340,10 @@ export default function CoincidenceDashboard() {
 
       const roiObj = await getRoiHistogramSum(boardId, low, high)
       const roiHistogram = window.JSROOT.parse(roiObj)
+
+      roiHistogram.fLineColor = 2;
+      roiHistogram.fFillColor = 2;
+      roiHistogram.fFillStyle = 3001;
 
       canv.fPrimitives.Add(roiHistogram, 'histo');
 
@@ -270,68 +371,74 @@ export default function CoincidenceDashboard() {
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
-    //window.location.reload()
   }
 
   const toggleLogScale = () => {
     setIsLogScale(!isLogScale)
   }
 
+  const handleDialogOpen = (histoId: string) => {
+    setActiveDialog(histoId);
+  };
+
+  const handleDialogClose = () => {
+    setActiveDialog(null);
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold">Coincidence Histogram Dashboard</h1>
-          <Button onClick={handleSaveChanges} disabled={!unsavedChanges}>
-            Save Changes
-          </Button>
+          <h1 className="text-2xl font-bold">Histogram Dashboard</h1>
         </div>
-        {boards.map((board) => (
-          <Card key={board.id} className="mb-6">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{board.name} (ID: {board.id})</CardTitle>
-              <Button onClick={toggleLogScale} variant="outline">
-                {isLogScale ? "Linear" : "Logarithmic"}
-              </Button>
-            </CardHeader>
-            <CardContent>
-              <div className="relative">
-                <h3 className="text-lg font-semibold mb-2">Sum Histogram</h3>
-                <div
-                  ref={el => { histogramRefs.current[`board${board.id}`] = el }}
-                  className="w-full h-96 border rounded-lg shadow-md mb-2"
-                ></div>
-                <div className="flex flex-col items-center gap-3">
-                  <div className="flex gap-4">
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor={`board${board.id}-low`}>Low ROI</Label>
-                      <Input
-                        id={`board${board.id}-low`}
-                        type="number"
-                        value={roiValues[`board${board.id}`]?.low ?? 0}
-                        onChange={(e) => handleROIChange(`board${board.id}`, 'low', Number(e.target.value))}
-                        className="w-24"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label htmlFor={`board${board.id}-high`}>High ROI</Label>
-                      <Input
-                        id={`board${board.id}-high`}
-                        type="number"
-                        value={roiValues[`board${board.id}`]?.high ?? 0}
-                        onChange={(e) => handleROIChange(`board${board.id}`, 'high', Number(e.target.value))}
-                        className="w-24"
-                      />
-                    </div>
+        {boards.map((board) => {
+          const histoId = `board${board.id}`
+          const roi = roiValues[histoId] || { low: 0, high: 0 }
+          const integral = integrals[histoId]
+
+          return (
+            <Card key={board.id} className="mb-6">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>{board.name} (ID: {board.id})</CardTitle>
+                <Button onClick={toggleLogScale} variant="outline">
+                  {isLogScale ? "Linear" : "Logarithmic"}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="relative">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-lg font-semibold">
+                      ROI ({roi.low} - {roi.high})
+                      {integral !== undefined && ` Integral: ${integral}`}
+                    </h3>
+                    
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDialogOpen(histoId)}
+                      className="h-8 w-8"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </Button>
                   </div>
-                  <div className="text-sm font-medium">
-                    Integral: {integrals[`board${board.id}`] || 'N/A'}
-                  </div>
+
+                  <div
+                    ref={el => { histogramRefs.current[histoId] = el }}
+                    className="w-full h-80 border rounded-lg shadow-md mb-2"
+                  />
+
+                  <ROISettingsDialog
+                    isOpen={activeDialog === histoId}
+                    onClose={handleDialogClose}
+                    histoId={histoId}
+                    currentValues={roi}
+                    onSave={handleROIChange}
+                  />
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          )
+        })}
       </main>
     </div>
   )
