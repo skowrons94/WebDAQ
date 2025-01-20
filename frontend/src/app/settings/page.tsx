@@ -2,7 +2,6 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useEffect, useState } from 'react';
-import { Logbook } from '@/components/logbook'
 import useAuthStore from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';

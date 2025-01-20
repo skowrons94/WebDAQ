@@ -421,10 +421,10 @@ export function RunControl() {
         return
       }
 
-      await startRunProcess()
       if (saveData) {
         await startAcquisitionCurrent(runNumber.toString())
       }
+      await startRunProcess()
       const initialCurrent = await getDataCurrent()
       localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
     } catch (error) {

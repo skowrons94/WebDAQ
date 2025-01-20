@@ -50,22 +50,6 @@ def get_info( board_id, channel, boards ):
     dpp = boards[int(board_id)]['dpp']
     return idx, dpp
 
-# Check if CSV exists, if not, create it with predefined columns
-def read_csv():
-    CSV_FILE = 'logbook.csv'
-    if not os.path.exists(CSV_FILE):
-        return [['Run Number', 'Start Time', 'Stop Time']]
-    else:
-        with open(CSV_FILE, mode='r') as file:
-            reader = csv.reader(file)
-            rows = list(reader)
-            return rows
-        
-def write_csv(rows):
-    with open('logbook.csv', mode='w') as file:
-        writer = csv.writer(file)
-        writer.writerows(rows)
-
 def check_project( ):
     # Check if directory exists, if not create it
     if not os.path.exists('conf'): 
@@ -238,9 +222,6 @@ def start_run( ):
     if( save or not XDAQ_FLAG ):
         run = daq_state['run']
         time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        rows = read_csv()
-        rows.append([run, time, None])
-        write_csv(rows)
 
         # Update metadata in the database check first if it exists already
         try:
@@ -275,31 +256,21 @@ def start_run( ):
 def stop_run( ):
     global daq_state, r_spy, b_spy, start_thread, t_crash
 
-    #start_thread = False
-    #try:
-    #    while( t_crash.is_alive() ):
-    #        time_lib.sleep( 1 )
-    #except:
-    #    pass
-
     # First stop the spy
     r_spy.stop()
     b_spy.stop()
     
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     # Stop the XDAQ
     if( XDAQ_FLAG ):
         topology.halt( )
 
-    daq_state['running'] = False
-
     # If we save the data, update the run in the database
-    if( daq_state['save'] or not XDAQ_FLAG ):
+    if( daq_state['save'] or not XDAQ_FLAG and daq_state['running'] ):
         daq_state['run'] += 1
-        #rows = read_csv()
-        #rows[-1][2] = time
-        #write_csv(rows)
 
+    daq_state['running'] = False
     daq_state['start_time'] = None
 
     # Update the daq_state file
@@ -503,20 +474,6 @@ def get_file_size_limit():
 def get_board_configuration():
     global daq_state
     return jsonify(daq_state['boards'])
-
-# Route to get the csv file
-@bp.route("/experiment/get_csv", methods=['GET'])
-@jwt_required_custom
-def get_csv():
-    return jsonify(read_csv())
-
-# Route to save the csv file
-@bp.route("/experiment/save_csv", methods=['POST'])
-@jwt_required_custom
-def save_csv():
-    data = request.get_json()["csvData"]
-    write_csv(data)
-    return jsonify({'message': 'CSV saved successfully !'}), 200
 
 # Get run number from the database
 @bp.route("/experiment/get_run_number", methods=['GET'])
