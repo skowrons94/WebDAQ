@@ -42,11 +42,13 @@ def start_acquisition(run_number):
     current_accumulating_run_number = int(run_number)
     previous_time = datetime.now().timestamp()
     run = int(run_number)
+    print("Starting acquisition for run {}".format(run))
     if( not controller.is_acquiring ):
         return jsonify({"message": "Can not start TetrAMM. Device not initialized"}), 400
     if( not os.path.exists("./data/run{}".format(run)) ):
         os.makedirs("./data/run{}".format(run))
     controller.set_save_data(True, "./data/run{}/".format(run))
+    print("Starting acquisition for run {}".format(run))
     running = True
     return jsonify({"message": "Acquisition started"}), 200
 
@@ -100,7 +102,8 @@ def reset_device():
 @bp.route('/current/data', methods=['GET'])
 @jwt_required_custom
 def get_data():
-    data = controller.get_data()["0"] * 1e5
+    data = controller.get_data()["0"]
+    if( data < 1e-9 ): data = 0
     return jsonify(data)
 
 @bp.route('/current/accumulated', methods=['GET'])
@@ -108,17 +111,19 @@ def get_data():
 def get_accumulated():
     global accumulated, previous_time, running, total_accumulated
     # If not running, return accumulated value
+    data = controller.get_data()["0"]
+    if( data < 1e-9 ): data = 0
     if( not running ):
         current_time = datetime.now().timestamp()
-        total_accumulated += (current_time - previous_time) * controller.get_data()['0'] * 1e5
+        total_accumulated += (current_time - previous_time) * data
         previous_time = current_time
         return jsonify(accumulated)
     # If thread dead, reset controller
     if( not controller.check_thread() ):
         controller.reset( )
     current_time = datetime.now().timestamp()
-    accumulated += (current_time - previous_time) * controller.get_data()['0'] * 1e5
-    total_accumulated += (current_time - previous_time) * controller.get_data()['0'] * 1e5
+    accumulated += (current_time - previous_time) * data
+    total_accumulated += (current_time - previous_time) * data
     previous_time = current_time
     return jsonify(accumulated)
 

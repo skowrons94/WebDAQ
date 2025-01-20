@@ -481,14 +481,14 @@ export function RunControl() {
         title: 'Stopping Run...',
         description: 'Please wait while the run is being stopped.',
       })
-      if(saveData) {
-        await stopAcquisitionCurrent()
-      }
       await stopRun()
       toast({
         title: 'Run Stopped',
         description: 'The experiment run has been stopped successfully.',
       })
+      if(saveData) {
+        await stopAcquisitionCurrent()
+      }
       setIsRunning(false)
 
       const newRunNumber = await getCurrentRunNumber()
@@ -637,7 +637,7 @@ export function RunControl() {
                 <Thermometer className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-              <div className="text-2xl font-bold">{beamCurrent < 1 ? (beamCurrent * 100).toFixed(2) + " nA" : beamCurrent.toFixed(2) + " uC"}</div>
+              <div className="text-2xl font-bold">{beamCurrent < 1 ? (beamCurrent * 1000).toFixed(2) + " nA" : beamCurrent.toFixed(2) + " uA"}</div>
                 <p className="text-xs text-muted-foreground">
                   {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from start
                 </p>

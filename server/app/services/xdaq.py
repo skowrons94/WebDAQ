@@ -255,6 +255,12 @@ class xdaq_actor:
         positionBeg = answer.rfind(">",positionEnd-20,positionEnd)
         return int(answer[positionBeg+1:positionEnd])
 
+    def set_cycle_counter(self,n):
+        message = self._messenger.create_parameter_message("cycleCounter",
+                                                           "xsd:unsignedInt",
+                                                           str(n))
+        self._messenger.send_message(message)
+
     def set_file_enable(self,file_enable):
         message = ""
         if file_enable:
@@ -628,10 +634,7 @@ class topology:
         if not os.path.exists('conf'):
             os.makedirs('conf')
         with open('conf/Builder.conf', 'w') as f:
-            for board in state['boards']:
-                for i in range(int(board['chan'])):
-                    f.write(f"1")
-                f.write("\n")
+            f.write("0111_1110_0000_0000")
     
     def set_files(self,runNumber):
         enaFiles=[self._writeRU,
@@ -802,13 +805,22 @@ class topology:
         for actors in self._bu_actors:
             actors.set_multiplicity(multiplicity)
 
-    def set_file_paths(self,filepath):
+    def set_file_paths(self,filepath,idx=0):
         for actors in self._ru_actors:
-            actors.set_file_path(filepath+"/ru")
+            if idx==0:
+                actors.set_file_path(filepath+"/ru")
+            else:
+                actors.set_file_path(filepath+"/ru"+str(idx))
         for actors in self._lf_actors:
-            actors.set_file_path(filepath+"/lf")
+            if idx==0:
+                actors.set_file_path(filepath+"/lf")
+            else:
+                actors.set_file_path(filepath+"/lf"+str(idx))   
         for actors in self._bu_actors:
-            actors.set_file_path(filepath+"/bu")
+            if idx==0:
+                actors.set_file_path(filepath+"/bu")
+            else:
+                actors.set_file_path(filepath+"/bu"+str(idx))
         for actors in self._mu_actors:
             actors.set_file_path(filepath)
         for actors in self._gf_actors:
@@ -824,6 +836,14 @@ class topology:
         self.enableBU_file(False)
         self.enableMU_file(False)
         self.enableGF_file(False)
+
+    def set_cycle_counter(self,n):
+        for actors in self._ru_actors:
+            actors.set_cycle_counter(n)
+        for actors in self._lf_actors:
+            actors.set_cycle_counter(n)
+        for actors in self._bu_actors:
+            actors.set_cycle_counter(n)
 
     def set_file_size_limit(self,filelimit):
         for actors in self._ru_actors:
@@ -874,7 +894,7 @@ class container:
             
         try: self.client.containers.get("xdaq")
         except docker.errors.NotFound:
-            self.client.containers.run( "skowrons/xdaq:v4.0", "sleep infinity", 
+            self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
                                         hostname="xdaq", 
                                         name="xdaq", 
                                         ports={'50000': 50000, '51000': 51000, '52000': 52000,
@@ -929,7 +949,7 @@ class container:
         self.client.networks.create("xdaq_net", driver="bridge")
 
         # Run container xdaq
-        self.client.containers.run( "skowrons/xdaq:v4.0", "sleep infinity", 
+        self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
                                     hostname="xdaq", 
                                     name="xdaq", 
                                     ports={'50000': 50000, '51000': 51000, '52000': 52000,
@@ -959,19 +979,41 @@ class container:
         cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(0.1)
+        time.sleep(1)
 
         # Start LocalFilter in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(0.1)
+        time.sleep(1)
 
         # Start BuilderUnit in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(0.1)
+        time.sleep(1)
+
+    # Function to kill xdaq processes in the container, restart it, enable the actors and start the run
+    def restart( self ):
+        cmd = "killall xdaq.exe"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        time.sleep(5)
+
+        cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        time.sleep(5)
+
+        cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        time.sleep(5)
+
+        cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+
+        time.sleep(5)        
 
     def stop( self ):
         # If container xdaq exists, remove it
