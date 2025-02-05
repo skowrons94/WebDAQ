@@ -62,24 +62,6 @@ export function VisualizationSettings() {
                     </div>
 
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showCoincidence">Show Coincidence</Label>
-                        <Switch
-                            id="showCoincidence"
-                            checked={settings.showCoincidence}
-                            onCheckedChange={(checked) => updateSettings({ showCoincidence: checked })}
-                        />
-                    </div>
-
-                    <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showAnticoincidence">Show Anticoincidence</Label>
-                        <Switch
-                            id="showAnticoincidence"
-                            checked={settings.showAnticoincidence}
-                            onCheckedChange={(checked) => updateSettings({ showAnticoincidence: checked })}
-                        />
-                    </div>
-
-                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showWaveforms">Show Waveforms</Label>
                         <Switch
                             id="showWaveforms"

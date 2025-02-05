@@ -4,8 +4,6 @@
 
   <i2o:protocol xmlns:i2o="http://xdaq.web.cern.ch/xdaq/xsd/2004/I2OConfiguration-30">
     <i2o:target class="ReadoutUnit" instance="0" tid="120"/>
-    <i2o:target class="LocalFilter" instance="0" tid="130"/>
-    <i2o:target class="rubuilder::bu::Application" instance="0" tid="140"/>
   </i2o:protocol>
 
   <xc:Context url="http://xdaq:50000">
@@ -27,97 +25,18 @@
 	<detInputMask xsi:type="xsd:string">ff</detInputMask>
 	<dataOutput soapenc:arrayType="xsd:ur-type[3]" xsi:type="soapenc:Array">
 	  <item soapenc:position="[0]" xsi:type="xsd:string">local</item>
-	  <item soapenc:position="[1]" xsi:type="xsd:string">network</item>
-	  <item soapenc:position="[2]" xsi:type="xsd:string">spy</item>
+	  <item soapenc:position="[1]" xsi:type="xsd:string">spy</item>
 	</dataOutput>
 	<spyPort xsi:type="xsd:unsignedInt">10002</spyPort>
 	<writeDataFile xsi:type="xsd:boolean">true</writeDataFile>
 	<outputFilepath xsi:type="xsd:string">/home/xdaq/xdata/ruData</outputFilepath>
   <outputFileSizeLimit_MB xsi:type="xsd:unsignedLong">0</outputFileSizeLimit_MB>
 	<outputFileCycleCounter xsi:type="xsd:unsignedInt">0</outputFileCycleCounter>
-	<LocalFilterInstances soapenc:arrayType="xsd:ur-type[1]" xsi:type="soapenc:Array">
-	  <item soapenc:position="[0]" xsi:type="xsd:unsignedInt">0</item>
-	</LocalFilterInstances>
       </properties>
-      <xc:Unicast instance="0" class="LocalFilter" network="net_atcp8"/>
     </xc:Application>
     <xc:Module>$XDAQ_ROOT/lib/libptatcprcvl08.so</xc:Module>
     <xc:Module>/home/xdaq/codes/daq/x86_64_centos7/lib/librubuilderutils.so</xc:Module>
     <xc:Module>/home/xdaq/codes/daq/x86_64_centos7/lib/librubuilderrucaendgtz.so</xc:Module>
-  </xc:Context>
-
-
-  <xc:Context url="http://xdaq:51000">
-    <xc:Module>$XDAQ_ROOT/lib/libxdaq2rc.so</xc:Module>
-    <xc:Endpoint protocol="atcp_08" service="i2o" hostname="xdaq" port="41000" network="net_atcp8"/>
-    <xc:Application class="pt::atcp::rcvl_08::PeerTransportATCP" id="10" instance="1" network="local">
-      <properties xmlns="urn:xdaq-application:pt::atcp::rcvl_08::PeerTransportATCP" xsi:type="soapenc:Struct">
-	<syncronousSend xsi:type="xsd:boolean">true</syncronousSend>
-	<blockingReceive xsi:type="xsd:boolean">true</blockingReceive>
-	<nonBlockingConnection xsi:type="xsd:boolean">false</nonBlockingConnection>
-	<maxPacketSize xsi:type="xsd:unsignedInt">262144</maxPacketSize>
-      </properties>
-    </xc:Application>
-    <xc:Application class="LocalFilter" id="50" instance="0" network="local">
-      <properties xmlns="urn:xdaq-application:LocalFilter" xsi:type="soapenc:Struct">
-	<runNumber xsi:type="xsd:unsignedInt">0</runNumber>
-	<dataOutput soapenc:arrayType="xsd:ur-type[2]" xsi:type="soapenc:Array">
-	  <item soapenc:position="[0]" xsi:type="xsd:string">local</item>
-	  <item soapenc:position="[1]" xsi:type="xsd:string">network</item>
-	</dataOutput>
-	<output_buffer_size xsi:type="xsd:unsignedInt">524288</output_buffer_size>
-	<chain_buffer_size xsi:type="xsd:unsignedInt">5242880</chain_buffer_size>
-	<writeDataFile xsi:type="xsd:boolean">true</writeDataFile>
-  <outputFileSizeLimit_MB xsi:type="xsd:unsignedLong">0</outputFileSizeLimit_MB>
-	<outputFileCycleCounter xsi:type="xsd:unsignedInt">0</outputFileCycleCounter>
-	<outputFilepath xsi:type="xsd:string">/home/xdaq/xdata/lfData</outputFilepath>
-	<configFilepath xsi:type="xsd:string">/home/xdaq/project/conf/LocalFilter.conf</configFilepath>
-	<buInstances soapenc:arrayType="xsd:ur-type[1]" xsi:type="soapenc:Array">
-	  <item soapenc:position="[0]" xsi:type="xsd:unsignedInt">0</item>
-	</buInstances>
-      </properties>
-      <xc:Unicast instance="0" class="rubuilder::bu::Application" network="net_atcp8"/>
-    </xc:Application>
-    <xc:Module>$XDAQ_ROOT/lib/libptatcprcvl08.so</xc:Module>
-    <xc:Module>/home/xdaq/codes/daq/x86_64_centos7/lib/librubuilderutils.so</xc:Module>
-    <xc:Module>/home/xdaq/codes/daq/x86_64_centos7/lib/librubuilderlfcaendgtz.so</xc:Module>
-  </xc:Context>
-
-  <xc:Context url="http://xdaq:52000">
-    <xc:Module>$XDAQ_ROOT/lib/libxdaq2rc.so</xc:Module>
-    <xc:Endpoint protocol="atcp_08" service="i2o" hostname="xdaq" port="42000" network="net_atcp8"/>
-    <xc:Application class="pt::atcp::rcvl_08::PeerTransportATCP" id="10" instance="2" network="local">
-      <properties xmlns="urn:xdaq-application:pt::atcp::rcvl_08::PeerTransportATCP" xsi:type="soapenc:Struct">
-	<syncronousSend xsi:type="xsd:boolean">true</syncronousSend>
-	<blockingReceive xsi:type="xsd:boolean">true</blockingReceive>
-	<nonBlockingConnection xsi:type="xsd:boolean">false</nonBlockingConnection>
-	<maxPacketSize xsi:type="xsd:unsignedInt">262144</maxPacketSize>
-      </properties>
-    </xc:Application>
-    <xc:Application class="rubuilder::bu::Application" id="60" instance="0" network="local">
-      <properties xmlns="urn:xdaq-application:BuilderUnit" xsi:type="soapenc:Struct">
-	<runNumber xsi:type="xsd:unsignedInt">0</runNumber>
-	<detconfFilepath xsi:type="xsd:string">/home/xdaq/project/conf/Builder.conf</detconfFilepath>
-	<dataOutput soapenc:arrayType="xsd:ur-type[2]" xsi:type="soapenc:Array">
-	  <item soapenc:position="[0]" xsi:type="xsd:string">local</item>
-    <item soapenc:position="[1]" xsi:type="xsd:string">spy</item>
-	</dataOutput>
-	<spyPort xsi:type="xsd:unsignedInt">10000</spyPort>
-	<merge_window xsi:type="xsd:unsignedInt">50</merge_window>
-        <multiplicity xsi:type="xsd:unsignedInt">1</multiplicity>
-        <dataKey xsi:type="xsd:string">CA020100</dataKey>
-	<writeDataFile xsi:type="xsd:boolean">true</writeDataFile>
-	<outputFilepath xsi:type="xsd:string">/home/xdaq/xdata/buData</outputFilepath>
-	<outputFileSizeLimit_MB xsi:type="xsd:unsignedLong">0</outputFileSizeLimit_MB>
-	<outputFileCycleCounter xsi:type="xsd:unsignedInt">0</outputFileCycleCounter>
-	<LocalFilterInstances soapenc:arrayType="xsd:ur-type[1]" xsi:type="soapenc:Array">
-          <item soapenc:position="[0]" xsi:type="xsd:unsignedInt">0</item>
-        </LocalFilterInstances>
-      </properties>
-    </xc:Application>
-    <xc:Module>$XDAQ_ROOT/lib/libptatcprcvl08.so</xc:Module>
-    <xc:Module>/home/xdaq/codes/daq/x86_64_centos7/lib/librubuilderutils.so</xc:Module>
-    <xc:Module>/home/xdaq/codes/daq/x86_64_centos7/lib/librubuilderbu.so</xc:Module>
   </xc:Context>
 
 </xc:Partition>

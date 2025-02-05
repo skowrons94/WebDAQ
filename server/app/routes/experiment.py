@@ -15,7 +15,7 @@ from app.models.run_metadata import RunMetadata
 from app.utils.jwt_utils import jwt_required_custom, get_current_user
 
 from app.services import xdaq
-from app.services.spy import ru_spy, bu_spy
+from app.services.spy import ru_spy
 
 import threading
 
@@ -37,8 +37,6 @@ def update_project( daq_state ):
         json.dump(daq_state, f, indent=4)
 
     topology.write_ruconf(daq_state)
-    topology.write_lfconf(daq_state)
-    topology.write_buconf(daq_state)
 
 # Functio to get histo index and board dpp
 def get_info( board_id, channel, boards ):
@@ -67,8 +65,6 @@ def check_project( ):
             'running': False,
             'start_time': 0,
             'run': 0,
-            'coincidence_window': 20,
-            'multiplicity': 1,
             'save': False,
             'limit_size': False,
             'file_size_limit': 0,
@@ -85,7 +81,6 @@ topology.load_topology( )
 topology.display()
 
 r_spy = ru_spy( )
-b_spy = bu_spy( )
 
 if( XDAQ_FLAG ):
     directory = os.path.dirname(os.path.realpath("./server"))
@@ -96,7 +91,6 @@ if( XDAQ_FLAG ):
         status = "Unknown"
     if( status == "Running" ):
         r_spy.start(daq_state)
-        b_spy.start(daq_state)
     else:
         container.initialize()
         print( "Container started...")
@@ -107,62 +101,6 @@ if( XDAQ_FLAG ):
 
 update_project(daq_state)
 
-# FIX: Function to recover from a crash
-#def recover_crash( cycle ):
-#    global daq_state, r_spy, b_spy, topology, container
-#
-#    run = daq_state['run']
-#    save = daq_state['save']
-#   multiplicity = daq_state['multiplicity']
-#    coincidence_window = daq_state['coincidence_window']
-#    running = daq_state['running']
-#    limit_size = daq_state['limit_size']
-#    file_size_limit = daq_state['file_size_limit']
-#
-#    r_spy.stop( )
-#    b_spy.stop( )
-#    time_lib.sleep( 5 )
-#    container.restart( )
-#    time_lib.sleep( 50 )
-#    topology.configure_pt( )
-#    time_lib.sleep( 5 )
-#    topology.enable_pt( )
-#    time_lib.sleep( 5 )
-#    time_lib.sleep( 5 )
-#    topology.set_coincidence_window(coincidence_window)
-#    topology.set_multiplicity(multiplicity)
-#    topology.set_cycle_counter(cycle)
-#    if( limit_size ): topology.set_file_size_limit(file_size_limit)
-#    else: topology.set_file_size_limit(0)
-#    topology.set_run_number(run)
-#    topology.set_enable_files(save)
-#    try:
-#        topology.set_file_paths(f"/home/xdaq/project/data/run{run}/",idx=cycle)
-#    except:
-#        topology.set_file_paths(f"/home/xdaq/project/data/run{run}/")
-#    topology.configure( )
-#    topology.start( )
-#    r_spy.start( daq_state )
-#    b_spy.start( daq_state )
-#    return
-
-# FIX: Function to check daq status
-#def detect_crash( ):
-#    cycle = 0
-#    while( start_thread ):
-#        time_lib.sleep( 1 )
-#        try:
-#            status = topology.get_daq_status( )
-#            if status == "Running":
-#                pass
-#            else:
-#                cycle += 1
-#                recover_crash( cycle )
-#        except:
-#            cycle += 1
-#            recover_crash( cycle )
-#    return
-
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
 def start_run( ):
@@ -170,8 +108,6 @@ def start_run( ):
 
     run = daq_state['run']
     save = daq_state['save']
-    multiplicity = daq_state['multiplicity']
-    coincidence_window = daq_state['coincidence_window']
     running = daq_state['running']
     limit_size = daq_state['limit_size']
     file_size_limit = daq_state['file_size_limit']
@@ -199,8 +135,6 @@ def start_run( ):
 
     # Start the XDAQ
     if( XDAQ_FLAG ):
-        topology.set_coincidence_window(coincidence_window)
-        topology.set_multiplicity(multiplicity)
         topology.set_cycle_counter(0)
         if( limit_size ): topology.set_file_size_limit(file_size_limit)
         else: topology.set_file_size_limit(0)
@@ -216,7 +150,6 @@ def start_run( ):
     # Example: ./LunaSpy -d board_name firmware channel -n run_number
     if( XDAQ_FLAG ):
         r_spy.start(daq_state)
-        b_spy.start(daq_state)
     
     # If we save the data, add the run to database
     if( save or not XDAQ_FLAG ):
@@ -254,11 +187,10 @@ def start_run( ):
 @bp.route("/experiment/stop_run", methods=['POST'])
 @jwt_required_custom
 def stop_run( ):
-    global daq_state, r_spy, b_spy, start_thread, t_crash
+    global daq_state, r_spy, start_thread, t_crash
 
     # First stop the spy
     r_spy.stop()
-    b_spy.stop()
     
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
@@ -388,24 +320,6 @@ def remove_caen():
 
     return jsonify(daq_state['boards'])
 
-# Route to update coincidence window
-@bp.route("/experiment/set_coincidence_window", methods=['POST'])
-@jwt_required_custom
-def update_coincidence_window():
-    global daq_state
-    coincidence_window = request.get_json()["value"]
-    daq_state['coincidence_window'] = coincidence_window
-    return jsonify(daq_state['coincidence_window'])
-
-# Route to update multiplicity
-@bp.route("/experiment/set_multiplicity", methods=['POST'])
-@jwt_required_custom
-def update_multiplicity():
-    global daq_state
-    multiplicity = request.get_json()["value"]
-    daq_state['multiplicity'] = multiplicity
-    return jsonify(daq_state['multiplicity'])
-
 # Route to update save data
 @bp.route("/experiment/set_save_data", methods=['POST'])
 @jwt_required_custom
@@ -432,20 +346,6 @@ def update_file_size_limit():
     file_size_limit = request.get_json()["value"]
     daq_state['file_size_limit'] = file_size_limit
     return jsonify(daq_state['file_size_limit'])
-
-# Route to get the coincidence window
-@bp.route("/experiment/get_coincidence_window", methods=['GET'])
-@jwt_required_custom
-def get_coincidence_window():
-    global daq_state
-    return jsonify(daq_state['coincidence_window'])
-
-# Route to get the multiplicity
-@bp.route("/experiment/get_multiplicity", methods=['GET'])
-@jwt_required_custom
-def get_multiplicity():
-    global daq_state
-    return jsonify(daq_state['multiplicity'])
 
 # Route to get the save data
 @bp.route("/experiment/get_save_data", methods=['GET'])
@@ -636,7 +536,6 @@ def get_output_bandwith( ):
 def reset( ):
     try:
         r_spy.stop()
-        b_spy.stop()
     except:
         pass
     topology = xdaq.topology("conf/topology.xml")
@@ -697,74 +596,6 @@ def get_roi_histo(board_id, channel, roi_min, roi_max):
     return obj
 
 # Route to serve all the data for a given run number
-@bp.route('/histograms/anti/<board_id>/<channel>', methods=['GET'])
-@jwt_required_custom
-def get_histo_anti(board_id, channel):
-    idx, dpp = get_info(board_id, channel, daq_state['boards'])
-    if( dpp == "DPP-PHA" ):
-        histo = b_spy.get_object("energyAnti", idx)
-    else:
-        histo = b_spy.get_object("qlongAnti", idx)
-    histo.Rebin( 16 )
-    obj = TBufferJSON.ConvertToJSON(histo)
-    return str(obj.Data())
-
-# Route to serve all the data for a given run number
-@bp.route('/histograms/coin/<board_id>', methods=['GET'])
-@jwt_required_custom
-def get_histo_sum(board_id):
-    dpp = daq_state['boards'][int(board_id)]['dpp']
-    if( dpp == "DPP-PHA" ):
-        histo = b_spy.get_object("energySum", board_id)
-    else:
-        histo = b_spy.get_object("qlongSum", board_id)
-    histo.Rebin( 16 )
-    obj = TBufferJSON.ConvertToJSON(histo)
-    return str(obj.Data())
-
-# Route to serve all the data for a given run number
-@bp.route('/histograms/sum/<board_id>/<roi_min>/<roi_max>', methods=['GET'])
-@jwt_required_custom
-def get_roi_histo_sum(board_id, roi_min, roi_max):
-    dpp = daq_state['boards'][int(board_id)]['dpp']
-    if( dpp == "DPP-PHA" ):
-        histo = b_spy.get_object("energySum", board_id)
-    else:
-        histo = b_spy.get_object("qlongSum", board_id)
-    histo.Rebin( 16 )
-    h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
-    h1.SetLineColor(2)
-    h1.SetFillStyle(3001)
-    h1.SetFillColorAlpha(2, 0.3)
-    h1.SetLineWidth(2)
-    obj = str(TBufferJSON.ConvertToJSON(h1).Data())
-    h1.Delete( )
-    del h1
-    return obj
-
-# Route to serve all the data for a given run number
-@bp.route('/histograms/anti/<board_id>/<channel>/<roi_min>/<roi_max>', methods=['GET'])
-@jwt_required_custom
-def get_roi_histo_anti(board_id, channel, roi_min, roi_max):
-    idx, dpp = get_info(board_id, channel, daq_state['boards'])
-    if( dpp == "DPP-PHA" ):
-        histo = b_spy.get_object("energyAnti", idx)
-    else:
-        histo = b_spy.get_object("qlongAnti", idx)
-    histo.Rebin( 16 )
-    h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
-    h1.SetLineColor(2)
-    h1.SetFillStyle(3001)
-    h1.SetFillColorAlpha(2, 0.3)
-    h1.SetLineWidth(2)
-    obj = str(TBufferJSON.ConvertToJSON(h1).Data())
-    h1.Delete( )
-    del h1
-    return obj
-
-# Route to serve all the data for a given run number
 @bp.route('/roi/<board_id>/<channel>/<roi_min>/<roi_max>', methods=['GET'])
 @jwt_required_custom
 def get_roi_integral(board_id, channel, roi_min, roi_max):
@@ -773,32 +604,6 @@ def get_roi_integral(board_id, channel, roi_min, roi_max):
         histo = r_spy.get_object("energy", idx)
     else:
         histo = r_spy.get_object("qlong", idx)
-    histo.Rebin( 16 )
-    integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
-    return jsonify(integral)
-
-# Route to serve all the data for a given run number
-@bp.route('/roi/coinc/<board_id>/<roi_min>/<roi_max>', methods=['GET'])
-@jwt_required_custom
-def get_roi_integral_sum(board_id, roi_min, roi_max):
-    dpp = daq_state['boards'][int(board_id)]['dpp']
-    if( dpp == "DPP-PHA" ):
-        histo = b_spy.get_object("energySum", board_id)
-    else:
-        histo = b_spy.get_object("qlongSum", board_id)
-    histo.Rebin( 16 )
-    integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
-    return jsonify(integral)
-
-# Route to serve all the data for a given run number
-@bp.route('/roi/anti/<board_id>/<channel>/<roi_min>/<roi_max>', methods=['GET'])
-@jwt_required_custom
-def get_roi_integral_anti(board_id, channel, roi_min, roi_max):
-    idx, dpp = get_info(board_id, channel, daq_state['boards'])
-    if( dpp == "DPP-PHA" ):
-        histo = b_spy.get_object("energyAnti", idx)
-    else:
-        histo = b_spy.get_object("qlongAnti", idx)
     histo.Rebin( 16 )
     integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
     return jsonify(integral)

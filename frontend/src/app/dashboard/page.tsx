@@ -8,8 +8,6 @@ import { RunControl } from '@/components/run-control';
 import { Stats } from '@/components/stats';
 import HistogramDashboard from '@/components/histo-dashboard';
 import WaveformDashboard from '@/components/wave-dashboard';
-import AntiCoincidenceDashboard from '@/components/anti-dashboard';
-import CoincidenceDashboard from '@/components/coin-dashboard';
 import { Layout } from '@/components/dashboard-layout'; import {
   Tabs,
   TabsContent,
@@ -45,8 +43,6 @@ export default function DashboardPage() {
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 {settings.showStats && <TabsTrigger value="stats">Stats</TabsTrigger>}
                 {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
-                {settings.showCoincidence && <TabsTrigger value="coincidence">Coincidence</TabsTrigger>}
-                {settings.showAnticoincidence && <TabsTrigger value="anticoincidence">Anticoincidence</TabsTrigger>}
                 {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
               </TabsList>
             </div>
@@ -58,12 +54,6 @@ export default function DashboardPage() {
           </TabsContent>
           <TabsContent value="histograms">
             <HistogramDashboard />
-          </TabsContent>
-          <TabsContent value="coincidence">
-            <CoincidenceDashboard />
-          </TabsContent>
-          <TabsContent value="anticoincidence">
-            <AntiCoincidenceDashboard />
           </TabsContent>
           <TabsContent value="waveforms">
             <WaveformDashboard />

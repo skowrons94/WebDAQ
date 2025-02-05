@@ -26,4 +26,4 @@ def make_shell_context():
     return {'db': db, 'User': User, 'RunMetadata': RunMetadata}
 
 if __name__ == '__main__':
-    serve(app, host='0.0.0.0', port=5001)
+    serve(app, host='0.0.0.0', port=5001, threads=10)

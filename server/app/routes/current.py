@@ -110,6 +110,7 @@ def get_data():
 @jwt_required_custom
 def get_accumulated():
     global accumulated, previous_time, running, total_accumulated
+    return jsonify(accumulated)
     # If not running, return accumulated value
     data = controller.get_data()["0"]
     if( data < 1e-9 ): data = 0

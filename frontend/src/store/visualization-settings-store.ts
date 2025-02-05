@@ -6,8 +6,6 @@ export interface VisualizationSettings {
     theme: 'light' | 'dark' | 'system'
     showStats: boolean
     showHistograms: boolean
-    showCoincidence: boolean
-    showAnticoincidence: boolean
     showWaveforms: boolean
     showStatus: boolean
     showCurrent: boolean
@@ -27,8 +25,6 @@ const DEFAULT_SETTINGS: VisualizationSettings = {
     theme: 'system',
     showStats: true,
     showHistograms: true,
-    showCoincidence: true,
-    showAnticoincidence: true,
     showWaveforms: true,
     showStatus: true,
     showCurrent: true,

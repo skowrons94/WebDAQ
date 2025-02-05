@@ -48,16 +48,6 @@ export const removeBoard = (boardId: string) =>
 
 // Functions for XDAQ configuration
 
-export const getCoincidenceWindow = () => 
-    api.get('/experiment/get_coincidence_window').then(res => res.data);
-export const setCoincidenceWindow = (value: number) => 
-    api.post('/experiment/set_coincidence_window', { value: value });
-
-export const getMultiplicity = () => 
-    api.get('/experiment/get_multiplicity').then(res => res.data);
-export const setMultiplicity = (value: number) => 
-    api.post('/experiment/set_multiplicity', { value: value });
-
 export const getSaveData = () => 
     api.get('/experiment/get_save_data').then(res => res.data);
 export const setSaveData = (value: boolean) => 
@@ -150,36 +140,6 @@ export const getCalib = (boardName: string, boardId: string, channel: string) =>
 
 export const setCalib = (boardName: string, boardId: string, channel: string, a: string, b: string) =>
     api.post(`/calib/set/${boardName}/${boardId}/${channel}`, { board_name: boardName, board_id: boardId, channel, a, b });
-// Get the histograms for a given board_id and channel
-export const getAntiHistogram = (boardId: string, channel: string) =>
-    api.get(`/histograms/anti/${boardId}/${channel}`).then(res => res.data);
-// Get the histograms for a given board_id and channel
-export const getAntiQlong = (boardId: string, channel: string) =>
-    api.get(`/qlong/anti/${boardId}/${channel}`).then(res => res.data);
-// Get the histograms for a given board_id and channel
-export const getAntiQshort = (boardId: string, channel: string) =>
-    api.get(`/qshort/anti/${boardId}/${channel}`).then(res => res.data);
-// Get the histograms for a given board_id and channel
-export const getCoincHistogram = (boardId: string) =>
-    api.get(`/histograms/coin/${boardId}`).then(res => res.data);
-// Get the histograms for a given board_id and channel
- export const getCoincQlong = (boardId: string) =>
-    api.get(`/qlong/coin/${boardId}`).then(res => res.data);
-// Get the histograms for a given board_id and channel
-export const getCoincQshort = (boardId: string) =>
-    api.get(`/qshort/coin/${boardId}`).then(res => res.data);
-// Get ROI histograms
-export const getRoiIntegralCoinc = (boardId: string, roiMin: number, roiMax: number) =>
-    api.get(`/roi/coinc/${boardId}/${roiMin}/${roiMax}`).then(res => res.data);
-// Get ROI histograms
-export const getRoiIntegralAnti = (boardId: string, channel: string, roiMin: number, roiMax: number) =>
-    api.get(`/roi/anti/${boardId}/${channel}/${roiMin}/${roiMax}`).then(res => res.data);
-// Get ROI histograms
-export const getRoiHistogramSum = (boardId: string, roiMin: number, roiMax: number) =>
-    api.get(`/histograms/sum/${boardId}/${roiMin}/${roiMax}`).then(res => res.data);
-// Get ROI histograms
-export const getRoiHistogramAnti = (boardId: string, channel: string, roiMin: number, roiMax: number) =>
-    api.get(`/histograms/anti/${boardId}/${channel}/${roiMin}/${roiMax}`).then(res => res.data);
 
 // Current reading APIs
 export const startAcquisitionCurrent = (runNumber: string) =>

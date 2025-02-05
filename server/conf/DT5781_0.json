@@ -182,7 +182,7 @@
             "address": "0x1180",
             "channel": 1,
             "name": "DPP Algorithm Control",
-            "value": "0x04300015"
+            "value": "0x04310015"
         },
         "reg_1184": {
             "address": "0x1184",
@@ -464,7 +464,7 @@
             "address": "0x8120",
             "channel": 0,
             "name": "Channel Enable Mask",
-            "value": "0x00000007"
+            "value": "0x00000001"
         },
         "reg_8180": {
             "address": "0x8180",
