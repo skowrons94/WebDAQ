@@ -443,8 +443,8 @@ export function RunControl() {
       }
 
       await startRunProcess()
-      //const initialCurrent = await getDataCurrent()
-      //localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
+      const initialCurrent = await getDataCurrent()
+      localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
     } catch (error) {
       console.error('Failed to start run:', error)
       toast({

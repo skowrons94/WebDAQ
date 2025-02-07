@@ -27,7 +27,7 @@
 	  <item soapenc:position="[0]" xsi:type="xsd:string">local</item>
 	  <item soapenc:position="[1]" xsi:type="xsd:string">spy</item>
 	</dataOutput>
-	<spyPort xsi:type="xsd:unsignedInt">10002</spyPort>
+	<spyPort xsi:type="xsd:unsignedInt">10000</spyPort>
 	<writeDataFile xsi:type="xsd:boolean">true</writeDataFile>
 	<outputFilepath xsi:type="xsd:string">/home/xdaq/xdata/ruData</outputFilepath>
   <outputFileSizeLimit_MB xsi:type="xsd:unsignedLong">0</outputFileSizeLimit_MB>

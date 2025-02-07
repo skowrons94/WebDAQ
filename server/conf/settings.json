@@ -1,8 +1,8 @@
 {
-    "running": false,
-    "start_time": null,
-    "run": 0,
-    "save": false,
+    "running": true,
+    "start_time": "2025-02-07 15:20:37",
+    "run": 2,
+    "save": true,
     "limit_size": false,
     "file_size_limit": 0,
     "boards": [

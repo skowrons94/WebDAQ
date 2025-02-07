@@ -897,9 +897,9 @@ class container:
             self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
                                         hostname="xdaq", 
                                         name="xdaq", 
-                                        ports={'50000': 50000, '51000': 51000, '52000': 52000,
-                                               '40000': 40000, '41000': 41000, '42000': 42000,
-                                               '10002': 10002, '10000': 10000},
+                                        ports={'50000': 50000,
+                                               '40000': 40000,
+                                               '10000': 10000},
                                         volumes={self.directory: {'bind': '/home/xdaq/project', 'mode': 'rw'},
                                                     '/dev': {'bind': '/dev', 'mode': 'rw'}, 
                                                     '/lib/modules': {'bind': '/lib/modules', 'mode': 'rw'}},
@@ -914,15 +914,15 @@ class container:
 
             time.sleep(0.1)
 
-            cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
-            self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+            #cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
+            #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-            time.sleep(0.1)
+            #time.sleep(0.1)
 
-            cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
-            self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+            #cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
+            #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-            time.sleep(0.1)
+            #time.sleep(0.1)
 
     def reset( self ):
 
@@ -952,9 +952,9 @@ class container:
         self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
                                     hostname="xdaq", 
                                     name="xdaq", 
-                                    ports={'50000': 50000, '51000': 51000, '52000': 52000,
-                                           '40000': 40000, '41000': 41000, '42000': 42000,
-                                           '10002': 10002, '10000': 10000},
+                                    ports={'50000': 50000,
+                                           '40000': 40000, 
+                                           '10002': 10002},
                                     volumes={curr_dir: {'bind': '/home/xdaq/project', 'mode': 'rw'},
                                                 '/dev': {'bind': '/dev', 'mode': 'rw'}, 
                                                 '/lib/modules': {'bind': '/lib/modules', 'mode': 'rw'}},
@@ -979,17 +979,17 @@ class container:
         cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(1)
+        #time.sleep(1)
 
         # Start LocalFilter in the container
-        cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
-        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+        #cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
+        #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(1)
+        #time.sleep(1)
 
         # Start BuilderUnit in the container
-        cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
-        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+        #cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
+        #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
         time.sleep(1)
 
@@ -998,22 +998,22 @@ class container:
         cmd = "killall xdaq.exe"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(5)
+        time.sleep(1)
 
         cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
         self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(5)
+        #time.sleep(1)
 
-        cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
-        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+        #cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
+        #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(5)
+        #time.sleep(1)
 
-        cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
-        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+        #cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
+        #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-        time.sleep(5)        
+        time.sleep(1)        
 
     def stop( self ):
         # If container xdaq exists, remove it

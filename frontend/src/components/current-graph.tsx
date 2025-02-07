@@ -9,7 +9,7 @@ import { getArrayDataCurrent } from '@/lib/api'
 const convertToChartData = (data) => {
     const now = new Date()
     return data.map((value, index) => ({
-        time: new Date(now - (data.length - index) * 1000).toISOString().substr(11, 8),
+        time: new Date(now.valueOf() - (data.length - index) * 1000).toISOString().substr(11, 8),
         value: value
     }))
 }
