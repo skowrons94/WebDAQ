@@ -20,7 +20,9 @@ import {
   CircleGauge,
   HardDrive,
   Network,
-  RefreshCw 
+  RefreshCw,
+  Plug,
+  BatteryCharging
 } from "lucide-react"
 import Link from "next/link"
 
@@ -88,19 +90,24 @@ import {
   getWaveformStatus,
   getRoiIntegral,
   getFileBandwidth,
-  getOutputBandwidth,
   reset,
   resetDeviceCurrent,
   getDataCurrent,
   startAcquisitionCurrent,
   stopAcquisitionCurrent,
   getAccumulatedCharge,
-  getMetricData,
+  getMetricData, 
   getTotalAccumulatedCharge,
-  resetTotalAccumulatedCharge
+  resetTotalAccumulatedCharge,
+  setIpPortCurrent,
+  getIpCurrent,
+  getPortCurrent,
+  connectCurrent,
+  getConnectedCurrent
 } from '@/lib/api'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
+import { string } from 'zod'
 
 
 type BoardData = {
@@ -143,11 +150,13 @@ export function RunControl() {
   const [waveformsEnabled, setWaveformsEnabled] = useState(false)
   const [roiValues, setRoiValues] = useState<ROIValues>({})
   const [fileBandwidth, setFileBandwidth] = useState<number>(0)
-  const [outputBandwidth, setOutputBandwidth] = useState<number>(0)
   const [beamCurrent, setBeamCurrent] = useState<number>(0)
   const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
   const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
   const [totalAccumulatedCharge, setTotalAccumulatedCharge] = useState<number>(0)
+  const [isConnectedCurrent, setIsConnectedCurrent] = useState(false)
+  const [ipCurrent, setIpCurrent] = useState<string>('')
+  const [portCurrent, setPortCurrent] = useState<string>('')
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
 
@@ -166,6 +175,7 @@ export function RunControl() {
       clearInterval(bandwidthInterval)
       clearInterval(beamCurrentInterval)
       clearInterval(accumulatedChargeInterval)
+      clearInterval(totalAccumulatedChargeInterval)
     }
   }, [])
 
@@ -237,7 +247,10 @@ export function RunControl() {
         currentRunNumber,
         runStatus,
         startTimeData,
-        waveformStatus
+        waveformStatus,
+        ipCurrent,
+        portCurrent,
+        isConnected
       ] = await Promise.all([
         getSaveData(),
         getLimitDataSize(),
@@ -245,7 +258,10 @@ export function RunControl() {
         getCurrentRunNumber(),
         getRunStatus(),
         getStartTime(),
-        getWaveformStatus()
+        getWaveformStatus(),
+        getIpCurrent(),
+        getPortCurrent(),
+        getConnectedCurrent()
       ])
 
       setSaveDataBox(saveDataStatus)
@@ -255,6 +271,9 @@ export function RunControl() {
       setIsRunning(runStatus)
       setStartTime(startTimeData)
       setWaveformsEnabled(waveformStatus)
+      setIpCurrent(ipCurrent)
+      setPortCurrent(portCurrent)
+      setIsConnectedCurrent(isConnected)
     } catch (error) {
       console.error('Failed to fetch initial data:', error)
       toast({
@@ -340,12 +359,10 @@ export function RunControl() {
 
   const updateBandwidthData = async () => {
     try {
-      const [fileBW, outputBW] = await Promise.all([
+      const [fileBW] = await Promise.all([
         getFileBandwidth(),
-        getOutputBandwidth()
       ])
       setFileBandwidth(fileBW)
-      setOutputBandwidth(outputBW)
     } catch (error) {
       console.error('Failed to update bandwidth data:', error)
     }
@@ -382,9 +399,28 @@ export function RunControl() {
     }
   }
 
+  const updateIsConnectedCurrent = async () => {
+    try {
+      const isConnected = await getConnectedCurrent()
+      setIsConnectedCurrent(isConnected)
+    } catch (error) {
+      console.error('Failed to update current connection status:', error)
+    }
+  }
+
   const handleLogout = () => {
     clearToken()
     router.push('/')
+  }
+
+  const handleIpCurrent = async (value: string) => {
+    setIpCurrent(value)
+    await setIpPortCurrent(value, portCurrent)
+  }
+
+  const handlePortCurrent = async (value: string) => {
+    setPortCurrent(value)
+    await setIpPortCurrent(ipCurrent, value)
   }
 
   const handleStartRun = async () => {
@@ -406,11 +442,6 @@ export function RunControl() {
         return
       }
 
-      // If save data is on, startAcqusiitonCurrent
-      //if (saveData) {
-      //  await startAcquisitionCurrent(runNumber.toString())
-      //}
-
       await startRunProcess()
       //const initialCurrent = await getDataCurrent()
       //localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
@@ -425,6 +456,15 @@ export function RunControl() {
   }
 
   const startRunProcess = async () => {
+    if (runNumber === null) {
+      toast({
+        title: 'Error',
+        description: 'Run number is not set. Please set a run number before starting.',
+        variant: 'destructive',
+      })
+      return
+    }
+
     try {
       toast({
         title: 'Starting Run...',
@@ -441,7 +481,11 @@ export function RunControl() {
         await deactivateWaveform()
       }
 
-      await startRun()
+      await Promise.all([
+        saveData && startAcquisitionCurrent( String(runNumber) ),
+        startRun()
+      ])
+
       const newStartTime = await getStartTime()
       setIsRunning(true)
       setStartTime(newStartTime)
@@ -467,10 +511,10 @@ export function RunControl() {
         description: 'Please wait while the run is being stopped.',
       })
       
-      //await Promise.all([
-      //  saveData && stopAcquisitionCurrent(),
-      //  stopRun()
-      //])
+      await Promise.all([
+        saveData && stopAcquisitionCurrent(),
+        stopRun()
+      ])
 
       await stopRun()
 
@@ -554,6 +598,25 @@ export function RunControl() {
     setRunNumber(value)
   }
 
+  const handleIpPortChange = async () => {
+    try {
+      await setIpPortCurrent(ipCurrent, portCurrent)
+      toast({
+        title: 'Success',
+        description: 'IP and Port have been updated.',
+      })
+      await connectCurrent()
+      updateIsConnectedCurrent()
+    } catch (error) {
+      console.error('Failed to connect to TetrAMM:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to connect to TetrAMM. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handleWaveformsChange = async (checked: boolean) => {
     try {
       if (checked) {
@@ -592,6 +655,21 @@ export function RunControl() {
                 </p>
               </CardContent>
             </Card>}
+            {settings.showStatus && <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  TetrAMM
+                </CardTitle>
+                <BatteryCharging className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+
+              <CardContent>
+                <div className="text-2xl font-bold">{isConnectedCurrent ? "Connected" : "Disconnected"}</div>
+                <p className="text-xs text-muted-foreground">
+                  {'IP: ' + ipCurrent + ' Port: ' + portCurrent}
+                </p>
+              </CardContent>
+            </Card>}
             {settings.showCurrent && <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -602,7 +680,7 @@ export function RunControl() {
               <CardContent>
                 <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
                 <p className="text-xs text-muted-foreground">
-                  {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from start
+                  {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from Start
                 </p>
               </CardContent>
             </Card>}
@@ -616,7 +694,7 @@ export function RunControl() {
             <CardContent>
               <div className="text-2xl font-bold">{accumulatedCharge.toFixed(2)} uC</div>
               <p className="text-xs text-muted-foreground">
-                Total charge accumulated
+                Total Charge Accumulated
               </p>
             </CardContent>
             </Card>}
@@ -631,7 +709,7 @@ export function RunControl() {
                 <CardContent>
                 <div className="text-2xl font-bold">{totalAccumulatedCharge > 1000000 ? (totalAccumulatedCharge/1000000).toFixed(2) + " C" : totalAccumulatedCharge.toFixed(2) + " uC"}</div>
                   <p className="text-xs text-muted-foreground">
-                    Total charge accumulated since last reset
+                    Total Charge Accumulated since Last Reset
                   </p>
                 </CardContent>
               </Card>
@@ -715,9 +793,9 @@ export function RunControl() {
                 </Button>
               </div>
               <div className="flex items-center gap-4">
-                <Button className="w-full" variant="outline" disabled>
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  View Live Data
+                <Button onClick={handleIpPortChange} className="w-full" variant="outline">
+                  <Plug className="mr-2 h-4 w-4" />
+                  Connect TetrAMM
                 </Button>
               </div>
               <div className="flex items-center gap-4">
@@ -733,7 +811,7 @@ export function RunControl() {
               <div className="grid gap-2">
                 <CardTitle>Acquisition Parameters</CardTitle>
                 <CardDescription>
-                  Current settings for the DAQ.
+                  Current settings for the DAQ
                 </CardDescription>
               </div>
               <Button onClick={() => setShowParametersDialog(true)} className="ml-auto" size="sm">
@@ -784,6 +862,24 @@ export function RunControl() {
                     <TableCell>
                       <Badge variant="outline">
                         {waveformsEnabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>TetrAMM IP</TableCell>
+                    <TableCell></TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {ipCurrent}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>TetrAMM Port</TableCell>
+                    <TableCell></TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {portCurrent}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -864,6 +960,24 @@ export function RunControl() {
                 disabled={isRunning}
               />
               <Label htmlFor="waveforms">Waveforms</Label>
+            </div>
+            <div className="flex flex-col gap-4">
+              <Label htmlFor="ipCurrent">TetrAMM IP</Label>
+              <Input
+                id="ipCurrent"
+                type="text"
+                value={ipCurrent}
+                onChange={(e) => handleIpCurrent(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-4">
+              <Label htmlFor="portCurrent">TetrAMM Port</Label>
+              <Input
+                id="portCurrent"
+                type="text"
+                value={portCurrent}
+                onChange={(e) => handlePortCurrent(e.target.value)}
+              />
             </div>
           </div>
           <DialogFooter>

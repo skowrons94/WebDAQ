@@ -129,8 +129,6 @@ export const getRoiIntegral = (boardId: string, channel: string, roiMin: number,
 export const getFileBandwidth = () =>
     api.get('/experiment/xdaq/file_bandwidth').then(res => res.data);
 
-export const getOutputBandwidth = () =>
-    api.get('/experiment/xdaq/output_bandwidth').then(res => res.data);
 // Reset
 export const reset = () =>
     api.post('/experiment/xdaq/reset').then(res => res.data);
@@ -154,8 +152,24 @@ export const resetDeviceCurrent = () =>
     api.post('/current/reset');
 export const getDataCurrent = () =>
     api.get('/current/data').then(res => res.data);
+export const getArrayDataCurrent = () =>
+    api.get('/current/data_array').then(res => res.data);
 export const getAccumulatedCharge = () =>
     api.get('/current/accumulated').then(res => res.data);
+export const getTotalAccumulatedCharge = () =>
+    api.get('/current/total_accumulated').then(res => res.data);
+export const resetTotalAccumulatedCharge = () =>
+    api.post('/current/reset_total_accumulated');
+export const setIpPortCurrent = (ip: string, port: string) =>
+    api.get(`/current/set_ip_port/${ip}/${port}`);
+export const getIpCurrent = () =>
+    api.get('/current/get_ip').then(res => res.data);
+export const getPortCurrent = () =>
+    api.get('/current/get_port').then(res => res.data);
+export const connectCurrent = () =>
+    api.get('/current/connect');
+export const getConnectedCurrent = () =>
+    api.get('/current/is_connected').then(res => res.data);
 
 // Get boards JSON
 export const getSetting = (id: string, setting: string) =>
@@ -167,13 +181,5 @@ export const setSetting = (id: string, setting: string, value: string) =>
 // Generic metric data fetching function
 export const getMetricData = (entityName: string, metricName: string, from: string = '-10s', until: string = 'now') =>
     api.get(`/stats/${entityName}/${metricName}`, { params: { from, until } }).then(res => res.data);
-
-// Get total accumulated charge
-export const getTotalAccumulatedCharge = () =>
-    api.get('/current/total_accumulated').then(res => res.data);
-
-// Reset the total accumulated charge
-export const resetTotalAccumulatedCharge = () =>
-    api.post('/current/reset_total_accumulated');
 
 export default api;

@@ -186,15 +186,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     }
   }
 
-  const handleApplyToAll = (settingName: string) => {
-    const valueToApply = settings[0][settingName].value
-    console.log(valueToApply, settingName)
-    setSettings(prev => prev.map(channelSettings => ({
-      ...channelSettings,
-      [settingName]: { ...channelSettings[settingName], value: valueToApply }
-    })))
-  }
-
   if (loading) {
     return <div>Loading settings...</div>
   }
@@ -227,9 +218,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                     ))}
                     <div className="flex flex-wrap justify-between mt-4">
                       <Button className="mb-2" onClick={() => handleSave(channel)}>Save</Button>
-                      <Button className="mb-2" variant="outline" onClick={() => handleApplyToAll('Trigger Threshold')}>
-                      Apply Threshold to All
-                      </Button>
                     </div>
                   </CardContent>
                 </Card>

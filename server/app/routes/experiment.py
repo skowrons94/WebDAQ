@@ -19,7 +19,7 @@ from app.services.spy import ru_spy
 
 import threading
 
-XDAQ_FLAG = True
+XDAQ_FLAG = False
 
 bp = Blueprint('experiment', __name__)
 

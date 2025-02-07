@@ -26,6 +26,17 @@ class tetram_controller:
         self.lock = threading.Lock()
         self.load_settings()
 
+    def set_ip(self, ip):
+        self.ip = ip
+
+    def set_port(self, port):
+        self.port = port
+
+    def is_connected(self):
+        if self.is_acquiring:
+            return True
+        return False
+
     def send_metric(self, metric_path, value, timestamp):
         # Create a socket connection to the Graphite server
         try:
@@ -156,6 +167,10 @@ class tetram_controller:
             self.start = datetime.now().timestamp()
             self.save_data = save_data
             self.save_folder = save_folder
+
+    def get_data_array(self):
+        with self.lock:
+            return { "0" : self.values["0"][-101:-1], "1" : self.values["1"][-101:-1][-1], "2" : self.values["2"][-101:-1][-1], "3" : self.values["3"][-101:-1][-1] }
 
     def get_data(self):
         with self.lock:
