@@ -112,6 +112,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
   const settingsToFetch = [
     { name: "Trigger Threshold", address: "0x106c" },
+    { name: "RC-CR2 Smoothing", address: "0x1054" },
     { name: "Input Rise Time", address: "0x1058" },
     { name: "DC Offset", address: "0x1098" },
     { name: "Trapezoid Rise Time", address: "0x105c" },
