@@ -80,7 +80,7 @@ class tetram_controller:
     def connect(self):
         self.socket = socket.socket()
         self.socket.settimeout(2.0)
-        self.socket.connect((self.ip, self.port))
+        self.socket.connect((self.ip, int(self.port)))
 
     def disconnect(self):
         if self.is_acquiring:
@@ -165,6 +165,10 @@ class tetram_controller:
     def set_save_data(self, save_data, save_folder=''):
         with self.lock:
             self.start = datetime.now().timestamp()
+            # Write header to file
+            if( save_data ):
+                with open(os.path.join(save_folder, 'current.txt'), 'w') as f:
+                    f.write(f'### Start time: {datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")} ###\n')
             self.save_data = save_data
             self.save_folder = save_folder
 

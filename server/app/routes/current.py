@@ -88,13 +88,11 @@ def start_acquisition(run_number):
     current_accumulating_run_number = int(run_number)
     previous_time = datetime.now().timestamp()
     run = int(run_number)
-    print("Starting acquisition for run {}".format(run))
     if( not controller.is_acquiring ):
         return jsonify({"message": "Can not start TetrAMM. Device not initialized"}), 400
     if( not os.path.exists("./data/run{}".format(run)) ):
         os.makedirs("./data/run{}".format(run))
     controller.set_save_data(True, "./data/run{}/".format(run))
-    print("Starting acquisition for run {}".format(run))
     running = True
     return jsonify({"message": "Acquisition started"}), 200
 

@@ -24,11 +24,7 @@ XDAQ_FLAG = True
 bp = Blueprint('experiment', __name__)
 
 os.system( "killall RUSpy" )
-os.system( "killall BUSpy" )
 os.system( "docker stop xdaq" )
-
-#start_thread = False
-#t_crash = None
 
 def update_project( daq_state ):
 
