@@ -182,4 +182,11 @@ export const setSetting = (id: string, setting: string, value: string) =>
 export const getMetricData = (entityName: string, metricName: string, from: string = '-10s', until: string = 'now') =>
     api.get(`/stats/${entityName}/${metricName}`, { params: { from, until } }).then(res => res.data);
 
+// FC control
+export const openFaraday = () =>
+    api.get('/faraday/open').then(res => res.data);
+
+export const closeFaraday = () =>
+    api.get('/faraday/close').then(res => res.data);
+
 export default api;

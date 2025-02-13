@@ -22,7 +22,9 @@ import {
   Network,
   RefreshCw,
   Plug,
-  BatteryCharging
+  BatteryCharging,
+  DoorOpen,
+  DoorClosed
 } from "lucide-react"
 import Link from "next/link"
 
@@ -103,7 +105,9 @@ import {
   getIpCurrent,
   getPortCurrent,
   connectCurrent,
-  getConnectedCurrent
+  getConnectedCurrent,
+  openFaraday,
+  closeFaraday
 } from '@/lib/api'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
@@ -413,6 +417,40 @@ export function RunControl() {
     router.push('/')
   }
 
+  const handleFCClose = async () => {
+    try {
+      await closeFaraday()
+      toast({
+        title: 'Success',
+        description: 'Faraday Cup has been closed.',
+      })
+    } catch (error) {
+      console.error('Failed to close Faraday Cup:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to close Faraday Cup. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleFCOpen = async () => {
+    try {
+      await openFaraday()
+      toast({
+        title: 'Success',
+        description: 'Faraday Cup has been opened.',
+      })
+    } catch (error) {
+      console.error('Failed to open Faraday Cup:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to open Faraday Cup. Please try again.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const handleIpCurrent = async (value: string) => {
     setIpCurrent(value)
     await setIpPortCurrent(value, portCurrent)
@@ -481,11 +519,25 @@ export function RunControl() {
         await deactivateWaveform()
       }
 
+      // Try to close the FC cup
+      try {
+        await closeFaraday()
+      } catch (error) {
+        console.error('Failed to close Faraday Cup:', error)
+      }
+
       if( saveData ) {
         await startAcquisitionCurrent( String(runNumber) )
       }
 
       await startRun()
+
+      // Try to open the FC cup
+      try {
+        await openFaraday()
+      } catch (error) {
+        console.error('Failed to close Faraday Cup:', error)
+      }
 
       const newStartTime = await getStartTime()
       setIsRunning(true)
@@ -511,6 +563,13 @@ export function RunControl() {
         title: 'Stopping Run...',
         description: 'Please wait while the run is being stopped.',
       })
+
+      // Try to close the FC cup
+      try {
+        await closeFaraday()
+      } catch (error) {
+        console.error('Failed to close Faraday Cup:', error)
+      }
 
       await stopRun()
       if (saveData) {
@@ -797,6 +856,18 @@ export function RunControl() {
                 <Button onClick={handleIpPortChange} className="w-full" variant="outline">
                   <Plug className="mr-2 h-4 w-4" />
                   Connect TetrAMM
+                </Button>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button onClick={handleFCOpen} className="w-full" variant="outline">
+                  <DoorOpen className="mr-2 h-4 w-4" />
+                  Open Faraday Cup
+                </Button>
+              </div>
+              <div className="flex items-center gap-4">
+                <Button onClick={handleFCClose} className="w-full" variant="outline">
+                  <DoorClosed className="mr-2 h-4 w-4" />
+                  Close Faraday Cup
                 </Button>
               </div>
               <div className="flex items-center gap-4">
