@@ -481,10 +481,11 @@ export function RunControl() {
         await deactivateWaveform()
       }
 
-      await Promise.all([
-        saveData && startAcquisitionCurrent( String(runNumber) ),
-        startRun()
-      ])
+      if( saveData ) {
+        await startAcquisitionCurrent( String(runNumber) )
+      }
+
+      await startRun()
 
       const newStartTime = await getStartTime()
       setIsRunning(true)
@@ -510,11 +511,11 @@ export function RunControl() {
         title: 'Stopping Run...',
         description: 'Please wait while the run is being stopped.',
       })
-      
-      await Promise.all([
-        saveData && stopAcquisitionCurrent(),
-        stopRun()
-      ])
+
+      await stopRun()
+      if (saveData) {
+        await stopAcquisitionCurrent()
+      }
 
       await stopRun()
 
