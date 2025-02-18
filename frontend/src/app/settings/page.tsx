@@ -12,7 +12,6 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
-import { JsonEditor } from '@/components/json';
 import { VisualizationSettings } from '@/components/visualization-settings';
 import { MetricsSettings } from '@/components/metrics-settings'
 
@@ -46,8 +45,6 @@ export default function SettingsPage() {
                 return < VisualizationSettings />;
             case 'boards':
                 return <Board />;
-            case 'json':
-                return <JsonEditor />;
             case 'metrics':
                 return <MetricsSettings />;
             default:
@@ -79,13 +76,6 @@ export default function SettingsPage() {
                                 onClick={() => setActiveView('boards')}
                             >
                                 Boards
-                            </Link>
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'json' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('json')}
-                            >
-                                Caen JSON editor
                             </Link>
                             <Link
                                 href="#"

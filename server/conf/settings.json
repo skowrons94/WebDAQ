@@ -1,20 +1,11 @@
 {
-    "running": true,
-    "start_time": "2025-02-12 13:58:22",
-    "run": 7,
-    "save": true,
+    "running": false,
+    "start_time": null,
+    "run": 0,
+    "save": false,
     "limit_size": false,
     "file_size_limit": 0,
     "boards": [
-        {
-            "id": "0",
-            "name": "DT5781",
-            "vme": "0",
-            "link_type": "Optical",
-            "link_num": "3",
-            "dpp": "DPP-PHA",
-            "chan": "4"
-        }
     ],
     "total_accumulated": 0.0
 }

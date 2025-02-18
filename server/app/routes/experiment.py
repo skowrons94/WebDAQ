@@ -16,6 +16,7 @@ from app.utils.jwt_utils import jwt_required_custom, get_current_user
 
 from app.services import xdaq
 from app.services.spy import ru_spy
+from app.services.dgtz import digitizer
 
 import threading
 
@@ -51,6 +52,9 @@ def check_project( ):
     # Check if directory exists, if not create it
     if not os.path.exists('calib'): 
         os.makedirs('calib')
+    # Check if directory exists, if not create it
+    if not os.path.exists('data'): 
+        os.makedirs('data')
     # Check if exists, if not create it
     if os.path.exists('conf/settings.json'):
         with open('conf/settings.json', 'r') as f: 
@@ -81,19 +85,12 @@ r_spy = ru_spy( )
 if( XDAQ_FLAG ):
     directory = os.path.dirname(os.path.realpath("./server"))
     container = xdaq.container(directory)
-    try:
-        status = topology.get_daq_status( )
-    except:
-        status = "Unknown"
-    if( status == "Running" ):
-        r_spy.start(daq_state)
-    else:
-        container.initialize()
-        print( "Container started...")
-        topology.configure_pt( )
-        print( "PT configured...")
-        topology.enable_pt( )
-        print( "PT enabled...")
+    container.initialize()
+    print( "Container started...")
+    topology.configure_pt( )
+    print( "PT configured...")
+    topology.enable_pt( )
+    print( "PT enabled...")
 
 update_project(daq_state)
 
@@ -120,9 +117,12 @@ def start_run( ):
     directory = f"data/"
     if not os.path.exists(directory):
         os.makedirs(directory)
-    directory = f"data/run{run}/"
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    
+    # If save is enabled, create the run directory
+    if save:
+        directory = f"data/run{run}/"
+        if not os.path.exists(directory):
+            os.makedirs(directory)
 
     # Copy the JSON configuration files to the run directory
     for board in daq_state['boards']:
@@ -184,6 +184,9 @@ def start_run( ):
 @jwt_required_custom
 def stop_run( ):
     global daq_state, r_spy, start_thread, t_crash
+
+    if( not daq_state['running'] ):
+        return jsonify({'message': 'Run stopped successfully !'}), 200
 
     # First stop the spy
     r_spy.stop()
@@ -271,23 +274,38 @@ def add_caen():
     global daq_state
 
     board = request.get_json()
-        
+
+    if( board["link_type"] == "USB" ):
+        link_type = 0
+    elif( board["link_type"] == "Optical" ):
+        link_type = 1
+    elif( board["link_type"] == "A4818" ):
+        link_type = 2
+
+    dgtz = digitizer(link_type, int(board["link_num"]), int(board["id"]), int(board["vme"]))
+    dgtz.open()
+
+    if not dgtz.get_connected():
+        return jsonify({'message': 'Failed to connect to the board!'}), 404
+
+    # Get the board info
+    board_info = dgtz.get_info()
+
+    board["name"] = board_info["ModelName"]
+    board["chan"] = int(board_info["Channels"])
+
     # Add the new board to the list
     daq_state['boards'].append(board)
 
-    # Get board name and dpp
-    board_name = board['name']
-    dpp = board['dpp']
-
-    # Chekc if default configuration file exists
-    dpp = "PSD" if dpp == 0 else "PHA"
-    if os.path.exists(f"json/{board_name}_{dpp}.json"):
-        # Copy to "conf" directory
-        os.system(f"cp json/{board_name}_{dpp}.json conf/{board_name}_{board['id']}.json")
+    # Read the registers
+    if board["dpp"] == "DPP-PHA":
+        dgtz.read_pha(f"conf/{board['name']}_{board['id']}.json")
+    elif board["dpp"] == "DPP-PSD":
+        dgtz.read_psd(f"conf/{board['name']}_{board['id']}.json")
 
     # Create the calibration file
-    os.system(f"touch calib/{board_name}_{board['id']}.cal")
-    with open(f"calib/{board_name}_{board['id']}.cal", 'w') as f:
+    os.system(f"touch calib/{board['name']}_{board['id']}.cal")
+    with open(f"calib/{board['name']}_{board['id']}.cal", 'w') as f:
         for i in range( board['chan'] ):
             f.write(f"0.0 1.0\n")
 

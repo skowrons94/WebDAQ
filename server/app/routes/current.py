@@ -150,10 +150,10 @@ def get_data():
 @jwt_required_custom
 def get_data_array():
     # Real thing
-    #data = controller.get_data_array()["0"]
+    data = controller.get_data_array()["0"].tolist()
     # For test: sample 100 points from normal distribution with mean 100 and std 10
-    data = np.random.normal(100, 10, 100)
-    data = data.tolist()
+    #data = np.random.normal(100, 10, 100)
+    #data = data.tolist()
     return jsonify(data)
 
 @bp.route('/current/accumulated', methods=['GET'])

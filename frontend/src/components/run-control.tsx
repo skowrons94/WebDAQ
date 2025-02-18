@@ -520,11 +520,11 @@ export function RunControl() {
       }
 
       // Try to close the FC cup
-      try {
-        await closeFaraday()
-      } catch (error) {
-        console.error('Failed to close Faraday Cup:', error)
-      }
+      //try {
+      //  await closeFaraday()
+      //} catch (error) {
+      //  console.error('Failed to close Faraday Cup:', error)
+      //}
 
       if( saveData ) {
         await startAcquisitionCurrent( String(runNumber) )
@@ -533,11 +533,11 @@ export function RunControl() {
       await startRun()
 
       // Try to open the FC cup
-      try {
-        await openFaraday()
-      } catch (error) {
-        console.error('Failed to close Faraday Cup:', error)
-      }
+      //try {
+      //  await openFaraday()
+      //} catch (error) {
+      //  console.error('Failed to close Faraday Cup:', error)
+      //}
 
       const newStartTime = await getStartTime()
       setIsRunning(true)
@@ -565,11 +565,11 @@ export function RunControl() {
       })
 
       // Try to close the FC cup
-      try {
-        await closeFaraday()
-      } catch (error) {
-        console.error('Failed to close Faraday Cup:', error)
-      }
+      //try {
+      //  await closeFaraday()
+      //} catch (error) {
+      //  console.error('Failed to close Faraday Cup:', error)
+      //}
 
       await stopRun()
       if (saveData) {
@@ -782,7 +782,7 @@ export function RunControl() {
                 <HardDrive className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{fileBandwidth.toFixed(2)} MB/s</div>
+                {fileBandwidth < 0.1 ? ( <div className="text-2xl font-bold">{(fileBandwidth*1024).toFixed(2)} KB/s</div> ) : <div className="text-2xl font-bold">{fileBandwidth.toFixed(2)} MB/s</div>} 
                 <p className="text-xs text-muted-foreground">
                   Data Writing Speed
                 </p>
@@ -856,18 +856,6 @@ export function RunControl() {
                 <Button onClick={handleIpPortChange} className="w-full" variant="outline">
                   <Plug className="mr-2 h-4 w-4" />
                   Connect TetrAMM
-                </Button>
-              </div>
-              <div className="flex items-center gap-4">
-                <Button onClick={handleFCOpen} className="w-full" variant="outline">
-                  <DoorOpen className="mr-2 h-4 w-4" />
-                  Open Faraday Cup
-                </Button>
-              </div>
-              <div className="flex items-center gap-4">
-                <Button onClick={handleFCClose} className="w-full" variant="outline">
-                  <DoorClosed className="mr-2 h-4 w-4" />
-                  Close Faraday Cup
                 </Button>
               </div>
               <div className="flex items-center gap-4">

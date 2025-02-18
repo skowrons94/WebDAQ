@@ -16,12 +16,10 @@ import { MoonStarIcon } from 'lucide-react'
 
 const formSchema = z.object({
   id: z.string().min(1, "Board ID is required"),
-  name: z.string().min(1, "Board Name is required"),
   vme: z.string().min(1, "VME Address is required"),
   link_type: z.enum(["Optical", "USB"]),
   link_num: z.enum(["0", "1", "2", "3"]),
-  dpp: z.enum(["DPP-PHA", "DPP-PSD"]),
-  chan: z.enum(["2", "4", "8", "16"])
+  dpp: z.enum(["DPP-PHA", "DPP-PSD"])
 })
 
 type BoardData = z.infer<typeof formSchema>
@@ -34,12 +32,10 @@ export function Board() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       id: "0",
-      name: "",
       vme: "0",
       link_type: "Optical",
       link_num: "0",
-      dpp: "DPP-PHA",
-      chan: "2"
+      dpp: "DPP-PHA"
     },
   })
 
@@ -123,19 +119,6 @@ export function Board() {
                 />
                 <FormField
                   control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Board Name</FormLabel>
-                      <FormControl>
-                        <Input placeholder="Enter board name" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
                   name="vme"
                   render={({ field }) => (
                     <FormItem>
@@ -162,6 +145,7 @@ export function Board() {
                         <SelectContent>
                           <SelectItem value="Optical">Optical</SelectItem>
                           <SelectItem value="USB">USB</SelectItem>
+                          <SelectItem value="A4818">A4818</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -211,28 +195,6 @@ export function Board() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="chan"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Channels</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select number of channels" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {["2", "4", "8", "16"].map((num) => (
-                            <SelectItem key={num} value={num}>{num}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <Button type="submit">Add Board</Button>
               </form>
             </Form>
@@ -248,12 +210,10 @@ export function Board() {
               {boards.map((board) => (
                 <li key={board.id} className="bg-muted p-4 rounded-md">
                   <strong>Board ID:</strong> {board.id} <br />
-                  <strong>Board Name:</strong> {board.name} <br />
                   <strong>VME Address:</strong> {board.vme} <br />
                   <strong>Link Type:</strong> {board.link_type} <br />
                   <strong>Link Number:</strong> {board.link_num} <br />
                   <strong>DPP Software:</strong> {board.dpp} <br />
-                  <strong>Channels:</strong> {board.chan} <br />
                   <Button 
                     variant="destructive" 
                     className="mt-2" 

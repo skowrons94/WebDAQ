@@ -99,11 +99,11 @@ class tetram_controller:
             self.write_settings()
         else:
             return -1
-        if self.is_acquiring:
-            self.stop_acquisition()
+        #if self.is_acquiring:
+        #    self.stop_acquisition()
         response = self._send_command(f'{setting}:{value}')
         response = response.decode().split( )[0]
-        self.start_acquisition()
+        #self.start_acquisition()
         return response
 
     def get_setting(self, setting):
@@ -150,12 +150,11 @@ class tetram_controller:
                     self.times[-1] = timestamp
                     for i in range(int(self.settings['CHN'])):
                         self.send_metric(f"tetram.ch{i}", self.values[str(i)][-1], timestamp)
-                    print(self.save_data)
                     if( self.save_data ):
                         with open(os.path.join(self.save_folder, f'current.txt'), 'a') as f:
-                            f.write(f'{timestamp - self.start:.2e}\t')
+                            f.write(f'{timestamp - self.start:.8e}\t')
                             for i in range(int(self.settings['CHN'])):
-                                f.write(f'{self.values[str(i)][-1]:.2e}\t')
+                                f.write(f'{self.values[str(i)][-1]:.3e}\t')
                             f.write('\n')
                 time.sleep(0.5)
             except socket.timeout:
@@ -174,7 +173,7 @@ class tetram_controller:
 
     def get_data_array(self):
         with self.lock:
-            return { "0" : self.values["0"][-101:-1], "1" : self.values["1"][-101:-1][-1], "2" : self.values["2"][-101:-1][-1], "3" : self.values["3"][-101:-1][-1] }
+            return { "0" : self.values["0"][-101:-1], "1" : self.values["1"][-101:-1], "2" : self.values["2"][-101:-1], "3" : self.values["3"][-101:-1] }
 
     def get_data(self):
         with self.lock:

@@ -66,7 +66,7 @@ export const columns: ColumnDef<RunMetadata>[] = [
         header: "End Time",
         cell: ({ row }) => {
             // Parse the date and time
-            const date = new Date(row.original.start_time)
+            const date = new Date(row.original.end_time)
             return (
                 <div className="text-left">
                     {date.toLocaleDateString()} {date.toLocaleTimeString()}
