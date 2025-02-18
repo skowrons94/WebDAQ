@@ -28,7 +28,8 @@ This repository contains a server and a React Next.js frontend designed for data
 - Node.js (v14 or higher)
 - Python (v3.7 or higher)
 - Flask
-- SQLite (or other supported database)
+- SQLite
+- (Optional) conda
 
 ### Installation
 
@@ -41,14 +42,24 @@ This repository contains a server and a React Next.js frontend designed for data
 
 2. **Set up docker**
     
-    Ensure Docker is running, and pull the Docker images if needed.
+    Since the XDAQ is running in a closed container due to heavy dependencies, the newest image must be pulled before starting the DAQ server:
     ```bash
-    docker pull skowrons/xdaq:v3.0
+    docker pull skowrons/xdaq:latest
     ```
+    This is not required, since when the server asks for the docker to start the image, it will be automatically pulled, but since it takes some time and it is a test of either docker is correctly installed on the PC, it is advised to run it beforehand.
 
-### Example Usage
+3. **Set up conda**
 
-#### Server
+    For easy run of all the components, a conda environment was prepared and can be installed with:
+    ```bash
+    conda env create -f environment.yml 
+    ```
+    This will install all the necessary packages to run both the frontend and the server.
+    
+
+### Setting Up
+
+First it is necessary to install the server. It takes care of handling the DAQ, the online analysis and the database where all the metadata are stored:
 
 1. **Navigate to server directory:**
     ```bash
@@ -69,25 +80,30 @@ This repository contains a server and a React Next.js frontend designed for data
 
 4. **Start the Flask server:**
     ```bash
-    flask --app server run -p 5001
+    python3 main.py
     ```
 
-#### Frontend
+At this point our DAQ server should be running and ready to accept the calls from the frontend, that we will start using the following:
 
 1. **Navigate to frontend directory:**
     ```bash
     cd frontend
     ```
 
-2. **Install dependencies and run the development server:**
+2. **Install dependencies and build the server:**
     ```bash
     npm install
-    npm run dev
+    npm run build
+    ```
+
+3. **Start the frontend:**
+    ```bash
+    npm run start
     ```
 
 ### Usage
 
-Once both the server and frontend are running, you can access the application via your web browser at ```http://localhost:3000```. The server will be available at ```http://localhost:5001```.
+Once both the server and frontend are running, you can access the application via your web browser at ```http://localhost:3000```. It communicates with the server that is located at ```http://localhost:5001```. In case the server is located on an another PC, its IP address should be set in the ```.env``` file that is located in ```frontend/``` folder.
 
 ### License
 

@@ -5,7 +5,6 @@
     "save": false,
     "limit_size": false,
     "file_size_limit": 0,
-    "boards": [
-    ],
+    "boards": [],
     "total_accumulated": 0.0
 }

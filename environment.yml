@@ -21,6 +21,7 @@ dependencies:
   - root=6.30.4
   - pycurl
   - pkgconfig
+  - nodejs
   - pip
   - pip:
     - docker
