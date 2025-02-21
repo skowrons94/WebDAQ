@@ -152,6 +152,10 @@ export const resetDeviceCurrent = () =>
     api.post('/current/reset');
 export const getDataCurrent = () =>
     api.get('/current/data').then(res => res.data);
+export const getDataCollimator1 = () =>
+    api.get('/current/collimator/1').then(res => res.data);
+export const getDataCollimator2 = () =>
+    api.get('/current/collimator/2').then(res => res.data);
 export const getArrayDataCurrent = () =>
     api.get('/current/data_array').then(res => res.data);
 export const getAccumulatedCharge = () =>

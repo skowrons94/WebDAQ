@@ -146,6 +146,20 @@ def get_data():
     if( data < 1e-9 ): data = 0
     return jsonify(data)
 
+@bp.route('/current/collimator/1', methods=['GET'])
+@jwt_required_custom
+def get_data():
+    data = controller.get_data()["1"]
+    if( data < 1e-9 ): data = 0
+    return jsonify(data)
+
+@bp.route('/current/collimator/2', methods=['GET'])
+@jwt_required_custom
+def get_data():
+    data = controller.get_data()["2"]
+    if( data < 1e-9 ): data = 0
+    return jsonify(data)
+
 @bp.route('/current/data_array', methods=['GET'])
 @jwt_required_custom
 def get_data_array():
