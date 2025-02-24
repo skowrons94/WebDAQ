@@ -20,7 +20,7 @@ from app.services.dgtz import digitizer
 
 import threading
 
-XDAQ_FLAG = True
+XDAQ_FLAG = False
 
 bp = Blueprint('experiment', __name__)
 
@@ -32,8 +32,8 @@ def update_project( daq_state ):
     # Save as JSON
     with open('conf/settings.json', 'w') as f:
         json.dump(daq_state, f, indent=4)
-
-    topology.write_ruconf(daq_state)
+    if( XDAQ_FLAG ):
+        topology.write_ruconf(daq_state)
 
 # Functio to get histo index and board dpp
 def get_info( board_id, channel, boards ):
@@ -421,16 +421,19 @@ def check_run_directory():
 @jwt_required_custom
 def get_run_status():
     global daq_state
-    try:
-        status = topology.get_daq_status( )
-        if status == "Running":
-            daq_state['running'] = True
-        else:
+    if XDAQ_FLAG:
+        try:
+            status = topology.get_daq_status( )
+            if status == "Running":
+                daq_state['running'] = True
+            else:
+                daq_state['running'] = False
+        except:
             daq_state['running'] = False
-    except:
-        daq_state['running'] = False
-        pass
-    return jsonify(daq_state['running'])
+            pass
+        return jsonify(daq_state['running'])
+    else:
+        return jsonify(daq_state['running'])
 
 @bp.route("/experiment/get_start_time", methods=['GET'])
 @jwt_required_custom
@@ -631,7 +634,11 @@ def get_setting( id, setting ):
             filename = "conf/{}_{}.json".format(board['name'], board['id'])
             with open(filename, 'r') as f:
                 data = json.load(f)
-            value = data['registers'][key]['value']
+            try:
+                value = data['registers'][key]['value']
+                return jsonify(value)
+            except:
+                return jsonify(-1)
             # Convert from hex 0x to int
             return jsonify(int(value, 16))
     return jsonify(-1)
