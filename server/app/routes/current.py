@@ -14,7 +14,7 @@ from datetime import datetime
 
 bp = Blueprint('current', __name__)
 
-TEST_FLAG = False
+TEST_FLAG = True
 
 # Default settings
 accumulated = 0
@@ -148,14 +148,14 @@ def get_data():
 
 @bp.route('/current/collimator/1', methods=['GET'])
 @jwt_required_custom
-def get_data():
+def get_data_1():
     data = controller.get_data()["1"]
     if( data < 1e-9 ): data = 0
     return jsonify(data)
 
 @bp.route('/current/collimator/2', methods=['GET'])
 @jwt_required_custom
-def get_data():
+def get_data_2():
     data = controller.get_data()["2"]
     if( data < 1e-9 ): data = 0
     return jsonify(data)
