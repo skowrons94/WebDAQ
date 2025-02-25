@@ -111,6 +111,8 @@ import {
 } from '@/lib/api'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
+import useRunControlStore from '@/store/run-control-store'
+
 import { string } from 'zod'
 
 
@@ -137,6 +139,9 @@ export function RunControl() {
   const { settings } = useVisualizationStore()
   const { metrics } = useMetricsStore()
   const [visibleMetrics, setVisibleMetrics] = useState(() => metrics.filter(metric => metric.isVisible))
+
+  const setIsRunningStore = useRunControlStore((state) => state.setIsRunning)
+  const setStartTimeStore = useRunControlStore((state) => state.setStartTime)
 
   useEffect(() => {
     setVisibleMetrics(metrics.filter(metric => metric.isVisible))
@@ -234,6 +239,11 @@ export function RunControl() {
       Object.keys(intervalRefs.current).forEach(clearMetricInterval)
     }
   }, [visibleMetrics])
+
+  useEffect(() => {
+    setIsRunningStore(isRunning)
+    setStartTimeStore(startTime)
+  }, [isRunning, startTime])
 
   const clearMetricInterval = (metricId: string) => {
     if (intervalRefs.current[metricId]) {
@@ -542,6 +552,8 @@ export function RunControl() {
       const newStartTime = await getStartTime()
       setIsRunning(true)
       setStartTime(newStartTime)
+      setIsRunningStore(true)
+      setStartTimeStore(newStartTime)
       toast({
         title: 'Run Started',
         description: `Run ${runNumber} started successfully with all parameters set.`,
@@ -583,6 +595,8 @@ export function RunControl() {
         description: 'The experiment run has been stopped successfully.',
       })
       setIsRunning(false)
+      setIsRunningStore(false)
+      setStartTimeStore(null)
 
       const newRunNumber = await getCurrentRunNumber()
       setRunNumberState(newRunNumber)
@@ -699,7 +713,7 @@ export function RunControl() {
     <div className="flex flex-col bg-background text-foreground">
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-2">
         <ScrollArea className="h-[320px] rounded-md border p-4">
-        <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-6 md:gap-8 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-6 md:gap-8 lg:grid-cols-4">
             {settings.showStatus && <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">

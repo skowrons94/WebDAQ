@@ -161,7 +161,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         onClick={() => setOpen(true)}
                     >
                         <Search className="mr-2 h-4 w-4" />
-                        Search experiments...
+                        Search...
                     </Button>
                     <CommandDialog open={open} onOpenChange={setOpen}>
                         <CommandInput placeholder="Type a command or search..." />
@@ -213,7 +213,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 {children}
             </main>
             <footer className="mt-auto flex items-center justify-center h-16 bg-background text-muted-foreground">
-                <span>&copy; 2024 LUNADAQ</span>
+                <span>&copy; 2025 LUNADAQ</span>
             </footer>
         </div>
     )
