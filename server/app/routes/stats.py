@@ -17,7 +17,7 @@ GRAPHITE_PORT = 80
 
 client_mv = GraphiteClient(GRAPHITE_HOST, GRAPHITE_PORT)
 
-DEBUG = True
+DEBUG = False
 
 def get_metric_data(metric: str, client: GraphiteClient, from_time: str = '-10s', until_time: str = 'now') -> Dict[str, Any]:
     if DEBUG:
