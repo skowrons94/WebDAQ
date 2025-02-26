@@ -17,7 +17,11 @@ GRAPHITE_PORT = 80
 
 client_mv = GraphiteClient(GRAPHITE_HOST, GRAPHITE_PORT)
 
+DEBUG = False
+
 def get_metric_data(metric: str, client: GraphiteClient, from_time: str = '-10s', until_time: str = 'now') -> Dict[str, Any]:
+    if DEBUG:
+        return {'success': True, 'data': []}
     try:
         data = client.get_data(metric, from_time, until_time)
         return {'success': True, 'data': data}
@@ -26,6 +30,7 @@ def get_metric_data(metric: str, client: GraphiteClient, from_time: str = '-10s'
 
 @bp.route('/stats/terminal_voltage', methods=['GET'])
 def get_terminal_voltage():
+
     from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
     result = get_metric_data('accelerator.terminal_voltage', client_mv, from_time, until_time)

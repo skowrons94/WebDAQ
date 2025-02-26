@@ -827,35 +827,33 @@ export function RunControl() {
               </Card>
             ))}
           </div>
-        </ScrollArea>
-        <div className="grid gap-4 md:gap-8 lg:grid-cols-2 xl:grid-cols-3">
+        </ScrollArea><div className="grid gap-4 md:gap-8 xl:grid-cols-2">
+          {/* Card 1: Experiment Controls - Full width on mobile */}
           <Card>
-            <CardHeader>
-              <CardTitle>Experiment Controls</CardTitle>
+            <CardHeader className="space-y-1 sm:space-y-0">
+              <CardTitle className="text-lg sm:text-xl">Experiment Controls</CardTitle>
             </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="flex items-center gap-4">
+            <CardContent className="grid gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
                 <Button onClick={handleStartRun} className="w-full" disabled={isRunning}>
                   <PlayCircle className="mr-2 h-4 w-4" />
                   Start Run
                 </Button>
-              </div>
-              <div className="flex items-center gap-4">
                 <Button onClick={handleStopRun} variant="outline" className="w-full" disabled={!isRunning}>
                   <StopCircle className="mr-2 h-4 w-4" />
                   Stop Run
                 </Button>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:gap-4">
                 <Button onClick={handleResetTotalAccumulatedCharge} className="w-full" variant="outline">
                   <RefreshCw className="mr-2 h-4 w-4" />
-                  Reset Total Charge
+                  <span className="hidden md:inline">Reset Total Charge</span>
+                  <span className="inline md:hidden">Reset Charge</span>
                 </Button>
-              </div>
-              <div className="flex items-center gap-4">
                 <Button onClick={handleIpPortChange} className="w-full" variant="outline">
                   <Plug className="mr-2 h-4 w-4" />
-                  Connect TetrAMM
+                  <span className="hidden md:inline">Connect TetrAMM</span>
+                  <span className="inline md:hidden">Connect</span>
                 </Button>
               </div>
               <div className="flex items-center gap-4">
@@ -866,85 +864,89 @@ export function RunControl() {
               </div>
             </CardContent>
           </Card>
-          <Card className="xl:col-span-2">
-            <CardHeader className="flex flex-row items-center">
-              <div className="grid gap-2">
-                <CardTitle>Acquisition Parameters</CardTitle>
-                <CardDescription>
+
+          {/* Card 2: Acquisition Parameters - Full width on mobile */}
+          <Card>
+            <CardHeader className="flex flex-row items-center flex-wrap gap-2">
+              <div className="grid gap-1">
+                <CardTitle className="text-lg sm:text-xl">Acquisition Parameters</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">
                   Current settings for the DAQ
                 </CardDescription>
               </div>
               <Button onClick={() => setShowParametersDialog(true)} className="ml-auto" size="sm">
                 <Cog className="mr-2 h-4 w-4" />
-                Adjust
+                <span className="hidden sm:inline">Adjust</span>
               </Button>
             </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Parameter</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  <TableRow>
-                    <TableCell>Run Number</TableCell>
-                    <TableCell>{runNumber !== null ? runNumber : ''}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">Autoincrement</Badge>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Save Data</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {saveData ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Max File Size</TableCell>
-                    <TableCell>
-                      {limitFileSize ? `${fileSizeLimit} MB` : 'None'}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {limitFileSize ? 'Set' : 'Unset'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Waveforms</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {waveformsEnabled ? 'Enabled' : 'Disabled'}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>TetrAMM IP</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {ipCurrent}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>TetrAMM Port</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell>
-                      <Badge variant="outline">
-                        {portCurrent}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
+            <CardContent className="px-2 sm:px-6 overflow-auto">
+              <div className="min-w-full overflow-x-auto">
+                <Table className="w-full">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="whitespace-nowrap text-xs sm:text-sm w-1/3">Parameter</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs sm:text-sm w-1/3">Value</TableHead>
+                      <TableHead className="whitespace-nowrap text-xs sm:text-sm w-1/3">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <TableRow>
+                      <TableCell className="text-xs sm:text-sm py-2">Run Number</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">{runNumber !== null ? runNumber : ''}</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">
+                        <Badge variant="outline" className="text-xs">Autoincrement</Badge>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-xs sm:text-sm py-2">Save Data</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2"></TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {saveData ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-xs sm:text-sm py-2">Max File Size</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">
+                        {limitFileSize ? `${fileSizeLimit} MB` : 'None'}
+                      </TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {limitFileSize ? 'Set' : 'Unset'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-xs sm:text-sm py-2">Waveforms</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2"></TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {waveformsEnabled ? 'Enabled' : 'Disabled'}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-xs sm:text-sm py-2">TetrAMM IP</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2"></TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {ipCurrent}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="text-xs sm:text-sm py-2">TetrAMM Port</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2"></TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">
+                        <Badge variant="outline" className="text-xs">
+                          {portCurrent}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -6,6 +6,8 @@ import ROOT
 import threading
 import time
 
+DEBUG = True
+
 class ru_spy:
     def __init__(self, host='localhost', port=6060):
         self.host = host
@@ -28,12 +30,16 @@ class ru_spy:
                 self.data[key].append(ROOT.TH1F("{} {}".format(key,i), "{} {}".format(key,i), 32768, 0, 32768))      
 
     def connect(self):
+        if DEBUG:
+            return
         self.socket = ROOT.TSocket(self.host, self.port)
         if not self.socket.IsValid():
             raise ConnectionError(f"Error connecting to {self.host}:{self.port}")
         return
 
     def disconnect(self):
+        if DEBUG:
+            return
         self.socket.Close()
         return
 
@@ -51,6 +57,8 @@ class ru_spy:
         return self.obj
         
     def start(self, state):
+        if DEBUG:
+            return
         cmd = "RUSpy"
         for board in state['boards']:
             firmware = 0 if board['dpp'] == "DPP-PHA" else 1
@@ -71,6 +79,9 @@ class ru_spy:
         return
 
     def collect(self):
+        if DEBUG:
+            return
+        
         indexes = { "energy": 0, "qshort": 0, "qlong": 0, "wave1": 0, "wave2": 0 }
         self.connect()
         self.send("get")

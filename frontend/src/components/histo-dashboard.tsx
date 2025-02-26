@@ -153,6 +153,34 @@ export default function HistogramDashboard() {
     }
   }, [jsrootLoaded, theme])
 
+  // Add this useEffect to handle wheel events on histograms
+  useEffect(() => {
+    if (!jsrootLoaded || boards.length === 0) return;
+
+    const preventScroll = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+
+    // Get all histogram elements and add non-passive wheel event listeners
+    const histoElements = Object.values(histogramRefs.current).filter(el => el !== null);
+    histoElements.forEach(el => {
+      if (el) {
+        el.addEventListener('wheel', preventScroll, { passive: false });
+      }
+    });
+
+    // Clean up event listeners on unmount
+    return () => {
+      histoElements.forEach(el => {
+        if (el) {
+          el.removeEventListener('wheel', preventScroll);
+        }
+      });
+    };
+  }, [jsrootLoaded, boards, updateTrigger]); // Include updateTrigger to refresh when new refs are added
+
   // API calls
   const fetchBoardConfiguration = async () => {
     try {
@@ -329,7 +357,6 @@ export default function HistogramDashboard() {
     if (histoElement) {
       const blankHist = createBlankHistogram(histoId)
     }
-
   }
 
   const drawHistogramWithROI = async (element: HTMLDivElement, histogram: any, histoId: string, chan: string, id: string) => {
@@ -393,6 +420,7 @@ export default function HistogramDashboard() {
   const handleDialogClose = () => {
     setActiveDialog(null);
   };
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">

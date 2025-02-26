@@ -5,7 +5,10 @@ import json
 from ctypes import *
 from typing import Dict
 
-libCAENDigitizer = CDLL('/usr/lib/libCAENDigitizer.so')
+DEBUG = True
+
+if not DEBUG:
+    libCAENDigitizer = CDLL('/usr/lib/libCAENDigitizer.so')
 
 def check_error_code(code):
 	"""Check if the code returned by a function of the libCAENDigitizer
@@ -49,12 +52,22 @@ class digitizer:
         self.__handle = c_int()
 
     def open(self):
+
+        if DEBUG:
+            self._connected = True
+            return
+          
         if self._connected == False:
             code = libCAENDigitizer.CAEN_DGTZ_OpenDigitizer(c_long(self._LinkType), c_int(self._LinkNum), c_int(self._BoardId), c_uint32(self._VmeAddress), byref(self.__handle))
             check_error_code(code)
             self._connected = True
     
     def close(self):
+        
+        if DEBUG:
+            self._connected = False
+            return
+
         if self._connected == True:
             code = libCAENDigitizer.CAEN_DGTZ_CloseDigitizer(self.__handle)
             check_error_code(code)
@@ -68,6 +81,19 @@ class digitizer:
         return self.__handle
 
     def get_info(self)->dict:
+        if DEBUG:
+            info = {
+                "ModelName": "DT5724",
+                "Model": 0x5724,
+                "Channels": 8,
+                "FormFactor": 0,
+                "FamilyCode": 0,
+                "ROC_FirmwareRel": "2.0.0",
+                "AMC_FirmwareRel": "2.0.0",
+                "SerialNumber": 0
+            }
+            return info
+
         info = BoardInfo()
         code = libCAENDigitizer.CAEN_DGTZ_GetInfo(self.get_handle(), byref(info))
         check_error_code(code)
@@ -77,20 +103,23 @@ class digitizer:
         return info
 
     def write_register(self, address, data):
+        if DEBUG: return
         code = libCAENDigitizer.CAEN_DGTZ_WriteRegister(self.get_handle(), c_uint32(address), c_uint32(data))
         check_error_code(code)
 
     def read_register(self, address):
+        if DEBUG: return 0
         data = c_uint32()
         code = libCAENDigitizer.CAEN_DGTZ_ReadRegister(self.get_handle(), c_uint32(address), byref(data),)
         check_error_code(code)
         return data.value
 
     def set_board_id(self):
+        if DEBUG: return
         reg = self.write_register(0xEF08, self._BoardId)
 
     def read_pha(self, file_name: str) -> None:
-        
+
         map_register: Dict[int, str] = {
             0x1034: "Number of Events per Aggregate",
             0x1038: "Pre Trigger",
@@ -121,12 +150,59 @@ class digitizer:
             0xEF08: "Board ID",
             0xEF1C: "Aggregate Number per BLT"
         }
-
         reg_list = {}
         dgt_list = {}
-        
+
         # Get board information
         info = self.get_info()
+
+        if DEBUG:
+            dgtz = {} 
+            default_values = {
+            0x1034: 0x10,
+            0x1038: 0x20,
+            0x1044: 0x30,
+            0x1054: 0x40,
+            0x1058: 0x50,
+            0x105C: 0x60,
+            0x1060: 0x70,
+            0x1064: 0x80,
+            0x1068: 0x90,
+            0x106C: 0xA0,
+            0x1074: 0xB0,
+            0x1078: 0xC0,
+            0x107C: 0xD0,
+            0x1080: 0xE0,
+            0x1084: 0xF0,
+            0x1098: 0x100,
+            0x10A0: 0x110,
+            0x10B8: 0x120,
+            0x10C4: 0x130,
+            0x10D4: 0x140,
+            0x8000: 0x150,
+            0x800C: 0x160,
+            0x8020: 0x170,
+            0x8100: 0x180,
+            0x810C: 0x190,
+            0x8120: 0x1A0,
+            0xEF08: 0x1B0,
+            0xEF1C: 0x1C0
+            }
+            for reg_address, reg_value in default_values.items():
+                reg_addr_str = f"0x{reg_address:04x}"
+                reg_val_str = f"0x{reg_value:x}"
+                reg_key = f"reg_{reg_address:04x}"
+                reg_list[reg_key] = {
+                    "name": map_register[reg_address],
+                    "channel": 0,
+                    "address": reg_addr_str,
+                    "value": reg_val_str
+                }
+            dgtz["registers"] = reg_list
+            with open(file_name, 'w') as f:
+                json.dump(dgtz, f, indent=2, ensure_ascii=False)
+            return
+        
 
         # Populate board info
         dgt_list["BoardName"] = str(info["ModelName"])
@@ -214,6 +290,44 @@ class digitizer:
         
         # Get board information
         info = self.get_info()
+
+        if DEBUG:
+            dgtz = {}
+            default_values = {
+            0x1034: 0x10,
+            0x1038: 0x20,
+            0x1044: 0x30,
+            0x1054: 0x40,
+            0x1058: 0x50,
+            0x105C: 0x60,
+            0x1060: 0x70,
+            0x1064: 0x80,
+            0x1068: 0x90,
+            0x106C: 0xA0,
+            0x1074: 0xB0,
+            0x1078: 0xC0,
+            0x107C: 0xD0,
+            0x1080: 0xE0,
+            0x1084: 0xF0,
+            0x1098: 0x100,
+            0x10A0: 0x110,
+            0x10B8: 0x120,
+            }
+            for reg_address, reg_value in default_values.items():
+                reg_addr_str = f"0x{reg_address:04x}"
+                reg_val_str = f"0x{reg_value:x}"
+                reg_key = f"reg_{reg_address:04x}"
+                reg_list[reg_key] = {
+                    "name": map_register[reg_address],
+                    "channel": 0,
+                    "address": reg_addr_str,
+                    "value": reg_val_str
+                }
+            dgtz["registers"] = reg_list
+            with open(file_name, 'w') as f:
+                json.dump(dgtz, f, indent=2, ensure_ascii=False)
+            return
+
 
         # Populate board info
         dgt_list["BoardName"] = str(info["ModelName"])
