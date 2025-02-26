@@ -34,6 +34,7 @@ import { Separator } from "@/components/ui/separator"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   AlertDialog,
@@ -849,6 +850,50 @@ export function RunControl() {
               <CardTitle className="text-lg sm:text-xl">Experiment Controls</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-8">
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="targetName">Target Name</Label>
+                    <Input
+                      id="targetName"
+                      type="text"
+                      value=""
+                      onChange={() => {}}
+                      disabled={isRunning}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="targetType">Run Type</Label>
+                    <Select>
+                <SelectTrigger id="framework">
+                  <SelectValue placeholder="Select" />
+                </SelectTrigger>
+                <SelectContent position="popper">
+                  <SelectItem value="longrun">Long Run</SelectItem>
+                  <SelectItem value="scan">Scan</SelectItem>
+                  <SelectItem value="background">Background</SelectItem>
+                </SelectContent>
+              </Select>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="tv">TV</Label>
+                    <Input
+                      id="tv"
+                      type="text"
+                      value=""
+                      onChange={() => {}}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="pv">PV</Label>
+                    <Input
+                      id="pv"
+                      type="text"
+                      value=""
+                      onChange={() => {}}
+                      disabled={isRunning}
+                    />
+                  </div>
+                </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
                 <Button onClick={handleStartRun} className="w-full" disabled={isRunning}>
                   <PlayCircle className="mr-2 h-4 w-4" />
