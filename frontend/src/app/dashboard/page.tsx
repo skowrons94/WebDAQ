@@ -15,7 +15,6 @@ import { Layout } from '@/components/dashboard-layout'; import {
   TabsTrigger,
 } from "@/components/ui/tabs"
 import { useVisualizationStore } from '@/store/visualization-settings-store'
-import CurrentGraph from "@/components/current-graph"
 
 
 const queryClient = new QueryClient()
@@ -49,7 +48,6 @@ export default function DashboardPage() {
             </div>
           <TabsContent value="overview">
             <RunControl />
-            <CurrentGraph />
           </TabsContent>
           <TabsContent value="stats">
             <Stats />

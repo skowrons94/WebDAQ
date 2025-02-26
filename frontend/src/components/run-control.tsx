@@ -112,6 +112,7 @@ import {
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
 import useRunControlStore from '@/store/run-control-store'
+import CurrentGraph from "@/components/current-graph"
 
 import { string } from 'zod'
 
@@ -963,6 +964,9 @@ export function RunControl() {
               </div>
             </CardContent>
           </Card>
+        </div>
+        <div className=" gap-4 ">
+        <CurrentGraph />
         </div>
       </main>
       <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
