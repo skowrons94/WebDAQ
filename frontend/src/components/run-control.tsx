@@ -987,21 +987,12 @@ export function RunControl() {
                       </TableCell>
                     </TableRow>
                     <TableRow>
-                      <TableCell className="text-xs sm:text-sm py-2">TetrAMM IP</TableCell>
-                      <TableCell className="text-xs sm:text-sm py-2"></TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">TetrAMM Address</TableCell>
+                      <TableCell className="text-xs sm:text-sm py-2">{`${ipCurrent}:${portCurrent}`}</TableCell>
                       <TableCell className="text-xs sm:text-sm py-2">
-                        <Badge variant="outline" className="text-xs">
-                          {ipCurrent}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="text-xs sm:text-sm py-2">TetrAMM Port</TableCell>
-                      <TableCell className="text-xs sm:text-sm py-2"></TableCell>
-                      <TableCell className="text-xs sm:text-sm py-2">
-                        <Badge variant="outline" className="text-xs">
-                          {portCurrent}
-                        </Badge>
+                      <Badge variant={isConnectedCurrent ? "outline" : "destructive"} className="text-xs">
+                        {isConnectedCurrent ? 'Connected' : 'Disconnected'}
+                      </Badge>
                       </TableCell>
                     </TableRow>
                   </TableBody>
