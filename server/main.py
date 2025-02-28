@@ -1,4 +1,5 @@
 # run.py
+import os
 from waitress import serve
 from app import create_app, db
 from app.models.user import User

@@ -20,7 +20,10 @@ from app.services.dgtz import digitizer
 
 import threading
 
-XDAQ_FLAG = False
+#TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = os.getenv('TEST_FLAG', False)
+
+print( "TEST_FLAG: ", TEST_FLAG )
 
 bp = Blueprint('experiment', __name__)
 
@@ -32,7 +35,7 @@ def update_project( daq_state ):
     # Save as JSON
     with open('conf/settings.json', 'w') as f:
         json.dump(daq_state, f, indent=4)
-    if( XDAQ_FLAG ):
+    if( not TEST_FLAG ):
         topology.write_ruconf(daq_state)
 
 # Functio to get histo index and board dpp
@@ -87,7 +90,7 @@ topology.display()
 
 r_spy = ru_spy( )
 
-if( XDAQ_FLAG ):
+if( not TEST_FLAG ):
     directory = os.path.dirname(os.path.realpath("./server"))
     container = xdaq.container(directory)
     container.initialize()
@@ -135,7 +138,7 @@ def start_run( ):
         os.system(f"cp {conf_file} data/run{run}/")
 
     # Start the XDAQ
-    if( XDAQ_FLAG ):
+    if( not TEST_FLAG ):
         topology.set_cycle_counter(0)
         if( limit_size ): topology.set_file_size_limit(file_size_limit)
         else: topology.set_file_size_limit(0)
@@ -149,11 +152,11 @@ def start_run( ):
 
     # Run the Spy to  save the histograms to txt file in run directory
     # Example: ./LunaSpy -d board_name firmware channel -n run_number
-    if( XDAQ_FLAG ):
+    if( not TEST_FLAG ):
         r_spy.start(daq_state)
     
     # If we save the data, add the run to database
-    if( save or not XDAQ_FLAG ):
+    if( save or TEST_FLAG ):
         run = daq_state['run']
         time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -209,11 +212,11 @@ def stop_run( ):
     time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
     # Stop the XDAQ
-    if( XDAQ_FLAG ):
+    if( not TEST_FLAG ):
         topology.halt( )
 
     # If we save the data, update the run in the database
-    if( daq_state['save'] or not XDAQ_FLAG and daq_state['running'] ):
+    if( daq_state['save'] or TEST_FLAG and daq_state['running'] ):
         daq_state['run'] += 1
 
     daq_state['running'] = False
@@ -224,7 +227,7 @@ def stop_run( ):
 
     # Update metadata in the database
     try:
-        if( daq_state['save'] or not XDAQ_FLAG ):
+        if( daq_state['save'] or TEST_FLAG ):
             run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
             run_metadata.end_time = datetime.now()
             db.session.commit()
@@ -465,7 +468,7 @@ def check_run_directory():
 @jwt_required_custom
 def get_run_status():
     global daq_state
-    if XDAQ_FLAG:
+    if not TEST_FLAG:
         try:
             status = topology.get_daq_status( )
             if status == "Running":
@@ -565,7 +568,7 @@ def wave_status():
 def get_file_bandwith( ):
     
     # For all xdaq actors in topology get the file bandwith
-    if( daq_state['running'] and XDAQ_FLAG ):
+    if( daq_state['running'] and not TEST_FLAG ):
         actors = topology.get_all_actors()
         data = 0
         for actor in actors:
@@ -581,7 +584,7 @@ def get_file_bandwith( ):
 def get_output_bandwith( ):
     
     # For all xdaq actors in topology get the file bandwith
-    if( daq_state['running'] and XDAQ_FLAG ):
+    if( daq_state['running'] and not TEST_FLAG ):
         actors = topology.get_all_actors()
         data = 0
         for actor in actors:
@@ -623,7 +626,7 @@ def get_histo(board_id, channel):
     histo.Rebin( 16 )
 
     # Fill the histogram with random numbers
-    if( not XDAQ_FLAG ):
+    if( TEST_FLAG ):
         histo.FillRandom("gaus", 1000)
 
     obj = TBufferJSON.ConvertToJSON(histo)
@@ -642,7 +645,7 @@ def get_roi_histo(board_id, channel, roi_min, roi_max):
     histo.Rebin( 16 )
 
     # Fill the histogram with random numbers
-    if( not XDAQ_FLAG ):
+    if( TEST_FLAG ):
         histo.FillRandom("gaus", 1000)
 
     h1 = TH1F(histo)

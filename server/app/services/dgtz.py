@@ -1,3 +1,4 @@
+import os
 import time
 import numpy
 import json
@@ -5,9 +6,10 @@ import json
 from ctypes import *
 from typing import Dict
 
-DEBUG = True
+#TEST_FLAG = False
+TEST_FLAG = os.getenv('TEST_FLAG', False)
 
-if not DEBUG:
+if not TEST_FLAG:
     libCAENDigitizer = CDLL('/usr/lib/libCAENDigitizer.so')
 
 def check_error_code(code):
@@ -53,7 +55,7 @@ class digitizer:
 
     def open(self):
 
-        if DEBUG:
+        if TEST_FLAG:
             self._connected = True
             return
           
@@ -64,7 +66,7 @@ class digitizer:
     
     def close(self):
         
-        if DEBUG:
+        if TEST_FLAG:
             self._connected = False
             return
 
@@ -81,7 +83,7 @@ class digitizer:
         return self.__handle
 
     def get_info(self)->dict:
-        if DEBUG:
+        if TEST_FLAG:
             info = {
                 "ModelName": "DT5724",
                 "Model": 0x5724,
@@ -103,19 +105,19 @@ class digitizer:
         return info
 
     def write_register(self, address, data):
-        if DEBUG: return
+        if TEST_FLAG: return
         code = libCAENDigitizer.CAEN_DGTZ_WriteRegister(self.get_handle(), c_uint32(address), c_uint32(data))
         check_error_code(code)
 
     def read_register(self, address):
-        if DEBUG: return 0
+        if TEST_FLAG: return 0
         data = c_uint32()
         code = libCAENDigitizer.CAEN_DGTZ_ReadRegister(self.get_handle(), c_uint32(address), byref(data),)
         check_error_code(code)
         return data.value
 
     def set_board_id(self):
-        if DEBUG: return
+        if TEST_FLAG: return
         reg = self.write_register(0xEF08, self._BoardId)
 
     def read_pha(self, file_name: str) -> None:
@@ -156,7 +158,7 @@ class digitizer:
         # Get board information
         info = self.get_info()
 
-        if DEBUG:
+        if TEST_FLAG:
             dgtz = {} 
             default_values = {
             0x1034: 0x10,
@@ -291,7 +293,7 @@ class digitizer:
         # Get board information
         info = self.get_info()
 
-        if DEBUG:
+        if TEST_FLAG:
             dgtz = {}
             default_values = {
             0x1034: 0x10,

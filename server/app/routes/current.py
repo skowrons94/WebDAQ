@@ -14,7 +14,8 @@ from datetime import datetime
 
 bp = Blueprint('current', __name__)
 
-TEST_FLAG = True
+#TEST_FLAG = True
+TEST_FLAG = os.getenv('TEST_FLAG', False)
 
 # Default settings
 accumulated = 0

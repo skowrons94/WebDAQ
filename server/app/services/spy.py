@@ -6,7 +6,8 @@ import ROOT
 import threading
 import time
 
-DEBUG = True
+#TEST_FLAG = True
+TEST_FLAG = os.getenv('TEST_FLAG', False)
 
 class ru_spy:
     def __init__(self, host='localhost', port=6060):
@@ -30,7 +31,7 @@ class ru_spy:
                 self.data[key].append(ROOT.TH1F("{} {}".format(key,i), "{} {}".format(key,i), 32768, 0, 32768))      
 
     def connect(self):
-        if DEBUG:
+        if TEST_FLAG:
             return
         self.socket = ROOT.TSocket(self.host, self.port)
         if not self.socket.IsValid():
@@ -38,7 +39,7 @@ class ru_spy:
         return
 
     def disconnect(self):
-        if DEBUG:
+        if TEST_FLAG:
             return
         self.socket.Close()
         return
@@ -57,7 +58,7 @@ class ru_spy:
         return self.obj
         
     def start(self, state):
-        if DEBUG:
+        if TEST_FLAG:
             return
         cmd = "RUSpy"
         for board in state['boards']:
@@ -79,7 +80,7 @@ class ru_spy:
         return
 
     def collect(self):
-        if DEBUG:
+        if TEST_FLAG:
             return
         
         indexes = { "energy": 0, "qshort": 0, "qlong": 0, "wave1": 0, "wave2": 0 }
