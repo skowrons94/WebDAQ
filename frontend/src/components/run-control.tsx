@@ -118,6 +118,7 @@ import useRunControlStore from '@/store/run-control-store'
 import CurrentGraph from "@/components/current-graph"
 
 import { string } from 'zod'
+import { set } from 'react-hook-form'
 
 
 type BoardData = {
@@ -159,6 +160,7 @@ export function RunControl() {
   const [timer, setTimer] = useState(0)
   const [startTime, setStartTime] = useState<string | null>(null)
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
+  const [showVoltagesDialog, setShowVoltagesDialog] = useState(false)
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [waveformsEnabled, setWaveformsEnabled] = useState(false)
   const [roiValues, setRoiValues] = useState<ROIValues>({})
@@ -178,6 +180,7 @@ export function RunControl() {
   const [runType, setRunType] = useState<string>('')
   const [tv, setTv] = useState<string>("0")
   const [pv, setPv] = useState<string>("0")
+  const [voltagesModified, setVoltagesModified] = useState<boolean>(false)
 
   
 
@@ -323,6 +326,7 @@ export function RunControl() {
         setRunType(lastRun.run_type || '');
         setTv(lastRun.terminal_voltage || '0');
         setPv(lastRun.probe_voltage || '0');
+        setVoltagesModified(false);
       }
     } catch (error) {
       console.error('Failed to fetch last run metadata:', error);
@@ -525,10 +529,12 @@ export function RunControl() {
         setShowOverrideDialog(true)
         return
       }
+      if (!voltagesModified) {
+        setShowVoltagesDialog(true)
+        return
+      }
 
       await startRunProcess()
-      const initialCurrent = await getDataCurrent()
-      localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
     } catch (error) {
       console.error('Failed to start run:', error)
       toast({
@@ -575,6 +581,9 @@ export function RunControl() {
       if( saveData ) {
         await startAcquisitionCurrent( String(runNumber) )
       }
+
+      const initialCurrent = await getDataCurrent()
+      localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
 
       await startRun()
 
@@ -634,6 +643,7 @@ export function RunControl() {
       setIsRunning(false)
       setIsRunningStore(false)
       setStartTimeStore(null)
+      setVoltagesModified(false)
 
       const newRunNumber = await getCurrentRunNumber()
       setRunNumberState(newRunNumber)
@@ -749,7 +759,7 @@ export function RunControl() {
   return (
     <div className="flex flex-col bg-background text-foreground">
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-2">
-        <ScrollArea className="h-[320px] rounded-md border p-4">
+        <ScrollArea className="h-[420px] rounded-md border p-4">
         <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-6 md:gap-8 lg:grid-cols-4">
             {settings.showStatus && <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -905,7 +915,8 @@ export function RunControl() {
                     <SelectContent position="popper">
                     <SelectItem value="longrun">Long Run</SelectItem>
                     <SelectItem value="scan">Scan</SelectItem>
-                    <SelectItem value="background">Background</SelectItem>
+                      <SelectItem value="background">Background</SelectItem>
+                      <SelectItem value="calibration">Calibration</SelectItem>
                     </SelectContent>
                   </Select>
                   </div>
@@ -915,20 +926,26 @@ export function RunControl() {
                     id="tv"
                     type="text"
                     value={tv}
-                    onChange={(e) => setTv(e.target.value)}
+                    onChange={(e) => {
+                      setTv(e.target.value)
+                      setVoltagesModified(true)
+                    }}
                     disabled={isRunning}
                   />
                   </div>
-                  <div className="flex flex-col gap-2">
-                  <Label htmlFor="pv">PV</Label>
-                  <Input
+                    <div className="flex flex-col gap-2">
+                    <Label htmlFor="pv">PV</Label>
+                    <Input
                     id="pv"
                     type="text"
                     value={pv}
-                    onChange={(e) => setPv(e.target.value)}
+                    onChange={(e) => {
+                      setPv(e.target.value)
+                      setVoltagesModified(true)
+                    }}
                     disabled={isRunning}
-                  />
-                  </div>
+                    />
+                    </div>
                 </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
                 <Button onClick={handleStartRun} className="w-full" disabled={isRunning}>
@@ -1044,6 +1061,7 @@ export function RunControl() {
         <CurrentGraph />
         </div>
       </main>
+      {/* Override Dialog */}
       <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1058,6 +1076,22 @@ export function RunControl() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Same voltages dialog */}
+      <AlertDialog open={showVoltagesDialog} onOpenChange={setShowVoltagesDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Keep same acceleraotor voltages?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The voltages for the current run are the same as the last run. Do you want to keep them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Discard</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { startRunProcess(); setVoltagesModified(false); }}>Keep</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* Parameters Dialog */}
       <Dialog open={showParametersDialog} onOpenChange={setShowParametersDialog}>
         <DialogContent>
           <DialogHeader>

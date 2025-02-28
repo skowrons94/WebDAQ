@@ -33,24 +33,57 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { mkConfig, generateCsv, download } from 'export-to-csv'
+import { createColumns } from "./columns" // Make sure this path is correct
+import { RunMetadata } from "./columns" // Import the type
 
 
-interface DataTableProps<TData extends { [k: string]: any; [k: number]: any }, TValue> {
+interface DataTableProps<TData extends { [k: string]: any;[k: number]: any }, TValue> {
     columns: ColumnDef<TData, TValue>[]
     data: TData[]
+    onDataChange?: () => void;
 }
 
 export function DataTable<TData extends { [k: string]: any;[k: number]: any }, TValue>({
     columns,
     data,
+    onDataChange,
 }: DataTableProps<TData, TValue>) {
-    const [sorting, setSorting] = React.useState<SortingState>([{id: "run_number", desc: true }])
-    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
-        []
-    )
-    const [columnVisibility, setColumnVisibility] =
-        React.useState<VisibilityState>({})
+    const [sorting, setSorting] = React.useState<SortingState>([{ id: "run_number", desc: true }])
+    const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
 
+    // LocalStorage key for saving column visibility
+    const STORAGE_KEY = 'dataTable_columnVisibility'
+
+    // Initialize column visibility state with localStorage values if available
+    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
+        if (typeof window !== 'undefined') {
+            try {
+                const savedVisibility = localStorage.getItem(STORAGE_KEY)
+                if (savedVisibility) {
+                    return JSON.parse(savedVisibility)
+                }
+            } catch (error) {
+                console.error('Error loading column visibility from localStorage:', error)
+            }
+        }
+        return {}
+    })
+
+    // Save column visibility to localStorage whenever it changes
+    React.useEffect(() => {
+        // Ensure we're in browser environment before accessing localStorage
+        if (typeof window !== 'undefined') {
+            try {
+                // Only save if we have actual visibility settings
+                // This prevents overwriting saved values with empty state during SSR
+                if (Object.keys(columnVisibility).length > 0) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(columnVisibility))
+                }
+            } catch (error) {
+                console.error('Error saving column visibility to localStorage:', error)
+            }
+        }
+    }, [columnVisibility])
 
     const table = useReactTable({
         data,
@@ -66,15 +99,16 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
             sorting,
             columnFilters,
             columnVisibility,
-
         }
     })
+
     const csvConfig = mkConfig({
         fieldSeparator: ',',
         filename: 'Logbook', // export file name (without .csv)
         decimalSeparator: '.',
         useKeysAsHeaders: true,
     })
+
     // export function
     const exportExcel = (rows: Row<TData>[]) => {
         //const rowData = rows.map((row) => row.original)
@@ -85,10 +119,14 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                     new Date(row.original.start_time).toLocaleString() : '',
                 'End Time': row.original.end_time ?
                     new Date(row.original.end_time).toLocaleString() : '',
-                'Notes': row.original.notes,
+                'Target': row.original.target_name,
+                'Run Type': row.original.run_type,
+                'Terminal Voltage': row.original.terminal_voltage,
+                'Probe Voltage': row.original.probe_voltage,
+                'Accumulated charge': row.original.accumulated_charge
             }
         })
-        const csv = generateCsv(csvConfig)(rowData as { [k: string]: any; [k: number]: any }[])
+        const csv = generateCsv(csvConfig)(rowData as { [k: string]: any;[k: number]: any }[])
         download(csvConfig)(csv)
     }
 
@@ -96,10 +134,10 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
         <div>
             <div className="flex items-center py-4">
                 <Input
-                    placeholder="Filter Times (Example)..."
-                    value={(table.getColumn("start_time")?.getFilterValue() as string) ?? ""}
+                    placeholder="Filter targets..."
+                    value={(table.getColumn("target_name")?.getFilterValue() as string) ?? ""}
                     onChange={(event) =>
-                        table.getColumn("start_time")?.setFilterValue(event.target.value)
+                        table.getColumn("target_name")?.setFilterValue(event.target.value)
                     }
                     className="max-w-sm"
                 />
@@ -141,49 +179,49 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                     Download CSV...
                 </Button>
             </div>
-        <div className="rounded-md border">
-            <Table>
-                <TableHeader>
-                    {table.getHeaderGroups().map((headerGroup) => (
-                        <TableRow key={headerGroup.id}>
-                            {headerGroup.headers.map((header) => {
-                                return (
-                                    <TableHead key={header.id}>
-                                        {header.isPlaceholder
-                                            ? null
-                                            : flexRender(
-                                                header.column.columnDef.header,
-                                                header.getContext()
-                                            )}
-                                    </TableHead>
-                                )
-                            })}
-                        </TableRow>
-                    ))}
-                </TableHeader>
-                <TableBody>
-                    {table.getRowModel().rows?.length ? (
-                        table.getRowModel().rows.map((row) => (
-                            <TableRow
-                                key={row.id}
-                                data-state={row.getIsSelected() && "selected"}
-                            >
-                                {row.getVisibleCells().map((cell) => (
-                                    <TableCell key={cell.id}>
-                                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                    </TableCell>
-                                ))}
+            <div className="rounded-md border">
+                <Table>
+                    <TableHeader>
+                        {table.getHeaderGroups().map((headerGroup) => (
+                            <TableRow key={headerGroup.id}>
+                                {headerGroup.headers.map((header) => {
+                                    return (
+                                        <TableHead key={header.id}>
+                                            {header.isPlaceholder
+                                                ? null
+                                                : flexRender(
+                                                    header.column.columnDef.header,
+                                                    header.getContext()
+                                                )}
+                                        </TableHead>
+                                    )
+                                })}
                             </TableRow>
-                        ))
-                    ) : (
-                        <TableRow>
-                            <TableCell colSpan={columns.length} className="h-24 text-center">
-                                No results.
-                            </TableCell>
-                        </TableRow>
-                    )}
-                </TableBody>
-            </Table>
+                        ))}
+                    </TableHeader>
+                    <TableBody>
+                        {table.getRowModel().rows?.length ? (
+                            table.getRowModel().rows.map((row) => (
+                                <TableRow
+                                    key={row.id}
+                                    data-state={row.getIsSelected() && "selected"}
+                                >
+                                    {row.getVisibleCells().map((cell) => (
+                                        <TableCell key={cell.id}>
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))
+                        ) : (
+                            <TableRow>
+                                <TableCell colSpan={columns.length} className="h-24 text-center">
+                                    No results.
+                                </TableCell>
+                            </TableRow>
+                        )}
+                    </TableBody>
+                </Table>
             </div>
             <div className="flex items-center justify-end space-x-2 py-4">
                 <Button
