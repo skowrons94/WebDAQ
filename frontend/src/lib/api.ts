@@ -30,6 +30,15 @@ export const stopRun = () =>
 export const addNote = (runNumber: number, note: string) =>
     api.post('/experiment/add_note', { run_number: runNumber, note });
 
+export const addRunMetadata = (runNumber: number, targetName: string, terminalVoltage: string, probeVoltage: string, runType: string) =>
+    api.post('/experiment/add_run_metadata', {
+        run_number: runNumber,
+        target_name: targetName,
+        terminal_voltage: Number(terminalVoltage),
+        probe_voltage: Number(probeVoltage),
+        run_type: runType
+    });
+
 export const getRunMetadata = (runNumber: number) =>
     api.get(`/experiment/get_run_metadata/${runNumber}`);
 
@@ -183,8 +192,8 @@ export const setSetting = (id: string, setting: string, value: string) =>
     api.get(`/experiment/boards/${id}/${setting}/${value}`);
 
 // Generic metric data fetching function
-export const getMetricData = (entityName: string, metricName: string, from: string = '-10s', until: string = 'now') =>
-    api.get(`/stats/${entityName}/${metricName}`, { params: { from, until } }).then(res => res.data);
+export const getMetricData = (entityName: string, from: string = '-10s', until: string = 'now') =>
+    api.get(`/stats/${entityName}`, { params: { from, until } }).then(res => res.data);
 
 // FC control
 export const openFaraday = () =>

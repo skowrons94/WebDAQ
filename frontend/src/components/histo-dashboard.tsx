@@ -8,8 +8,9 @@ import { loadJSROOT } from '@/lib/load-jsroot'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTheme } from 'next-themes'
-import { Settings } from 'lucide-react'
+import { Settings, Grid2X2, Rows2 } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -114,6 +115,7 @@ export default function HistogramDashboard() {
   const { toast } = useToast()
   const { theme } = useTheme()
   const initialFetchDone = useRef(false)
+  const [layout, setLayout] = useState<'grid' | 'rows'>('grid')
 
   // Initial setup
   useEffect(() => {
@@ -413,6 +415,10 @@ export default function HistogramDashboard() {
     setIsLogScale(!isLogScale)
   }
 
+  const setLogScale = (value: boolean) => {
+    setIsLogScale(value)
+  }
+
   const handleDialogOpen = (histoId: string) => {
     setActiveDialog(histoId);
   };
@@ -426,17 +432,25 @@ export default function HistogramDashboard() {
       <main className="flex-1 container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Histogram Dashboard</h1>
+          <ToggleGroup type="single" value={layout} onValueChange={(value) => setLayout(value as 'grid' | 'rows')}>
+            <ToggleGroupItem value="grid"><Grid2X2 className="h-4 w-4" /> </ToggleGroupItem>
+            <ToggleGroupItem value="rows"><Rows2 className="h-4 w-4" /> </ToggleGroupItem>
+          </ToggleGroup>
         </div>
         {boards.map((board) => (
           <Card key={board.id} className="mb-6">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>{board.name} (ID: {board.id})</CardTitle>
-              <Button onClick={toggleLogScale} variant="outline">
+{/*               <Button onClick={toggleLogScale} variant="outline">
                 {isLogScale ? "Linear" : "Logarithmic"}
-              </Button>
+              </Button> */}
+                <ToggleGroup type="single" value={isLogScale ? 'logaritmic' : 'linear'} onValueChange={(value) => setLogScale(value === 'logaritmic')}>
+                <ToggleGroupItem value="linear">Linear </ToggleGroupItem>
+                <ToggleGroupItem value="logaritmic">Logaritmic </ToggleGroupItem>
+              </ToggleGroup>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-1 xl:grid-cols-1 gap-6">
+              <div className={`grid ${layout === 'grid' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3' : 'grid-cols-1'} gap-6`}>
                 {Array.from({ length: parseInt(board.chan) }).map((_, channelIndex) => {
                   const histoId = `board${board.id}_channel${channelIndex}`
                   const roi = roiValues[histoId] || { low: 0, high: 0 }

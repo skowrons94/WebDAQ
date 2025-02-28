@@ -76,6 +76,11 @@ def check_project( ):
 
 daq_state = check_project( )
 
+target_name = ""
+terminal_voltage = 0
+probe_voltage = 0
+run_type = ""
+
 topology = xdaq.topology("conf/topology.xml")
 topology.load_topology( )
 topology.display()
@@ -97,7 +102,7 @@ update_project(daq_state)
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
 def start_run( ):
-    global daq_state, t_crash, start_thread
+    global daq_state, t_crash, start_thread#, target_name, terminal_voltage, probe_voltage, run_type
 
     run = daq_state['run']
     save = daq_state['save']
@@ -156,11 +161,21 @@ def start_run( ):
         try:
             run_metadata = RunMetadata.query.filter_by(run_number=run).first()
             if not run_metadata:
-                run_metadata = RunMetadata(run_number=run, start_time=datetime.now(), user_id=get_current_user())
+                run_metadata = RunMetadata(run_number=run, 
+                                           start_time=datetime.now(), 
+                                           #target_name=target_name,
+                                           #terminal_voltage=terminal_voltage,
+                                           #probe_voltage=probe_voltage,
+                                           #run_type=run_type,
+                                           user_id=get_current_user())
                 db.session.add(run_metadata)
                 db.session.commit()
             else:
                 run_metadata.start_time = time
+                #run_metadata.target_name = target_name
+                #run_metadata.terminal_voltage = terminal_voltage
+                #run_metadata.probe_voltage = probe_voltage
+                #run_metadata.run_type = run_type
                 run_metadata.end_time = None
             
                 db.session.commit()
@@ -232,6 +247,27 @@ def add_note():
         return jsonify({'message': 'Note added successfully'}), 200
     return jsonify({'message': 'Run not found'}), 404
 
+@bp.route("/experiment/add_run_metadata", methods=['POST'])
+@jwt_required_custom
+def add_run_metadata():
+    data = request.get_json()
+    run_number = data['run_number']
+    target_name = data['target_name']
+    terminal_voltage = data['terminal_voltage']
+    probe_voltage = data['probe_voltage']
+    run_type = data['run_type']
+    
+    run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
+    if run_metadata:
+        run_metadata.target_name = target_name
+        run_metadata.terminal_voltage = terminal_voltage
+        run_metadata.probe_voltage = probe_voltage
+        run_metadata.run_type = run_type
+        db.session.commit()
+        return jsonify({'message': 'Run metadata added successfully'}), 200
+    return jsonify({'message': 'Run not found'}), 404
+
+
 @bp.route("/experiment/get_run_metadata/<run_number>", methods=['GET'])
 @jwt_required_custom
 def get_run_metadata(run_number):
@@ -242,6 +278,10 @@ def get_run_metadata(run_number):
             'start_time': run_metadata.start_time,
             'end_time': run_metadata.end_time,
             'notes': run_metadata.notes,
+            'target_name': run_metadata.target_name,
+            'terminal_voltage': run_metadata.terminal_voltage,
+            'probe_voltage': run_metadata.probe_voltage,
+            'run_type': run_metadata.run_type,
             'accumulated_charge': run_metadata.accumulated_charge,
             'user_id': run_metadata.user_id
         }), 200
@@ -261,6 +301,10 @@ def get_all_run_metadata():
                 'start_time': run.start_time,
                 'end_time': run.end_time,
                 'notes': run.notes,
+                'target_name': run.target_name,
+                'terminal_voltage': run.terminal_voltage,
+                'probe_voltage': run.probe_voltage,
+                'run_type': run.run_type,
                 'accumulated_charge': run.accumulated_charge,
                 'user_id': run.user_id
             })
