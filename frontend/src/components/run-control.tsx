@@ -108,7 +108,9 @@ import {
   connectCurrent,
   getConnectedCurrent,
   openFaraday,
-  closeFaraday
+  closeFaraday,
+  addRunMetadata,
+  getRunMetadataAll
 } from '@/lib/api'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
@@ -171,8 +173,17 @@ export function RunControl() {
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
 
+  // Initial values are taken from the last run
+  const [targetName, setTargetName] = useState<string>('')
+  const [runType, setRunType] = useState<string>('')
+  const [tv, setTv] = useState<string>("0")
+  const [pv, setPv] = useState<string>("0")
+
+  
+
   useEffect(() => {
     fetchInitialData()
+    fetchLastRunMetadata()
     const statusInterval = setInterval(fetchRunStatus, 5000)
     const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
@@ -215,7 +226,7 @@ export function RunControl() {
 
       const fetchMetricData = async () => {
         try {
-          const data = await getMetricData(metric.entityName, metric.metricName)
+          const data = await getMetricData(metric.entityName)
           const latestValue = Array.isArray(data) && data.length > 0 ? 
             data[0][1] : 
             0;
@@ -246,6 +257,7 @@ export function RunControl() {
     setIsRunningStore(isRunning)
     setStartTimeStore(startTime)
   }, [isRunning, startTime])
+
 
   const clearMetricInterval = (metricId: string) => {
     if (intervalRefs.current[metricId]) {
@@ -299,6 +311,28 @@ export function RunControl() {
       })
     }
   }
+
+
+  const fetchLastRunMetadata = async () => {
+    try {
+      const metadata = await getRunMetadataAll();
+      if (metadata.data && metadata.data.length > 0) {
+        console.log(metadata.data[0]);
+        const lastRun = metadata.data[0];
+        setTargetName(lastRun.target_name || ''); // Use default if undefined
+        setRunType(lastRun.run_type || '');
+        setTv(lastRun.terminal_voltage || '0');
+        setPv(lastRun.probe_voltage || '0');
+      }
+    } catch (error) {
+      console.error('Failed to fetch last run metadata:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch last run metadata.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const fetchRunStatus = async () => {
     try {
@@ -556,6 +590,7 @@ export function RunControl() {
       setStartTime(newStartTime)
       setIsRunningStore(true)
       setStartTimeStore(newStartTime)
+      addRunMetadata(runNumber, targetName, tv, pv, runType)
       toast({
         title: 'Run Started',
         description: `Run ${runNumber} started successfully with all parameters set.`,
@@ -852,46 +887,47 @@ export function RunControl() {
             <CardContent className="grid gap-3">
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-8">
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="targetName">Target Name</Label>
-                    <Input
-                      id="targetName"
-                      type="text"
-                      value=""
-                      onChange={() => {}}
-                      disabled={isRunning}
-                    />
+                  <Label htmlFor="targetName">Target Name</Label>
+                  <Input
+                    id="targetName"
+                    type="text"
+                    value={targetName}
+                    onChange={(e) => setTargetName(e.target.value)}
+                    disabled={isRunning}
+                  />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="targetType">Run Type</Label>
-                    <Select>
-                <SelectTrigger id="framework">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem value="longrun">Long Run</SelectItem>
-                  <SelectItem value="scan">Scan</SelectItem>
-                  <SelectItem value="background">Background</SelectItem>
-                </SelectContent>
-              </Select>
+                  <Label htmlFor="targetType">Run Type</Label>
+                  <Select value={runType} onValueChange={(value) => setRunType(value) } disabled={isRunning}>
+                    <SelectTrigger id="framework">
+                    <SelectValue placeholder="Select" />
+                    </SelectTrigger>
+                    <SelectContent position="popper">
+                    <SelectItem value="longrun">Long Run</SelectItem>
+                    <SelectItem value="scan">Scan</SelectItem>
+                    <SelectItem value="background">Background</SelectItem>
+                    </SelectContent>
+                  </Select>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="tv">TV</Label>
-                    <Input
-                      id="tv"
-                      type="text"
-                      value=""
-                      onChange={() => {}}
-                    />
+                  <Label htmlFor="tv">TV</Label>
+                  <Input
+                    id="tv"
+                    type="text"
+                    value={tv}
+                    onChange={(e) => setTv(e.target.value)}
+                    disabled={isRunning}
+                  />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label htmlFor="pv">PV</Label>
-                    <Input
-                      id="pv"
-                      type="text"
-                      value=""
-                      onChange={() => {}}
-                      disabled={isRunning}
-                    />
+                  <Label htmlFor="pv">PV</Label>
+                  <Input
+                    id="pv"
+                    type="text"
+                    value={pv}
+                    onChange={(e) => setPv(e.target.value)}
+                    disabled={isRunning}
+                  />
                   </div>
                 </div>
               <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
@@ -988,7 +1024,10 @@ export function RunControl() {
                     </TableRow>
                     <TableRow>
                       <TableCell className="text-xs sm:text-sm py-2">TetrAMM Address</TableCell>
-                      <TableCell className="text-xs sm:text-sm py-2">{`${ipCurrent}:${portCurrent}`}</TableCell>
+                        <TableCell className="text-xs sm:text-sm py-2">
+                        <div className="block sm:hidden">...</div>
+                        <div className="hidden sm:block">{`${ipCurrent}:${portCurrent}`}</div>
+                        </TableCell>
                       <TableCell className="text-xs sm:text-sm py-2">
                       <Badge variant={isConnectedCurrent ? "outline" : "destructive"} className="text-xs">
                         {isConnectedCurrent ? 'Connected' : 'Disconnected'}

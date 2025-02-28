@@ -22,6 +22,10 @@ export type RunMetadata = {
     start_time: string
     end_time: string
     notes: string
+    target_name: string
+    terminal_voltage: number
+    probe_voltage: number
+    run_type: string
     accumulated_charge: number
     user_id: number
 }
@@ -76,11 +80,40 @@ export const columns: ColumnDef<RunMetadata>[] = [
     },
     {
         accessorKey: "accumulated_charge",
-        header: "Accumulated Charge"
+        header: "Accumulated Charge",
+        cell: ({ row }) => {
+            return (
+                <div className="text-center">
+                    {row.original.accumulated_charge}
+                </div>
+            )
+        }
     },
     {
-        accessorKey: "notes",
-        header: "Notes",
+        accessorKey: "target_name",
+        header: "Target Name",
+    },
+    {
+        accessorKey: "terminal_voltage",
+        header: "Terminal Voltage",
+    },
+    {
+        accessorKey: "probe_voltage",
+        header: "Probe Voltage",
+    },
+    {
+        accessorKey: "run_type",
+        header: "Run Type",
+        cell: ({ row }) => {
+            return (
+                <div className="text-center">
+                    {row.original.run_type === "longrun" ? "Long Run"
+                        : row.original.run_type === "scan" ? "Scan"
+                            : row.original.run_type === "background" ? "Background"
+                                : row.original.run_type}
+                </div>
+            )
+        }
     },
     {
         id: "actions",

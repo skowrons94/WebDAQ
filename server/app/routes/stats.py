@@ -59,11 +59,12 @@ def get_column_current():
     else:
         return jsonify({'error': result['error']}), 500
 
-@bp.route('/stats/<entity>/<metric>', methods=['GET'])
-def get_metric(entity, metric):
+@bp.route('/stats/<entity>', methods=['GET'])
+def get_metric(entity):
     from_time = request.args.get('from', '-10s')
     until_time = request.args.get('until', 'now')
-    result = get_metric_data(f'{entity}.{metric}', client_mv, from_time, until_time)
+    result = get_metric_data(f'{entity}', client_mv, from_time, until_time)
+    #print(entity, metric, result)
     if result['success']:
         return jsonify(result['data']), 200
     else:
