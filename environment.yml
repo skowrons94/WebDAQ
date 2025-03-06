@@ -26,3 +26,4 @@ dependencies:
   - pip:
     - docker
     - waitress
+    - pyjwt<2.10
