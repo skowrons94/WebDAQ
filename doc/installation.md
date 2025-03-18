@@ -19,9 +19,7 @@ This page provides a detailed step-by-step guide to install and configure the Lu
 
 ## Prerequisites
 
-The LunaDAQ is compatibile only with Linux systems, so ensure to use a PC with any Linux version you prefer.
-
-Ensure the following are installed on your system:
+The LunaDAQ is compatibile only with Linux systems, so ensure to use a PC with any Linux version you prefer. MacOS works as well, but the CAEN drivers are not available on it so the DAQ can be run only in test mode, i.e. without connecting to any board. Apart from the OS, the following packages are required:
 
 | Component       | Version      | Verification Command      |
 |-----------------|--------------|----------------------------|
@@ -32,15 +30,30 @@ Ensure the following are installed on your system:
 | SQLite          | ≥ 3.35       | `sqlite3 --version`        |
 | npm             | ≥ 7.x        | `npm -v`                   |
 
-**Notes**:  
-- For Docker, ensure the service is running (`systemctl status docker` on Linux).  
-- If using Conda, install [Miniconda](https://docs.conda.io/en/latest/miniconda.html) or Anaconda.
+For an easy installation of all the requirements, an `environment.yml` file is provided to create the `luna` conda environment which will install all the requirements, apart from Docker.
+
+For the Docker installation, please follow the official [Docker guide](https://docs.docker.com/engine/install/) and complete the post installation steps as well. Once completed, the docker status can be checked through `sudo systemctl status docker` command.
+
+In order to communicate succesfully with the CAEN boards, the [CAENVME Library](https://www.caen.it/products/caenvmelib-library/), the [CAENComm Library](https://www.caen.it/products/caencomm-library/) and [CAENDigitizer Library](https://www.caen.it/products/caendigitizer-library/) must be installed in the operating system. Additionally, if the USB communication is used, remember to install the drivers for the CAEN board that is being used.
+
+Finally, to have the support for the online data visualization (so in order to spy on the data acquisition), the [LunaSpy](https://github.com/skowrons94/LunaSpy) software must be installed:
+
+```bash
+git clone https://github.com/skowrons94/LunaSpy.git
+cd LunaSpy && mkdir build && cd build && cmake .. # Prepare the CMake build
+make # Build the software
+sudo ln -s LunaSpy /usr/local/bin/LunaSpy # Create a symbolic link
+```
 
 ---
 
 ## Installation Steps
 
+In the following all the steps for a fresh installation of LunaDAQ will be reported.
+
 ### 1. Clone Repository
+
+First, the repository must be cloned:
 
 ```bash
 git clone https://github.com/skowrons94/WebDAQ.git
@@ -49,17 +62,13 @@ cd WebDAQ
 
 ---
 
-### 2. Docker Setup
+### 2. Docker Setup (Optional)
 
-#### Pull the XDAQ Image
 The DAQ server relies on a pre-built Docker image where all the XDAQ components are located. Run:
 ```bash
 docker pull skowrons/xdaq:latest
 ```
-
-**Troubleshooting Tips**:  
-- If you encounter network errors, ensure Docker has internet access.  
-- Verify the image exists: `docker images | grep skowrons/xdaq`.
+in order to download the latest XDAQ image. This part is skippaple since when the XDAQ is being launched, Docker will automatically download the image by itself. However, it can take several minutes, so it is advisable to do beforehand.
 
 ---
 
@@ -68,13 +77,13 @@ docker pull skowrons/xdaq:latest
 A Conda environment simplifies dependency management. To create it:
 ```bash
 conda env create -f environment.yml
-conda activate luna
 ```
 
-**Alternative (Manual Setup)**:  
-Install the following packages globally:  
-- Python: `flask`, `sqlalchemy`, `python-dotenv`  
-- Node.js: `react`, `next`, `axios`  
+Once created, the environment can be activated:
+```bash
+conda activate luna
+```
+Now all the dependencies (apart from the CAEN ones) should be succesfully installed.
 
 ---
 
@@ -83,14 +92,17 @@ Install the following packages globally:
 In order to start the DAQ, first the server part must be activated. This is the one that actually handles the data acquistion, stores the variables, and communicates with the other components that are being added.
 
 #### Initialize the Database
+LunaDAQ provides a SQL database where all the run information will be stored. In order to create a database we must:
 ```bash
 cd server
-flask db init                  # Creates migration directory
-flask db migrate -m "Initial migration"  # Generates migration script
-flask db upgrade               # Applies migrations to the database
+flask db init # Creates migration directory
+flask db migrate -m "Initial migration" # Generates migration script
+flask db upgrade # Applies migrations to the database
 ```
+After these, the SQL should be ready for usage.
 
 #### Create a User
+In order to access the DAQ, the username and password are necessary. Due to security reason, these can only be created from command line as:
 ```bash
 flask --app server create-user  # Follow prompts to set username/password
 ```
@@ -102,35 +114,35 @@ If you have all the CAEN drivers installed and a board is connected to your PC:
 python3 main.py
 ```
 
-Alternatively, it is possible to start the server in TEST mode that is useful when working on the interface without the need of having a physical board attached:
+Alternatively, it is possible to start the server in test mode that is useful when working on the interface without the need of having a physical board attached:
 ```bash
 TEST_FLAG=True python3 main.py
 ```
+In the test mode, LunaDAQ will not check for any board communication and will use dummy board instead. It will be still possible to start and stop the runs, and the information in the SQL database will still be populated. 
+
+Note that the server will be run on a specific IP address and a dedicated port. In order to change the values of the port, open the `server/main.py` file and change the values in the last line. 
 
 ---
 
 ### 5. Frontend Setup
 
-This part, instead, handles the interface of the DAQ by creating a web page that can be accessed and that communicates with the server to get information about the DAQ status, the boards that are connected and the data that will be collected
+Now, instead, it is necessary to handle the interface of the DAQ by creating a web page that communicates with the server to get information about the DAQ status, the boards that are connected and the data that will be collected.
 
-#### Install Dependencies
+#### Install Packages
+First we install the packages that are needed for the web page:
 ```bash
 cd frontend
 npm install    # Installs Next.js and React dependencies
 ```
 
 #### Build and Start
+Then we can build the web page and start it:
 ```bash
 npm run build  # Compiles production-ready assets
 npm run start  # Launches frontend on http://localhost:3000
 ```
 
-**Configuration**:  
-- If the server is hosted remotely, update `frontend/.env`:
-  ```env
-  NEXT_PUBLIC_API_URL=http://<SERVER_IP>:5001
-  ```
-  Beware: this feature permits to run the server and the web page (so the client) on two different PCs. Usually, there is no need of doing that and both can run on the same PC.
+The web page will be looking for the server at the IP and port reported in `frontend/.env` files, thus ensure that matches the values with which the server was run. Beware that every time the values in `frontend/.env` are changed, the build must be redone before starting the new web page. Note that this permits to run the server and the web page on two completely different PCs, if needed.
 
 ---
 
@@ -138,18 +150,12 @@ npm run start  # Launches frontend on http://localhost:3000
 
 1. **Verify Server Access**:  
    ```bash
-   curl http://localhost:5001/api/status
+   curl http://localhost:5001/experiment/get_run_number
    ```
    Expected response: `{"status": "ok"}`
 
 2. **Access the Frontend**:  
    Open `http://localhost:3000` in a browser. Log in with the credentials created earlier.
-
-3. **Check Docker Container**:  
-   Ensure the XDAQ container is running:
-   ```bash
-   docker ps | grep skowrons/xdaq
-   ```
 
 ---
 
