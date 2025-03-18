@@ -10,5 +10,7 @@ Welcome to Example's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   client.md
-   server.md
+   welcome.md
+   installation.md
+   description.md
+   usage.md
