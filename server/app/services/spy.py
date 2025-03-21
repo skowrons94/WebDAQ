@@ -139,7 +139,7 @@ class ru_spy:
         try:
             return self.data[name][idx].Clone( )
         except:
-            return self.histo
+            return self.histo.Clone( )
 
 class bu_spy:
     def __init__(self, host='localhost', port=7070):

@@ -27,8 +27,10 @@ print( "TEST_FLAG: ", TEST_FLAG )
 
 bp = Blueprint('experiment', __name__)
 
-os.system( "killall RUSpy" )
-os.system( "docker stop xdaq" )
+if( not TEST_FLAG ):
+    # Clean up just in case
+    os.system( "killall RUSpy" )
+    os.system( "docker stop xdaq" )
 
 def update_project( daq_state ):
 
@@ -356,6 +358,9 @@ def add_caen():
         for i in range( board['chan'] ):
             f.write(f"0.0 1.0\n")
 
+    # Close the connection
+    dgtz.close()
+
     # Update the project
     update_project(daq_state)
 
@@ -625,10 +630,6 @@ def get_histo(board_id, channel):
 
     histo.Rebin( 16 )
 
-    # Fill the histogram with random numbers
-    if( TEST_FLAG ):
-        histo.FillRandom("gaus", 1000)
-
     obj = TBufferJSON.ConvertToJSON(histo)
     return str(obj.Data())
 
@@ -644,18 +645,14 @@ def get_roi_histo(board_id, channel, roi_min, roi_max):
 
     histo.Rebin( 16 )
 
-    # Fill the histogram with random numbers
-    if( TEST_FLAG ):
-        histo.FillRandom("gaus", 1000)
-
     h1 = TH1F(histo)
     h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
     h1.SetLineColor(2)
     h1.SetFillStyle(3001)
     h1.SetFillColorAlpha(2, 0.3)
     h1.SetLineWidth(2)
-    obj = str(TBufferJSON.ConvertToJSON(h1).Data())
-    h1.Delete( )
+    obj = str(TBufferJSON.ConvertToJSON(histo).Data())
+    #h1.Delete( )
     del h1
     return obj
 

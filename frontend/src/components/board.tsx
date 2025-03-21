@@ -17,7 +17,7 @@ import { MoonStarIcon } from 'lucide-react'
 const formSchema = z.object({
   id: z.string().min(1, "Board ID is required"),
   vme: z.string().min(1, "VME Address is required"),
-  link_type: z.enum(["Optical", "USB"]),
+  link_type: z.enum(["Optical", "USB", "A4818"]),
   link_num: z.enum(["0", "1", "2", "3"]),
   dpp: z.enum(["DPP-PHA", "DPP-PSD"])
 })
