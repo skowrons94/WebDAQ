@@ -10,7 +10,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ReloadIcon } from "@radix-ui/react-icons"
 import { useToast } from "@/components/ui/use-toast"
-import { getBoardConfiguration, getSetting, setSetting } from '@/lib/api'
+import { getBoardConfiguration, 
+         getSetting, 
+         setSetting,
+         getPolarity,
+         setPolarity,
+         updateJSON
+        } from '@/lib/api'
 import {
   Carousel,
   CarouselContent,
@@ -47,6 +53,7 @@ export default function Dashboard() {
   const { toast } = useToast()
 
   const fetchBoardConfiguration = async () => {
+    updateJSON()
     setLoading(true)
     setError(null)
     try {
@@ -140,6 +147,13 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               value: response
             }
           }
+          // Fetch polarity
+          const polarity = await getPolarity(boardData.id, i.toString())
+          channelSettingsObj["Polarity"] = {
+            address: "0x1080",
+            name: "Polarity",
+            value: polarity
+          }
           channelSettings.push(channelSettingsObj)
         }
         setSettings(channelSettings)
@@ -171,18 +185,36 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
   const handleSave = async (channel: number) => {
     for (const [key, setting] of Object.entries(settings[channel])) {
-      try {
-        await setSetting(boardData.id, setting.address, setting.value)
-        toast({
-          title: "Success",
-          description: `Updated ${key} for channel ${channel}`,
-        })
-      } catch (error) {
-        toast({
-          title: "Error",
-          description: `Failed to update ${key} for channel ${channel}`,
-          variant: "destructive",
-        })
+      // IF polarity, set polarity
+      if (key === "Polarity") {
+        try {
+          await setPolarity(boardData.id, channel.toString(), setting.value)
+          toast({
+            title: "Success",
+            description: `Settings updated`,
+          })
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: `Failed to update settings`,
+            variant: "destructive",
+          })
+        }
+      }
+      else {
+        try {
+          await setSetting(boardData.id, setting.address, setting.value)
+          toast({
+            title: "Success",
+            description: `Settings updated`,
+          })
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: `Failed to update settings`,
+            variant: "destructive",
+          })
+        }
       }
     }
   }

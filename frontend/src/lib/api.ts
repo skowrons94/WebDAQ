@@ -186,10 +186,19 @@ export const getConnectedCurrent = () =>
 
 // Get boards JSON
 export const getSetting = (id: string, setting: string) =>
-    api.get(`/experiment/boards/${id}/${setting}`).then(res => res.data);
+    api.get(`/digitizer/${id}/${setting}`).then(res => res.data);
 
 export const setSetting = (id: string, setting: string, value: string) =>
-    api.get(`/experiment/boards/${id}/${setting}/${value}`);
+    api.get(`/digitizer/${id}/${setting}/${value}`);
+
+export const updateJSON = () =>
+    api.get(`/digitizer/update`);
+
+export const getPolarity = (id: string, channel: string) =>
+    api.get(`/digitizer/polarity/${id}/${channel}`).then(res => res.data);
+
+export const setPolarity = (id: string, channel: string, value: string) =>
+    api.get(`/digitizer/polarity/${id}/${channel}/${value}`);
 
 // Generic metric data fetching function
 export const getMetricData = (entityName: string, from: string = '-10s', until: string = 'now') =>
