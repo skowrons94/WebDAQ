@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Example's documentation!
+Welcome to LunaDAQ's documentation!
 ===================================
 
 .. toctree::
@@ -12,5 +12,5 @@ Welcome to Example's documentation!
 
    welcome.md
    installation.md
-   description.md
+   details.md
    usage.md

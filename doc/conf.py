@@ -6,10 +6,10 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'WebDAQ'
+project = 'LunaDAQ'
 copyright = 'AC and JS'
 author = 'AC and JS'
-release = '0.1'
+release = '1.0'
 
 
 # -- General configuration ---------------------------------------------------
