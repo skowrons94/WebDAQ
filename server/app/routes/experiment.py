@@ -105,7 +105,7 @@ update_project(daq_state)
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
 def start_run( ):
-    global daq_state, t_crash, start_thread#, target_name, terminal_voltage, probe_voltage, run_type
+    global daq_state
 
     run = daq_state['run']
     save = daq_state['save']
@@ -165,19 +165,11 @@ def start_run( ):
             if not run_metadata:
                 run_metadata = RunMetadata(run_number=run, 
                                            start_time=datetime.now(), 
-                                           target_name=target_name,
-                                           terminal_voltage=terminal_voltage,
-                                           probe_voltage=probe_voltage,
-                                           run_type=run_type,
                                            user_id=get_current_user())
                 db.session.add(run_metadata)
                 db.session.commit()
             else:
                 run_metadata.start_time = time
-                run_metadata.target_name = target_name
-                run_metadata.terminal_voltage = terminal_voltage
-                run_metadata.probe_voltage = probe_voltage
-                run_metadata.run_type = run_type
                 run_metadata.end_time = None
             
                 db.session.commit()
@@ -195,7 +187,7 @@ def start_run( ):
 @bp.route("/experiment/stop_run", methods=['POST'])
 @jwt_required_custom
 def stop_run( ):
-    global daq_state, r_spy, start_thread, t_crash
+    global daq_state, r_spy
 
     if( not daq_state['running'] ):
         return jsonify({'message': 'Run stopped successfully !'}), 200
@@ -209,6 +201,30 @@ def stop_run( ):
     if( not TEST_FLAG ):
         topology.halt( )
 
+    run = daq_state['run']
+
+    # Update metadata in the database
+    try:
+        if( daq_state['save'] or TEST_FLAG ):
+            run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
+            run_metadata.end_time = datetime.now()
+
+            metadata = { "Start Time"            : run_metadata.start_time,
+                         "Stop Time"             : run_metadata.end_time,
+                         "Terminal Voltage" : run_metadata.terminal_voltage,
+                         "Probe Voltage"     : run_metadata.probe_voltage,
+                         "Run Type"              : run_metadata.run_type,
+                         "Target Name"           : run_metadata.target_name,
+                         "Accumulated Charge"    : run_metadata.accumulated_charge
+                         }
+            
+            with open(f'data/run{run}//metadata.json', 'w') as f: 
+                json.dump(metadata, f)
+
+            db.session.commit()
+    except:
+        pass
+
     # If we save the data, update the run in the database
     if( daq_state['save'] or TEST_FLAG and daq_state['running'] ):
         daq_state['run'] += 1
@@ -218,15 +234,6 @@ def stop_run( ):
 
     # Update the daq_state file
     update_project(daq_state)
-
-    # Update metadata in the database
-    try:
-        if( daq_state['save'] or TEST_FLAG ):
-            run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
-            run_metadata.end_time = datetime.now()
-            db.session.commit()
-    except:
-        pass
 
     return jsonify({'message': 'Run stopped successfully !'}), 200
 

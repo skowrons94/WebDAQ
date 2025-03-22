@@ -55,6 +55,12 @@ class digitizer:
 
     def open(self):
 
+        print( "# Connecting to CAEN Board #")
+        print( "Link Type: {}".format(self._LinkType) )
+        print( "Link Number: {}".format(self._LinkNum) )
+        print( "Board ID: {}".format(self._BoardId) )
+        print( "VME Address: {}".format(self._VmeAddress) )
+
         if TEST_FLAG:
             self._connected = True
             return
@@ -102,6 +108,10 @@ class digitizer:
         info = struct2dict(info)
         info["ModelName"] = info["ModelName"].decode('utf-8')
         info["ROC_FirmwareRel"] = info["ROC_FirmwareRel"].decode('utf-8')
+
+        print( "# CAEN Board Info #")
+        print(info)
+
         return info
 
     def write_register(self, address, data):
