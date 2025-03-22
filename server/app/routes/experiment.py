@@ -330,7 +330,7 @@ def add_caen():
     elif( board["link_type"] == "A4818" ):
         link_type = 2
 
-    dgtz = digitizer(link_type, int(board["link_num"]), int(board["id"]), int(board["vme"]))
+    dgtz = digitizer(link_type, int(board["link_num"]), int(board["id"]), int(board["vme"], 16))
     dgtz.open()
 
     if not dgtz.get_connected():
