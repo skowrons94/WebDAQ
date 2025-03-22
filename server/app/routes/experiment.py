@@ -28,7 +28,7 @@ bp = Blueprint('experiment', __name__)
 if( not TEST_FLAG ):
     # Clean up just in case
     os.system( "killall RUSpy >/dev/null 2>&1" )
-    os.system( "docker kill xdaq >/dev/null 2>&1" )
+    os.system( "docker stop xdaq >/dev/null 2>&1" )
 
 def update_project( daq_state ):
 
@@ -91,7 +91,7 @@ topology.display()
 r_spy = ru_spy( )
 
 if( not TEST_FLAG ):
-    directory = os.path.dirname(os.path.realpath("./"))
+    directory = os.path.realpath("./")
     container = xdaq.container(directory)
     container.initialize()
     print( "Container started...")
@@ -209,13 +209,13 @@ def stop_run( ):
             run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
             run_metadata.end_time = datetime.now()
 
-            metadata = { "Start Time"            : run_metadata.start_time,
-                         "Stop Time"             : run_metadata.end_time,
-                         "Terminal Voltage" : run_metadata.terminal_voltage,
-                         "Probe Voltage"     : run_metadata.probe_voltage,
-                         "Run Type"              : run_metadata.run_type,
-                         "Target Name"           : run_metadata.target_name,
-                         "Accumulated Charge"    : run_metadata.accumulated_charge
+            metadata = { "Start Time"          : run_metadata.start_time,
+                         "Stop Time"           : run_metadata.end_time,
+                         "Terminal Voltage"    : run_metadata.terminal_voltage,
+                         "Probe Voltage"       : run_metadata.probe_voltage,
+                         "Run Type"            : run_metadata.run_type,
+                         "Target Name"         : run_metadata.target_name,
+                         "Accumulated Charge"  : run_metadata.accumulated_charge
                          }
             
             with open(f'data/run{run}//metadata.json', 'w') as f: 

@@ -906,8 +906,8 @@ class container:
         self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
                                     hostname="xdaq", 
                                     name="xdaq",
-                                    network='xdaq-net'
-                                    ports={'10000': 10000},
+                                    network='xdaq-net',
+                                    ports={'50000': 50000, '10000': 10000},
                                     volumes={self.directory: {'bind': '/home/xdaq/project', 'mode': 'rw'},
                                              '/dev':         {'bind': '/dev',               'mode': 'rw'}, 
                                              '/lib/modules': {'bind': '/lib/modules',       'mode': 'rw'}},
