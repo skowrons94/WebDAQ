@@ -876,48 +876,25 @@ class container:
 
     def initialize(self):
 
-        try: self.client.volumes.get("graphite")
-        except docker.errors.NotFound: self.client.volumes.create("graphite")
-
-        try: self.client.containers.get("graphite")
-        except docker.errors.NotFound:
-            self.client.containers.run( "graphiteapp/graphite-statsd", 
-                                        hostname="graphite", 
-                                        name="graphite", 
-                                        ports={'2003': 2003, '8125': 8125, '80': 80},
-                                        volumes={'graphite': {'bind': '/opt/graphite/storage', 'mode': 'rw'}},
-                                        environment=["TZ=Europe/Rome"],
-                                        detach=True, 
-                                        remove=True )
+        if not any(n.name == "xdaq-net" for n in self.client.networks.list()): self.client.networks.create("xdaq-net")
             
-        try: self.client.containers.get("xdaq")
-        except docker.errors.NotFound:
-            self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
-                                        hostname="xdaq", 
-                                        name="xdaq", 
-                                        ports={'50000': 50000,'10000': 10000},
-                                        volumes={self.directory: {'bind': '/home/xdaq/project', 'mode': 'rw'},
-                                                 '/dev':         {'bind': '/dev',               'mode': 'rw'}, 
-                                                 '/lib/modules': {'bind': '/lib/modules',       'mode': 'rw'}},
-                                        environment=["TZ=Europe/Rome"],
-                                        detach=True, 
-                                        remove=True,
-                                        privileged=True )
+        self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
+                                    hostname="xdaq", 
+                                    name="xdaq",
+                                    network='xdaq-net',
+                                    ports={'50000': 50000, '10000': 10000},
+                                    volumes={self.directory: {'bind': '/home/xdaq/project', 'mode': 'rw'},
+                                             '/dev':         {'bind': '/dev',               'mode': 'rw'}, 
+                                             '/lib/modules': {'bind': '/lib/modules',       'mode': 'rw'}},
+                                    environment=["TZ=Europe/Rome"],
+                                    detach=True, 
+                                    remove=True,
+                                    privileged=True )
             
-            cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
-            self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
+        cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"
+        self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
 
-            time.sleep(0.1)
-
-            #cmd = "/opt/xdaq/bin/xdaq.exe -p 51000 -c /home/xdaq/project/conf/topology.xml"
-            #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
-
-            #time.sleep(0.1)
-
-            #cmd = "/opt/xdaq/bin/xdaq.exe -p 52000 -c /home/xdaq/project/conf/topology.xml"
-            #self.client.containers.get("xdaq").exec_run(cmd, detach=True, tty=True, stdin=True, stdout=True, stderr=True)
-
-            #time.sleep(0.1)
+        time.sleep(1)
 
     def reset( self ):
 
@@ -925,40 +902,19 @@ class container:
         try: self.client.containers.get("xdaq").remove(force=True)
         except docker.errors.NotFound: pass
 
-        # If container xdaq exists, remove it
-        try: self.client.containers.get("graphite").remove(force=True)
-        except docker.errors.NotFound: pass
-
-        # If graphite volume does not exist, create it
-        try: self.client.volumes.get("graphite")
-        except docker.errors.NotFound: self.client.volumes.create("graphite")
-
-        # Get current directory
-        curr_dir = self.directory
-
         # Run container xdaq
         self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
                                     hostname="xdaq", 
-                                    name="xdaq", 
+                                    name="xdaq",
+                                    network='xdaq-net'
                                     ports={'10000': 10000},
-                                    volumes={curr_dir:       {'bind': '/home/xdaq/project', 'mode': 'rw'},
+                                    volumes={self.directory: {'bind': '/home/xdaq/project', 'mode': 'rw'},
                                              '/dev':         {'bind': '/dev',               'mode': 'rw'}, 
                                              '/lib/modules': {'bind': '/lib/modules',       'mode': 'rw'}},
                                     environment=["TZ=Europe/Rome"],
                                     detach=True, 
                                     remove=True, 
                                     privileged=True )
-
-        # Run graphite container
-        self.client.containers.run( "graphiteapp/graphite-statsd", 
-                                    hostname="graphite", 
-                                    name="graphite", 
-                                    ports={'2003': 2003, '8125': 8125, '80': 80},
-                                    network="xdaq_net",
-                                    volumes={'graphite': {'bind': '/opt/graphite/storage', 'mode': 'rw'}},
-                                    environment=["TZ=Europe/Rome"],
-                                    detach=True, 
-                                    remove=True )
 
         # Start ReadoutUnit in the container
         cmd = "/opt/xdaq/bin/xdaq.exe -p 50000 -c /home/xdaq/project/conf/topology.xml"

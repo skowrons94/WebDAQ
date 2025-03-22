@@ -23,14 +23,12 @@ import threading
 #TEST_FLAG = os.getenv('TEST_FLAG', False)
 TEST_FLAG = os.getenv('TEST_FLAG', False)
 
-print( "TEST_FLAG: ", TEST_FLAG )
-
 bp = Blueprint('experiment', __name__)
 
 if( not TEST_FLAG ):
     # Clean up just in case
-    os.system( "killall RUSpy" )
-    os.system( "docker stop xdaq" )
+    os.system( "killall RUSpy >/dev/null 2>&1" )
+    os.system( "docker kill xdaq >/dev/null 2>&1" )
 
 def update_project( daq_state ):
 
@@ -93,7 +91,7 @@ topology.display()
 r_spy = ru_spy( )
 
 if( not TEST_FLAG ):
-    directory = os.path.dirname(os.path.realpath("./server"))
+    directory = os.path.dirname(os.path.realpath("./"))
     container = xdaq.container(directory)
     container.initialize()
     print( "Container started...")
@@ -152,8 +150,7 @@ def start_run( ):
 
     daq_state['running'] = True
 
-    # Run the Spy to  save the histograms to txt file in run directory
-    # Example: ./LunaSpy -d board_name firmware channel -n run_number
+    # Run the spy server
     if( not TEST_FLAG ):
         r_spy.start(daq_state)
     
@@ -168,19 +165,19 @@ def start_run( ):
             if not run_metadata:
                 run_metadata = RunMetadata(run_number=run, 
                                            start_time=datetime.now(), 
-                                           #target_name=target_name,
-                                           #terminal_voltage=terminal_voltage,
-                                           #probe_voltage=probe_voltage,
-                                           #run_type=run_type,
+                                           target_name=target_name,
+                                           terminal_voltage=terminal_voltage,
+                                           probe_voltage=probe_voltage,
+                                           run_type=run_type,
                                            user_id=get_current_user())
                 db.session.add(run_metadata)
                 db.session.commit()
             else:
                 run_metadata.start_time = time
-                #run_metadata.target_name = target_name
-                #run_metadata.terminal_voltage = terminal_voltage
-                #run_metadata.probe_voltage = probe_voltage
-                #run_metadata.run_type = run_type
+                run_metadata.target_name = target_name
+                run_metadata.terminal_voltage = terminal_voltage
+                run_metadata.probe_voltage = probe_voltage
+                run_metadata.run_type = run_type
                 run_metadata.end_time = None
             
                 db.session.commit()
@@ -192,11 +189,6 @@ def start_run( ):
 
     # Update the daq_state file
     update_project(daq_state)
-
-    # FIX: Start the thread to check for crashes
-    #start_thread = True
-    #t_crash = threading.Thread(target=detect_crash)
-    #t_crash.start()
 
     return jsonify({'message': 'Run started successfully !'}), 200
 
