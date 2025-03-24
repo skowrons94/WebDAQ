@@ -14,6 +14,7 @@ Welcome to LunaDAQ, the modern data acquisition and visualization system develop
 | **[Installation]**  | Detailed guide for setting up LunaDAQ      | [View Installation Guide](installation.md) |
 | **[User Guide]**    | Detailed guide for the LunaDAQ functionalities         | [View Usage Guide](usage.md)               |
 | **[Details]**    | Detailed description of how LunaDAQ works         | [View Details Page](details.md)               |
+| **[Usage]**    | User guide for the LunaDAQ features         | [View Details Page](usage.md)               |
 
 ## Key Capabilities
 
