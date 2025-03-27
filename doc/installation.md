@@ -45,6 +45,66 @@ make # Build the software
 sudo ln -s LunaSpy /usr/local/bin/LunaSpy # Create a symbolic link
 ```
 
+## Common Issues
+
+In case you own an already installed ROOT version (outside of ```conda```), some issue might arise. The best solutions seems to be the following:
+
+### 1. Activate the `luna` Environment  
+Activate the Conda environment:  
+
+```bash
+conda activate luna
+```
+
+### 2. Create the Activation Script  
+Create the activation file:  
+
+```bash
+mkdir -p ~/miniconda3/envs/luna/etc/conda/activate.d
+nano ~/miniconda3/envs/luna/etc/conda/activate.d/env_vars.sh
+```
+
+### 3. Add to `env_vars.sh`  
+Edit the file and add the following lines:  
+
+```bash
+#!/bin/bash
+# Source a different bashrc or other setup file when 'luna' environment is activated
+source ~/miniconda3/envs/luna/.bashrc_luna
+```
+
+### 4. Create a Custom `.bashrc_luna`  
+Create the custom `.bashrc_luna` file:  
+
+```bash
+nano ~/miniconda3/envs/luna/.bashrc_luna
+```
+
+### 5. Add to `.bashrc_luna`  
+Add the following lines:  
+
+```bash
+# Remove all current ROOT paths from LD_LIBRARY_PATH and PYTHONPATH
+export LD_LIBRARY_PATH=$(echo $LD_LIBRARY_PATH | sed -e 's|[^:]*ROOT[^:]*:||g')
+unset PYTHONPATH
+
+# Point ROOTSYS to the conda environment's root directory
+export ROOTSYS=$CONDA_PREFIX
+
+# Add ROOT binary directory to the PATH
+export PATH=$ROOTSYS/bin:$PATH
+
+# Add ROOT library directory to LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$ROOTSYS/lib:$LD_LIBRARY_PATH
+
+# Add ROOT path to python path
+export PYTHONPATH=$ROOTSYS/lib:$PYTHONPATH
+```
+
+Save and exit.
+
+Now, whenever you activate the `luna` environment, it will automatically use the Conda-installed ROOT version without conflicts.
+
 ---
 
 ## Installation Steps
