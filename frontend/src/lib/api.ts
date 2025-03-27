@@ -200,6 +200,12 @@ export const getPolarity = (id: string, channel: string) =>
 export const setPolarity = (id: string, channel: string, value: string) =>
     api.get(`/digitizer/polarity/${id}/${channel}/${value}`);
 
+export const getChannelEnabled = (id: string, channel: string) =>
+    api.get(`/digitizer/channel/${id}/${channel}`).then(res => res.data);
+
+export const setChannelEnabled = (id: string, channel: string, value: string) =>
+    api.get(`/digitizer/channel/${id}/${channel}/${value}`);
+
 // Generic metric data fetching function
 export const getMetricData = (entityName: string, from: string = '-10s', until: string = 'now') =>
     api.get(`/stats/${entityName}`, { params: { from, until } }).then(res => res.data);

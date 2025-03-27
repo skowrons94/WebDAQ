@@ -16,7 +16,8 @@ from app.services.dgtz import digitizer
 
 bp = Blueprint('digitizer', __name__)
 
-register_map = { "Invert Input": 1080 }
+register_map = { "Invert Input": 1080,
+                 "Channel Enable Mask": 8120 }
 
 daq_state = {}
 config = {}
@@ -96,6 +97,45 @@ def set_polarity( id, channel, value ):
     
     prev_value = int(prev_value, 16)
     value = (prev_value & 0xFFFEFFFF) | (int(value) << 16)
+    conf['registers'][key]['value'] = hex(value)
+    save_config(config)
+
+    return jsonify(0)
+
+@bp.route('/digitizer/channel/<id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_channel_enable( id, channel ):
+    key = register_map["Channel Enable Mask"]
+    key = "reg_{}".format(key)
+
+    conf = config[id]
+    try: value = conf['registers'][key]['value']
+    except: return jsonify(-1)
+
+    value = int(value, 16)
+    value = (value >> int(channel)) & 1
+
+    return jsonify(value)
+
+@bp.route('/digitizer/channel/<id>/<channel>/<value>', methods=['GET'])
+@jwt_required_custom
+def set_channel_enable( id, channel, value ):
+
+    # If value is not 0 or 1, return error
+    if int(value) != 0 and int(value) != 1:
+        return jsonify(-1)
+
+    key = register_map["Channel Enable Mask"]
+    key = "reg_{}".format(key)
+
+    conf = config[id]
+    try: prev_value = conf['registers'][key]['value']
+    except: return jsonify(-1)
+
+    print(prev_value)
+    
+    prev_value = int(prev_value, 16)
+    value = (prev_value & ~(1 << int(channel))) | (int(value) << int(channel))
     conf['registers'][key]['value'] = hex(value)
     save_config(config)
 
