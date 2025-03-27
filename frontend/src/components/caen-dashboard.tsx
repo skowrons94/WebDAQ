@@ -15,6 +15,8 @@ import { getBoardConfiguration,
          setSetting,
          getPolarity,
          setPolarity,
+         getChannelEnabled,
+         setChannelEnabled,
          updateJSON
         } from '@/lib/api'
 import {
@@ -119,8 +121,8 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
   const settingsToFetch = [
     { name: "Trigger Threshold", address: "0x106c" },
-    { name: "RC-CR2 Smoothing Factor", address: "0x1054" },
     { name: "Input Rise Time", address: "0x1058" },
+    { name: "RC-CR2 Smoothing Factor", address: "0x1054" },
     { name: "DC Offset", address: "0x1098" },
     { name: "Trapezoid Rise Time", address: "0x105c" },
     { name: "Trapezoid Flat Top", address: "0x1060" },
@@ -138,6 +140,20 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         for (let i = 0; i < parseInt(boardData.chan); i++) {
           const channelOffset = i * 0x100
           const channelSettingsObj: ChannelSettings = {}
+          // Fetch channel enabled
+          const enabled = await getChannelEnabled(boardData.id, i.toString())
+          channelSettingsObj["Enabled"] = {
+            address: "0x1084",
+            name: "Enabled",
+            value: enabled
+          }
+          // Fetch polarity
+          const polarity = await getPolarity(boardData.id, i.toString())
+          channelSettingsObj["Polarity"] = {
+            address: "0x1080",
+            name: "Polarity",
+            value: polarity
+          }
           for (const setting of settingsToFetch) {
             const address = (parseInt(setting.address, 16) + channelOffset).toString(16)
             const response = await getSetting(boardData.id, address)
@@ -146,13 +162,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               name: setting.name,
               value: response
             }
-          }
-          // Fetch polarity
-          const polarity = await getPolarity(boardData.id, i.toString())
-          channelSettingsObj["Polarity"] = {
-            address: "0x1080",
-            name: "Polarity",
-            value: polarity
           }
           channelSettings.push(channelSettingsObj)
         }
@@ -189,6 +198,21 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       if (key === "Polarity") {
         try {
           await setPolarity(boardData.id, channel.toString(), setting.value)
+          toast({
+            title: "Success",
+            description: `Settings updated`,
+          })
+        } catch (error) {
+          toast({
+            title: "Error",
+            description: `Failed to update settings`,
+            variant: "destructive",
+          })
+        }
+      }
+      else if (key === "Enabled") {
+        try {
+          await setChannelEnabled(boardData.id, channel.toString(), setting.value)
           toast({
             title: "Success",
             description: `Settings updated`,
