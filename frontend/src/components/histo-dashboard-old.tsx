@@ -117,10 +117,6 @@ export default function HistogramDashboard() {
   const initialFetchDone = useRef(false)
   const [layout, setLayout] = useState<'grid' | 'rows'>('grid')
 
-
-  const framePainters = useRef<{ [key: string]: any }>({})
-  const syncedZoom = useRef(false)
-
   // Initial setup
   useEffect(() => {
     fetchCachedROIs()
@@ -350,30 +346,18 @@ export default function HistogramDashboard() {
 
   // Event handlers
   const handleROIChange = async (histoId: string, low: number, high: number) => {
-    // Create a proper copy of the roiValues to ensure state updates properly
-    const updatedRoiValues = { ...roiValues };
-    updatedRoiValues[histoId] = { low, high, integral: 0 };
-    
-    setUnsavedChanges(true);
-    
+    //setRoiValues(prev => ({
+    //  ...prev,
+    //  [histoId]: { ...prev[histoId], low, high }
+    //}))
+    roiValues[histoId] = { low, high, integral: 0 }
+    setUnsavedChanges(true)
     // Update the cache immediately
-    await updateROICache(updatedRoiValues);
-    
-    // Trigger a histogram update to reflect the new ROI
-    // This will ensure the histogram updates properly even when zooming is synched
-    const histoElement = histogramRefs.current[histoId];
+    updateROICache(roiValues)
+    // Clean the histogram JSROOT object
+    const histoElement = histogramRefs.current[histoId]
     if (histoElement) {
-      // Force an update of the histogram with the new ROI values
-      const boardId = histoId.split('_')[0].replace('board', '');
-      const channelIndex = histoId.split('_')[1].replace('channel', '');
-      
-      try {
-        const histogramData = await getHistogram(boardId, channelIndex);
-        const histogram = window.JSROOT.parse(histogramData);
-        await drawHistogramWithROI(histoElement, histogram, histoId, channelIndex, boardId);
-      } catch (error) {
-        console.error(`Failed to update histogram for ${histoId}:`, error);
-      }
+      const blankHist = createBlankHistogram(histoId)
     }
   }
 
@@ -411,128 +395,9 @@ export default function HistogramDashboard() {
         canv.fLogz = 0;
       }
 
-      const painter = await window.JSROOT.redraw(element, canv);
-
-      // Store the frame painter reference for synchronization
-      if (painter && painter.getFramePainter) {
-        const fp = painter.getFramePainter();
-        if (fp) {
-          framePainters.current[histoId] = fp;
-          
-          // Make sure the frame painter has its original zoom function saved
-          if (!fp.syncedZoomSetup) {
-            fp.oldZoom = fp.zoom;
-            fp.syncedZoomSetup = true;
-            
-            // If zoom is synced, apply the synchronized zoom function
-            if (syncedZoom.current) {
-              fp.zoom = function (xmin, xmax, ymin, ymax, zmin, zmax) {
-                // Apply zoom to all other histograms
-                Object.entries(framePainters.current).forEach(([id, painter]) => {
-                  if (id !== histoId && painter && painter.oldZoom) {
-                    // Only sync X-axis zoom for now - modify as needed
-                    painter.oldZoom(xmin, xmax, painter.scale_ymin, painter.scale_ymax, zmin, zmax);
-                  }
-                });
-                
-                // Apply zoom to this histogram too
-                return fp.oldZoom(xmin, xmax, ymin, ymax, zmin, zmax);
-              };
-            }
-          }
-        }
-      }
+      await window.JSROOT.redraw(element, canv)
     }
   }
-
-  // Add this new function to setup synchronized zooming
-  const setupSyncedZoom = useCallback(() => {
-    // Only proceed if we have at least one frame painter
-    const framePainterIds = Object.keys(framePainters.current);
-    if (framePainterIds.length === 0) return;
-
-    framePainterIds.forEach(histoId => {
-      const fp = framePainters.current[histoId];
-      if (!fp || fp.syncedZoomSetup) return;
-
-      // Save the original zoom function
-      fp.oldZoom = fp.zoom;
-
-      // Replace the zoom function with our synchronized version
-      fp.zoom = function (xmin, xmax, ymin, ymax, zmin, zmax) {
-        // Apply zoom to all other histograms
-        Object.entries(framePainters.current).forEach(([id, painter]) => {
-          if (id !== histoId && painter && painter.oldZoom) {
-            // Only sync X-axis zoom for now - modify as needed
-            painter.oldZoom(xmin, xmax, painter.scale_ymin, painter.scale_ymax, zmin, zmax);
-          }
-        });
-
-        // Apply zoom to this histogram too
-        return this.oldZoom(xmin, xmax, ymin, ymax, zmin, zmax);
-      };
-
-      // Mark this frame painter as having the synced zoom setup
-      fp.syncedZoomSetup = true;
-    });
-
-    // Don't automatically set syncedZoom to true - let the user toggle it
-  }, []);
-
-  // Prepare zoom functionality but don't enable sync by default
-  useEffect(() => {
-    if (jsrootLoaded && Object.keys(framePainters.current).length > 0) {
-      // Setup the zoom functions but don't enable synchronization yet
-      const framePainterIds = Object.keys(framePainters.current);
-      framePainterIds.forEach(histoId => {
-        const fp = framePainters.current[histoId];
-        if (!fp || fp.syncedZoomSetup) return;
-        
-        // Save the original zoom function
-        fp.oldZoom = fp.zoom;
-        fp.syncedZoomSetup = true;
-      });
-    }
-  }, [jsrootLoaded, setupSyncedZoom]);
-
-  // Add button for toggle synchronized zooming
-  const toggleSyncedZoom = () => {
-    const isSynced = syncedZoom.current;
-
-    Object.values(framePainters.current).forEach(fp => {
-      if (fp) {
-        if (isSynced) {
-          // Restore original zoom function
-          if (fp.oldZoom) {
-            fp.zoom = fp.oldZoom;
-          }
-        } else {
-          // Replace with synchronized zoom function
-          if (fp.oldZoom) {
-            fp.zoom = function (xmin, xmax, ymin, ymax, zmin, zmax) {
-              // Apply zoom to all other histograms
-              Object.entries(framePainters.current).forEach(([id, painter]) => {
-                if (painter !== fp && painter && painter.oldZoom) {
-                  // Only sync X-axis zoom for now - modify as needed
-                  painter.oldZoom(xmin, xmax, painter.scale_ymin, painter.scale_ymax, zmin, zmax);
-                }
-              });
-              
-              // Apply zoom to this histogram too
-              return fp.oldZoom(xmin, xmax, ymin, ymax, zmin, zmax);
-            };
-          }
-        }
-      }
-    });
-
-    syncedZoom.current = !isSynced;
-    toast({
-      title: `Synchronized Zooming ${!isSynced ? 'Enabled' : 'Disabled'}`,
-      description: `Histograms will ${!isSynced ? 'now' : 'no longer'} zoom together.`,
-    });
-  };
-
 
   // Update effects
   useEffect(() => {
@@ -540,7 +405,7 @@ export default function HistogramDashboard() {
       updateHistograms()
       updateROIIntegrals()
     }
-  }, [jsrootLoaded, boards, updateHistograms, updateROIIntegrals, isLogScale, updateTrigger])
+  }, [jsrootLoaded, boards, updateTrigger, updateHistograms, updateROIIntegrals, isLogScale])
 
   const handleSaveChanges = () => {
     updateROICache(roiValues)
@@ -566,19 +431,11 @@ export default function HistogramDashboard() {
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">
         <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={toggleSyncedZoom}
-              variant={syncedZoom.current ? "default" : "outline"}
-              className="mr-2"
-            >
-              {syncedZoom.current ? "Unsync Zoom" : "Sync Zoom"}
-            </Button>
-            <ToggleGroup type="single" value={layout} onValueChange={(value) => setLayout(value as 'grid' | 'rows')}>
-              <ToggleGroupItem value="grid"><Grid2X2 className="h-4 w-4" /> </ToggleGroupItem>
-              <ToggleGroupItem value="rows"><Rows2 className="h-4 w-4" /> </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
+          <h1 className="text-2xl font-bold">Histogram Dashboard</h1>
+          <ToggleGroup type="single" value={layout} onValueChange={(value) => setLayout(value as 'grid' | 'rows')}>
+            <ToggleGroupItem value="grid"><Grid2X2 className="h-4 w-4" /> </ToggleGroupItem>
+            <ToggleGroupItem value="rows"><Rows2 className="h-4 w-4" /> </ToggleGroupItem>
+          </ToggleGroup>
         </div>
         {boards.map((board) => (
           <Card key={board.id} className="mb-6">
@@ -601,7 +458,6 @@ export default function HistogramDashboard() {
 
                   return (
                     <div key={histoId} className="relative">
-
                         <div className="flex items-center ">
                         <h3 className="text-lg font-semibold">
                           Channel {channelIndex} - ROI ({roi.low} - {roi.high})
