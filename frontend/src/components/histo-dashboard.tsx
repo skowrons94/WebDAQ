@@ -120,6 +120,8 @@ export default function HistogramDashboard() {
 
   const framePainters = useRef<{ [key: string]: any }>({})
   const syncedZoom = useRef(false)
+  // Store current zoom ranges for each histogram
+  const currentZoomRanges = useRef<{ [key: string]: { xmin: number; xmax: number; ymin: number; ymax: number } }>({})
 
   // Initial setup
   useEffect(() => {
@@ -379,6 +381,30 @@ export default function HistogramDashboard() {
 
   const drawHistogramWithROI = async (element: HTMLDivElement, histogram: any, histoId: string, chan: string, id: string) => {
     if (window.JSROOT) {
+      // Save current zoom ranges before redrawing if available
+      const currentFp = framePainters.current[histoId];
+      if (currentFp) {
+        // Store current zoom ranges if they exist
+        if (currentFp.scale_xmin !== undefined && currentFp.scale_xmax !== undefined) {
+          currentZoomRanges.current[histoId] = {
+            xmin: currentFp.scale_xmin,
+            xmax: currentFp.scale_xmax,
+            ymin: currentFp.scale_ymin,
+            ymax: currentFp.scale_ymax
+          };
+        }
+      }
+
+      // Get shared zoom ranges if synced zoom is enabled
+      let sharedZoomRanges: { xmin: number; xmax: number; ymin: number; ymax: number } | null = null;
+      if (syncedZoom.current) {
+        // Find any existing zoom ranges to use as a reference
+        const zoomRangesArray = Object.values(currentZoomRanges.current);
+        if (zoomRangesArray.length > 0) {
+          sharedZoomRanges = zoomRangesArray[0];
+        }
+      }
+
       const canv = window.JSROOT.create('TCanvas');
 
       // Make histogram blue fill with alpha of 0.3
@@ -427,11 +453,20 @@ export default function HistogramDashboard() {
             // If zoom is synced, apply the synchronized zoom function
             if (syncedZoom.current) {
               fp.zoom = function (xmin, xmax, ymin, ymax, zmin, zmax) {
+                // Save the zoom ranges for this histogram
+                currentZoomRanges.current[histoId] = { xmin, xmax, ymin, ymax };
+                
                 // Apply zoom to all other histograms
                 Object.entries(framePainters.current).forEach(([id, painter]) => {
                   if (id !== histoId && painter && painter.oldZoom) {
                     // Only sync X-axis zoom for now - modify as needed
                     painter.oldZoom(xmin, xmax, painter.scale_ymin, painter.scale_ymax, zmin, zmax);
+                    // Save the zoom ranges for other histograms too
+                    currentZoomRanges.current[id] = { 
+                      xmin, xmax, 
+                      ymin: painter.scale_ymin, 
+                      ymax: painter.scale_ymax 
+                    };
                   }
                 });
                 
@@ -439,6 +474,24 @@ export default function HistogramDashboard() {
                 return fp.oldZoom(xmin, xmax, ymin, ymax, zmin, zmax);
               };
             }
+          }
+          
+          // Restore zoom ranges if available
+          const zoomToApply = currentZoomRanges.current[histoId] || 
+                             (syncedZoom.current ? sharedZoomRanges : null);
+                             
+          if (zoomToApply) {
+            // Use a small timeout to ensure the histogram is fully rendered before zooming
+            setTimeout(() => {
+              if (fp.zoom) {
+                fp.zoom(
+                  zoomToApply.xmin, 
+                  zoomToApply.xmax, 
+                  zoomToApply.ymin, 
+                  zoomToApply.ymax
+                );
+              }
+            }, 50);
           }
         }
       }
@@ -498,29 +551,73 @@ export default function HistogramDashboard() {
   // Add button for toggle synchronized zooming
   const toggleSyncedZoom = () => {
     const isSynced = syncedZoom.current;
+    
+    // If we're enabling sync, we need to capture a reference zoom range
+    let referenceZoomRange: { xmin: number; xmax: number; ymin: number; ymax: number } | null = null;
+    
+    // Find the first histogram with a defined zoom range to use as reference
+    if (!isSynced) {
+      const framePainterEntries = Object.entries(framePainters.current);
+      for (const [histoId, fp] of framePainterEntries) {
+        if (fp && fp.scale_xmin !== undefined && fp.scale_xmax !== undefined) {
+          referenceZoomRange = {
+            xmin: fp.scale_xmin,
+            xmax: fp.scale_xmax,
+            ymin: fp.scale_ymin,
+            ymax: fp.scale_ymax
+          };
+          // Save this as the current zoom range for this histogram
+          currentZoomRanges.current[histoId] = { ...referenceZoomRange };
+          break;
+        }
+      }
+    }
 
-    Object.values(framePainters.current).forEach(fp => {
+    Object.entries(framePainters.current).forEach(([histoId, fp]) => {
       if (fp) {
         if (isSynced) {
-          // Restore original zoom function
+          // Restore original zoom function when disabling sync
           if (fp.oldZoom) {
             fp.zoom = fp.oldZoom;
           }
         } else {
-          // Replace with synchronized zoom function
+          // Replace with synchronized zoom function when enabling sync
           if (fp.oldZoom) {
             fp.zoom = function (xmin, xmax, ymin, ymax, zmin, zmax) {
+              // Save the zoom ranges for this histogram
+              currentZoomRanges.current[histoId] = { xmin, xmax, ymin, ymax };
+              
               // Apply zoom to all other histograms
               Object.entries(framePainters.current).forEach(([id, painter]) => {
-                if (painter !== fp && painter && painter.oldZoom) {
+                if (id !== histoId && painter && painter.oldZoom) {
                   // Only sync X-axis zoom for now - modify as needed
                   painter.oldZoom(xmin, xmax, painter.scale_ymin, painter.scale_ymax, zmin, zmax);
+                  // Save the zoom ranges for other histograms too
+                  currentZoomRanges.current[id] = { 
+                    xmin, xmax, 
+                    ymin: painter.scale_ymin, 
+                    ymax: painter.scale_ymax 
+                  };
                 }
               });
               
               // Apply zoom to this histogram too
               return fp.oldZoom(xmin, xmax, ymin, ymax, zmin, zmax);
             };
+          }
+          
+          // If we're enabling sync and have a reference zoom range, apply it to all histograms
+          if (referenceZoomRange && fp.zoom) {
+            setTimeout(() => {
+              if (fp.zoom) {
+                fp.zoom(
+                  referenceZoomRange!.xmin,
+                  referenceZoomRange!.xmax,
+                  fp.scale_ymin || referenceZoomRange!.ymin,
+                  fp.scale_ymax || referenceZoomRange!.ymax
+                );
+              }
+            }, 50);
           }
         }
       }
