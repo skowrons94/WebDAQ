@@ -132,14 +132,14 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
 
     return (
         <div>
-            <div className="flex items-center py-4">
+            <div className="flex items-center py-4 flex-wrap sm:flex-nowrap">
                 <Input
                     placeholder="Filter targets..."
                     value={(table.getColumn("target_name")?.getFilterValue() as string) ?? ""}
                     onChange={(event) =>
                         table.getColumn("target_name")?.setFilterValue(event.target.value)
                     }
-                    className="max-w-sm"
+                    className="max-w-sm mb-2 sm:mb-0"
                 />
 
                 <DropdownMenu>
@@ -176,7 +176,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                     onClick={() => exportExcel(table.getFilteredRowModel().rows)}
                 >
                     <FileDown className="h-4 w-4 mr-2" />
-                    Download CSV...
+                    <span className="hidden sm:inline">Download CSV...</span>
                 </Button>
             </div>
             <div className="rounded-md border">
