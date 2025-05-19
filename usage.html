@@ -1,0 +1,222 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Usage &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=e59714d7" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=9bcbadda"></script>
+      <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="LunaDAQ Details" href="details.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">LUNA Experiment Data Acquisition System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">LunaDAQ Details</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#dashboard-panel">Dashboard panel</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#overview-tab">Overview tab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#stats-tab">Stats tab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#histogram-tab">Histogram tab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#waveform-tab">Waveform tab</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#logbook-panel">Logbook panel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#grafana">Grafana</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#daq-configuration-panel">DAQ configuration panel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#settings">Settings</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#appearance">Appearance</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#boards">Boards</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#metrics">Metrics</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Usage</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="usage">
+<h1>Usage<a class="headerlink" href="#usage" title="Link to this heading"></a></h1>
+<p>This page provide a description of LUNADAQ functionality and user guide.</p>
+<hr class="docutils" />
+<section id="dashboard-panel">
+<h2>Dashboard panel<a class="headerlink" href="#dashboard-panel" title="Link to this heading"></a></h2>
+<p>Under the dashboard panel you will find all the main components to control and monitor the acquisition offered by LunaDAQ.</p>
+<section id="overview-tab">
+<h3>Overview tab<a class="headerlink" href="#overview-tab" title="Link to this heading"></a></h3>
+<p>The main tab gives a summary of the acquisition status, main monitored metrics, a control panel for the acquisition and a configuration panel.</p>
+<ul class="simple">
+<li><p>The <strong>Card View</strong> display several key informations including:</p>
+<ul>
+<li><p>The <strong>run status</strong>.</p></li>
+<li><p>Tetramm status and  <strong>real time current</strong> readings.</p></li>
+<li><p><strong>Accumulated charge</strong> for the run and total accumulated charge since last reset.</p></li>
+<li><p><strong>Data bandwith</strong> and writing speed.</p></li>
+<li><p>Counts in some predefined <strong>Regions of Interest</strong>.</p></li>
+<li><p>The value for some predefined metrics of the slow-control system logged in the time-series database. The shown information can be configured in the settings.</p></li>
+</ul>
+</li>
+<li><p><strong>Experiment Controls</strong> panel offers functionality to start and stop the acquisition, input metadata for the run and control the current acquisition.</p></li>
+<li><p><strong>Aquisition Parameters</strong> let you adjust some settings.</p>
+<ul>
+<li><p>Set run number and autoincrement</p></li>
+<li><p>Select saving policies for data including waveforms.</p></li>
+</ul>
+</li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <strong>metadata</strong> values currently support in the LunaDAQ software are currently: The <strong>target name</strong>, the <strong>run type</strong> (i.e. long run, background, target scan…), and values for <strong>terminal voltage</strong> (TV) and <strong>Probe voltage</strong> (PV) of the LUNA-400 accelerator. You can leave these values blank if not need and change them in the Logbook panel if wrongly assigned (see below). Values are saved in the database after starting each run, and precompiled in the form before starting a new one, if not changed since the last run a warning will appear before the start of a new acquisition.</p>
+</div>
+</section>
+<hr class="docutils" />
+<section id="stats-tab">
+<h3>Stats tab<a class="headerlink" href="#stats-tab" title="Link to this heading"></a></h3>
+<p>The stats will be used to show charts for monitored slow-control metrics from the graphite database. this feature is currently <strong>Work In Progress</strong>.</p>
+</section>
+<section id="histogram-tab">
+<h3>Histogram tab<a class="headerlink" href="#histogram-tab" title="Link to this heading"></a></h3>
+<p>The histogram tab offers a view of all the spectra acquired for each channel. Key functionality:</p>
+<ul class="simple">
+<li><p><strong>Change layout</strong> from grid view to list view using the switch on the top right.</p></li>
+<li><p><strong>Change scale</strong> between linear or logarithmic for all the histogram.</p></li>
+<li><p><strong>Set a monitored Region of Interest</strong> for each channel using the gear icon right of each histogram channel header.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="waveform-tab">
+<h3>Waveform tab<a class="headerlink" href="#waveform-tab" title="Link to this heading"></a></h3>
+<p>Similarly to the Histogram tab, here you can monitor the waveform spectra for each acquisition channel.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="logbook-panel">
+<h2>Logbook panel<a class="headerlink" href="#logbook-panel" title="Link to this heading"></a></h2>
+<p>The logbook panel shows a table display the informations for saved in the database for all runs.</p>
+<ul class="simple">
+<li><p><strong>Filter by target name</strong> using the input field on the top right.</p></li>
+<li><p><strong>Change the column displayed</strong> using the button on the right.</p></li>
+<li><p>If you wish to <strong>edit informations for a run</strong> open the contextual menu on the right.</p></li>
+<li><p>It is possible to export a complete record of the database using the <strong>Download CSV</strong> button.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="grafana">
+<h2>Grafana<a class="headerlink" href="#grafana" title="Link to this heading"></a></h2>
+<p>This link opens the Grafana interface in another tab of the browser.</p>
+</section>
+<hr class="docutils" />
+<section id="daq-configuration-panel">
+<h2>DAQ configuration panel<a class="headerlink" href="#daq-configuration-panel" title="Link to this heading"></a></h2>
+<p>This panel offers an interface to change the settings of the CAEN boards and set energy calibration for each channel.</p>
+</section>
+<hr class="docutils" />
+<section id="settings">
+<h2>Settings<a class="headerlink" href="#settings" title="Link to this heading"></a></h2>
+<section id="appearance">
+<h3>Appearance<a class="headerlink" href="#appearance" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Switch between light and <strong>Dark mode</strong>.</p></li>
+<li><p>Selected metric to hide/show from the card view in the overview tab</p></li>
+<li><p>Hide/show tabs from the dashboard</p></li>
+</ul>
+</section>
+<section id="boards">
+<h3>Boards<a class="headerlink" href="#boards" title="Link to this heading"></a></h3>
+<p>Here you can add and remove a new CAEN board to the system.</p>
+</section>
+<section id="metrics">
+<h3>Metrics<a class="headerlink" href="#metrics" title="Link to this heading"></a></h3>
+<p>Each slow control metric that is logged into the Graphite time-series database can be displayed in the card view of the overview tab.</p>
+<p>Use this form to <strong>add metrics to be displayed in the main tab</strong>. You can set the refresh time and multiplier if you wish to display the value in different units.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="details.html" class="btn btn-neutral float-left" title="LunaDAQ Details" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
