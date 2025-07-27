@@ -1,0 +1,280 @@
+[
+  {
+    "id": "hist_0_0",
+    "boardId": "0",
+    "channel": 0,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 0",
+    "position": {
+      "row": 0,
+      "col": 0
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_0",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_0_1",
+    "boardId": "0",
+    "channel": 1,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 1",
+    "position": {
+      "row": 0,
+      "col": 1
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_1",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_0_2",
+    "boardId": "0",
+    "channel": 2,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 2",
+    "position": {
+      "row": 0,
+      "col": 2
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_2",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_0_3",
+    "boardId": "0",
+    "channel": 3,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 3",
+    "position": {
+      "row": 1,
+      "col": 0
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_3",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_0_4",
+    "boardId": "0",
+    "channel": 4,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 4",
+    "position": {
+      "row": 1,
+      "col": 1
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_4",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_0_5",
+    "boardId": "0",
+    "channel": 5,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 5",
+    "position": {
+      "row": 1,
+      "col": 2
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_5",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_0_6",
+    "boardId": "0",
+    "channel": 6,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 6",
+    "position": {
+      "row": 2,
+      "col": 0
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_6",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_0_7",
+    "boardId": "0",
+    "channel": 7,
+    "visible": false,
+    "size": "medium",
+    "label": "DT5724 - Channel 7",
+    "position": {
+      "row": 2,
+      "col": 1
+    },
+    "rois": [
+      {
+        "id": "roi_default_0_7",
+        "name": "Default ROI",
+        "low": 0,
+        "high": 1000,
+        "integral": 0,
+        "color": "#ff0000",
+        "enabled": true
+      }
+    ]
+  },
+  {
+    "id": "hist_1753576503606",
+    "boardId": "0",
+    "channel": 0,
+    "size": "medium",
+    "label": "NaI",
+    "customLabel": "NaI",
+    "visible": false,
+    "position": {
+      "row": 0,
+      "col": 0
+    },
+    "rois": []
+  },
+  {
+    "id": "hist_1753576539838",
+    "boardId": "0",
+    "channel": 0,
+    "size": "medium",
+    "label": "NaI",
+    "customLabel": "NaI",
+    "visible": false,
+    "position": {
+      "row": 0,
+      "col": 0
+    },
+    "rois": [
+      {
+        "id": "roi_1753576575421",
+        "name": "Background",
+        "low": 0,
+        "high": 100,
+        "color": "#ff0000",
+        "enabled": true,
+        "integral": 0
+      },
+      {
+        "id": "roi_1753576586553",
+        "name": "Signal",
+        "low": 0,
+        "high": 100,
+        "color": "#00f900",
+        "enabled": true,
+        "integral": 0
+      },
+      {
+        "id": "roi_1753576682869",
+        "name": "New",
+        "low": 0,
+        "high": 100,
+        "color": "#a96800",
+        "enabled": true,
+        "integral": 0
+      }
+    ]
+  },
+  {
+    "id": "hist_1753606355508",
+    "boardId": "0",
+    "channel": 0,
+    "size": "medium",
+    "label": "NaI",
+    "customLabel": "NaI",
+    "visible": true,
+    "position": {
+      "row": 0,
+      "col": 0
+    },
+    "rois": [
+      {
+        "id": "roi_1753607577641",
+        "name": "12C + 12C",
+        "low": 0,
+        "high": 100,
+        "color": "#ff0000",
+        "enabled": true,
+        "integral": 0
+      }
+    ]
+  },
+  {
+    "id": "hist_1753610611265",
+    "boardId": "0",
+    "channel": 1,
+    "size": "medium",
+    "label": "HPGe",
+    "customLabel": "HPGe",
+    "visible": true,
+    "position": {
+      "row": 0,
+      "col": 0
+    },
+    "rois": []
+  }
+]

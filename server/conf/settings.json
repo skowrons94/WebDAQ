@@ -1,10 +1,20 @@
 {
     "running": false,
     "start_time": null,
-    "run": 0,
-    "save": false,
+    "run": 13,
+    "save": true,
     "limit_size": false,
     "file_size_limit": 0,
-    "boards": [],
+    "boards": [
+        {
+            "id": "0",
+            "vme": "0",
+            "link_type": "Optical",
+            "link_num": "0",
+            "dpp": "DPP-PHA",
+            "name": "DT5724",
+            "chan": 8
+        }
+    ],
     "total_accumulated": 0.0
 }

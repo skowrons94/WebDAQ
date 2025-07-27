@@ -1,0 +1,13 @@
+{
+  "layout": "grid",
+  "gridCols": 3,
+  "isLogScale": false,
+  "syncZoom": false,
+  "showLabels": true,
+  "showROIs": true,
+  "showIntegrals": true,
+  "autoUpdate": true,
+  "updateInterval": 7000,
+  "theme": "auto",
+  "rebinFactor": 1
+}

@@ -2,15 +2,13 @@ import os
 import json
 import numpy as np
 
+from datetime import datetime
 from flask import Blueprint, jsonify, request
-from flask_cors import CORS
-from app.services.tetramm import tetram_controller
+from ..utils.tetramm import tetram_controller
 
 from app import db
-from app.models.run_metadata import RunMetadata
-from app.utils.jwt_utils import jwt_required_custom
-
-from datetime import datetime
+from ..models.run_metadata import RunMetadata
+from ..utils.jwt_utils import jwt_required_custom
 
 bp = Blueprint('current', __name__)
 
@@ -32,7 +30,7 @@ else:
 
 # Initialize TetrAMMController
 controller = tetram_controller( ip=settings["tetramm_ip"], port=settings["tetramm_port"] )
-controller.initialize( )
+#controller.initialize( )
 
 # Set ip and port
 @bp.route('/current/set_ip_port/<ip>/<port>', methods=['GET'])

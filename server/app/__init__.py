@@ -19,12 +19,13 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     CORS(app)
 
-    from app.routes import auth, experiment, stats, calib, current, digitizer
+    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms
     app.register_blueprint(auth.bp)
     app.register_blueprint(experiment.bp)
     app.register_blueprint(stats.bp)
     app.register_blueprint(calib.bp)
     app.register_blueprint(current.bp)
     app.register_blueprint(digitizer.bp)
+    app.register_blueprint(histograms.bp)
 
     return app

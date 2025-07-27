@@ -1,8 +1,7 @@
-from flask import Blueprint, jsonify, request
-from flask_cors import CORS
-from app.services.graphite import GraphiteClient
 from typing import Dict, Any
-import os
+from flask import Blueprint, jsonify, request
+
+from ..utils.graphite import GraphiteClient
 
 bp = Blueprint('stats', __name__)
 

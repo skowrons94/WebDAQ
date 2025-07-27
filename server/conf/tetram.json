@@ -1,1 +1,8 @@
-{"CHN": "4", "RNG": "AUTO", "ASCII": "ON", "NRSAMP": "1000", "TRG": "OFF", "NAQ": "1"}
+{
+  "CHN": "4",
+  "RNG": "AUTO",
+  "ASCII": "ON",
+  "NRSAMP": "1000",
+  "TRG": "OFF",
+  "NAQ": "1"
+}

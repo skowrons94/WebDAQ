@@ -1,171 +1,289 @@
-# app/routes/experiment.py
+# app/routes/digitizer.py
 import os
-import gc
-import csv
 import json
-import time as time_lib
 
-from datetime import datetime
+from flask import Blueprint, request, jsonify
 
-from flask import Blueprint, request, jsonify, send_from_directory
-from app import db
-from app.models.run_metadata import RunMetadata
-from app.utils.jwt_utils import jwt_required_custom, get_current_user
-
-from app.services.dgtz import digitizer
+from ..utils.jwt_utils import jwt_required_custom
+from ..services.daq_manager import get_daq_manager
 
 bp = Blueprint('digitizer', __name__)
 
-register_map = { "Invert Input": 1080,
-                 "Channel Enable Mask": 8120 }
+TEST_FLAG = os.getenv('TEST_FLAG', False)
 
-daq_state = {}
-config = {}
+# Initialize DAQ manager
+daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 
-def load():
-    daq_state = {}
-    if os.path.exists('conf/settings.json'):
-        with open('conf/settings.json', 'r') as f: 
-                daq_state = json.load(f)
-    return daq_state
-    
-def load_config():
-    config = {}
-    for board in daq_state['boards']:
-        filename = "conf/{}_{}.json".format(board['name'], board['id'])
-        with open(filename,'r') as f:
-            data = json.load(f)
-            config[board['id']] = data
-    return config
+# Register map for common settings
+register_map = {
+    "Invert Input": 1080,
+    "Channel Enable Mask": 8120
+}
 
-def save_config(config):
-    for board in daq_state['boards']:
-        filename = "conf/{}_{}.json".format(board['name'], board['id'])
-        with open(filename,'w') as f:
-            json.dump(config[board['id']], f, indent=4)
+def load_board_config(board_id: str) -> dict:
+    """
+    Load configuration for a specific board.
     
-daq_state = load()
-config = load_config()
+    Args:
+        board_id: Board ID string
+        
+    Returns:
+        Board configuration dictionary
+    """
+    board_info = daq_mgr.get_board_info(board_id)
+    if not board_info:
+        return None
     
+    filename = f"conf/{board_info['name']}_{board_info['id']}.json"
+    try:
+        with open(filename, 'r') as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+def save_board_config(board_id: str, config: dict) -> bool:
+    """
+    Save configuration for a specific board.
+    
+    Args:
+        board_id: Board ID string
+        config: Configuration dictionary
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    board_info = daq_mgr.get_board_info(board_id)
+    if not board_info:
+        return False
+    
+    filename = f"conf/{board_info['name']}_{board_info['id']}.json"
+    try:
+        with open(filename, 'w') as f:
+            json.dump(config, f, indent=4)
+        return True
+    except Exception:
+        return False
+
 @bp.route('/digitizer/boards', methods=['GET'])
 @jwt_required_custom
 def get_boards():
-    daq_state = load()
-    if daq_state is None:
+    """Get list of all configured boards."""
+    boards = daq_mgr.get_boards()
+    if boards is None:
         return jsonify(-1)
-    return jsonify(daq_state['boards'])
+    return jsonify(boards)
 
 @bp.route('/digitizer/update', methods=['GET'])
 @jwt_required_custom
 def update():
-    global daq_state, config
-    daq_state = load()
-    config = load_config()
+    """Force update of board configurations."""
+    # DAQ manager automatically keeps configurations up to date
     return jsonify(0)
 
 @bp.route('/digitizer/polarity/<id>/<channel>', methods=['GET'])
 @jwt_required_custom
-def get_polarity( id, channel ):
+def get_polarity(id, channel):
+    """Get input polarity setting for a specific channel."""
     key = register_map["Invert Input"]
     key += int(channel) * 100
-    key = "reg_{}".format(key)
+    key = f"reg_{key}"
 
-    conf = config[id]
-    try: value = conf['registers'][key]['value']
-    except: return jsonify(-1)
+    config = load_board_config(id)
+    if not config:
+        return jsonify(-1)
 
-    value = int(value, 16)
-    value = (value >> 16) & 1
-
-    return jsonify(value)
+    try:
+        value = config['registers'][key]['value']
+        value = int(value, 16)
+        value = (value >> 16) & 1
+        return jsonify(value)
+    except Exception:
+        return jsonify(-1)
 
 @bp.route('/digitizer/polarity/<id>/<channel>/<value>', methods=['GET'])
 @jwt_required_custom
-def set_polarity( id, channel, value ):
-
-    # If value is not 0 or 1, return error
-    if int(value) != 0 and int(value) != 1:
+def set_polarity(id, channel, value):
+    """Set input polarity for a specific channel."""
+    # Validate input
+    if int(value) not in [0, 1]:
         return jsonify(-1)
 
     key = register_map["Invert Input"]
     key += int(channel) * 100
-    key = "reg_{}".format(key)
+    key = f"reg_{key}"
 
-    conf = config[id]
-    try: prev_value = conf['registers'][key]['value']
-    except: return jsonify(-1)
-    
-    prev_value = int(prev_value, 16)
-    value = (prev_value & 0xFFFEFFFF) | (int(value) << 16)
-    conf['registers'][key]['value'] = hex(value)
-    save_config(config)
+    config = load_board_config(id)
+    if not config:
+        return jsonify(-1)
 
-    return jsonify(0)
+    try:
+        prev_value = config['registers'][key]['value']
+        prev_value = int(prev_value, 16)
+        new_value = (prev_value & 0xFFFEFFFF) | (int(value) << 16)
+        config['registers'][key]['value'] = hex(new_value)
+        
+        if save_board_config(id, config):
+            return jsonify(0)
+        else:
+            return jsonify(-1)
+    except Exception:
+        return jsonify(-1)
 
 @bp.route('/digitizer/channel/<id>/<channel>', methods=['GET'])
 @jwt_required_custom
-def get_channel_enable( id, channel ):
+def get_channel_enable(id, channel):
+    """Get channel enable status."""
     key = register_map["Channel Enable Mask"]
-    key = "reg_{}".format(key)
+    key = f"reg_{key}"
 
-    conf = config[id]
-    try: value = conf['registers'][key]['value']
-    except: return jsonify(-1)
+    config = load_board_config(id)
+    if not config:
+        return jsonify(-1)
 
-    value = int(value, 16)
-    value = (value >> int(channel)) & 1
-
-    return jsonify(value)
+    try:
+        value = config['registers'][key]['value']
+        value = int(value, 16)
+        value = (value >> int(channel)) & 1
+        return jsonify(value)
+    except Exception:
+        return jsonify(-1)
 
 @bp.route('/digitizer/channel/<id>/<channel>/<value>', methods=['GET'])
 @jwt_required_custom
-def set_channel_enable( id, channel, value ):
-
-    # If value is not 0 or 1, return error
-    if int(value) != 0 and int(value) != 1:
+def set_channel_enable(id, channel, value):
+    """Set channel enable status."""
+    # Validate input
+    if int(value) not in [0, 1]:
         return jsonify(-1)
 
     key = register_map["Channel Enable Mask"]
-    key = "reg_{}".format(key)
+    key = f"reg_{key}"
 
-    conf = config[id]
-    try: prev_value = conf['registers'][key]['value']
-    except: return jsonify(-1)
+    config = load_board_config(id)
+    if not config:
+        return jsonify(-1)
 
-    print(prev_value)
-    
-    prev_value = int(prev_value, 16)
-    value = (prev_value & ~(1 << int(channel))) | (int(value) << int(channel))
-    conf['registers'][key]['value'] = hex(value)
-    save_config(config)
-
-    return jsonify(0)
+    try:
+        prev_value = config['registers'][key]['value']
+        prev_value = int(prev_value, 16)
+        new_value = (prev_value & ~(1 << int(channel))) | (int(value) << int(channel))
+        config['registers'][key]['value'] = hex(new_value)
+        
+        if save_board_config(id, config):
+            return jsonify(0)
+        else:
+            return jsonify(-1)
+    except Exception:
+        return jsonify(-1)
 
 @bp.route('/digitizer/<id>/<setting>', methods=['GET'])
 @jwt_required_custom
-def get_setting( id, setting ):
-    key = "reg_{}".format(setting)
+def get_setting(id, setting):
+    """Get a generic register setting."""
+    key = f"reg_{setting}"
 
-    conf = config[id]
-    try: value = conf['registers'][key]['value']
-    except: return jsonify(-1)
+    config = load_board_config(id)
+    if not config:
+        return jsonify(-1)
 
-    value = int(value, 16)
-
-    return jsonify(value)
+    try:
+        value = config['registers'][key]['value']
+        value = int(value, 16)
+        return jsonify(value)
+    except Exception:
+        return jsonify(-1)
 
 @bp.route('/digitizer/<id>/<setting>/<value>', methods=['GET'])
 @jwt_required_custom
-def set_setting( id, setting, value ):
-    key = "reg_{}".format(setting)
+def set_setting(id, setting, value):
+    """Set a generic register setting."""
+    key = f"reg_{setting}"
 
-    conf = config[id]
-    try: conf['registers'][key]['value']
-    except: return jsonify(-1)
+    config = load_board_config(id)
+    if not config:
+        return jsonify(-1)
 
-    # Convert value in decimal to hex
-    value_string = hex(int(value))
-    conf['registers'][key]['value'] = str(value_string)
-    save_config(config)
+    try:
+        # Validate that the register exists
+        if key not in config['registers']:
+            return jsonify(-1)
+        
+        # Convert value to hex string
+        value_string = hex(int(value))
+        config['registers'][key]['value'] = value_string
+        
+        if save_board_config(id, config):
+            return jsonify(0)
+        else:
+            return jsonify(-1)
+    except Exception:
+        return jsonify(-1)
 
-    return jsonify(0)
+@bp.route('/digitizer/<id>/info', methods=['GET'])
+@jwt_required_custom
+def get_board_info(id):
+    """Get detailed information about a specific board."""
+    board_info = daq_mgr.get_board_info(id)
+    if board_info:
+        return jsonify(board_info)
+    else:
+        return jsonify({'message': 'Board not found'}), 404
+
+@bp.route('/digitizer/<id>/config', methods=['GET'])
+@jwt_required_custom
+def get_full_config(id):
+    """Get complete configuration for a board."""
+    config = load_board_config(id)
+    if config:
+        return jsonify(config)
+    else:
+        return jsonify({'message': 'Configuration not found'}), 404
+
+@bp.route('/digitizer/<id>/config', methods=['POST'])
+@jwt_required_custom
+def set_full_config(id):
+    """Set complete configuration for a board."""
+    new_config = request.get_json()
+    
+    if not new_config:
+        return jsonify({'message': 'Invalid configuration'}), 400
+    
+    if save_board_config(id, new_config):
+        return jsonify({'message': 'Configuration updated successfully'})
+    else:
+        return jsonify({'message': 'Failed to update configuration'}), 500
+
+@bp.route('/digitizer/<id>/registers', methods=['GET'])
+@jwt_required_custom
+def get_all_registers(id):
+    """Get all register values for a board."""
+    config = load_board_config(id)
+    if not config or 'registers' not in config:
+        return jsonify({'message': 'Registers not found'}), 404
+    
+    # Convert hex values to decimal for easier frontend use
+    registers = {}
+    for reg_name, reg_data in config['registers'].items():
+        try:
+            registers[reg_name] = {
+                'value_hex': reg_data['value'],
+                'value_dec': int(reg_data['value'], 16),
+                'description': reg_data.get('description', 'No description')
+            }
+        except Exception:
+            registers[reg_name] = {
+                'value_hex': reg_data['value'],
+                'value_dec': 0,
+                'description': reg_data.get('description', 'No description')
+            }
+    
+    return jsonify(registers)
+
+@bp.route('/digitizer/available_settings', methods=['GET'])
+@jwt_required_custom
+def get_available_settings():
+    """Get list of available register settings."""
+    return jsonify({
+        'common_registers': register_map,
+        'description': 'Common digitizer register mappings'
+    })

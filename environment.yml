@@ -19,7 +19,6 @@ dependencies:
   - flask-jwt-extended
   - flask-cors
   - root=6.30.4
-  - pycurl
   - pkgconfig
   - nodejs
   - pip
@@ -27,3 +26,4 @@ dependencies:
     - docker
     - waitress
     - pyjwt<2.10
+    - pycurl

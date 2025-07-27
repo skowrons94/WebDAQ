@@ -3,6 +3,8 @@
 /__pycache__
 _build/
 
+CLAUDE.md
+.claude/**
 
 # dependencies
 /node_modules

@@ -1,9 +1,5 @@
-from flask import Blueprint, jsonify, request
-from flask_cors import CORS
-from app.services.graphite import GraphiteClient
-from typing import Dict, Any
-import os
 import requests
+from flask import Blueprint, jsonify, request
 
 bp = Blueprint('faraday', __name__)
 

@@ -1,241 +1,127 @@
 # app/routes/experiment.py
 import os
-import gc
-import csv
 import json
-import time as time_lib
-
-from ROOT import TBufferJSON, TH1F
-
 from datetime import datetime
 
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify
 from app import db
-from app.models.run_metadata import RunMetadata
-from app.utils.jwt_utils import jwt_required_custom, get_current_user
 
-from app.services import xdaq
-from app.services.spy import ru_spy
-from app.services.dgtz import digitizer
+from ..models.run_metadata import RunMetadata
+from ..utils.jwt_utils import jwt_required_custom, get_current_user
+from ..services.daq_manager import get_daq_manager
+from ..services.spy_manager import get_spy_manager
 
-import threading
-
-#TEST_FLAG = os.getenv('TEST_FLAG', False)
 TEST_FLAG = os.getenv('TEST_FLAG', False)
 
 bp = Blueprint('experiment', __name__)
 
-if( not TEST_FLAG ):
+if not TEST_FLAG:
     # Clean up just in case
-    os.system( "killall RUSpy >/dev/null 2>&1" )
-    os.system( "docker stop xdaq >/dev/null 2>&1" )
+    os.system("killall RUSpy >/dev/null 2>&1")
+    os.system("docker stop xdaq >/dev/null 2>&1")
 
-def update_project( daq_state ):
-
-    # Save as JSON
-    with open('conf/settings.json', 'w') as f:
-        json.dump(daq_state, f, indent=4)
-    if( not TEST_FLAG ):
-        topology.write_ruconf(daq_state)
-
-# Functio to get histo index and board dpp
-def get_info( board_id, channel, boards ):
-    idx = 0
-    for board in boards:
-        if int(board['id']) < int(board_id):
-            idx += board['chan']
-    idx += int(channel)
-    dpp = boards[int(board_id)]['dpp']
-    return idx, dpp
-
-def check_project( ):
-    # Check if directory exists, if not create it
-    if not os.path.exists('conf'): 
-        os.makedirs('conf')
-    # Check if directory exists, if not create it
-    if not os.path.exists('calib'): 
-        os.makedirs('calib')
-    # Check if directory exists, if not create it
-    if not os.path.exists('data'): 
-        os.makedirs('data')
-    # Check if exists, if not create it
-    if os.path.exists('conf/settings.json'):
-        with open('conf/settings.json', 'r') as f: 
-            daq_state = json.load(f)
-    else:
-        # Variables to store the current DAQ system state and CAEN boards
-        daq_state = {
-            'running': False,
-            'start_time': 0,
-            'run': 0,
-            'save': False,
-            'limit_size': False,
-            'file_size_limit': 0,
-            'boards': []
-        }
-        with open('conf/settings.json', 'w') as f: 
-            json.dump(daq_state, f)
-    return daq_state
-
-daq_state = check_project( )
-
-target_name = ""
-terminal_voltage = 0
-probe_voltage = 0
-run_type = ""
-
-topology = xdaq.topology("conf/topology.xml")
-topology.load_topology( )
-topology.display()
-
-r_spy = ru_spy( )
-
-if( not TEST_FLAG ):
-    directory = os.path.realpath("./")
-    container = xdaq.container(directory)
-    container.initialize()
-    print( "Container started...")
-    topology.configure_pt( )
-    print( "PT configured...")
-    topology.enable_pt( )
-    print( "PT enabled...")
-
-update_project(daq_state)
+# Initialize managers
+daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
+spy_mgr = get_spy_manager(test_flag=TEST_FLAG)
 
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
-def start_run( ):
-    global daq_state
-
-    run = daq_state['run']
-    save = daq_state['save']
-    running = daq_state['running']
-    limit_size = daq_state['limit_size']
-    file_size_limit = daq_state['file_size_limit']
-
-    # If the DAQ is already running, do nothing
-    if running:
-        return jsonify({'message': 'DAQ is already running !'}), 404
+def start_run():
+    # Check if DAQ is already running
+    if daq_mgr.is_running():
+        return jsonify({'message': 'DAQ is already running!'}), 404
     
-    # If there are no CAEN boards, do nothing
-    if len(daq_state['boards']) == 0:
-        return jsonify({'message': 'No CAEN boards found !'}), 404
+    # Check if there are boards configured
+    boards = daq_mgr.get_boards()
+    if len(boards) == 0:
+        return jsonify({'message': 'No CAEN boards found!'}), 404
 
-    # Check if directory exists before starting DAQ
-    directory = f"data/"
-    if not os.path.exists(directory):
-        os.makedirs(directory)
+    # Prepare for run start
+    if not daq_mgr.prepare_run_start():
+        return jsonify({'message': 'Failed to prepare run start'}), 500
+
+    # Configure and start XDAQ
+    if not daq_mgr.configure_xdaq_for_run():
+        return jsonify({'message': 'Failed to configure XDAQ'}), 500
     
-    # If save is enabled, create the run directory
-    if save:
-        directory = f"data/run{run}/"
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+    if not daq_mgr.start_xdaq():
+        return jsonify({'message': 'Failed to start XDAQ'}), 500
 
-    # Copy the JSON configuration files to the run directory
-    for board in daq_state['boards']:
-        conf_file = f"conf/{board['name']}_{board['id']}.json"
-        os.system(f"cp {conf_file} data/run{run}/")
+    # Set running state
+    daq_mgr.set_running_state(True)
 
-    # Start the XDAQ
-    if( not TEST_FLAG ):
-        topology.set_cycle_counter(0)
-        if( limit_size ): topology.set_file_size_limit(file_size_limit)
-        else: topology.set_file_size_limit(0)
-        topology.set_run_number(run)
-        topology.set_enable_files(save)
-        topology.set_file_paths(f"/home/xdaq/project/data/run{run}/")
-        topology.configure( )
-        topology.start( )
-
-    daq_state['running'] = True
-
-    # Run the spy server
-    if( not TEST_FLAG ):
-        r_spy.start(daq_state)
+    # Start spy server
+    daq_state = daq_mgr.get_state()
+    if not spy_mgr.start_spy(daq_state):
+        return jsonify({'message': 'Failed to start spy server'}), 500
     
-    # If we save the data, add the run to database
-    if( save or TEST_FLAG ):
-        run = daq_state['run']
-        time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # Update metadata in the database check first if it exists already
+    # Add run to database if saving data
+    if daq_mgr.get_save_data():
+        run_number = daq_mgr.get_run_number()
         try:
-            run_metadata = RunMetadata.query.filter_by(run_number=run).first()
+            run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
             if not run_metadata:
-                run_metadata = RunMetadata(run_number=run, 
-                                           start_time=datetime.now(), 
-                                           user_id=get_current_user())
+                run_metadata = RunMetadata(
+                    run_number=run_number, 
+                    start_time=datetime.now(), 
+                    user_id=get_current_user()
+                )
                 db.session.add(run_metadata)
                 db.session.commit()
             else:
-                run_metadata.start_time = time
+                run_metadata.start_time = datetime.now()
                 run_metadata.end_time = None
-            
                 db.session.commit()
-        except:
-            pass
+        except Exception:
+            pass  # Non-critical error
 
-    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    daq_state['start_time'] = time
-
-    # Update the daq_state file
-    update_project(daq_state)
-
-    return jsonify({'message': 'Run started successfully !'}), 200
+    return jsonify({'message': 'Run started successfully!'}), 200
 
 @bp.route("/experiment/stop_run", methods=['POST'])
 @jwt_required_custom
-def stop_run( ):
-    global daq_state, r_spy
+def stop_run():
+    if not daq_mgr.is_running():
+        return jsonify({'message': 'Run stopped successfully!'}), 200
 
-    if( not daq_state['running'] ):
-        return jsonify({'message': 'Run stopped successfully !'}), 200
-
-    # First stop the spy
-    r_spy.stop()
+    # Stop spy server first
+    spy_mgr.stop_spy()
     
-    time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    
-    # Stop the XDAQ
-    if( not TEST_FLAG ):
-        topology.halt( )
+    # Stop XDAQ
+    daq_mgr.stop_xdaq()
 
-    run = daq_state['run']
+    # Update run metadata in database
+    if daq_mgr.get_save_data():
+        run_number = daq_mgr.get_run_number()
+        try:
+            run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
+            if run_metadata:
+                run_metadata.end_time = datetime.now()
+                
+                metadata = {
+                    "Start Time": run_metadata.start_time.isoformat(),
+                    "Stop Time": run_metadata.end_time.isoformat(),
+                    "Terminal Voltage": run_metadata.terminal_voltage,
+                    "Probe Voltage": run_metadata.probe_voltage,
+                    "Run Type": run_metadata.run_type,
+                    "Target Name": run_metadata.target_name,
+                    "Accumulated Charge": run_metadata.accumulated_charge
+                }
+                
+                with open(f'data/run{run_number}/metadata.json', 'w') as f:
+                    json.dump(metadata, f, indent=4)
 
-    # Update metadata in the database
-    try:
-        if( daq_state['save'] or TEST_FLAG ):
-            run_metadata = RunMetadata.query.filter_by(run_number=daq_state['run']-1).first()
-            run_metadata.end_time = datetime.now()
+                db.session.commit()
+        except Exception:
+            pass
 
-            metadata = { "Start Time"          : run_metadata.start_time,
-                         "Stop Time"           : run_metadata.end_time,
-                         "Terminal Voltage"    : run_metadata.terminal_voltage,
-                         "Probe Voltage"       : run_metadata.probe_voltage,
-                         "Run Type"            : run_metadata.run_type,
-                         "Target Name"         : run_metadata.target_name,
-                         "Accumulated Charge"  : run_metadata.accumulated_charge
-                         }
-            
-            with open(f'data/run{run}//metadata.json', 'w') as f: 
-                json.dump(metadata, f)
+    # Increment run number if we saved data
+    if daq_mgr.get_save_data():
+        daq_mgr.increment_run_number()
 
-            db.session.commit()
-    except:
-        pass
+    # Set not running state
+    daq_mgr.set_running_state(False)
 
-    # If we save the data, update the run in the database
-    if( daq_state['save'] or TEST_FLAG and daq_state['running'] ):
-        daq_state['run'] += 1
-
-    daq_state['running'] = False
-    daq_state['start_time'] = None
-
-    # Update the daq_state file
-    update_project(daq_state)
-
-    return jsonify({'message': 'Run stopped successfully !'}), 200
+    return jsonify({'message': 'Run stopped successfully!'}), 200
 
 @bp.route("/experiment/add_note", methods=['POST'])
 @jwt_required_custom
@@ -270,7 +156,6 @@ def add_run_metadata():
         db.session.commit()
         return jsonify({'message': 'Run metadata added successfully'}), 200
     return jsonify({'message': 'Run not found'}), 404
-
 
 @bp.route("/experiment/get_run_metadata/<run_number>", methods=['GET'])
 @jwt_required_custom
@@ -319,388 +204,122 @@ def get_all_run_metadata():
 @bp.route("/experiment/add_board", methods=['POST'])
 @jwt_required_custom
 def add_caen():
-    global daq_state
-
-    board = request.get_json()
-
-    if( board["link_type"] == "USB" ):
-        link_type = 0
-    elif( board["link_type"] == "Optical" ):
-        link_type = 1
-    elif( board["link_type"] == "A4818" ):
-        link_type = 2
-
-    dgtz = digitizer(link_type, int(board["link_num"]), int(board["id"]), int(board["vme"], 16))
-    dgtz.open()
-
-    if not dgtz.get_connected():
+    board_config = request.get_json()
+    
+    if daq_mgr.add_board(board_config):
+        return jsonify(daq_mgr.get_boards()), 200
+    else:
         return jsonify({'message': 'Failed to connect to the board!'}), 404
-
-    # Get the board info
-    board_info = dgtz.get_info()
-
-    board["name"] = board_info["ModelName"]
-    board["chan"] = int(board_info["Channels"])
-
-    # Add the new board to the list
-    daq_state['boards'].append(board)
-
-    # Read the registers
-    if board["dpp"] == "DPP-PHA":
-        dgtz.read_pha(f"conf/{board['name']}_{board['id']}.json")
-    elif board["dpp"] == "DPP-PSD":
-        dgtz.read_psd(f"conf/{board['name']}_{board['id']}.json")
-
-    # Create the calibration file
-    os.system(f"touch calib/{board['name']}_{board['id']}.cal")
-    with open(f"calib/{board['name']}_{board['id']}.cal", 'w') as f:
-        for i in range( board['chan'] ):
-            f.write(f"0.0 1.0\n")
-
-    # Close the connection
-    dgtz.close()
-
-    # Update the project
-    update_project(daq_state)
-
-    return jsonify(daq_state['boards'])
 
 # Route for removing a CAEN board
 @bp.route("/experiment/remove_board", methods=['POST'])
 @jwt_required_custom
 def remove_caen():
-    global daq_state
-
-    index = request.get_json()["id"]
-
-    index = int(index)
-
-    # Remove the board based on its index in the list
-    if 0 <= index < len(daq_state['boards']):
-        os.system(f"rm calib/{daq_state['boards'][index]['name']}_{daq_state['boards'][index]['id']}.cal")
-        _ = daq_state['boards'].pop(index)
-
-    # Update the project
-    update_project(daq_state)
-
-    return jsonify(daq_state['boards'])
+    board_index = int(request.get_json()["id"])
+    
+    if daq_mgr.remove_board(board_index):
+        return jsonify(daq_mgr.get_boards()), 200
+    else:
+        return jsonify({'message': 'Failed to remove board'}), 404
 
 # Route to update save data
 @bp.route("/experiment/set_save_data", methods=['POST'])
 @jwt_required_custom
 def update_save_data():
-    global daq_state
     save = request.get_json()["value"]
-    daq_state['save'] = save
-    return jsonify(daq_state['save'])
+    daq_mgr.set_save_data(save)
+    return jsonify(daq_mgr.get_save_data())
 
 # Route to update limit size
 @bp.route("/experiment/set_limit_data_size", methods=['POST'])
 @jwt_required_custom
 def update_limit_size():
-    global daq_state
     limit_size = request.get_json()["value"]
-    daq_state['limit_size'] = limit_size
-    return jsonify(daq_state['limit_size'])
+    daq_mgr.set_limit_data_size(limit_size)
+    return jsonify(daq_mgr.get_limit_data_size())
 
 # Route to update file size limit
 @bp.route("/experiment/set_data_size_limit", methods=['POST'])
 @jwt_required_custom
 def update_file_size_limit():
-    global daq_state
     file_size_limit = request.get_json()["value"]
-    daq_state['file_size_limit'] = file_size_limit
-    return jsonify(daq_state['file_size_limit'])
+    daq_mgr.set_data_size_limit(file_size_limit)
+    return jsonify(daq_mgr.get_data_size_limit())
 
 # Route to get the save data
 @bp.route("/experiment/get_save_data", methods=['GET'])
 @jwt_required_custom
 def get_save_data():
-    global daq_state
-    return jsonify(daq_state['save'])
+    return jsonify(daq_mgr.get_save_data())
 
 # Route to get the limit size
 @bp.route("/experiment/get_limit_data_size", methods=['GET'])
 @jwt_required_custom
 def get_limit_size():
-    global daq_state
-    return jsonify(daq_state['limit_size'])
+    return jsonify(daq_mgr.get_limit_data_size())
 
 # Route to get the file size limit
 @bp.route("/experiment/get_data_size_limit", methods=['GET'])
 @jwt_required_custom
 def get_file_size_limit():
-    global daq_state
-    return jsonify(daq_state['file_size_limit'])
+    return jsonify(daq_mgr.get_data_size_limit())
 
 # Route for sending CAEN board
 @bp.route("/experiment/get_board_configuration", methods=['GET'])
 @jwt_required_custom
 def get_board_configuration():
-    global daq_state
-    return jsonify(daq_state['boards'])
+    return jsonify(daq_mgr.get_boards())
 
 # Get run number from the database
 @bp.route("/experiment/get_run_number", methods=['GET'])
 @jwt_required_custom
 def get_run_number():
-    global daq_state
-    return jsonify(daq_state['run'])
+    return jsonify(daq_mgr.get_run_number())
 
 # Set run number in the database
 @bp.route("/experiment/set_run_number", methods=['POST'])
 @jwt_required_custom
 def set_run_number():
-    global daq_state
     run_number = request.get_json()["value"]
-    daq_state['run'] = run_number
-    return jsonify(daq_state['run'])
+    daq_mgr.set_run_number(run_number)
+    return jsonify(daq_mgr.get_run_number())
 
-# FastAPI route to use this function
+# Check run directory
 @bp.route("/experiment/check_run_directory", methods=['GET'])
 @jwt_required_custom
 def check_run_directory():
-    run_number = daq_state['run']
-    run_dir = f"data/run{run_number}"
-    # Check if the directory exists
-    if os.path.exists(run_dir):
-        return jsonify(True)
-    return jsonify(False)
+    return jsonify(daq_mgr.check_run_directory())
 
 # Get run status
 @bp.route("/experiment/get_run_status", methods=['GET'])
 @jwt_required_custom
 def get_run_status():
-    global daq_state
-    if not TEST_FLAG:
-        try:
-            status = topology.get_daq_status( )
-            if status == "Running":
-                daq_state['running'] = True
-            else:
-                daq_state['running'] = False
-        except:
-            daq_state['running'] = False
-            pass
-        return jsonify(daq_state['running'])
-    else:
-        return jsonify(daq_state['running'])
+    return jsonify(daq_mgr.is_running())
 
 @bp.route("/experiment/get_start_time", methods=['GET'])
 @jwt_required_custom
 def get_start_time():
-    global daq_state
-    return jsonify(daq_state['start_time'])
-
-@bp.route('/waveforms/1/<board_id>/<channel>', methods=['GET'])
-@jwt_required_custom
-def get_wave1(board_id, channel):
-    idx = 0
-    for board in daq_state['boards']:
-        if int(board['id']) < int(board_id):
-            idx += board['chan']
-    idx += int(channel)
-    histo = r_spy.get_object("wave1", idx)
-    obj = TBufferJSON.ConvertToJSON(histo)
-    return str(obj.Data())
-
-@bp.route('/waveforms/2/<board_id>/<channel>', methods=['GET'])
-@jwt_required_custom
-def get_wave2(board_id, channel):
-    idx = 0
-    for board in daq_state['boards']:
-        if int(board['id']) < int(board_id):
-            idx += board['chan']
-    idx += int(channel)
-    histo = r_spy.get_object("wave2", idx)
-    obj = TBufferJSON.ConvertToJSON(histo)
-
-    return str(obj.Data())
-
-@bp.route('/waveforms/activate', methods=['POST'])
-@jwt_required_custom
-def activate_wave():
-    # We must change the JSON configuration file to enable waveforms
-    for board in daq_state['boards']:
-        filename = f"conf/{board['name']}_{board['id']}.json"
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        string = data['registers']['reg_8000']["value"]
-        value = int(string, 16)
-        value |= 1 << 16
-        data['registers']['reg_8000']["value"] = hex(value)
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
-
-    return jsonify({'message': 'Waveforms activated successfully !'}), 200
-
-@bp.route('/waveforms/deactivate', methods=['POST'])
-@jwt_required_custom
-def deactivate_wave():
-    # We must change the JSON configuration file to enable waveforms
-    for board in daq_state['boards']:
-        filename = f"conf/{board['name']}_{board['id']}.json"
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        string = data['registers']['reg_8000']["value"]
-        value = int(string, 16)
-        value &= ~(1 << 16)
-        data['registers']['reg_8000']["value"] = hex(value)
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=4)
-
-    return jsonify({'message': 'Waveforms deactivated successfully !'}), 200
-
-@bp.route('/waveforms/status', methods=['GET'])
-@jwt_required_custom
-def wave_status():
-    # We must check if waveforms are enabled
-    for board in daq_state['boards']:
-        filename = f"conf/{board['name']}_{board['id']}.json"
-        with open(filename, 'r') as f:
-            data = json.load(f)
-
-        string = data['registers']['reg_8000']["value"]
-        value = int(string, 16)
-        if (value & (1 << 16)) == 0:
-            return jsonify(False)
-
-    return jsonify(True)
+    return jsonify(daq_mgr.get_start_time())
 
 @bp.route('/experiment/xdaq/file_bandwidth', methods=['GET'])
 @jwt_required_custom
-def get_file_bandwith( ):
-    
-    # For all xdaq actors in topology get the file bandwith
-    if( daq_state['running'] and not TEST_FLAG ):
-        actors = topology.get_all_actors()
-        data = 0
-        for actor in actors:
-            for a in actor:
-                data += float(a.get_file_bandwith( ))
-
-        return jsonify(data)
-    
-    return jsonify(0)
+def get_file_bandwidth():
+    return jsonify(daq_mgr.get_file_bandwidth())
 
 @bp.route('/experiment/xdaq/output_bandwidth', methods=['GET'])
 @jwt_required_custom
-def get_output_bandwith( ):
-    
-    # For all xdaq actors in topology get the file bandwith
-    if( daq_state['running'] and not TEST_FLAG ):
-        actors = topology.get_all_actors()
-        data = 0
-        for actor in actors:
-            for a in actor:
-                data += float(a.get_output_bandwith( ))
-
-        return jsonify(data)
-    
-    return jsonify(0)
+def get_output_bandwidth():
+    return jsonify(daq_mgr.get_output_bandwidth())
 
 @bp.route('/experiment/xdaq/reset', methods=['POST'])
 @jwt_required_custom
-def reset( ):
+def reset():
     try:
-        r_spy.stop()
-    except:
+        spy_mgr.stop_spy()
+    except Exception:
         pass
-    topology = xdaq.topology("conf/topology.xml")
-    topology.load_topology( )
-    topology.display()
-    container.reset( )
-    print( "Container started...")
-    topology.configure_pt( )
-    print( "PT configured...")
-    topology.enable_pt( )
-    print( "PT enabled...")
-    return jsonify(0)
-
-# Route to serve all the data for a given run number
-@bp.route('/histograms/<board_id>/<channel>', methods=['GET'])
-@jwt_required_custom
-def get_histo(board_id, channel):
-    idx, dpp = get_info(board_id, channel, daq_state['boards'])
-    if( dpp == "DPP-PHA" ):
-        histo = r_spy.get_object("energy", idx)
-    else:
-        histo = r_spy.get_object("qlong", idx)
-
-    histo.Rebin( 16 )
-
-    obj = TBufferJSON.ConvertToJSON(histo)
-    return str(obj.Data())
-
-# Route to serve all the data for a given run number
-@bp.route('/histograms/<board_id>/<channel>/<roi_min>/<roi_max>', methods=['GET'])
-@jwt_required_custom
-def get_roi_histo(board_id, channel, roi_min, roi_max):
-    idx, dpp = get_info(board_id, channel, daq_state['boards'])
-    if( dpp == "DPP-PHA" ):
-        histo = r_spy.get_object("energy", idx)
-    else:
-        histo = r_spy.get_object("qlong", idx)
-
-    histo.Rebin( 16 )
-
-    h1 = TH1F(histo)
-    h1.GetXaxis( ).SetRange(h1.FindBin(int(roi_min)), h1.FindBin(int(roi_max))-1)
-    h1.SetLineColor(2)
-    h1.SetFillStyle(3001)
-    h1.SetFillColorAlpha(2, 0.3)
-    h1.SetLineWidth(2)
-    obj = str(TBufferJSON.ConvertToJSON(histo).Data())
-    #h1.Delete( )
-    del h1
-    return obj
-
-# Route to serve all the data for a given run number
-@bp.route('/roi/<board_id>/<channel>/<roi_min>/<roi_max>', methods=['GET'])
-@jwt_required_custom
-def get_roi_integral(board_id, channel, roi_min, roi_max):
-    idx, dpp = get_info(board_id, channel, daq_state['boards'])
-    if( dpp == "DPP-PHA" ):
-        histo = r_spy.get_object("energy", idx)
-    else:
-        histo = r_spy.get_object("qlong", idx)
-    histo.Rebin( 16 )
-    integral = histo.Integral(histo.FindBin(int(roi_min)), histo.FindBin(int(roi_max)))
-    return jsonify(integral)
-
-@bp.route('/experiment/boards/<id>/<setting>', methods=['GET'])
-@jwt_required_custom
-def get_setting( id, setting ):
-    key = "reg_{}".format(setting)
-    for board in daq_state['boards']:
-        if board['id'] == id:
-            filename = "conf/{}_{}.json".format(board['name'], board['id'])
-            with open(filename, 'r') as f:
-                data = json.load(f)
-            try:
-                value = data['registers'][key]['value']
-                return jsonify(value)
-            except:
-                return jsonify(-1)
-            # Convert from hex 0x to int
-            return jsonify(int(value, 16))
-    return jsonify(-1)
-
-@bp.route('/experiment/boards/<id>/<setting>/<value>', methods=['GET'])
-@jwt_required_custom
-def set_setting( id, setting, value ):
-    key = "reg_{}".format(setting)
-    try:
-        for board in daq_state['boards']:
-            if board['id'] == id:
-                filename = "conf/{}_{}.json".format(board['name'], board['id'])
-                with open(filename, 'r') as f:
-                    data = json.load(f)
-                data['registers'][key]['value'] = hex(int(value))
-                with open(filename, 'w') as f:
-                    json.dump(data, f, indent=4)
-        # Return success
+    
+    if daq_mgr.reset_xdaq():
         return jsonify(0)
-    except:
-        # Return failure
+    else:
         return jsonify(-1)

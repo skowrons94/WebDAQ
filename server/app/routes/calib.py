@@ -1,9 +1,9 @@
+# calib.py
 import os
-
 import numpy as np
 
 from flask import Blueprint, jsonify, request
-from app.utils.jwt_utils import jwt_required_custom
+from ..utils.jwt_utils import jwt_required_custom
 
 bp = Blueprint('calib', __name__)
 
