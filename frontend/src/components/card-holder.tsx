@@ -23,8 +23,6 @@ import {
   getRoiIntegral,
   getFileBandwidth,
   getDataCurrent,
-  getDataCollimator1,
-  getDataCollimator2,
   getAccumulatedCharge,
   getTotalAccumulatedCharge,
   getConnectedCurrent,
@@ -86,8 +84,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [fileBandwidth, setFileBandwidth] = useState<number>(0)
   const [beamCurrent, setBeamCurrent] = useState<number>(0)
   const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
-  const [collimator1Current, setCollimator1Current] = useState<number>(0)
-  const [collimator2Current, setCollimator2Current] = useState<number>(0)
   const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
   const [totalAccumulatedCharge, setTotalAccumulatedCharge] = useState<number>(0)
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false)
@@ -122,8 +118,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
     // Set up intervals for real-time data updates
     const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
-    const collimator1CurrentInterval = setInterval(updateCollimator1Current, 1000)
-    const collimator2CurrentInterval = setInterval(updateCollimator2Current, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
     const bandwidthInterval = setInterval(updateBandwidthData, 1000)
     const accumulatedChargeInterval = setInterval(updateAccumulatedCharge, 1000)
@@ -131,8 +125,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
     return () => {
       clearInterval(beamCurrentInterval)
-      clearInterval(collimator1CurrentInterval)
-      clearInterval(collimator2CurrentInterval)
       clearInterval(roiInterval)
       clearInterval(bandwidthInterval)
       clearInterval(accumulatedChargeInterval)
@@ -276,24 +268,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }
 
-  const updateCollimator1Current = async () => {
-    try {
-      const currentData = await getDataCollimator1()
-      setCollimator1Current(currentData)
-    } catch (error) {
-      console.error('Failed to update collimator 1 current:', error)
-    }
-  }
-
-  const updateCollimator2Current = async () => {
-    try {
-      const currentData = await getDataCollimator2()
-      setCollimator2Current(currentData)
-    } catch (error) {
-      console.error('Failed to update collimator 2 current:', error)
-    }
-  }
-
   const updateAccumulatedCharge = async () => {
     try {
       const charge = await getAccumulatedCharge()
@@ -368,42 +342,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
               <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
               <p className="text-xs text-muted-foreground">
                 {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from Start
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Collimator Upstream Current Card */}
-        {settings.showCurrent && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Collimator Upstream
-              </CardTitle>
-              <Thermometer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{collimator1Current.toFixed(2)} uA</div>
-              <p className="text-xs text-muted-foreground">
-                Current on the first collimator
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Collimator Downstream Current Card */}
-        {settings.showCurrent && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Collimator Downstream
-              </CardTitle>
-              <Thermometer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{collimator2Current.toFixed(2)} uA</div>
-              <p className="text-xs text-muted-foreground">
-                Current on the second collimator
               </p>
             </CardContent>
           </Card>
