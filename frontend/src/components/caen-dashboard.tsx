@@ -168,8 +168,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   }
 
   const handleSaveAll = async () => {
-    const promises = Array.from(modifiedSettings).map((regName) => setSetting(regName, settings[regName].value_dec))
-
+    const promises = Array.from(modifiedSettings).map((regName) => setSetting(boardData.id, regName, settings[regName].value_dec.toString()))
     try {
       await Promise.all(promises)
       setModifiedSettings(new Set())
@@ -211,7 +210,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   Object.entries(settings).forEach(([regName, registerData]) => {
     const address = Number.parseInt(registerData.address, 16)
 
-    if (address > 0x8000) {
+    if (address > 0x7000) {
       commonSettings[regName] = registerData
     } else {
       const channel = registerData.channel
