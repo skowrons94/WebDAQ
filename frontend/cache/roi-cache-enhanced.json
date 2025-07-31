@@ -1,130 +1,13 @@
 {
-  "hist_0_0": [
+  "hist_1753620920687": [
     {
-      "id": "roi_default_0_0",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_0_1": [
-    {
-      "id": "roi_default_0_1",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_0_2": [
-    {
-      "id": "roi_default_0_2",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_0_3": [
-    {
-      "id": "roi_default_0_3",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_0_4": [
-    {
-      "id": "roi_default_0_4",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_0_5": [
-    {
-      "id": "roi_default_0_5",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_0_6": [
-    {
-      "id": "roi_default_0_6",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_0_7": [
-    {
-      "id": "roi_default_0_7",
-      "name": "Default ROI",
-      "low": 0,
-      "high": 1000,
-      "integral": 0,
-      "color": "#ff0000",
-      "enabled": true
-    }
-  ],
-  "hist_1753576539838": [
-    {
-      "id": "roi_1753576575421",
-      "name": "Background",
-      "low": 0,
-      "high": 100,
-      "color": "#ff0000",
-      "enabled": true,
-      "integral": 0
-    },
-    {
-      "id": "roi_1753576586553",
-      "name": "Signal",
+      "id": "roi_1753620937435",
+      "name": "ROI",
       "low": 0,
       "high": 100,
       "color": "#00f900",
       "enabled": true,
-      "integral": 0
-    },
-    {
-      "id": "roi_1753576682869",
-      "name": "New",
-      "low": 0,
-      "high": 100,
-      "color": "#a96800",
-      "enabled": true,
-      "integral": 0
-    }
-  ],
-  "hist_1753606355508": [
-    {
-      "id": "roi_1753607577641",
-      "name": "12C + 12C",
-      "low": 0,
-      "high": 100,
-      "color": "#ff0000",
-      "enabled": true,
-      "integral": 0
+      "integral": 5551
     }
   ]
 }

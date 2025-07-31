@@ -6,7 +6,6 @@ const CACHE_DIR = path.join(process.cwd(), "cache")
 const ROI_CACHE_FILE = path.join(CACHE_DIR, "roi-cache-enhanced.json")
 const DASHBOARD_SETTINGS_FILE = path.join(CACHE_DIR, "dashboard-settings.json")
 const HISTOGRAM_CONFIGS_FILE = path.join(CACHE_DIR, "histogram-configs.json")
-const ZOOM_RANGES_FILE = path.join(CACHE_DIR, "zoom-ranges.json")
 
 // Enhanced ROI structure
 type ROI = {
@@ -32,7 +31,13 @@ type HistogramConfig = {
   label: string
   customLabel?: string
   position: { row: number; col: number }
-  zoomRange?: { xmin: number; xmax: number; ymin: number; ymax: number }
+  zoomRange?: {
+    xmin: number
+    xmax: number
+    ymin: number
+    ymax: number
+    timestamp?: number
+  }
   rois: ROI[]
 }
 
@@ -48,17 +53,6 @@ type DashboardSettings = {
   updateInterval: number
   theme: "auto" | "light" | "dark"
   rebinFactor?: number
-}
-
-// New type for zoom ranges
-type ZoomRanges = {
-  [histogramId: string]: {
-    xmin: number
-    xmax: number
-    ymin: number
-    ymax: number
-    timestamp: number // Track when zoom was last updated
-  }
 }
 
 async function ensureCacheDirectoryExists() {
@@ -126,15 +120,24 @@ export async function GET(request: Request) {
         })
 
       case "zoom-ranges":
-        await ensureFileExists(ZOOM_RANGES_FILE, "{}")
-        const zoomData = await fs.readFile(ZOOM_RANGES_FILE, "utf-8")
+        // For backward compatibility, extract zoom ranges from histogram configs
+        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
+        const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
+        const zoomRanges: { [key: string]: any } = {}
+
+        histogramConfigs.forEach((config) => {
+          if (config.zoomRange) {
+            zoomRanges[config.id] = config.zoomRange
+          }
+        })
+
         return NextResponse.json({
           success: true,
-          data: JSON.parse(zoomData) as ZoomRanges,
+          data: zoomRanges,
         })
 
       case "all":
-        // Return all cached data including zoom ranges
+        // Return all cached data
         await ensureFileExists(ROI_CACHE_FILE, "{}")
         await ensureFileExists(
           DASHBOARD_SETTINGS_FILE,
@@ -153,22 +156,29 @@ export async function GET(request: Request) {
           }),
         )
         await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-        await ensureFileExists(ZOOM_RANGES_FILE, "{}")
 
-        const [allRoiData, allSettingsData, allHistogramData, allZoomData] = await Promise.all([
+        const [allRoiData, allSettingsData, allHistogramData] = await Promise.all([
           fs.readFile(ROI_CACHE_FILE, "utf-8"),
           fs.readFile(DASHBOARD_SETTINGS_FILE, "utf-8"),
           fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8"),
-          fs.readFile(ZOOM_RANGES_FILE, "utf-8"),
         ])
+
+        const allHistogramConfigs = JSON.parse(allHistogramData) as HistogramConfig[]
+        const allZoomRanges: { [key: string]: any } = {}
+
+        allHistogramConfigs.forEach((config) => {
+          if (config.zoomRange) {
+            allZoomRanges[config.id] = config.zoomRange
+          }
+        })
 
         return NextResponse.json({
           success: true,
           data: {
             rois: JSON.parse(allRoiData) as ROICollection,
             settings: JSON.parse(allSettingsData) as DashboardSettings,
-            histograms: JSON.parse(allHistogramData) as HistogramConfig[],
-            zoomRanges: JSON.parse(allZoomData) as ZoomRanges,
+            histograms: allHistogramConfigs,
+            zoomRanges: allZoomRanges,
           },
         })
 
@@ -225,7 +235,7 @@ export async function POST(request: Request) {
         break
 
       case "zoom-range":
-        // Save individual zoom range for a specific histogram
+        // Save zoom range within histogram config
         if (!histogramId) {
           return NextResponse.json(
             {
@@ -236,20 +246,33 @@ export async function POST(request: Request) {
           )
         }
 
-        await ensureFileExists(ZOOM_RANGES_FILE, "{}")
-        const existingZoomData = JSON.parse(await fs.readFile(ZOOM_RANGES_FILE, "utf-8")) as ZoomRanges
+        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
+        const existingHistograms = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
 
-        existingZoomData[histogramId] = {
-          ...data,
-          timestamp: Date.now(),
+        const histogramIndex = existingHistograms.findIndex((h) => h.id === histogramId)
+        if (histogramIndex >= 0) {
+          existingHistograms[histogramIndex].zoomRange = {
+            ...data,
+            timestamp: Date.now(),
+          }
+          await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(existingHistograms, null, 2))
         }
-
-        await fs.writeFile(ZOOM_RANGES_FILE, JSON.stringify(existingZoomData, null, 2))
         break
 
       case "zoom-ranges":
-        // Save all zoom ranges at once
-        await fs.writeFile(ZOOM_RANGES_FILE, JSON.stringify(data, null, 2))
+        // Save multiple zoom ranges within their respective histogram configs
+        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
+        const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
+
+        // Update each histogram with its zoom range
+        Object.entries(data).forEach(([histId, zoomData]: [string, any]) => {
+          const histIndex = histogramConfigs.findIndex((h) => h.id === histId)
+          if (histIndex >= 0) {
+            histogramConfigs[histIndex].zoomRange = zoomData
+          }
+        })
+
+        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(histogramConfigs, null, 2))
         break
 
       case "all":
@@ -261,9 +284,6 @@ export async function POST(request: Request) {
         }
         if (data.histograms) {
           await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(data.histograms, null, 2))
-        }
-        if (data.zoomRanges) {
-          await fs.writeFile(ZOOM_RANGES_FILE, JSON.stringify(data.zoomRanges, null, 2))
         }
         break
 
@@ -329,11 +349,11 @@ export async function DELETE(request: Request) {
       case "histogram":
         // Remove specific histogram from cache (used when visibility is toggled off)
         if (histogramId) {
-          // Remove from zoom ranges
-          await ensureFileExists(ZOOM_RANGES_FILE, "{}")
-          const zoomData = JSON.parse(await fs.readFile(ZOOM_RANGES_FILE, "utf-8")) as ZoomRanges
-          delete zoomData[histogramId]
-          await fs.writeFile(ZOOM_RANGES_FILE, JSON.stringify(zoomData, null, 2))
+          // Remove from histogram configs
+          await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
+          const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
+          const updatedConfigs = histogramConfigs.filter((h) => h.id !== histogramId)
+          await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(updatedConfigs, null, 2))
 
           // Remove from ROI data
           await ensureFileExists(ROI_CACHE_FILE, "{}")
@@ -344,7 +364,15 @@ export async function DELETE(request: Request) {
         break
 
       case "zoom-ranges":
-        await fs.writeFile(ZOOM_RANGES_FILE, "{}")
+        // Clear zoom ranges from all histogram configs
+        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
+        const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
+
+        histogramConfigs.forEach((config) => {
+          delete config.zoomRange
+        })
+
+        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(histogramConfigs, null, 2))
         break
 
       case "all":
@@ -366,7 +394,6 @@ export async function DELETE(request: Request) {
           }),
         )
         await fs.writeFile(HISTOGRAM_CONFIGS_FILE, "[]")
-        await fs.writeFile(ZOOM_RANGES_FILE, "{}")
         break
 
       default:
@@ -437,16 +464,19 @@ export async function PUT(request: Request) {
     }
 
     if (type === "zoom-range" && histogramId) {
-      // Update specific histogram zoom range
-      await ensureFileExists(ZOOM_RANGES_FILE, "{}")
-      const zoomData = JSON.parse(await fs.readFile(ZOOM_RANGES_FILE, "utf-8")) as ZoomRanges
+      // Update specific histogram zoom range within histogram config
+      await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
+      const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
 
-      zoomData[histogramId] = {
-        ...data,
-        timestamp: Date.now(),
+      const histogramIndex = histogramConfigs.findIndex((h) => h.id === histogramId)
+      if (histogramIndex >= 0) {
+        histogramConfigs[histogramIndex].zoomRange = {
+          ...data,
+          timestamp: Date.now(),
+        }
+        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(histogramConfigs, null, 2))
       }
 
-      await fs.writeFile(ZOOM_RANGES_FILE, JSON.stringify(zoomData, null, 2))
       return NextResponse.json({ success: true })
     }
 

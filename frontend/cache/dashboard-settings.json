@@ -7,7 +7,7 @@
   "showROIs": true,
   "showIntegrals": true,
   "autoUpdate": true,
-  "updateInterval": 7000,
+  "updateInterval": 2000,
   "theme": "auto",
   "rebinFactor": 1
 }

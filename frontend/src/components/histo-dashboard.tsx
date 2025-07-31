@@ -1,16 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import {
-  getBoardConfiguration,
-  getRunStatus,
-  getCurrentRunNumber,
-  getHistogram,
-  getRoiHistogram,
-  getRoiIntegral,
-  getRebinFactor,
-  setRebinFactor,
-} from "@/lib/api"
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getRoiIntegral } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from "@/lib/load-jsroot"
@@ -25,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
 
-// Enhanced Types
+// Types
 type BoardData = {
   id: string
   name: string
@@ -46,10 +37,6 @@ type ROI = {
   enabled: boolean
 }
 
-type ROIValues = {
-  [key: string]: ROI[]
-}
-
 type HistogramConfig = {
   id: string
   boardId: string
@@ -59,7 +46,11 @@ type HistogramConfig = {
   label: string
   customLabel?: string
   position: { row: number; col: number }
-  zoomRange?: { xmin: number; xmax: number; ymin: number; ymax: number }
+  zoomRange?: {
+    xmin: number
+    xmax: number
+    timestamp?: number
+  }
   rois: ROI[]
 }
 
@@ -75,16 +66,6 @@ type DashboardSettings = {
   updateInterval: number
   theme: "auto" | "light" | "dark"
   rebinFactor: number
-}
-
-type ZoomRanges = {
-  [histogramId: string]: {
-    xmin: number
-    xmax: number
-    ymin: number
-    ymax: number
-    timestamp: number
-  }
 }
 
 type HistogramDialogProps = {
@@ -224,7 +205,6 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
   const [boardId, setBoardId] = useState(histogram?.boardId || "")
   const [channel, setChannel] = useState(histogram?.channel || 0)
   const [size, setSize] = useState(histogram?.size || "medium")
-  const [label, setLabel] = useState(histogram?.label || "")
   const [customLabel, setCustomLabel] = useState(histogram?.customLabel || "")
   const [visible, setVisible] = useState(histogram?.visible ?? true)
 
@@ -233,14 +213,12 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
       setBoardId(histogram.boardId)
       setChannel(histogram.channel)
       setSize(histogram.size)
-      setLabel(histogram.label)
       setCustomLabel(histogram.customLabel || "")
       setVisible(histogram.visible)
     } else {
       setBoardId("")
       setChannel(0)
       setSize("medium")
-      setLabel("")
       setCustomLabel("")
       setVisible(true)
     }
@@ -370,15 +348,10 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
 // Main Enhanced Dashboard Component
 export default function EnhancedHistogramDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
-  const [isRunning, setIsRunning] = useState(false)
-  const [runNumber, setRunNumber] = useState<number | null>(null)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
-  const [updateTrigger, setUpdateTrigger] = useState(0)
 
   // Enhanced state management
   const [histograms, setHistograms] = useState<HistogramConfig[]>([])
-  const [roiValues, setRoiValues] = useState<ROIValues>({})
-  const [zoomRanges, setZoomRanges] = useState<ZoomRanges>({})
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({
     layout: "grid",
     gridCols: 3,
@@ -388,7 +361,7 @@ export default function EnhancedHistogramDashboard() {
     showROIs: true,
     showIntegrals: true,
     autoUpdate: true,
-    updateInterval: 2000,
+    updateInterval: 5000, // Default 5 seconds
     theme: "auto",
     rebinFactor: 1,
   })
@@ -403,42 +376,32 @@ export default function EnhancedHistogramDashboard() {
     roi: null,
   })
 
+  // JSROOT refs - proper canvas approach
   const histogramRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
-  const framePainters = useRef<{ [key: string]: any }>({})
-  const currentZoomRanges = useRef<{ [key: string]: { xmin: number; xmax: number; ymin: number; ymax: number } }>({})
-  const initialDrawComplete = useRef<{ [key: string]: boolean }>({}) // Add this line
+  const canvasObjects = useRef<{ [key: string]: any }>({})
+  const histogramPainters = useRef<{ [key: string]: any }>({})
+  const isUpdating = useRef<{ [key: string]: boolean }>({})
+
+  // Update interval ref to properly manage the interval
+  const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const { toast } = useToast()
   const { theme } = useTheme()
 
-  // State to track if app is initialized to avoid default generation
-  const [appInitialized, setAppInitialized] = useState(false)
-
-  // Zoom ranges are now automatically saved on every zoom change
-
   // Load saved settings and histograms
   useEffect(() => {
     const initializeApp = async () => {
-      // Load settings, histograms, and zoom ranges
       await loadDashboardSettings()
       await loadHistogramConfigs()
-      await loadZoomRanges()
-
-      // Then fetch board configuration
       await fetchBoardConfiguration()
       await fetchRunStatus()
-
-      setAppInitialized(true)
     }
 
     initializeApp()
-
     const statusInterval = setInterval(fetchRunStatus, 5000)
 
     loadJSROOT()
-      .then(() => {
-        setJsrootLoaded(true)
-      })
+      .then(() => setJsrootLoaded(true))
       .catch((error) => {
         console.error("Failed to load JSROOT:", error)
         toast({
@@ -451,47 +414,45 @@ export default function EnhancedHistogramDashboard() {
     return () => clearInterval(statusInterval)
   }, [])
 
-  // Generate default histograms after app initialization if none exist
-  useEffect(() => {
-    if (appInitialized && histograms.length === 0 && boards.length > 0) {
-      generateDefaultHistograms(boards)
-    }
-  }, [appInitialized, histograms.length, boards])
-
-  // Initialize histograms when JSROOT loads and histograms are available
+  // Initialize histograms when JSROOT loads
   useEffect(() => {
     if (jsrootLoaded && histograms.length > 0) {
-      setTimeout(() => {
-        // Initialize blank histograms
-        if (window.JSROOT) {
-          histograms.forEach((config) => {
-            if (config.visible) {
-              const histoElement = histogramRefs.current[config.id]
-              if (histoElement) {
-                const blankHist = window.JSROOT.createHistogram("TH1F", 100)
-                blankHist.fName = config.id
-                blankHist.fTitle = config.label
-                window.JSROOT.redraw(histoElement, blankHist, "hist")
-              }
-            }
-          })
+      histograms.forEach((config) => {
+        if (config.visible && !histogramPainters.current[config.id]) {
+          initializeHistogram(config)
         }
-      }, 100)
+      })
     }
   }, [jsrootLoaded, histograms])
 
-  // Auto-update histograms
+  // FIXED: Auto-update histograms and ROI integrals with proper interval management
   useEffect(() => {
-    if (dashboardSettings.autoUpdate && jsrootLoaded && boards.length > 0) {
-      const updateInterval = setInterval(() => {
-        updateHistograms()
-        updateROIIntegrals()
-        setUpdateTrigger((prev) => prev + 1)
-      }, dashboardSettings.updateInterval)
-
-      return () => clearInterval(updateInterval)
+    // Clear any existing interval first
+    if (updateIntervalRef.current) {
+      console.log("Clearing existing update interval")
+      clearInterval(updateIntervalRef.current)
+      updateIntervalRef.current = null
     }
-  }, [jsrootLoaded, boards, dashboardSettings.autoUpdate, dashboardSettings.updateInterval])
+
+    // Only start new interval if conditions are met
+    if (dashboardSettings.autoUpdate && jsrootLoaded && boards.length > 0 && histograms.length > 0) {
+      console.log(`Starting auto-update with interval: ${dashboardSettings.updateInterval}ms`)
+
+      updateIntervalRef.current = setInterval(() => {
+        console.log(`Auto-updating histograms and ROI integrals every ${dashboardSettings.updateInterval}ms...`)
+        updateAllHistograms()
+      }, dashboardSettings.updateInterval)
+    }
+
+    // Cleanup function
+    return () => {
+      if (updateIntervalRef.current) {
+        console.log("Cleaning up update interval")
+        clearInterval(updateIntervalRef.current)
+        updateIntervalRef.current = null
+      }
+    }
+  }, [jsrootLoaded, boards.length, histograms.length, dashboardSettings.autoUpdate, dashboardSettings.updateInterval])
 
   // JSROOT theme handling
   useEffect(() => {
@@ -501,35 +462,14 @@ export default function EnhancedHistogramDashboard() {
     }
   }, [jsrootLoaded, theme, dashboardSettings.theme])
 
-  // Trigger histogram updates when settings change - FIXED: Immediate updates
+  // Force update when settings change
   useEffect(() => {
     if (jsrootLoaded && histograms.length > 0) {
-      // Force immediate re-render when settings change
-      const forceUpdate = async () => {
-        if (window.JSROOT) {
-          const visibleHistograms = histograms.filter((h) => h.visible)
-
-          for (const config of visibleHistograms) {
-            const histoElement = histogramRefs.current[config.id]
-            if (histoElement) {
-              try {
-                const histogramData = await getHistogram(config.boardId, config.channel.toString())
-                const histogram = window.JSROOT.parse(histogramData)
-                await drawHistogramWithROIs(histoElement, histogram, config)
-              } catch (error) {
-                console.error(`Failed to update histogram for ${config.id}:`, error)
-                // Draw blank histogram on error
-                const blankHist = window.JSROOT.createHistogram("TH1F", 100)
-                blankHist.fName = config.id
-                blankHist.fTitle = config.label
-                window.JSROOT.redraw(histoElement, blankHist, "hist")
-              }
-            }
-          }
-        }
-      }
-
-      forceUpdate()
+      histograms
+        .filter((h) => h.visible)
+        .forEach((config) => {
+          updateHistogramData(config)
+        })
     }
   }, [
     jsrootLoaded,
@@ -540,46 +480,364 @@ export default function EnhancedHistogramDashboard() {
     dashboardSettings.rebinFactor,
   ])
 
-  // NEW: Load zoom ranges from cache
-  const loadZoomRanges = useCallback(async () => {
+  // Initialize a single histogram
+  const initializeHistogram = async (config: HistogramConfig) => {
+    const element = histogramRefs.current[config.id]
+    if (!element || !window.JSROOT || histogramPainters.current[config.id]) return
+
     try {
-      const response = await fetch("/api/cache?type=zoom-ranges")
-      const data = await response.json()
-      if (data.success && data.data) {
-        setZoomRanges(data.data)
-        // Also update the current zoom ranges ref
-        currentZoomRanges.current = Object.fromEntries(
-          Object.entries(data.data).map(([id, zoom]: [string, any]) => [
-            id,
-            { xmin: zoom.xmin, xmax: zoom.xmax, ymin: zoom.ymin, ymax: zoom.ymax },
-          ]),
-        )
+      // Load saved zoom from cache first
+      const savedZoom = await loadZoomFromCache(config.id)
+      console.log(`Loading saved zoom for ${config.id}:`, savedZoom)
+
+      // Create histogram and draw it
+      await updateHistogramData(config, savedZoom)
+    } catch (error) {
+      console.error(`Failed to initialize histogram ${config.id}:`, error)
+    }
+  }
+
+  // Update all visible histograms and ROI integrals
+  const updateAllHistograms = async () => {
+    const visibleConfigs = histograms.filter((h) => h.visible)
+
+    // Update histograms in batches for performance
+    const batchSize = 10
+    for (let i = 0; i < visibleConfigs.length; i += batchSize) {
+      const batch = visibleConfigs.slice(i, i + batchSize)
+      await Promise.all(batch.map((config) => updateHistogramData(config)))
+    }
+
+    // Update ROI integrals after histogram updates
+    await updateROIIntegrals()
+  }
+
+  // Helper function to determine if ROI lines need updating
+  const shouldUpdateROIs = (canvas: any, config: HistogramConfig): boolean => {
+    if (!dashboardSettings.showROIs || config.rois.length === 0) {
+      // Check if there are existing ROI lines that need to be removed
+      const hasROILines = canvas.fPrimitives.arr.some((p: any) => p.fName && p.fName.startsWith('roi_'))
+      return hasROILines
+    }
+
+    // Check if ROI configuration has changed
+    const existingROILines = canvas.fPrimitives.arr.filter((p: any) => p.fName && p.fName.startsWith('roi_'))
+    const expectedROILines = config.rois.filter(r => r.enabled).length * 2 // 2 lines per ROI (start + end)
+    
+    return existingROILines.length !== expectedROILines
+  }
+
+  // Update histogram data - core function using proper canvas management
+  const updateHistogramData = async (config: HistogramConfig, initialZoom?: any) => {
+    if (isUpdating.current[config.id]) return
+    isUpdating.current[config.id] = true
+
+    console.log(`Updating histogram ${config.id}...`, {
+      boardId: config.boardId,
+      channel: config.channel,
+      zoomRange: initialZoom || config.zoomRange,
+    })
+
+    try {
+      const element = histogramRefs.current[config.id]
+      if (!element || !window.JSROOT) return
+
+      // Only use initial zoom for first-time creation, not for updates
+      const isFirstTime = !histogramPainters.current[config.id]
+      const zoomToApply = isFirstTime ? (initialZoom || config.zoomRange) : null
+
+      // ALWAYS fetch fresh histogram data from server
+      const histogramData = await getHistogram(config.boardId, config.channel.toString())
+      const histogram = window.JSROOT.parse(histogramData)
+
+      // Apply rebin factor if set
+      if (dashboardSettings.rebinFactor > 1) {
+        histogram.Rebin(dashboardSettings.rebinFactor)
+      }
+
+      // Style histogram
+      histogram.fLineColor = 4
+      histogram.fFillColor = 4
+      histogram.fFillStyle = 3001
+      histogram.fTitle = dashboardSettings.showLabels ? config.label : ""
+      histogram.fName = `hist_${config.id}`
+
+      // Create canvas object
+      let canvas = canvasObjects.current[config.id]
+      if (!canvas) {
+        // Create new canvas
+        canvas = window.JSROOT.create("TCanvas")
+        canvas.fName = `canvas_${config.id}`
+        canvas.fTitle = config.label
+        canvasObjects.current[config.id] = canvas
+      }
+
+      // Set log scale
+      canvas.fLogy = dashboardSettings.isLogScale ? 1 : 0
+
+      // Only clear and rebuild primitives for first-time creation or when ROI settings change
+      // This preserves zoom state during regular updates
+      if (isFirstTime || shouldUpdateROIs(canvas, config)) {
+        canvas.fPrimitives.Clear()
+        canvas.fPrimitives.Add(histogram, "hist")
+
+        // Add ROI TLines to canvas primitives
+        if (dashboardSettings.showROIs && config.rois.length > 0) {
+          addROILinesToCanvas(canvas, config, histogram)
+        }
+      } else {
+        // For regular updates, only update the histogram data without clearing primitives
+        // Find and update the existing histogram primitive
+        const histPrimitive = canvas.fPrimitives.arr.find((p: any) => p._typename === "TH1F" || p._typename === "TH1I")
+        if (histPrimitive) {
+          // Copy data from new histogram to existing one
+          histPrimitive.fArray = histogram.fArray
+          histPrimitive.fMaximum = histogram.fMaximum
+          histPrimitive.fMinimum = histogram.fMinimum
+          histPrimitive.fEntries = histogram.fEntries
+          histPrimitive.fTsumw = histogram.fTsumw
+          histPrimitive.fTsumw2 = histogram.fTsumw2
+          histPrimitive.fTsumwx = histogram.fTsumwx
+          histPrimitive.fTsumwx2 = histogram.fTsumwx2
+        }
+      }
+
+      // Draw or redraw the canvas
+      let painter = histogramPainters.current[config.id]
+      if (!painter) {
+        // First time - create painter
+        painter = await window.JSROOT.redraw(element, canvas)
+        histogramPainters.current[config.id] = painter
+
+        // Setup zoom functionality
+        setupZoomPersistence(painter, config)
+
+        // Apply saved zoom ONLY once after first creation
+        if (zoomToApply && zoomToApply.xmin < zoomToApply.xmax) {
+          console.log(`Applying saved zoom to ${config.id}:`, zoomToApply)
+          setTimeout(() => {
+            const fp = painter.getFramePainter()
+            if (fp && fp.zoom) {
+              fp.zoom(zoomToApply.xmin, zoomToApply.xmax, 0, 0)
+            }
+          }, 100)
+        }
+      } else {
+        // For existing painters, only redraw if primitives were rebuilt
+        // Otherwise just update the display without full redraw to preserve zoom
+        if (isFirstTime || shouldUpdateROIs(canvas, config)) {
+          await window.JSROOT.redraw(element, canvas)
+        } else {
+          // Just refresh/repaint the existing painter without full redraw
+          if (painter.redrawPad) {
+            painter.redrawPad()
+          } else if (painter.refresh) {
+            painter.refresh()
+          }
+        }
       }
     } catch (error) {
-      console.error("Failed to load zoom ranges:", error)
+      console.error(`Failed to update histogram ${config.id}:`, error)
+    } finally {
+      isUpdating.current[config.id] = false
     }
-  }, [])
+  }
+
+  // Setup zoom persistence
+  const setupZoomPersistence = (painter: any, config: HistogramConfig) => {
+    const fp = painter.getFramePainter()
+    if (!fp || fp.zoomConfigured) return
+
+    fp.originalZoom = fp.zoom
+    fp.zoomConfigured = true
+
+    fp.zoom = (xmin: number, xmax: number, ymin: number, ymax: number) => {
+      const result = fp.originalZoom(xmin, xmax, ymin, ymax)
+
+      // Save zoom to cache with debouncing
+      clearTimeout(fp.saveZoomTimeout)
+      fp.saveZoomTimeout = setTimeout(() => {
+        saveZoomToCache(config.id, { xmin, xmax })
+
+        // Sync zoom if enabled
+        if (dashboardSettings.syncZoom) {
+          syncZoomToOthers(config.id, xmin, xmax)
+        }
+      }, 200)
+
+      return result
+    }
+  }
+
+
+  // Add ROI vertical lines to canvas primitives
+  const addROILinesToCanvas = (canvas: any, config: HistogramConfig, histogram: any) => {
+    // Get histogram Y range for proper line positioning
+    const data = histogram.fArray
+    const histMax = Math.max(...data)
+    const histMin = Math.min(...data)
+    // Get max from Canvas y axis
+    const yAxis = canvas.fPrimitives.arr.find((p: any) => p._typename === "TAttAxis")
+    const yMin = yAxis ? yAxis.fYmin : histMin
+
+    //const yMin = 0.1 // 10% below min for visibility
+    const yMax = 10 // 10% above max for visibility
+
+    console.log(`Adding ROI lines at yMin=${yMin}, yMax=${yMax}`)
+
+
+    // Add each enabled ROI as vertical boundary lines
+    for (const roi of config.rois.filter((r) => r.enabled)) {
+      try {
+        console.log('ROI color:', roi.color)
+        // Convert to RGB the string with #
+        if (!roi.color.startsWith("#")) {
+          roi.color = `#${roi.color}`
+        }
+
+        const rootColor = convertColorToRoot(roi.color)
+
+        // Create vertical line at ROI low boundary
+        const roiLineStart = window.JSROOT.create("TLine")
+        roiLineStart.fX1 = roi.low
+        roiLineStart.fY1 = yMin
+        roiLineStart.fX2 = roi.high
+        roiLineStart.fY2 = yMin
+        roiLineStart.fLineColor = rootColor
+        roiLineStart.fLineWidth = 4
+        roiLineStart.fLineStyle = 1 // Dashed line
+        roiLineStart.fName = `roi_start_${roi.id}`
+
+        // Create vertical line at ROI high boundary
+        const roiLineEnd = window.JSROOT.create("TLine")
+        roiLineEnd.fX1 = roi.low
+        roiLineEnd.fY1 = yMin
+        roiLineEnd.fX2 = roi.high
+        roiLineEnd.fY2 = yMin
+        roiLineEnd.fLineColor = rootColor
+        roiLineEnd.fLineWidth = 4
+        roiLineEnd.fLineStyle = 1 // Dashed line
+        roiLineEnd.fName = `roi_end_${roi.id}`
+
+        // Add lines to canvas primitives
+        canvas.fPrimitives.Add(roiLineStart, "")
+        canvas.fPrimitives.Add(roiLineEnd, "")
+
+        // Restore canvas min/max if needed
+
+        console.log(`Added ROI vertical lines for ${roi.name}: start=${roi.low}, end=${roi.high}, color=${rootColor}`)
+      } catch (error) {
+        console.error(`Failed to add ROI lines for ${roi.name}:`, error)
+      }
+    }
+  }
+
+  // Convert hex color to ROOT color index
+  const convertColorToRoot = (hexColor: string): number => {
+    const colorMap: { [key: string]: number } = {
+      "#ff0000": 2,
+      "#00ff00": 3,
+      "#0000ff": 4,
+      "#ffff00": 5,
+      "#ff00ff": 6,
+      "#00ffff": 7,
+      "#000000": 1,
+      "#ffffff": 0,
+      // Safari colors
+      "#ff7f00": 8, // Orange
+      "#7f00ff": 9, // Violet
+      "#7f7f7f": 10, // Gray
+      "#808080": 11, // Dark Gray
+      "#800000": 12, // Maroon
+      "#008000": 13, // Green
+      "#000080": 14, // Navy
+      "#7f7f00": 15, // Olive
+      "#007f7f": 16, // Teal
+      "#800080": 17, // Purple
+    }
+    return colorMap[hexColor.toLowerCase()] || 2
+  }
+
+  // Save zoom to cache
+  const saveZoomToCache = async (histogramId: string, zoom: { xmin: number; xmax: number }) => {
+    try {
+      const zoomData = { ...zoom, timestamp: Date.now() }
+      console.log(`Saving zoom for ${histogramId}:`, zoomData)
+
+      // Save to cache API
+      await fetch("/api/cache", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "zoom-range",
+          histogramId,
+          data: zoomData,
+        }),
+      })
+
+      // Also update the histogram config locally
+      const updatedHistograms = histograms.map((h) => (h.id === histogramId ? { ...h, zoomRange: zoomData } : h))
+      setHistograms(updatedHistograms)
+    } catch (error) {
+      console.error("Failed to save zoom to cache:", error)
+    }
+  }
+
+  // Load zoom from cache
+  const loadZoomFromCache = async (histogramId: string) => {
+    try {
+      // Try loading from cache API first
+      const response = await fetch(`/api/cache?type=zoom-ranges`)
+      const data = await response.json()
+      if (data.success && data.data && data.data[histogramId]) {
+        console.log(`Found zoom in cache for ${histogramId}:`, data.data[histogramId])
+        return data.data[histogramId]
+      }
+
+      // Fallback: check if zoom is in histogram config
+      const config = histograms.find((h) => h.id === histogramId)
+      if (config?.zoomRange) {
+        console.log(`Found zoom in config for ${histogramId}:`, config.zoomRange)
+        return config.zoomRange
+      }
+
+      console.log(`No zoom found for ${histogramId}`)
+    } catch (error) {
+      console.error("Failed to load zoom from cache:", error)
+    }
+    return null
+  }
+
+  // Sync zoom to other histograms
+  const syncZoomToOthers = (sourceId: string, xmin: number, xmax: number) => {
+    Object.entries(histogramPainters.current).forEach(([id, painter]) => {
+      if (id !== sourceId && painter) {
+        const fp = painter.getFramePainter()
+        if (fp?.originalZoom) {
+          fp.originalZoom(xmin, xmax, 0, 0)
+          saveZoomToCache(id, { xmin, xmax })
+        }
+      }
+    })
+  }
 
   // Settings persistence using enhanced cache API
   const saveDashboardSettings = useCallback(
     async (settings: DashboardSettings) => {
       try {
+        // Ensure minimum interval is 1 second (1000ms)
+        const validatedSettings = {
+          ...settings,
+          updateInterval: Math.max(1000, settings.updateInterval),
+        }
+
         await fetch("/api/cache", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "settings", data: settings }),
+          body: JSON.stringify({ type: "settings", data: validatedSettings }),
         })
 
-        // Update rebin factor via API
-        if (settings.rebinFactor !== dashboardSettings.rebinFactor) {
-          try {
-            await setRebinFactor(settings.rebinFactor)
-          } catch (error) {
-            console.error("Failed to set rebin factor:", error)
-          }
-        }
-
-        setDashboardSettings(settings)
+        setDashboardSettings(validatedSettings)
         toast({
           title: "Settings Saved",
           description: "Dashboard settings have been saved successfully.",
@@ -593,7 +851,7 @@ export default function EnhancedHistogramDashboard() {
         })
       }
     },
-    [toast, dashboardSettings.rebinFactor],
+    [toast],
   )
 
   const loadDashboardSettings = useCallback(async () => {
@@ -601,19 +859,11 @@ export default function EnhancedHistogramDashboard() {
       const response = await fetch("/api/cache?type=settings")
       const data = await response.json()
       if (data.success && data.data) {
-        // Ensure minimum update interval of 2000ms
         const settings = {
           ...data.data,
-          updateInterval: Math.max(2000, data.data.updateInterval || 2000),
+          // Ensure minimum interval is 1 second, default to 5 seconds
+          updateInterval: Math.max(1000, data.data.updateInterval || 5000),
           rebinFactor: data.data.rebinFactor || 1,
-        }
-
-        // Load rebin factor from API
-        try {
-          const apiRebinFactor = await getRebinFactor()
-          settings.rebinFactor = apiRebinFactor
-        } catch (error) {
-          console.error("Failed to get rebin factor:", error)
         }
 
         setDashboardSettings((prev) => ({ ...prev, ...settings }))
@@ -632,21 +882,6 @@ export default function EnhancedHistogramDashboard() {
           body: JSON.stringify({ type: "histograms", data: configs }),
         })
         setHistograms(configs)
-
-        // Also save ROI data from configs
-        const roiData: ROIValues = {}
-        configs.forEach((config) => {
-          if (config.rois && config.rois.length > 0) {
-            roiData[config.id] = config.rois
-          }
-        })
-        setRoiValues(roiData)
-
-        await fetch("/api/cache", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "rois", data: roiData }),
-        })
       } catch (error) {
         console.error("Failed to save histogram configs:", error)
         toast({
@@ -665,20 +900,13 @@ export default function EnhancedHistogramDashboard() {
       const data = await response.json()
       if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
         setHistograms(data.data)
-
-        // Load ROI data as well
-        const roiResponse = await fetch("/api/cache?type=rois")
-        const roiData = await roiResponse.json()
-        if (roiData.success && roiData.data) {
-          setRoiValues(roiData.data)
-        }
       }
     } catch (error) {
       console.error("Failed to load histogram configs:", error)
     }
   }, [])
 
-  // FIXED: Remove from cache when visibility is toggled off
+  // Remove histogram from cache when visibility is toggled off
   const removeHistogramFromCache = useCallback(async (histogramId: string) => {
     try {
       await fetch("/api/cache", {
@@ -687,16 +915,11 @@ export default function EnhancedHistogramDashboard() {
         body: JSON.stringify({ type: "histogram", id: histogramId }),
       })
 
-      // Also remove from local zoom ranges
-      setZoomRanges((prev) => {
-        const updated = { ...prev }
-        delete updated[histogramId]
-        return updated
-      })
-
-      // Clear from current zoom ranges ref
-      delete currentZoomRanges.current[histogramId]
-      delete initialDrawComplete.current[histogramId] // Add this line
+      // Clean up refs
+      delete histogramRefs.current[histogramId]
+      delete histogramPainters.current[histogramId]
+      delete canvasObjects.current[histogramId]
+      delete isUpdating.current[histogramId]
     } catch (error) {
       console.error("Failed to remove histogram from cache:", error)
     }
@@ -721,45 +944,10 @@ export default function EnhancedHistogramDashboard() {
 
   const fetchRunStatus = async () => {
     try {
-      const [statusResponse, runNumberResponse] = await Promise.all([getRunStatus(), getCurrentRunNumber()])
-      setIsRunning(statusResponse)
-      setRunNumber(runNumberResponse)
+      await Promise.all([getRunStatus(), getCurrentRunNumber()])
     } catch (error) {
       console.error("Failed to fetch run status:", error)
     }
-  }
-
-  // Generate default histograms
-  const generateDefaultHistograms = (boardData: BoardData[]) => {
-    const defaultConfigs: HistogramConfig[] = []
-
-    boardData.forEach((board) => {
-      for (let channel = 0; channel < Number.parseInt(board.chan); channel++) {
-        const config: HistogramConfig = {
-          id: `hist_${board.id}_${channel}`,
-          boardId: board.id,
-          channel,
-          visible: true,
-          size: "medium",
-          label: `${board.name} - Channel ${channel}`,
-          position: { row: Math.floor(defaultConfigs.length / 3), col: defaultConfigs.length % 3 },
-          rois: [
-            {
-              id: `roi_default_${board.id}_${channel}`,
-              name: "Default ROI",
-              low: 0,
-              high: 1000,
-              integral: 0,
-              color: "#ff0000",
-              enabled: true,
-            },
-          ],
-        }
-        defaultConfigs.push(config)
-      }
-    })
-
-    saveHistogramConfigs(defaultConfigs)
   }
 
   // Histogram management
@@ -786,19 +974,11 @@ export default function EnhancedHistogramDashboard() {
     saveHistogramConfigs(updatedHistograms)
 
     // Clean up refs and painters
-    if (histogramRefs.current[id]) {
-      delete histogramRefs.current[id]
-    }
-    if (framePainters.current[id]) {
-      delete framePainters.current[id]
-    }
-    if (currentZoomRanges.current[id]) {
-      delete currentZoomRanges.current[id]
-    }
-    if (initialDrawComplete.current[id]) {
-      // Add this line
-      delete initialDrawComplete.current[id]
-    }
+    delete histogramRefs.current[id]
+    delete histogramPainters.current[id]
+    delete canvasObjects.current[id]
+    delete isUpdating.current[id]
+
     // Remove from cache
     removeHistogramFromCache(id)
   }
@@ -824,16 +1004,16 @@ export default function EnhancedHistogramDashboard() {
       return h
     })
 
-    // Update local state immediately before saving
     setHistograms(updatedHistograms)
-    
-    // Update ROI values immediately for display
-    const updatedRoiValues = { ...roiValues }
-    updatedRoiValues[histogramId] = updatedHistograms.find((h) => h.id === histogramId)?.rois || []
-    setRoiValues(updatedRoiValues)
-
-    // Save to persistent storage
     saveHistogramConfigs(updatedHistograms)
+
+    // Refresh the specific histogram with new ROI
+    setTimeout(() => {
+      const config = updatedHistograms.find((h) => h.id === histogramId)
+      if (config && config.visible) {
+        updateHistogramData(config)
+      }
+    }, 100)
   }
 
   const deleteROI = (histogramId: string, roiId: string) => {
@@ -844,28 +1024,80 @@ export default function EnhancedHistogramDashboard() {
       return h
     })
 
+    setHistograms(updatedHistograms)
     saveHistogramConfigs(updatedHistograms)
+
+    // Refresh the specific histogram after ROI deletion
+    setTimeout(() => {
+      const config = updatedHistograms.find((h) => h.id === histogramId)
+      if (config && config.visible) {
+        updateHistogramData(config)
+      }
+    }, 100)
+  }
+
+  // Update ROI integrals for all visible histograms
+  const updateROIIntegrals = async () => {
+    const visibleHistograms = histograms.filter((h) => h.visible)
+
+    // Batch all ROI integral requests
+    const integralPromises: Promise<{ histogramId: string; roiId: string; integral: number }>[] = []
+
+    for (const config of visibleHistograms) {
+      for (const roi of config.rois.filter((r) => r.enabled)) {
+        integralPromises.push(
+          getRoiIntegral(config.boardId, config.channel.toString(), roi.low, roi.high)
+            .then((integral) => ({ histogramId: config.id, roiId: roi.id, integral }))
+            .catch((error) => {
+              console.error(`Failed to get ROI integral for ${config.id}/${roi.id}:`, error)
+              return { histogramId: config.id, roiId: roi.id, integral: 0 }
+            }),
+        )
+      }
+    }
+
+    // Wait for all integral calculations
+    const results = await Promise.all(integralPromises)
+
+    // Update histograms with new integrals in a single batch
+    if (results.length > 0) {
+      const updatedHistograms = histograms.map((h) => {
+        const histogramIntegrals = results.filter((r) => r.histogramId === h.id)
+        if (histogramIntegrals.length === 0) return h
+
+        return {
+          ...h,
+          rois: h.rois.map((roi) => {
+            const integralResult = histogramIntegrals.find((r) => r.roiId === roi.id)
+            return integralResult ? { ...roi, integral: integralResult.integral } : roi
+          }),
+        }
+      })
+
+      setHistograms(updatedHistograms)
+    }
   }
 
   // Zoom management
   const resetAllZoom = () => {
-    Object.values(framePainters.current).forEach((fp) => {
-      if (fp && fp.zoom) {
-        fp.zoom(0, 0, 0, 0) // Reset to default zoom
+    Object.values(histogramPainters.current).forEach((painter) => {
+      const fp = painter?.getFramePainter()
+      if (fp?.originalZoom) {
+        clearTimeout(fp.saveZoomTimeout)
+        fp.originalZoom(0, 0, 0, 0)
       }
     })
 
-    // Clear stored zoom ranges
-    currentZoomRanges.current = {}
+    const updatedHistograms = histograms.map((h) => ({ ...h, zoomRange: undefined }))
+    setHistograms(updatedHistograms)
+    saveHistogramConfigs(updatedHistograms)
 
-    // Clear cached zoom ranges
+    // Clear zoom cache
     fetch("/api/cache", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "zoom-ranges" }),
-    }).catch((error) => console.error("Failed to clear zoom ranges:", error))
-
-    setZoomRanges({})
+    })
 
     toast({
       title: "Zoom Reset",
@@ -877,329 +1109,10 @@ export default function EnhancedHistogramDashboard() {
     const newSyncState = !dashboardSettings.syncZoom
     saveDashboardSettings({ ...dashboardSettings, syncZoom: newSyncState })
 
-    // Apply sync logic to frame painters
-    Object.entries(framePainters.current).forEach(([histoId, fp]) => {
-      if (fp && fp.oldZoom) {
-        if (newSyncState) {
-          // Enable synchronized zoom with automatic saving
-          fp.zoom = (xmin: number, xmax: number, ymin: number, ymax: number, zmin?: number, zmax?: number) => {
-            const zoomRange = { xmin, xmax, ymin, ymax }
-            currentZoomRanges.current[histoId] = zoomRange
-
-            // Automatically save zoom changes to cache
-            const zoomToSave = {
-              ...zoomRange,
-              timestamp: Date.now(),
-            }
-            
-            // Update local zoom ranges state
-            setZoomRanges(prev => ({
-              ...prev,
-              [histoId]: zoomToSave
-            }))
-
-            Object.entries(framePainters.current).forEach(([id, painter]) => {
-              if (id !== histoId && painter && painter.oldZoom) {
-                painter.oldZoom(xmin, xmax, painter.scale_ymin, painter.scale_ymax, zmin, zmax)
-                const syncZoomRange = {
-                  xmin,
-                  xmax,
-                  ymin: painter.scale_ymin,
-                  ymax: painter.scale_ymax,
-                }
-                currentZoomRanges.current[id] = syncZoomRange
-                
-                // Save synced zoom as well
-                const syncZoomToSave = {
-                  ...syncZoomRange,
-                  timestamp: Date.now(),
-                }
-                setZoomRanges(prev => ({
-                  ...prev,
-                  [id]: syncZoomToSave
-                }))
-              }
-            })
-
-            // Save all zoom ranges to cache
-            fetch("/api/cache", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                type: "zoom-ranges",
-                data: { ...zoomRanges, [histoId]: zoomToSave },
-              }),
-            }).catch(error => console.error("Failed to save zoom ranges:", error))
-
-            return fp.oldZoom(xmin, xmax, ymin, ymax, zmin, zmax)
-          }
-        } else {
-          // Restore original zoom function
-          fp.zoom = fp.oldZoom
-        }
-      }
-    })
-
     toast({
       title: `Synchronized Zooming ${newSyncState ? "Enabled" : "Disabled"}`,
       description: `Histograms will ${newSyncState ? "now" : "no longer"} zoom together.`,
     })
-  }
-
-  // Histogram rendering
-
-  const updateHistograms = useCallback(async () => {
-    if (!window.JSROOT) return
-
-    for (const config of histograms.filter((h) => h.visible)) {
-      const histoElement = histogramRefs.current[config.id]
-      if (histoElement) {
-        try {
-          const histogramData = await getHistogram(config.boardId, config.channel.toString())
-          const histogram = window.JSROOT.parse(histogramData)
-          await drawHistogramWithROIs(histoElement, histogram, config)
-        } catch (error) {
-          console.error(`Failed to fetch histogram for ${config.id}:`, error)
-          // Draw blank histogram on error
-          const blankHist = window.JSROOT.createHistogram("TH1F", 100)
-          blankHist.fName = config.id
-          blankHist.fTitle = config.label
-          window.JSROOT.redraw(histoElement, blankHist, "hist")
-        }
-      }
-    }
-  }, [histograms, dashboardSettings.isLogScale, dashboardSettings.showROIs])
-
-  const updateROIIntegrals = useCallback(async () => {
-    for (const config of histograms.filter((h) => h.visible)) {
-      for (const roi of config.rois.filter((r) => r.enabled)) {
-        try {
-          const integral = await getRoiIntegral(config.boardId, config.channel.toString(), roi.low, roi.high)
-
-          // Update the ROI integral in the histogram config
-          const updatedHistograms = histograms.map((h) => {
-            if (h.id === config.id) {
-              return {
-                ...h,
-                rois: h.rois.map((r) => (r.id === roi.id ? { ...r, integral } : r)),
-              }
-            }
-            return h
-          })
-
-          setHistograms(updatedHistograms)
-        } catch (error) {
-          console.error(`Failed to get ROI integral for ${config.id}:`, error)
-        }
-      }
-    }
-  }, [histograms])
-
-  const drawHistogramWithROIs = async (element: HTMLDivElement, histogram: any, config: HistogramConfig) => {
-    if (window.JSROOT) {
-      const canv = window.JSROOT.create("TCanvas")
-
-      // Style main histogram
-      histogram.fLineColor = 4
-      histogram.fFillColor = 4
-      histogram.fFillStyle = 3001
-      histogram.fTitle = dashboardSettings.showLabels ? config.label : ""
-
-      canv.fName = "c1"
-      canv.fPrimitives.Add(histogram, "histo")
-
-      // Add ROIs if enabled
-      if (dashboardSettings.showROIs) {
-        for (const roi of config.rois.filter((r) => r.enabled)) {
-          try {
-            const roiData = await getRoiHistogram(config.boardId, config.channel.toString(), roi.low, roi.high)
-            const roiHistogram = window.JSROOT.parse(roiData)
-
-            // Convert hex color to ROOT color index (simplified)
-            const colorMap = {
-              "#ff0000": 2,
-              "#00ff00": 3,
-              "#0000ff": 4,
-              "#ffff00": 5,
-              "#ff00ff": 6,
-              "#00ffff": 7,
-              "#000000": 1,
-              "#ffffff": 0,
-            }
-            const rootColor = colorMap[roi.color as keyof typeof colorMap] || 2
-
-            roiHistogram.fLineColor = rootColor
-            roiHistogram.fFillColor = rootColor
-            roiHistogram.fFillStyle = 3001
-
-            canv.fPrimitives.Add(roiHistogram, "histo")
-          } catch (error) {
-            console.error(`Failed to draw ROI ${roi.name}:`, error)
-          }
-        }
-      }
-
-      // Apply log scale
-      if (dashboardSettings.isLogScale) {
-        canv.fLogy = 1
-      } else {
-        canv.fLogy = 0
-      }
-
-      // Redraw with new data
-      const painter = await window.JSROOT.redraw(element, canv)
-
-      // Setup frame painter
-      if (painter && painter.getFramePainter) {
-        const fp = painter.getFramePainter()
-        if (fp) {
-          framePainters.current[config.id] = fp
-
-          // Setup zoom synchronization without automatic persistence (only once)
-          if (!fp.syncedZoomSetup) {
-            fp.oldZoom = fp.zoom
-            fp.syncedZoomSetup = true
-
-            // Enhanced zoom function to track and automatically save zoom changes
-            fp.zoom = (xmin: number, xmax: number, ymin: number, ymax: number, zmin?: number, zmax?: number) => {
-              const zoomRange = { xmin, xmax, ymin, ymax }
-              currentZoomRanges.current[config.id] = zoomRange
-
-              // Automatically save zoom changes to cache
-              const zoomToSave = {
-                ...zoomRange,
-                timestamp: Date.now(),
-              }
-              
-              // Update local zoom ranges state
-              setZoomRanges(prev => ({
-                ...prev,
-                [config.id]: zoomToSave
-              }))
-              
-              // Save to cache asynchronously
-              fetch("/api/cache", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  type: "zoom-ranges",
-                  data: { ...zoomRanges, [config.id]: zoomToSave },
-                }),
-              }).catch(error => console.error("Failed to save zoom range:", error))
-
-              if (dashboardSettings.syncZoom) {
-                Object.entries(framePainters.current).forEach(([id, painter]) => {
-                  if (id !== config.id && painter && painter.oldZoom) {
-                    painter.oldZoom(xmin, xmax, painter.scale_ymin, painter.scale_ymax, zmin, zmax)
-                    const syncZoomRange = {
-                      xmin,
-                      xmax,
-                      ymin: painter.scale_ymin,
-                      ymax: painter.scale_ymax,
-                    }
-                    currentZoomRanges.current[id] = syncZoomRange
-                    
-                    // Save synced zoom as well
-                    const syncZoomToSave = {
-                      ...syncZoomRange,
-                      timestamp: Date.now(),
-                    }
-                    setZoomRanges(prev => ({
-                      ...prev,
-                      [id]: syncZoomToSave
-                    }))
-                  }
-                })
-              }
-
-              return fp.oldZoom(xmin, xmax, ymin, ymax, zmin, zmax)
-            }
-
-            // ONLY restore zoom on initial draw, not on updates
-            const isInitialDraw = !initialDrawComplete.current[config.id]
-            if (isInitialDraw) {
-              // Mark as initially drawn
-              initialDrawComplete.current[config.id] = true
-
-              // Determine which zoom to apply (priority order)
-              const cachedZoom = zoomRanges[config.id]
-              const configZoom = config.zoomRange
-              const zoomToApply = cachedZoom || configZoom
-
-              if (zoomToApply) {
-                // Apply zoom after a short delay to ensure painter is fully ready
-                setTimeout(() => {
-                  if (fp.zoom && fp.scale_xmin !== undefined) {
-                    // Validate zoom ranges before applying
-                    const isValidZoom =
-                      zoomToApply.xmin < zoomToApply.xmax &&
-                      zoomToApply.ymin < zoomToApply.ymax &&
-                      !isNaN(zoomToApply.xmin) &&
-                      !isNaN(zoomToApply.xmax) &&
-                      !isNaN(zoomToApply.ymin) &&
-                      !isNaN(zoomToApply.ymax) &&
-                      isFinite(zoomToApply.xmin) &&
-                      isFinite(zoomToApply.xmax) &&
-                      isFinite(zoomToApply.ymin) &&
-                      isFinite(zoomToApply.ymax)
-
-                    if (isValidZoom) {
-                      try {
-                        fp.zoom(zoomToApply.xmin, zoomToApply.xmax, zoomToApply.ymin, zoomToApply.ymax)
-                        // Update current zoom ranges after successful application
-                        currentZoomRanges.current[config.id] = {
-                          xmin: zoomToApply.xmin,
-                          xmax: zoomToApply.xmax,
-                          ymin: zoomToApply.ymin,
-                          ymax: zoomToApply.ymax
-                        }
-                        console.log(`Applied saved zoom for ${config.id}:`, zoomToApply)
-                      } catch (error) {
-                        console.error(`Failed to apply zoom for ${config.id}:`, error)
-                      }
-                    } else {
-                      console.warn(`Invalid zoom range for ${config.id}:`, zoomToApply)
-                    }
-                  }
-                }, 150)
-              }
-            }
-          }
-          
-          // Apply saved zoom ranges on every update (similar to toggleSyncZoom behavior)
-          const savedZoom = zoomRanges[config.id] || currentZoomRanges.current[config.id]
-          if (savedZoom && fp.zoom) {
-            // Apply saved zoom after a short delay to ensure painter is ready
-            setTimeout(() => {
-              if (fp.zoom && fp.scale_xmin !== undefined) {
-                // Validate zoom ranges before applying
-                const isValidZoom =
-                  savedZoom.xmin < savedZoom.xmax &&
-                  savedZoom.ymin < savedZoom.ymax &&
-                  !isNaN(savedZoom.xmin) &&
-                  !isNaN(savedZoom.xmax) &&
-                  !isNaN(savedZoom.ymin) &&
-                  !isNaN(savedZoom.ymax) &&
-                  isFinite(savedZoom.xmin) &&
-                  isFinite(savedZoom.xmax) &&
-                  isFinite(savedZoom.ymin) &&
-                  isFinite(savedZoom.ymax)
-
-                if (isValidZoom) {
-                  try {
-                    // Use oldZoom to avoid triggering the save mechanism
-                    fp.oldZoom(savedZoom.xmin, savedZoom.xmax, savedZoom.ymin, savedZoom.ymax)
-                    console.log(`Applied saved zoom for ${config.id}:`, savedZoom)
-                  } catch (error) {
-                    console.error(`Failed to apply saved zoom for ${config.id}:`, error)
-                  }
-                }
-              }
-            }, 50)
-          }
-        }
-      }
-    }
   }
 
   // Layout calculations
@@ -1218,7 +1131,7 @@ export default function EnhancedHistogramDashboard() {
 
   const getGridClass = () => {
     if (dashboardSettings.layout === "rows") return "grid-cols-1"
-    if (dashboardSettings.layout === "custom") return "grid-cols-1" // Custom positioning handled separately
+    if (dashboardSettings.layout === "custom") return "grid-cols-1"
     return `grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.min(dashboardSettings.gridCols, 4)}`
   }
 
@@ -1248,7 +1161,6 @@ export default function EnhancedHistogramDashboard() {
               {dashboardSettings.isLogScale ? "Linear Scale" : "Log Scale"}
             </Button>
 
-            {/* ADDED: Rebin Factor Input */}
             <div className="flex items-center gap-2">
               <Label htmlFor="rebin-factor" className="text-sm font-medium">
                 Rebin:
@@ -1288,90 +1200,106 @@ export default function EnhancedHistogramDashboard() {
           </div>
         </div>
 
+        {/* Empty State */}
+        {visibleHistograms.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <div className="text-muted-foreground mb-4">
+              <Grid2X2 className="h-12 w-12 mx-auto mb-2" />
+              <h3 className="text-lg font-semibold">No Histograms Added</h3>
+              <p className="text-sm">Click "Add Histogram" to get started with your dashboard.</p>
+            </div>
+            <Button onClick={addHistogram}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Histogram
+            </Button>
+          </div>
+        )}
+
         {/* Histograms Grid */}
-        <div className={`grid ${getGridClass()} gap-6`}>
-          {visibleHistograms.map((config) => (
-            <Card key={config.id} className="relative">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-base font-semibold leading-tight">{config.label}</CardTitle>
-                <div className="flex items-center gap-1">
-                  {/* ROI Controls */}
-                  <Button variant="ghost" size="sm" onClick={() => addROI(config.id)} title="Add ROI">
-                    <Plus className="h-3 w-3" />
-                  </Button>
+        {visibleHistograms.length > 0 && (
+          <div className={`grid ${getGridClass()} gap-6`}>
+            {visibleHistograms.map((config) => (
+              <Card key={config.id} className="relative">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-base font-semibold leading-tight">{config.label}</CardTitle>
+                  <div className="flex items-center gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => addROI(config.id)} title="Add ROI">
+                      <Plus className="h-3 w-3" />
+                    </Button>
 
-                  {/* Edit Histogram */}
-                  <Button variant="ghost" size="sm" onClick={() => editHistogram(config)} title="Edit Histogram">
-                    <Edit className="h-3 w-3" />
-                  </Button>
+                    {/* Edit Histogram */}
+                    <Button variant="ghost" size="sm" onClick={() => editHistogram(config)} title="Edit Histogram">
+                      <Edit className="h-3 w-3" />
+                    </Button>
 
-                  {/* Toggle Visibility - FIXED: Remove from cache when toggled off */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      const updated = { ...config, visible: !config.visible }
-                      if (!updated.visible) {
-                        removeHistogramFromCache(config.id)
-                      }
-                      saveHistogram(updated)
-                    }}
-                    title="Toggle Visibility"
-                  >
-                    {config.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                  </Button>
-                </div>
-              </CardHeader>
-
-              <CardContent>
-                {/* IMPROVED: ROI Information with better styling and alignment */}
-                {dashboardSettings.showROIs && config.rois.length > 0 && (
-                  <div className="mb-3 space-y-2">
-                    {config.rois
-                      .filter((r) => r.enabled)
-                      .map((roi) => (
-                        <div key={roi.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="w-3 h-3 rounded-full border border-gray-400"
-                              style={{ backgroundColor: roi.color }}
-                            />
-                            <span className="text-sm font-medium">{roi.name}</span>
-                            <span className="text-xs text-muted-foreground font-mono">
-                              [{roi.low} - {roi.high}]
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {dashboardSettings.showIntegrals && (
-                              <span className="text-sm font-mono bg-background px-2 py-1 rounded border">
-                                {roi.integral.toLocaleString()}
-                              </span>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => editROI(config.id, roi)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                    {/* Toggle Visibility */}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const updated = { ...config, visible: !config.visible }
+                        if (!updated.visible) {
+                          removeHistogramFromCache(config.id)
+                        }
+                        saveHistogram(updated)
+                      }}
+                      title="Toggle Visibility"
+                    >
+                      {config.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+                    </Button>
                   </div>
-                )}
+                </CardHeader>
 
-                {/* Histogram Display */}
-                <div
-                  ref={(el) => {
-                    histogramRefs.current[config.id] = el
-                  }}
-                  className={`w-full ${getHistogramSize(config.size)} border rounded-lg shadow-md bg-white dark:bg-gray-900`}
-                />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                <CardContent>
+                  {/* ROI Information */}
+                  {dashboardSettings.showROIs && config.rois.length > 0 && (
+                    <div className="mb-3 space-y-2">
+                      {config.rois
+                        .filter((r) => r.enabled)
+                        .map((roi) => (
+                          <div key={roi.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="w-3 h-3 rounded-full border border-gray-400"
+                                style={{ backgroundColor: roi.color }}
+                              />
+                              <span className="text-sm font-medium">{roi.name}</span>
+                              <span className="text-xs text-muted-foreground font-mono">
+                                [{roi.low} - {roi.high}]
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {dashboardSettings.showIntegrals && (
+                                <span className="text-sm font-mono bg-background px-2 py-1 rounded border">
+                                  {roi.integral.toLocaleString()}
+                                </span>
+                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => editROI(config.id, roi)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  {/* Histogram Display */}
+                  <div
+                    ref={(el) => {
+                      histogramRefs.current[config.id] = el
+                    }}
+                    className={`w-full ${getHistogramSize(config.size)} border rounded-lg shadow-md bg-white dark:bg-gray-900`}
+                  />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
         {/* Dialogs */}
         <HistogramDialog
@@ -1418,18 +1346,19 @@ export default function EnhancedHistogramDashboard() {
                     type="number"
                     value={dashboardSettings.updateInterval}
                     onChange={(e) => {
-                      const value = Math.max(2000, Math.round(Number(e.target.value) / 500) * 500)
+                      // Minimum 1 second (1000ms), round to nearest 100ms
+                      const value = Math.max(1000, Math.round(Number(e.target.value) / 100) * 100)
                       saveDashboardSettings({ ...dashboardSettings, updateInterval: value })
                     }}
-                    min={2000}
-                    max={10000}
-                    step={500}
+                    min={1000}
+                    max={60000}
+                    step={100}
                   />
-                  <span className="text-xs text-muted-foreground">Minimum: 2000ms, Steps: 500ms</span>
+                  <span className="text-xs text-muted-foreground">Minimum: 1000ms (1 second), Steps: 100ms</span>
                 </div>
               </div>
 
-              {/* ADDED: Rebin Factor in Settings */}
+              {/* Rebin Factor in Settings */}
               <div className="flex flex-col gap-2">
                 <Label>Rebin Factor</Label>
                 <Input
