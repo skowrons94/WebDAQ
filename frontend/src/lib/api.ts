@@ -108,6 +108,12 @@ export const getBoardRatesS = (boardId: string, boardName: string, channel: stri
     api.get('/stats/board_rates_satu', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
 export const getBoardRatesD = (boardId: string, boardName: string, channel: string, from: string = '-10s', until: string = 'now') =>
     api.get('/stats/board_rates_dt', { params: { board_id: boardId, board_name: boardName, channel, from, until } }).then(res => res.data);
+
+export const getRebinFactor = () =>
+    api.get(`/histograms/rebin`).then(res => res.data);
+export const setRebinFactor = (factor: number) =>
+    api.post(`/histograms/rebin`, { factor }).then(res => res.data);
+
 // Get the histograms for a given board_id and channel
 export const getHistogram = (boardId: string, channel: string) =>
     api.get(`/histograms/${boardId}/${channel}`).then(res => res.data);
@@ -205,6 +211,9 @@ export const getChannelEnabled = (id: string, channel: string) =>
 
 export const setChannelEnabled = (id: string, channel: string, value: string) =>
     api.get(`/digitizer/channel/${id}/${channel}/${value}`);
+
+export const getBoardSettings = (id: string) =>
+    api.get(`/digitizer/${id}/registers`).then(res => res.data);
 
 // Generic metric data fetching function
 export const getMetricData = (entityName: string, from: string = '-10s', until: string = 'now') =>

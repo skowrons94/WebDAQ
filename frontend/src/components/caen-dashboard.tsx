@@ -1,32 +1,14 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { ReloadIcon } from "@radix-ui/react-icons"
 import { useToast } from "@/components/ui/use-toast"
-import { getBoardConfiguration, 
-         getSetting, 
-         setSetting,
-         getPolarity,
-         setPolarity,
-         getChannelEnabled,
-         setChannelEnabled,
-         updateJSON
-        } from '@/lib/api'
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel"
-
+import { getBoardConfiguration, getBoardSettings, setSetting, updateJSON } from "@/lib/api"
 
 interface BoardData {
   id: string
@@ -38,14 +20,16 @@ interface BoardData {
   chan: string
 }
 
-interface Setting {
-  address: string
+interface RegisterData {
   name: string
-  value: string
+  value_dec: number
+  value_hex: string
+  channel: number
+  address: string
 }
 
-interface ChannelSettings {
-  [key: string]: Setting
+interface BoardSettings {
+  [reg_name: string]: RegisterData
 }
 
 export default function Dashboard() {
@@ -62,7 +46,7 @@ export default function Dashboard() {
       const response = await getBoardConfiguration()
       setBoards(response.data)
     } catch (err) {
-      setError('Failed to load boards data')
+      setError("Failed to load boards data")
       toast({
         title: "Error",
         description: "Failed to fetch board configuration. Please try again.",
@@ -98,76 +82,39 @@ export default function Dashboard() {
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-      <h1 className="text-2xl font-bold">Boards Configuration</h1>
-      <Button onClick={fetchBoardConfiguration}>Refresh Boards Data</Button>
+        <h1 className="text-2xl font-bold">Boards Configuration</h1>
+        <Button onClick={fetchBoardConfiguration}>Refresh Boards Data</Button>
       </div>
-      <ul>
-      {boards.map((board) => (
-        <li key={board.id} className="mb-4">
-        <h2 className="text-xl font-bold">{board.name} (ID: {board.id})</h2>
-        <BoardComponent boardData={board} />
-        </li>
-      ))}
-      </ul>
+      <div className="space-y-6">
+        {boards.map((board) => (
+          <div key={board.id} className="border rounded-lg p-4">
+            <h2 className="text-xl font-bold mb-4">
+              {board.name} (ID: {board.id})
+            </h2>
+            <BoardComponent boardData={board} />
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
 
 function BoardComponent({ boardData }: { boardData: BoardData }) {
-  const [settings, setSettings] = useState<ChannelSettings[]>([])
+  const [settings, setSettings] = useState<BoardSettings>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [modifiedSettings, setModifiedSettings] = useState<Set<string>>(new Set())
   const { toast } = useToast()
-
-  const settingsToFetch = [
-    { name: "Trigger Threshold", address: "0x106c" },
-    { name: "Input Rise Time", address: "0x1058" },
-    { name: "RC-CR2 Smoothing Factor", address: "0x1054" },
-    { name: "DC Offset", address: "0x1098" },
-    { name: "Trapezoid Rise Time", address: "0x105c" },
-    { name: "Trapezoid Flat Top", address: "0x1060" },
-    { name: "Trapezoid Decay Time", address: "0x1068" }
-  ]
 
   useEffect(() => {
     const fetchSettings = async () => {
       setLoading(true)
       setError(null)
-      //const response = await getSetting(boardData.id, settingsToFetch[0].address)
-      //console.log(response)
       try {
-        const channelSettings: ChannelSettings[] = []
-        for (let i = 0; i < parseInt(boardData.chan); i++) {
-          const channelOffset = i * 0x100
-          const channelSettingsObj: ChannelSettings = {}
-          // Fetch channel enabled
-          const enabled = await getChannelEnabled(boardData.id, i.toString())
-          channelSettingsObj["Enabled"] = {
-            address: "0x1084",
-            name: "Enabled",
-            value: enabled
-          }
-          // Fetch polarity
-          const polarity = await getPolarity(boardData.id, i.toString())
-          channelSettingsObj["Polarity"] = {
-            address: "0x1080",
-            name: "Polarity",
-            value: polarity
-          }
-          for (const setting of settingsToFetch) {
-            const address = (parseInt(setting.address, 16) + channelOffset).toString(16)
-            const response = await getSetting(boardData.id, address)
-            channelSettingsObj[setting.name] = {
-              address,
-              name: setting.name,
-              value: response
-            }
-          }
-          channelSettings.push(channelSettingsObj)
-        }
-        setSettings(channelSettings)
+        const response = await getBoardSettings(boardData.id)
+        setSettings(response)
       } catch (err) {
-        setError('Failed to load settings data')
+        setError("Failed to load settings data")
         toast({
           title: "Error",
           description: "Failed to fetch settings. Please try again.",
@@ -179,111 +126,194 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     }
 
     fetchSettings()
-  }, [boardData])
+  }, [boardData.id])
 
-  const handleSettingChange = (channel: number, settingName: string, value: string) => {
-    setSettings(prev => {
-      const newSettings = [...prev]
-      newSettings[channel] = { 
-        ...newSettings[channel], 
-        [settingName]: { ...newSettings[channel][settingName], value } 
-      }
-      return newSettings
-    })
+  const handleSettingChange = (regName: string, value: string) => {
+    const numValue = Number.parseInt(value)
+    if (isNaN(numValue) || numValue < 0 || numValue > 4294967295) {
+      return // Invalid value, don't update
+    }
+
+    setSettings((prev) => ({
+      ...prev,
+      [regName]: {
+        ...prev[regName],
+        value_dec: numValue,
+        value_hex: `0x${numValue.toString(16).toUpperCase()}`,
+      },
+    }))
+
+    setModifiedSettings((prev) => new Set(prev).add(regName))
   }
 
-  const handleSave = async (channel: number) => {
-    for (const [key, setting] of Object.entries(settings[channel])) {
-      // IF polarity, set polarity
-      if (key === "Polarity") {
-        try {
-          await setPolarity(boardData.id, channel.toString(), setting.value)
-          toast({
-            title: "Success",
-            description: `Settings updated`,
-          })
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: `Failed to update settings`,
-            variant: "destructive",
-          })
-        }
-      }
-      else if (key === "Enabled") {
-        try {
-          await setChannelEnabled(boardData.id, channel.toString(), setting.value)
-          toast({
-            title: "Success",
-            description: `Settings updated`,
-          })
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: `Failed to update settings`,
-            variant: "destructive",
-          })
-        }
-      }
-      else {
-        try {
-          await setSetting(boardData.id, setting.address, setting.value)
-          toast({
-            title: "Success",
-            description: `Settings updated`,
-          })
-        } catch (error) {
-          toast({
-            title: "Error",
-            description: `Failed to update settings`,
-            variant: "destructive",
-          })
-        }
-      }
+  const handleSave = async (regName: string) => {
+    try {
+      await setSetting(boardData.id, regName, settings[regName].value_dec.toString())
+      setModifiedSettings((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(regName)
+        return newSet
+      })
+      toast({
+        title: "Success",
+        description: `Setting "${settings[regName].name}" updated successfully`,
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: `Failed to update setting "${settings[regName].name}"`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleSaveAll = async () => {
+    const promises = Array.from(modifiedSettings).map((regName) => setSetting(regName, settings[regName].value_dec))
+
+    try {
+      await Promise.all(promises)
+      setModifiedSettings(new Set())
+      toast({
+        title: "Success",
+        description: "All modified settings updated successfully",
+      })
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update some settings",
+        variant: "destructive",
+      })
     }
   }
 
   if (loading) {
-    return <div>Loading settings...</div>
+    return (
+      <div className="flex justify-center items-center py-8">
+        <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />
+        Loading settings...
+      </div>
+    )
   }
 
   if (error) {
-    return <div>Error: {error}</div>
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    )
   }
 
-  return (
+  // Group settings by channel and common settings
+  const channelSettings: { [channel: number]: { [regName: string]: RegisterData } } = {}
+  const commonSettings: { [regName: string]: RegisterData } = {}
 
-      <div className="max-w-[800px] p-8 mx-auto">
-        <Carousel>
-          <CarouselContent>
-            {settings.map((channelSettings, channel) => (
-              <CarouselItem key={channel} >
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Channel {channel}</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {Object.entries(channelSettings).map(([key, setting]) => (
-                      <div key={key} className="mb-4">
-                        <Label htmlFor={`${channel}-${key}`}>{setting.name}</Label>
-                        <Input
-                          id={`${channel}-${key}`}
-                          value={setting.value}
-                          onChange={(e) => handleSettingChange(channel, key, e.target.value)}
-                        />
-                      </div>
-                    ))}
-                    <div className="flex flex-wrap justify-between mt-4">
-                      <Button className="mb-2" onClick={() => handleSave(channel)}>Save</Button>
+  Object.entries(settings).forEach(([regName, registerData]) => {
+    const address = Number.parseInt(registerData.address, 16)
+
+    if (address > 0x8000) {
+      commonSettings[regName] = registerData
+    } else {
+      const channel = registerData.channel
+      if (!channelSettings[channel]) {
+        channelSettings[channel] = {}
+      }
+      channelSettings[channel][regName] = registerData
+    }
+  })
+
+  const channels = Object.keys(channelSettings)
+    .map(Number)
+    .sort((a, b) => a - b)
+
+  return (
+    <div className="space-y-6">
+      {/* Common Settings */}
+      {Object.keys(commonSettings).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Common Settings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {Object.entries(commonSettings).map(([regName, registerData]) => (
+                <div key={regName} className="space-y-2">
+                  <Label htmlFor={regName}>
+                    {registerData.name}
+                    {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id={regName}
+                      type="number"
+                      min="0"
+                      max="4294967295"
+                      value={registerData.value_dec}
+                      onChange={(e) => handleSettingChange(regName, e.target.value)}
+                      className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
+                    />
+                    <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                      Save
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Hex: {registerData.value_hex} | Address: {registerData.address}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Channel Settings */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {channels.map((channel) => (
+          <Card key={channel}>
+            <CardHeader>
+              <CardTitle>Channel {channel}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {Object.entries(channelSettings[channel]).map(([regName, registerData]) => (
+                  <div key={regName} className="space-y-2">
+                    <Label htmlFor={`${channel}-${regName}`}>
+                      {registerData.name}
+                      {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id={`${channel}-${regName}`}
+                        type="number"
+                        min="0"
+                        max="4294967295"
+                        value={registerData.value_dec}
+                        onChange={(e) => handleSettingChange(regName, e.target.value)}
+                        className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
+                      />
+                      <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                        Save
+                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious />
-          <CarouselNext />
-        </Carousel>
+                    <div className="text-xs text-muted-foreground">
+                      Hex: {registerData.value_hex} | Address: {registerData.address}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      {/* Save All Button */}
+      {modifiedSettings.size > 0 && (
+        <div className="flex justify-center">
+          <Button onClick={handleSaveAll} className="bg-green-600 hover:bg-green-700">
+            Save All Modified Settings ({modifiedSettings.size})
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }

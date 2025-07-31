@@ -304,6 +304,14 @@ class DAQManager:
                 dgtz.read_pha(config_file)
             elif board_config["dpp"] == "DPP-PSD":
                 dgtz.read_psd(config_file)
+
+            # Open the file and search for reg_ef08 to set the "value" to board id
+            with open(config_file, 'r') as f:
+                config_data = json.load(f)
+            if "reg_EF08" in config_data["registers"]:
+                config_data["registers"]["reg_EF08"]["value"] = "0x" + str(int(board_config["id"]))
+            with open(config_file, 'w') as f:
+                json.dump(config_data, f, indent=4)
             
             # Create calibration file
             calib_file = f"calib/{board_config['name']}_{board_config['id']}.cal"

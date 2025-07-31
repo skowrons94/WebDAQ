@@ -1,0 +1,416 @@
+{
+    "dgtzs": {
+        "BoardName": "DT5720B",
+        "Model": "9",
+        "NbChannels": "4",
+        "SerialNumber": "779",
+        "LinkNb": "3",
+        "BoardNb": "0",
+        "ConnectionType": "1",
+        "Firmware": "04.09 - Build 0216"
+    },
+    "registers": {
+        "reg_1020": {
+            "name": "Record Length",
+            "channel": 0,
+            "address": "0x1020",
+            "value": "0x1F"
+        },
+        "reg_4384": {
+            "name": "Record Length",
+            "channel": 1,
+            "address": "0x1120",
+            "value": "0x1F"
+        },
+        "reg_4640": {
+            "name": "Record Length",
+            "channel": 2,
+            "address": "0x1220",
+            "value": "0x1F"
+        },
+        "reg_4896": {
+            "name": "Record Length",
+            "channel": 3,
+            "address": "0x1320",
+            "value": "0x1F"
+        },
+        "reg_1034": {
+            "name": "Number of Events per Aggregate",
+            "channel": 0,
+            "address": "0x1034",
+            "value": "0x2"
+        },
+        "reg_4404": {
+            "name": "Number of Events per Aggregate",
+            "channel": 1,
+            "address": "0x1134",
+            "value": "0x2"
+        },
+        "reg_4660": {
+            "name": "Number of Events per Aggregate",
+            "channel": 2,
+            "address": "0x1234",
+            "value": "0x2"
+        },
+        "reg_4916": {
+            "name": "Number of Events per Aggregate",
+            "channel": 3,
+            "address": "0x1334",
+            "value": "0x2"
+        },
+        "reg_1038": {
+            "name": "Pre Trigger",
+            "channel": 0,
+            "address": "0x1038",
+            "value": "0x19"
+        },
+        "reg_4408": {
+            "name": "Pre Trigger",
+            "channel": 1,
+            "address": "0x1138",
+            "value": "0x19"
+        },
+        "reg_4664": {
+            "name": "Pre Trigger",
+            "channel": 2,
+            "address": "0x1238",
+            "value": "0x19"
+        },
+        "reg_4920": {
+            "name": "Pre Trigger",
+            "channel": 3,
+            "address": "0x1338",
+            "value": "0x19"
+        },
+        "reg_1054": {
+            "name": "Short Gate",
+            "channel": 0,
+            "address": "0x1054",
+            "value": "0x1E"
+        },
+        "reg_4436": {
+            "name": "Short Gate",
+            "channel": 1,
+            "address": "0x1154",
+            "value": "0x1E"
+        },
+        "reg_4692": {
+            "name": "Short Gate",
+            "channel": 2,
+            "address": "0x1254",
+            "value": "0x1E"
+        },
+        "reg_4948": {
+            "name": "Short Gate",
+            "channel": 3,
+            "address": "0x1354",
+            "value": "0x1E"
+        },
+        "reg_1058": {
+            "name": "Long Gate",
+            "channel": 0,
+            "address": "0x1058",
+            "value": "0xAF"
+        },
+        "reg_4440": {
+            "name": "Long Gate",
+            "channel": 1,
+            "address": "0x1158",
+            "value": "0xAF"
+        },
+        "reg_4696": {
+            "name": "Long Gate",
+            "channel": 2,
+            "address": "0x1258",
+            "value": "0xAF"
+        },
+        "reg_4952": {
+            "name": "Long Gate",
+            "channel": 3,
+            "address": "0x1358",
+            "value": "0xAF"
+        },
+        "reg_105C": {
+            "name": "Gate Offset",
+            "channel": 0,
+            "address": "0x105C",
+            "value": "0xC"
+        },
+        "reg_4444": {
+            "name": "Gate Offset",
+            "channel": 1,
+            "address": "0x115C",
+            "value": "0xC"
+        },
+        "reg_4700": {
+            "name": "Gate Offset",
+            "channel": 2,
+            "address": "0x125C",
+            "value": "0xC"
+        },
+        "reg_4956": {
+            "name": "Gate Offset",
+            "channel": 3,
+            "address": "0x135C",
+            "value": "0xC"
+        },
+        "reg_1060": {
+            "name": "Trigger Threshold",
+            "channel": 0,
+            "address": "0x1060",
+            "value": "0x1E"
+        },
+        "reg_4448": {
+            "name": "Trigger Threshold",
+            "channel": 1,
+            "address": "0x1160",
+            "value": "0x1E"
+        },
+        "reg_4704": {
+            "name": "Trigger Threshold",
+            "channel": 2,
+            "address": "0x1260",
+            "value": "0x1E"
+        },
+        "reg_4960": {
+            "name": "Trigger Threshold",
+            "channel": 3,
+            "address": "0x1360",
+            "value": "0x1E"
+        },
+        "reg_1064": {
+            "name": "Fixed Baseline",
+            "channel": 0,
+            "address": "0x1064",
+            "value": "0x0"
+        },
+        "reg_4452": {
+            "name": "Fixed Baseline",
+            "channel": 1,
+            "address": "0x1164",
+            "value": "0x0"
+        },
+        "reg_4708": {
+            "name": "Fixed Baseline",
+            "channel": 2,
+            "address": "0x1264",
+            "value": "0x0"
+        },
+        "reg_4964": {
+            "name": "Fixed Baseline",
+            "channel": 3,
+            "address": "0x1364",
+            "value": "0x0"
+        },
+        "reg_106C": {
+            "name": "Trigger Latency",
+            "channel": 0,
+            "address": "0x106C",
+            "value": "0x0"
+        },
+        "reg_4460": {
+            "name": "Trigger Latency",
+            "channel": 1,
+            "address": "0x116C",
+            "value": "0x0"
+        },
+        "reg_4716": {
+            "name": "Trigger Latency",
+            "channel": 2,
+            "address": "0x126C",
+            "value": "0x0"
+        },
+        "reg_4972": {
+            "name": "Trigger Latency",
+            "channel": 3,
+            "address": "0x136C",
+            "value": "0x0"
+        },
+        "reg_1070": {
+            "name": "Shaped Trigger Width",
+            "channel": 0,
+            "address": "0x1070",
+            "value": "0xC"
+        },
+        "reg_4464": {
+            "name": "Shaped Trigger Width",
+            "channel": 1,
+            "address": "0x1170",
+            "value": "0xC"
+        },
+        "reg_4720": {
+            "name": "Shaped Trigger Width",
+            "channel": 2,
+            "address": "0x1270",
+            "value": "0xC"
+        },
+        "reg_4976": {
+            "name": "Shaped Trigger Width",
+            "channel": 3,
+            "address": "0x1370",
+            "value": "0xC"
+        },
+        "reg_1074": {
+            "name": "Trigger Hold-Off Width",
+            "channel": 0,
+            "address": "0x1074",
+            "value": "0x3E"
+        },
+        "reg_4468": {
+            "name": "Trigger Hold-Off Width",
+            "channel": 1,
+            "address": "0x1174",
+            "value": "0x3E"
+        },
+        "reg_4724": {
+            "name": "Trigger Hold-Off Width",
+            "channel": 2,
+            "address": "0x1274",
+            "value": "0x3E"
+        },
+        "reg_4980": {
+            "name": "Trigger Hold-Off Width",
+            "channel": 3,
+            "address": "0x1374",
+            "value": "0x3E"
+        },
+        "reg_1078": {
+            "name": "Threshold for the PSD",
+            "channel": 0,
+            "address": "0x1078",
+            "value": "0x0"
+        },
+        "reg_4472": {
+            "name": "Threshold for the PSD",
+            "channel": 1,
+            "address": "0x1178",
+            "value": "0x0"
+        },
+        "reg_4728": {
+            "name": "Threshold for the PSD",
+            "channel": 2,
+            "address": "0x1278",
+            "value": "0x0"
+        },
+        "reg_4984": {
+            "name": "Threshold for the PSD",
+            "channel": 3,
+            "address": "0x1378",
+            "value": "0x0"
+        },
+        "reg_107C": {
+            "name": "PUR-GAP Threshold",
+            "channel": 0,
+            "address": "0x107C",
+            "value": "0x3E8"
+        },
+        "reg_4476": {
+            "name": "PUR-GAP Threshold",
+            "channel": 1,
+            "address": "0x117C",
+            "value": "0x3E8"
+        },
+        "reg_4732": {
+            "name": "PUR-GAP Threshold",
+            "channel": 2,
+            "address": "0x127C",
+            "value": "0x3E8"
+        },
+        "reg_4988": {
+            "name": "PUR-GAP Threshold",
+            "channel": 3,
+            "address": "0x137C",
+            "value": "0x3E8"
+        },
+        "reg_1080": {
+            "name": "DPP Algorithm Control",
+            "channel": 0,
+            "address": "0x1080",
+            "value": "0x310080"
+        },
+        "reg_4480": {
+            "name": "DPP Algorithm Control",
+            "channel": 1,
+            "address": "0x1180",
+            "value": "0x310080"
+        },
+        "reg_4736": {
+            "name": "DPP Algorithm Control",
+            "channel": 2,
+            "address": "0x1280",
+            "value": "0x310080"
+        },
+        "reg_4992": {
+            "name": "DPP Algorithm Control",
+            "channel": 3,
+            "address": "0x1380",
+            "value": "0x310080"
+        },
+        "reg_1098": {
+            "name": "DC Offset",
+            "channel": 0,
+            "address": "0x1098",
+            "value": "0x3333"
+        },
+        "reg_4504": {
+            "name": "DC Offset",
+            "channel": 1,
+            "address": "0x1198",
+            "value": "0x3333"
+        },
+        "reg_4760": {
+            "name": "DC Offset",
+            "channel": 2,
+            "address": "0x1298",
+            "value": "0x3333"
+        },
+        "reg_5016": {
+            "name": "DC Offset",
+            "channel": 3,
+            "address": "0x1398",
+            "value": "0x3333"
+        },
+        "reg_8000": {
+            "name": "Board Configuration",
+            "channel": 0,
+            "address": "0x8000",
+            "value": "0x8e0114"
+        },
+        "reg_800C": {
+            "name": "Aggregate Configuration",
+            "channel": 0,
+            "address": "0x800C",
+            "value": "0xA"
+        },
+        "reg_8100": {
+            "name": "Acquisition Control",
+            "channel": 0,
+            "address": "0x8100",
+            "value": "0x0"
+        },
+        "reg_810C": {
+            "name": "Global Trigger Mask",
+            "channel": 0,
+            "address": "0x810C",
+            "value": "0x80000000"
+        },
+        "reg_8120": {
+            "name": "Channel Enable Mask",
+            "channel": 0,
+            "address": "0x8120",
+            "value": "0x1"
+        },
+        "reg_EF08": {
+            "name": "Board ID",
+            "channel": 0,
+            "address": "0xEF08",
+            "value": "0x0"
+        },
+        "reg_EF1C": {
+            "name": "Aggregate Number per BLT",
+            "channel": 0,
+            "address": "0xEF1C",
+            "value": "0x1"
+        }
+    }
+}

@@ -14,6 +14,12 @@ bp = Blueprint('histograms', __name__)
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 spy_mgr = get_spy_manager(test_flag=TEST_FLAG)
 
+@bp.route('/histograms/rebin', methods=['POST'])
+@jwt_required_custom
+def set_rebin_factor():
+    spy_mgr.set_rebin_factor(request.json.get('factor', 1))
+    return jsonify({'message': 'Rebin factor set successfully'}), 200
+
 # Histogram Routes
 @bp.route('/histograms/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom

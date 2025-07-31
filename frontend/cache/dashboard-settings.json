@@ -1,7 +1,7 @@
 {
   "layout": "grid",
-  "gridCols": 3,
-  "isLogScale": false,
+  "gridCols": 1,
+  "isLogScale": true,
   "syncZoom": false,
   "showLabels": true,
   "showROIs": true,
@@ -9,5 +9,5 @@
   "autoUpdate": true,
   "updateInterval": 2000,
   "theme": "auto",
-  "rebinFactor": 1
+  "rebinFactor": 100
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getRoiIntegral } from "@/lib/api"
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getRoiIntegral, getRebinFactor, setRebinFactor } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from "@/lib/load-jsroot"
@@ -550,11 +550,6 @@ export default function EnhancedHistogramDashboard() {
       const histogramData = await getHistogram(config.boardId, config.channel.toString())
       const histogram = window.JSROOT.parse(histogramData)
 
-      // Apply rebin factor if set
-      if (dashboardSettings.rebinFactor > 1) {
-        histogram.Rebin(dashboardSettings.rebinFactor)
-      }
-
       // Style histogram
       histogram.fLineColor = 4
       histogram.fFillColor = 4
@@ -838,6 +833,7 @@ export default function EnhancedHistogramDashboard() {
         })
 
         setDashboardSettings(validatedSettings)
+        setRebinFactor(validatedSettings.rebinFactor)
         toast({
           title: "Settings Saved",
           description: "Dashboard settings have been saved successfully.",
@@ -867,6 +863,7 @@ export default function EnhancedHistogramDashboard() {
         }
 
         setDashboardSettings((prev) => ({ ...prev, ...settings }))
+        setRebinFactor(settings.rebinFactor)
       }
     } catch (error) {
       console.error("Failed to load dashboard settings:", error)

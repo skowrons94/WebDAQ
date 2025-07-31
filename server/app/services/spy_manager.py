@@ -47,6 +47,22 @@ class SpyManager:
         # Initialize ReadoutUnit spy server
         self.ru_spy = ru_spy()
         self.logger.info("Spy manager initialized")
+
+        # Rebin factor
+        self.rebin_factor = 1
+
+    def set_rebin_factor(self, factor: int):
+        """
+        Set the rebin factor for histograms.
+        
+        Args:
+            factor: Rebin factor to apply to histograms
+        """
+        if factor > 0:
+            self.rebin_factor = factor
+            self.logger.info(f"Rebin factor set to {self.rebin_factor}")
+        else:
+            self.logger.warning("Invalid rebin factor, must be greater than 0")
     
     def start_spy(self, daq_state: Dict[str, Any]) -> bool:
         """
@@ -139,8 +155,8 @@ class SpyManager:
             # Get histogram from spy server
             histo = self.ru_spy.get_object(histogram_type, idx)
             
-            if histo and rebin > 1:
-                histo.Rebin(rebin)
+            if histo and self.rebin_factor > 1:
+                histo.Rebin(self.rebin_factor)
             
             return histo
             
@@ -232,6 +248,9 @@ class SpyManager:
                 h1.SetFillStyle(3001)
                 h1.SetFillColorAlpha(2, 0.3)
                 h1.SetLineWidth(2)
+
+                if self.rebin_factor > 1:
+                    h1.Rebin(self.rebin_factor)
                 
                 # Return original histogram (ROI highlighting is for display)
                 del h1

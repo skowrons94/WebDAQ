@@ -197,11 +197,13 @@ def get_setting(id, setting):
 @jwt_required_custom
 def set_setting(id, setting, value):
     """Set a generic register setting."""
-    key = f"reg_{setting}"
+    key = f"{setting}"
 
     config = load_board_config(id)
     if not config:
         return jsonify(-1)
+    
+    print(f"Setting {key} to {value} for board {id}")
 
     try:
         # Validate that the register exists
@@ -268,13 +270,17 @@ def get_all_registers(id):
             registers[reg_name] = {
                 'value_hex': reg_data['value'],
                 'value_dec': int(reg_data['value'], 16),
-                'description': reg_data.get('description', 'No description')
+                'name': reg_data.get('name', 'No description'),
+                'channel': reg_data.get('channel', 0),
+                'address': reg_data.get('address', 'N/A')
             }
         except Exception:
             registers[reg_name] = {
                 'value_hex': reg_data['value'],
                 'value_dec': 0,
-                'description': reg_data.get('description', 'No description')
+                'name': reg_data.get('name', 'No description'),
+                'channel': reg_data.get('channel', 0),
+                'address': reg_data.get('address', 'N/A')
             }
     
     return jsonify(registers)

@@ -322,7 +322,7 @@ class ReadoutUnitSpy:
                     else:
                         obj.Delete()
                         
-                elif "QShort" in histogram_name:
+                elif "Qshort" in histogram_name:
                     idx = histogram_indices["qshort"]
                     if idx < len(self.buff["qshort"]):
                         self.buff["qshort"][idx] = obj
@@ -330,7 +330,7 @@ class ReadoutUnitSpy:
                     else:
                         obj.Delete()
                         
-                elif "QLong" in histogram_name:
+                elif "Qlong" in histogram_name:
                     idx = histogram_indices["qlong"]
                     if idx < len(self.buff["qlong"]):
                         self.buff["qlong"][idx] = obj

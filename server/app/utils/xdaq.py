@@ -602,9 +602,7 @@ class topology:
                 if board['link_type'] == "USB": link_type = 0
                 elif board['link_type'] == "Optical": link_type = 1
                 elif board['link_type'] == "A4818": link_type = 5
-                if board["dpp"] == "DPP-PHA": dpp = 0
-                elif board["dpp"] == "DPP-PSD": dpp = 1
-                f.write(f"Board {board['name']} {board['id']} {board['vme']} {link_type} {board['link_num']} {dpp}\n")
+                f.write(f"Board {board['name']} {board['id']} {board['vme']} {link_type} {board['link_num']} {board['id']}\n")
                 f.write(f"BoardConf {board['id']} {conf}\n")
 
     def write_lfconf(self, state):

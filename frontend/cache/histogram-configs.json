@@ -1,11 +1,35 @@
 [
   {
-    "id": "hist_1753649571268",
+    "id": "hist_1753950660272",
     "boardId": "0",
     "channel": 0,
     "size": "medium",
-    "label": "Board 0 - Channel 0",
-    "customLabel": "",
+    "label": "LaBr",
+    "customLabel": "LaBr",
+    "visible": false,
+    "position": {
+      "row": 0,
+      "col": 0
+    },
+    "rois": [
+      {
+        "id": "roi_1753950679345",
+        "name": "LaBr",
+        "low": 1500,
+        "high": 2200,
+        "color": "#ff0000",
+        "enabled": true,
+        "integral": 0
+      }
+    ]
+  },
+  {
+    "id": "hist_1753958529761",
+    "boardId": "0",
+    "channel": 0,
+    "size": "medium",
+    "label": "LaBr",
+    "customLabel": "LaBr",
     "visible": true,
     "position": {
       "row": 0,
@@ -13,28 +37,19 @@
     },
     "rois": [
       {
-        "id": "roi_1753654924412",
+        "id": "roi_1753961526965",
         "name": "ROI",
-        "low": 5000,
-        "high": 10000,
+        "low": 7200,
+        "high": 8300,
         "color": "#ff0000",
         "enabled": true,
-        "integral": 84
-      },
-      {
-        "id": "roi_1753656803568",
-        "name": "ROI2",
-        "low": 15000,
-        "high": 20000,
-        "color": "#00ff00",
-        "enabled": true,
-        "integral": 377
+        "integral": 15547
       }
     ],
     "zoomRange": {
-      "xmin": 7556.816993464052,
-      "xmax": 11216.868464052288,
-      "timestamp": 1753657645225
+      "xmin": 6315.3473346367755,
+      "xmax": 9123.679611429043,
+      "timestamp": 1753961582310
     }
   }
 ]

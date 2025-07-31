@@ -368,29 +368,29 @@ class Digitizer:
         
         # DPP-PSD register map (similar to PHA with some differences)
         register_map: Dict[int, str] = {
+            0x1020: "Record Length",
+            0x1028: "Input Dynamic Range",
             0x1034: "Number of Events per Aggregate",
             0x1038: "Pre Trigger",
-            0x1044: "Shaped Trigger Delay",
-            0x1054: "RC-CR2 Smoothing Factor",
-            0x1058: "Input Rise Time",
-            0x105C: "Trapezoid Rise Time",
-            0x1060: "Trapezoid Flat Top",
-            0x1064: "Peaking Time",
-            0x1068: "Decay Time",
-            0x106C: "Trigger Threshold",
+            0x103C: "CFD Settings",
+            0x1054: "Short Gate",
+            0x1058: "Long Gate",
+            0x105C: "Gate Offset",
+            0x1060: "Trigger Threshold",
+            0x1064: "Fixed Baseline",
+            0x106C: "Trigger Latency",
+            0x1070: "Shaped Trigger Width",
             0x1074: "Trigger Hold-Off Width",
-            0x1078: "Peak Hold-Off",
-            0x107C: "Baseline Hold-Off",
+            0x1078: "Threshold for the PSD",
+            0x107C: "PUR-GAP Threshold",
             0x1080: "DPP Algorithm Control",
-            0x1084: "Shaped Trigger Width",
+            0x1084: "DPP Algorithm Control 2",
             0x1098: "DC Offset",
-            0x10A0: "DPP Algorithm Control 2",
             0x10B8: "Trapezoid Baseline Offset",
             0x10C4: "Fine Gain",
             0x10D4: "Veto Width",
             0x8000: "Board Configuration",
             0x800C: "Aggregate Configuration",
-            0x8020: "Record Length",
             0x8100: "Acquisition Control",
             0x810C: "Global Trigger Mask",
             0x8120: "Channel Enable Mask",
@@ -459,10 +459,14 @@ class Digitizer:
             for reg_address, reg_name in register_map.items():
                 try:
                     reg_value = self.read_register(reg_address)
+                    # If reg == 0xffffffff, skip it
+                    if reg_value == 0xFFFFFFFF:
+                        self.logger.warning(f"Register 0x{reg_address:X} has value 0xFFFFFFFF, skipping")
+                        continue
                     reg_addr_str = f"0x{reg_address:04X}"
                     reg_val_str = f"0x{reg_value:X}"
                     
-                    reg_key = f"reg_{reg_address}"
+                    reg_key = f"reg_{reg_address:04X}"
                     reg_list[reg_key] = {
                         "name": reg_name,
                         "channel": 0,
