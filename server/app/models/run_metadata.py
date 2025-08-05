@@ -13,6 +13,7 @@ class RunMetadata(db.Model):
     terminal_voltage = db.Column(db.Float)
     probe_voltage = db.Column(db.Float)
     run_type = db.Column(db.String(64))
+    flag = db.Column(db.String(32), default='unknown')  # 'good', 'unknown', 'bad'
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     
     user = db.relationship('User', backref=db.backref('runs', lazy='dynamic'))

@@ -16,6 +16,8 @@ export function Logbook() {
         setLoading(true)
         try {
             const response = (await getRunMetadataAll()).data
+            console.log('Fetched run metadata:', response)
+            console.log('First item flag:', response[0]?.flag)
             setData(response)
         } catch (error) {
             console.error('Failed to fetch Data:', error)

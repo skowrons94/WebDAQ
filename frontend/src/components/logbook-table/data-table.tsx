@@ -123,7 +123,9 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                 'Run Type': row.original.run_type,
                 'Terminal Voltage': row.original.terminal_voltage,
                 'Probe Voltage': row.original.probe_voltage,
-                'Accumulated charge': row.original.accumulated_charge
+                'Accumulated charge': row.original.accumulated_charge,
+                'Flag': row.original.flag,
+                'Notes': row.original.notes
             }
         })
         const csv = generateCsv(csvConfig)(rowData as { [k: string]: any;[k: number]: any }[])

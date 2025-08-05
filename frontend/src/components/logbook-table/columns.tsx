@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ColumnDef } from "@tanstack/react-table"
 import { MoreHorizontal } from "lucide-react"
 import { ArrowUpDown } from "lucide-react"
@@ -39,7 +39,8 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import { addRunMetadata } from "@/lib/api"
+import { Textarea } from "@/components/ui/textarea"
+import { addRunMetadata, updateRunFlag, updateRunNotes } from "@/lib/api"
 import { useForm } from "react-hook-form"
 
 // This type is used to define the shape of our data.
@@ -56,6 +57,7 @@ export type RunMetadata = {
     run_type: string
     accumulated_charge: number
     user_id: number
+    flag: string
 }
 
 interface EditRunFormProps {
@@ -254,6 +256,106 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                             : row.original.run_type === "background" ? "Background"
                                 : row.original.run_type === "calibration" ? "Calibration"
                                     : row.original.run_type}
+                </div>
+            )
+        }
+    },
+    {
+        accessorKey: "flag",
+        header: "Flag",
+        cell: ({ row }) => {
+            const [flag, setFlag] = useState(row.original.flag || 'unknown')
+            
+            // Sync local state with row data when it changes
+            useEffect(() => {
+                setFlag(row.original.flag || 'unknown')
+            }, [row.original.flag])
+            
+            const handleFlagChange = async (newFlag: string) => {
+                console.log('Updating flag for run', row.original.run_number, 'to', newFlag)
+                try {
+                    const response = await updateRunFlag(row.original.run_number, newFlag)
+                    console.log('Flag update response:', response)
+                    setFlag(newFlag)
+                    onDataUpdate?.()
+                } catch (error) {
+                    console.error("Failed to update flag:", error)
+                }
+            }
+
+            const getFlagColor = (flag: string) => {
+                switch (flag) {
+                    case 'good': return 'text-green-600 bg-green-50'
+                    case 'bad': return 'text-red-600 bg-red-50'
+                    default: return 'text-orange-600 bg-orange-50'
+                }
+            }
+
+            return (
+                <Select value={flag} onValueChange={handleFlagChange}>
+                    <SelectTrigger className={`w-24 h-8 ${getFlagColor(flag)}`}>
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="good" className="text-green-600">Good</SelectItem>
+                        <SelectItem value="unknown" className="text-orange-600">Unknown</SelectItem>
+                        <SelectItem value="bad" className="text-red-600">Bad</SelectItem>
+                    </SelectContent>
+                </Select>
+            )
+        }
+    },
+    {
+        accessorKey: "notes",
+        header: "Notes",
+        cell: ({ row }) => {
+            const [notes, setNotes] = useState(row.original.notes || '')
+            const [isEditing, setIsEditing] = useState(false)
+            
+            // Sync local state with row data when it changes
+            useEffect(() => {
+                setNotes(row.original.notes || '')
+            }, [row.original.notes])
+            
+            const handleNotesSubmit = async () => {
+                try {
+                    await updateRunNotes(row.original.run_number, notes)
+                    setIsEditing(false)
+                    onDataUpdate?.()
+                } catch (error) {
+                    console.error("Failed to update notes:", error)
+                }
+            }
+
+            const handleKeyDown = (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' && e.ctrlKey) {
+                    handleNotesSubmit()
+                } else if (e.key === 'Escape') {
+                    setNotes(row.original.notes || '')
+                    setIsEditing(false)
+                }
+            }
+
+            return (
+                <div className="max-w-xs">
+                    {isEditing ? (
+                        <Textarea
+                            value={notes}
+                            onChange={(e) => setNotes(e.target.value)}
+                            onBlur={handleNotesSubmit}
+                            onKeyDown={handleKeyDown}
+                            className="min-h-16 text-sm"
+                            placeholder="Add notes (Ctrl+Enter to save, Esc to cancel)"
+                            autoFocus
+                        />
+                    ) : (
+                        <div 
+                            className="cursor-pointer p-2 min-h-8 text-sm hover:bg-gray-50 rounded"
+                            onClick={() => setIsEditing(true)}
+                        >
+                            {notes || <span className="text-gray-400">Click to add notes...</span>}
+                        </div>
+                    )}
                 </div>
             )
         }

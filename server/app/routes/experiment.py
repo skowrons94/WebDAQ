@@ -172,7 +172,8 @@ def get_run_metadata(run_number):
             'probe_voltage': run_metadata.probe_voltage,
             'run_type': run_metadata.run_type,
             'accumulated_charge': run_metadata.accumulated_charge,
-            'user_id': run_metadata.user_id
+            'user_id': run_metadata.user_id,
+            'flag': run_metadata.flag
         }), 200
     return jsonify({'message': 'Run not found'}), 404
 
@@ -195,7 +196,8 @@ def get_all_run_metadata():
                 'probe_voltage': run.probe_voltage,
                 'run_type': run.run_type,
                 'accumulated_charge': run.accumulated_charge,
-                'user_id': run.user_id
+                'user_id': run.user_id,
+                'flag': run.flag
             })
         return jsonify(metadata), 200
     return jsonify({'message': 'No runs found'}), 404
@@ -323,3 +325,49 @@ def reset():
         return jsonify(0)
     else:
         return jsonify(-1)
+    
+# Route for updating run flag
+@bp.route("/experiment/update_run_flag", methods=['POST'])
+@jwt_required_custom
+def update_run_flag():
+    data = request.get_json()
+    run_number = data.get('run_number')
+    flag = data.get('flag')
+    
+    if not run_number or not flag:
+        return jsonify({'message': 'Missing run_number or flag'}), 400
+    
+    if flag not in ['good', 'unknown', 'bad']:
+        return jsonify({'message': 'Invalid flag value. Must be good, unknown, or bad'}), 400
+    
+    run = RunMetadata.query.filter_by(run_number=run_number).first()
+    if not run:
+        return jsonify({'message': 'Run not found'}), 404
+    
+    run.flag = flag
+    db.session.commit()
+
+    print(f"Run {run_number} flag updated to {flag}")
+    print(db)
+    
+    return jsonify({'message': 'Flag updated successfully', 'flag': flag}), 200
+
+# Route for updating run notes
+@bp.route("/experiment/update_run_notes", methods=['POST'])
+@jwt_required_custom
+def update_run_notes():
+    data = request.get_json()
+    run_number = data.get('run_number')
+    notes = data.get('notes', '')
+    
+    if not run_number:
+        return jsonify({'message': 'Missing run_number'}), 400
+    
+    run = RunMetadata.query.filter_by(run_number=run_number).first()
+    if not run:
+        return jsonify({'message': 'Run not found'}), 404
+    
+    run.notes = notes
+    db.session.commit()
+    
+    return jsonify({'message': 'Notes updated successfully', 'notes': notes}), 200

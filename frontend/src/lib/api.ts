@@ -45,6 +45,12 @@ export const getRunMetadata = (runNumber: number) =>
 export const getRunMetadataAll = () =>
     api.get('/experiment/get_run_metadata');
 
+export const updateRunFlag = (runNumber: number, flag: string) =>
+    api.post('/experiment/update_run_flag', { run_number: runNumber, flag });
+
+export const updateRunNotes = (runNumber: number, notes: string) =>
+    api.post('/experiment/update_run_notes', { run_number: runNumber, notes });
+
 // Functions for board management
 export const getBoardConfiguration = () =>
     api.get('/experiment/get_board_configuration');
