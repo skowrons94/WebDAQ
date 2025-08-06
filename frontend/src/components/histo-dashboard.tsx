@@ -15,6 +15,156 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Slider } from "@/components/ui/slider"
+import {
+  DndContext, 
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import {
+  useSortable,
+} from '@dnd-kit/sortable'
+import {CSS} from '@dnd-kit/utilities'
+
+// Sortable Histogram Card Component
+const SortableHistogramCard = ({ config, onAddROI, onEditHistogram, onEditROI, onSaveHistogram, onRemoveHistogramFromCache, dashboardSettings, getHistogramSize, histogramRefs }: {
+  config: HistogramConfig
+  onAddROI: (id: string) => void
+  onEditHistogram: (config: HistogramConfig) => void
+  onEditROI: (histogramId: string, roi: ROI) => void
+  onSaveHistogram: (config: HistogramConfig) => void
+  onRemoveHistogramFromCache: (id: string) => void
+  dashboardSettings: DashboardSettings
+  getHistogramSize: (size: "small" | "medium" | "large") => string
+  histogramRefs: React.MutableRefObject<{ [key: string]: HTMLDivElement | null }>
+}) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({id: config.id})
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  }
+
+  return (
+    <Card ref={setNodeRef} style={style} className={`relative ${isDragging ? 'z-50' : ''} bg-gradient-to-br from-card via-card/95 to-card/90 backdrop-blur-sm border-border/50`}>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base font-semibold leading-tight flex items-center gap-2">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            title="Drag to reorder"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" className="text-gray-400">
+              <circle cx="3" cy="3" r="1" fill="currentColor"/>
+              <circle cx="9" cy="3" r="1" fill="currentColor"/>
+              <circle cx="3" cy="6" r="1" fill="currentColor"/>
+              <circle cx="9" cy="6" r="1" fill="currentColor"/>
+              <circle cx="3" cy="9" r="1" fill="currentColor"/>
+              <circle cx="9" cy="9" r="1" fill="currentColor"/>
+            </svg>
+          </div>
+          {config.label}
+        </CardTitle>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="sm" onClick={() => onAddROI(config.id)} title="Add ROI">
+            <Plus className="h-3 w-3" />
+          </Button>
+
+          {/* Edit Histogram */}
+          <Button variant="ghost" size="sm" onClick={() => onEditHistogram(config)} title="Edit Histogram">
+            <Edit className="h-3 w-3" />
+          </Button>
+
+          {/* Toggle Visibility */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const updated = { ...config, visible: !config.visible }
+              if (!updated.visible) {
+                onRemoveHistogramFromCache(config.id)
+              }
+              onSaveHistogram(updated)
+            }}
+            title="Toggle Visibility"
+          >
+            {config.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          </Button>
+        </div>
+      </CardHeader>
+
+      <CardContent>
+        {/* ROI Information */}
+        {dashboardSettings.showROIs && config.rois.length > 0 && (
+          <div className="mb-3 space-y-2">
+            {config.rois
+              .filter((r) => r.enabled)
+              .map((roi) => (
+                <div key={roi.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-3 h-3 rounded-full border border-gray-400"
+                      style={{ backgroundColor: roi.color }}
+                    />
+                    <span className="text-sm font-medium">{roi.name}</span>
+                    <span className="text-xs text-muted-foreground font-mono">
+                      [{roi.low} - {roi.high}]
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {dashboardSettings.showIntegrals && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-sm font-mono bg-background px-2 py-1 rounded border">
+                          {roi.integral.toLocaleString()} counts
+                        </span>
+                        <span className="text-xs font-mono bg-muted px-2 py-1 rounded border text-muted-foreground">
+                          {roi.rate.toFixed(1)} cps
+                        </span>
+                      </div>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEditROI(config.id, roi)}
+                      className="h-6 w-6 p-0"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
+
+        {/* Histogram Display */}
+        <div
+          ref={(el) => {
+            histogramRefs.current[config.id] = el
+          }}
+          className={`w-full ${getHistogramSize(config.size)} border rounded-lg shadow-md bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700`}
+        />
+      </CardContent>
+    </Card>
+  )
+}
 
 // Types
 type BoardData = {
@@ -33,6 +183,8 @@ type ROI = {
   low: number
   high: number
   integral: number
+  rate: number // counts per minute
+  lastUpdateTime: number // timestamp for rate calculation
   color: string
   enabled: boolean
 }
@@ -46,6 +198,7 @@ type HistogramConfig = {
   label: string
   customLabel?: string
   position: { row: number; col: number }
+  order: number
   zoomRange?: {
     xmin: number
     xmax: number
@@ -119,6 +272,8 @@ const ROIDialog = ({ isOpen, onClose, histogramId, roi, onSave, onDelete }: ROID
       color,
       enabled,
       integral: roi?.integral || 0,
+      rate: roi?.rate || 0,
+      lastUpdateTime: roi?.lastUpdateTime || Date.now(),
     }
     onSave(histogramId, updatedROI)
     onClose()
@@ -236,6 +391,7 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
       customLabel,
       visible,
       position: histogram?.position || { row: 0, col: 0 },
+      order: histogram?.order || Date.now(), // Use timestamp as default order
       zoomRange: histogram?.zoomRange,
       rois: histogram?.rois || [],
     }
@@ -352,6 +508,7 @@ export default function EnhancedHistogramDashboard() {
 
   // Enhanced state management
   const [histograms, setHistograms] = useState<HistogramConfig[]>([])
+  const [dashboardKey, setDashboardKey] = useState(0) // Key for forcing complete reload
   const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({
     layout: "grid",
     gridCols: 3,
@@ -387,6 +544,14 @@ export default function EnhancedHistogramDashboard() {
 
   const { toast } = useToast()
   const { theme } = useTheme()
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   // Load saved settings and histograms
   useEffect(() => {
@@ -429,17 +594,14 @@ export default function EnhancedHistogramDashboard() {
   useEffect(() => {
     // Clear any existing interval first
     if (updateIntervalRef.current) {
-      console.log("Clearing existing update interval")
       clearInterval(updateIntervalRef.current)
       updateIntervalRef.current = null
     }
 
     // Only start new interval if conditions are met
     if (dashboardSettings.autoUpdate && jsrootLoaded && boards.length > 0 && histograms.length > 0) {
-      console.log(`Starting auto-update with interval: ${dashboardSettings.updateInterval}ms`)
 
       updateIntervalRef.current = setInterval(() => {
-        console.log(`Auto-updating histograms and ROI integrals every ${dashboardSettings.updateInterval}ms...`)
         updateAllHistograms()
       }, dashboardSettings.updateInterval)
     }
@@ -447,18 +609,30 @@ export default function EnhancedHistogramDashboard() {
     // Cleanup function
     return () => {
       if (updateIntervalRef.current) {
-        console.log("Cleaning up update interval")
         clearInterval(updateIntervalRef.current)
         updateIntervalRef.current = null
       }
     }
   }, [jsrootLoaded, boards.length, histograms.length, dashboardSettings.autoUpdate, dashboardSettings.updateInterval])
 
-  // JSROOT theme handling
+  // JSROOT theme and font handling
   useEffect(() => {
     if (jsrootLoaded) {
       const effectiveTheme = dashboardSettings.theme === "auto" ? theme : dashboardSettings.theme
       window.JSROOT.settings.DarkMode = effectiveTheme === "dark"
+      
+      // Configure modern fonts and appearance
+      window.JSROOT.settings.Palette = 57 // Modern color palette
+      window.JSROOT.settings.OptStat = 0  // Disable stats box globally
+      window.JSROOT.settings.OptTitle = 1 // Show titles
+      
+      // Set modern font
+      if (window.JSROOT.gStyle) {
+        window.JSROOT.gStyle.fTextFont = 42 // Helvetica
+        window.JSROOT.gStyle.fLabelFont = 42
+        window.JSROOT.gStyle.fTitleFont = 42
+        window.JSROOT.gStyle.fStatFont = 42
+      }
     }
   }, [jsrootLoaded, theme, dashboardSettings.theme])
 
@@ -488,7 +662,6 @@ export default function EnhancedHistogramDashboard() {
     try {
       // Load saved zoom from cache first
       const savedZoom = await loadZoomFromCache(config.id)
-      console.log(`Loading saved zoom for ${config.id}:`, savedZoom)
 
       // Create histogram and draw it
       await updateHistogramData(config, savedZoom)
@@ -532,12 +705,6 @@ export default function EnhancedHistogramDashboard() {
     if (isUpdating.current[config.id]) return
     isUpdating.current[config.id] = true
 
-    console.log(`Updating histogram ${config.id}...`, {
-      boardId: config.boardId,
-      channel: config.channel,
-      zoomRange: initialZoom || config.zoomRange,
-    })
-
     try {
       const element = histogramRefs.current[config.id]
       if (!element || !window.JSROOT) return
@@ -550,12 +717,15 @@ export default function EnhancedHistogramDashboard() {
       const histogramData = await getHistogram(config.boardId, config.channel.toString())
       const histogram = window.JSROOT.parse(histogramData)
 
-      // Style histogram
+      // Style histogram with modern appearance
       histogram.fLineColor = 4
       histogram.fFillColor = 4
-      histogram.fFillStyle = 3001
+      histogram.fFillStyle = 3001 // Solid fill
       histogram.fTitle = dashboardSettings.showLabels ? config.label : ""
       histogram.fName = `hist_${config.id}`
+      
+      // Remove stats box
+      histogram.fStats = 0
 
       // Create canvas object
       let canvas = canvasObjects.current[config.id]
@@ -574,7 +744,7 @@ export default function EnhancedHistogramDashboard() {
       // This preserves zoom state during regular updates
       if (isFirstTime || shouldUpdateROIs(canvas, config)) {
         canvas.fPrimitives.Clear()
-        canvas.fPrimitives.Add(histogram, "hist")
+        canvas.fPrimitives.Add(histogram, "hist nostat") // same0 removes stats box
 
         // Add ROI TLines to canvas primitives
         if (dashboardSettings.showROIs && config.rois.length > 0) {
@@ -609,7 +779,6 @@ export default function EnhancedHistogramDashboard() {
 
         // Apply saved zoom ONLY once after first creation
         if (zoomToApply && zoomToApply.xmin < zoomToApply.xmax) {
-          console.log(`Applying saved zoom to ${config.id}:`, zoomToApply)
           setTimeout(() => {
             const fp = painter.getFramePainter()
             if (fp && fp.zoom) {
@@ -669,7 +838,6 @@ export default function EnhancedHistogramDashboard() {
   const addROILinesToCanvas = (canvas: any, config: HistogramConfig, histogram: any) => {
     // Get histogram Y range for proper line positioning
     const data = histogram.fArray
-    const histMax = Math.max(...data)
     const histMin = Math.min(...data)
     // Get max from Canvas y axis
     const yAxis = canvas.fPrimitives.arr.find((p: any) => p._typename === "TAttAxis")
@@ -678,13 +846,9 @@ export default function EnhancedHistogramDashboard() {
     //const yMin = 0.1 // 10% below min for visibility
     const yMax = 10 // 10% above max for visibility
 
-    console.log(`Adding ROI lines at yMin=${yMin}, yMax=${yMax}`)
-
-
     // Add each enabled ROI as vertical boundary lines
     for (const roi of config.rois.filter((r) => r.enabled)) {
       try {
-        console.log('ROI color:', roi.color)
         // Convert to RGB the string with #
         if (!roi.color.startsWith("#")) {
           roi.color = `#${roi.color}`
@@ -718,9 +882,6 @@ export default function EnhancedHistogramDashboard() {
         canvas.fPrimitives.Add(roiLineStart, "")
         canvas.fPrimitives.Add(roiLineEnd, "")
 
-        // Restore canvas min/max if needed
-
-        console.log(`Added ROI vertical lines for ${roi.name}: start=${roi.low}, end=${roi.high}, color=${rootColor}`)
       } catch (error) {
         console.error(`Failed to add ROI lines for ${roi.name}:`, error)
       }
@@ -757,7 +918,6 @@ export default function EnhancedHistogramDashboard() {
   const saveZoomToCache = async (histogramId: string, zoom: { xmin: number; xmax: number }) => {
     try {
       const zoomData = { ...zoom, timestamp: Date.now() }
-      console.log(`Saving zoom for ${histogramId}:`, zoomData)
 
       // Save to cache API
       await fetch("/api/cache", {
@@ -785,18 +945,15 @@ export default function EnhancedHistogramDashboard() {
       const response = await fetch(`/api/cache?type=zoom-ranges`)
       const data = await response.json()
       if (data.success && data.data && data.data[histogramId]) {
-        console.log(`Found zoom in cache for ${histogramId}:`, data.data[histogramId])
         return data.data[histogramId]
       }
 
       // Fallback: check if zoom is in histogram config
       const config = histograms.find((h) => h.id === histogramId)
       if (config?.zoomRange) {
-        console.log(`Found zoom in config for ${histogramId}:`, config.zoomRange)
         return config.zoomRange
       }
 
-      console.log(`No zoom found for ${histogramId}`)
     } catch (error) {
       console.error("Failed to load zoom from cache:", error)
     }
@@ -805,12 +962,18 @@ export default function EnhancedHistogramDashboard() {
 
   // Sync zoom to other histograms
   const syncZoomToOthers = (sourceId: string, xmin: number, xmax: number) => {
+    if (!dashboardSettings.syncZoom) return
+        
     Object.entries(histogramPainters.current).forEach(([id, painter]) => {
-      if (id !== sourceId && painter) {
-        const fp = painter.getFramePainter()
-        if (fp?.originalZoom) {
-          fp.originalZoom(xmin, xmax, 0, 0)
-          saveZoomToCache(id, { xmin, xmax })
+      if (id !== sourceId && painter && histogramRefs.current[id]) {
+        try {
+          const fp = painter.getFramePainter()
+          if (fp && fp.originalZoom) {
+            fp.originalZoom(xmin, xmax, 0, 0)
+            saveZoomToCache(id, { xmin, xmax })
+          }
+        } catch (error) {
+          console.error(`Failed to sync zoom to histogram ${id}:`, error)
         }
       }
     })
@@ -834,6 +997,10 @@ export default function EnhancedHistogramDashboard() {
 
         setDashboardSettings(validatedSettings)
         setRebinFactor(validatedSettings.rebinFactor)
+        
+        // Trigger complete dashboard reload
+        reloadDashboard()
+        
         toast({
           title: "Settings Saved",
           description: "Dashboard settings have been saved successfully.",
@@ -912,15 +1079,134 @@ export default function EnhancedHistogramDashboard() {
         body: JSON.stringify({ type: "histogram", id: histogramId }),
       })
 
+      reloadDashboard() // Trigger complete reload to remove from UI
+
       // Clean up refs
-      delete histogramRefs.current[histogramId]
-      delete histogramPainters.current[histogramId]
-      delete canvasObjects.current[histogramId]
-      delete isUpdating.current[histogramId]
+
     } catch (error) {
       console.error("Failed to remove histogram from cache:", error)
     }
   }, [])
+
+  // Complete dashboard reload function
+  const reloadDashboard = useCallback(async () => {
+    
+    // Preserve current ROI data before reload
+    const roiDataBackup: { [histogramId: string]: { [roiId: string]: { integral: number; rate: number; lastUpdateTime: number } } } = {}
+    histograms.forEach(histogram => {
+      roiDataBackup[histogram.id] = {}
+      histogram.rois.forEach(roi => {
+        if (roi.integral > 0 || roi.rate > 0) { // Only backup meaningful data
+          roiDataBackup[histogram.id][roi.id] = {
+            integral: roi.integral,
+            rate: roi.rate,
+            lastUpdateTime: roi.lastUpdateTime
+          }
+        }
+      })
+    })
+        
+    // Clear update interval first
+    if (updateIntervalRef.current) {
+      clearInterval(updateIntervalRef.current)
+      updateIntervalRef.current = null
+    }
+
+    // Clear all histogram refs and painters
+    Object.keys(histogramRefs.current).forEach(id => {
+      delete histogramRefs.current[id]
+      delete histogramPainters.current[id]
+      delete canvasObjects.current[id]
+      delete isUpdating.current[id]
+    })
+
+    // Clear all caches
+    histogramRefs.current = {}
+    histogramPainters.current = {}
+    canvasObjects.current = {}
+    isUpdating.current = {}
+
+    // Reset JSROOT state
+    setJsrootLoaded(false)
+
+    // Clear cache on server side
+    //try {
+    //  await fetch("/api/cache", {
+    //    method: "DELETE",
+    //    headers: { "Content-Type": "application/json" },
+    //    body: JSON.stringify({ type: "all" }),
+    //  })
+    //} catch (error) {
+    //  console.error("Failed to clear server cache:", error)
+    //}
+
+    // Increment dashboard key to force React to remount components
+    setDashboardKey(prev => prev + 1)
+
+    // Reload everything fresh after a short delay to allow React to remount
+    setTimeout(async () => {
+      try {
+        // Reload JSROOT first
+        await loadJSROOT()
+        setJsrootLoaded(true)
+        
+        // Then reload all data
+        await Promise.all([
+          loadDashboardSettings(),
+          loadHistogramConfigs()
+        ])
+        
+        // Restore ROI data after histogram configs are loaded
+        setTimeout(() => {
+          setHistograms(currentHistograms => {
+            return currentHistograms.map(histogram => {
+              const backupData = roiDataBackup[histogram.id]
+              if (backupData) {
+                return {
+                  ...histogram,
+                  rois: histogram.rois.map(roi => {
+                    const restoredData = backupData[roi.id]
+                    if (restoredData) {
+                      return {
+                        ...roi,
+                        integral: restoredData.integral,
+                        rate: restoredData.rate,
+                        lastUpdateTime: restoredData.lastUpdateTime
+                      }
+                    }
+                    return roi
+                  })
+                }
+              }
+              return histogram
+            })
+          })
+        }, 200) // Small delay to ensure histogram configs are loaded
+        
+        // Fetch board configuration and run status
+        try {
+          const response = await getBoardConfiguration()
+          setBoards(response.data)
+        } catch (error) {
+          console.error("Failed to fetch board configuration:", error)
+        }
+        
+        try {
+          await Promise.all([getRunStatus(), getCurrentRunNumber()])
+        } catch (error) {
+          console.error("Failed to fetch run status:", error)
+        }
+        
+      } catch (error) {
+        console.error("Failed to reload dashboard:", error)
+        toast({
+          title: "Error",
+          description: "Failed to reload dashboard. Some features may not work correctly.",
+          variant: "destructive",
+        })
+      }
+    }, 100)
+  }, [loadDashboardSettings, loadHistogramConfigs, toast, histograms])
 
   // API calls
   const fetchBoardConfiguration = async () => {
@@ -1004,13 +1290,8 @@ export default function EnhancedHistogramDashboard() {
     setHistograms(updatedHistograms)
     saveHistogramConfigs(updatedHistograms)
 
-    // Refresh the specific histogram with new ROI
-    setTimeout(() => {
-      const config = updatedHistograms.find((h) => h.id === histogramId)
-      if (config && config.visible) {
-        updateHistogramData(config)
-      }
-    }, 100)
+    // Trigger complete dashboard reload
+    reloadDashboard()
   }
 
   const deleteROI = (histogramId: string, roiId: string) => {
@@ -1066,13 +1347,71 @@ export default function EnhancedHistogramDashboard() {
           ...h,
           rois: h.rois.map((roi) => {
             const integralResult = histogramIntegrals.find((r) => r.roiId === roi.id)
-            return integralResult ? { ...roi, integral: integralResult.integral } : roi
+            if (integralResult) {
+              const currentTime = Date.now()
+              const previousIntegral = roi.integral || 0
+              const previousUpdateTime = roi.lastUpdateTime || currentTime
+              const timeDifferenceSeconds = (currentTime - previousUpdateTime) / (1000)
+              
+              // Calculate rate (counts per minute)
+              let rate = roi.rate || 0 // Keep previous rate if no update
+                            
+              // Only calculate rate if we have a meaningful time difference and the integral has changed
+              if (timeDifferenceSeconds  > 0.1 && previousIntegral !== integralResult.integral) { // At least 6 seconds between updates
+                const integralDifference = integralResult.integral - previousIntegral
+                rate = Math.abs(integralDifference) / timeDifferenceSeconds 
+              }
+              
+              return { 
+                ...roi, 
+                integral: integralResult.integral,
+                rate: Math.max(0, rate),
+                lastUpdateTime: currentTime
+              }
+            }
+            return roi
           }),
         }
       })
 
       setHistograms(updatedHistograms)
     }
+  }
+
+  // Reorder histograms function
+  const reorderHistograms = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (!over || active.id === over.id) {
+      return
+    }
+
+    const oldIndex = histograms.findIndex((h) => h.id === active.id)
+    const newIndex = histograms.findIndex((h) => h.id === over.id)
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return
+    }
+
+    // Reorder the histograms array
+    const reorderedHistograms = arrayMove(histograms, oldIndex, newIndex)
+    
+    // Update order numbers based on new positions
+    const updatedHistograms = reorderedHistograms.map((histogram, index) => ({
+      ...histogram,
+      order: index
+    }))
+
+    // Save the new order to cache
+    await saveHistogramConfigs(updatedHistograms)
+    
+    // Trigger dashboard reload to reflect new order
+    reloadDashboard()
+
+    toast({
+      title: "Order Updated",
+      description: "Histogram order has been updated and saved.",
+    })
   }
 
   // Zoom management
@@ -1132,10 +1471,10 @@ export default function EnhancedHistogramDashboard() {
     return `grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.min(dashboardSettings.gridCols, 4)}`
   }
 
-  const visibleHistograms = histograms.filter((h) => h.visible)
+  const visibleHistograms = histograms.filter((h) => h.visible).sort((a, b) => a.order - b.order)
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground">
+    <div key={dashboardKey} className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">
         {/* Header Controls */}
         <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
@@ -1147,9 +1486,6 @@ export default function EnhancedHistogramDashboard() {
             <Button onClick={resetAllZoom} variant="outline">
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset Zoom
-            </Button>
-            <Button onClick={toggleSyncZoom} variant={dashboardSettings.syncZoom ? "default" : "outline"}>
-              {dashboardSettings.syncZoom ? "Unsync Zoom" : "Sync Zoom"}
             </Button>
             <Button
               onClick={() => saveDashboardSettings({ ...dashboardSettings, isLogScale: !dashboardSettings.isLogScale })}
@@ -1214,88 +1550,33 @@ export default function EnhancedHistogramDashboard() {
 
         {/* Histograms Grid */}
         {visibleHistograms.length > 0 && (
-          <div className={`grid ${getGridClass()} gap-6`}>
-            {visibleHistograms.map((config) => (
-              <Card key={config.id} className="relative">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-base font-semibold leading-tight">{config.label}</CardTitle>
-                  <div className="flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => addROI(config.id)} title="Add ROI">
-                      <Plus className="h-3 w-3" />
-                    </Button>
-
-                    {/* Edit Histogram */}
-                    <Button variant="ghost" size="sm" onClick={() => editHistogram(config)} title="Edit Histogram">
-                      <Edit className="h-3 w-3" />
-                    </Button>
-
-                    {/* Toggle Visibility */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const updated = { ...config, visible: !config.visible }
-                        if (!updated.visible) {
-                          removeHistogramFromCache(config.id)
-                        }
-                        saveHistogram(updated)
-                      }}
-                      title="Toggle Visibility"
-                    >
-                      {config.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                    </Button>
-                  </div>
-                </CardHeader>
-
-                <CardContent>
-                  {/* ROI Information */}
-                  {dashboardSettings.showROIs && config.rois.length > 0 && (
-                    <div className="mb-3 space-y-2">
-                      {config.rois
-                        .filter((r) => r.enabled)
-                        .map((roi) => (
-                          <div key={roi.id} className="flex items-center justify-between p-2 bg-muted/30 rounded-md">
-                            <div className="flex items-center gap-2">
-                              <div
-                                className="w-3 h-3 rounded-full border border-gray-400"
-                                style={{ backgroundColor: roi.color }}
-                              />
-                              <span className="text-sm font-medium">{roi.name}</span>
-                              <span className="text-xs text-muted-foreground font-mono">
-                                [{roi.low} - {roi.high}]
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {dashboardSettings.showIntegrals && (
-                                <span className="text-sm font-mono bg-background px-2 py-1 rounded border">
-                                  {roi.integral.toLocaleString()}
-                                </span>
-                              )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => editROI(config.id, roi)}
-                                className="h-6 w-6 p-0"
-                              >
-                                <Edit className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-
-                  {/* Histogram Display */}
-                  <div
-                    ref={(el) => {
-                      histogramRefs.current[config.id] = el
-                    }}
-                    className={`w-full ${getHistogramSize(config.size)} border rounded-lg shadow-md bg-white dark:bg-gray-900`}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={reorderHistograms}
+          >
+            <SortableContext
+              items={visibleHistograms.map(h => h.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className={`grid ${getGridClass()} gap-6`}>
+                {visibleHistograms.map((config) => (
+                  <SortableHistogramCard
+                    key={config.id}
+                    config={config}
+                    onAddROI={addROI}
+                    onEditHistogram={editHistogram}
+                    onEditROI={editROI}
+                    onSaveHistogram={saveHistogram}
+                    onRemoveHistogramFromCache={removeHistogramFromCache}
+                    dashboardSettings={dashboardSettings}
+                    getHistogramSize={getHistogramSize}
+                    histogramRefs={histogramRefs}
                   />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
 
         {/* Dialogs */}

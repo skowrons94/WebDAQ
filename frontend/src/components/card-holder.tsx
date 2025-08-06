@@ -37,6 +37,8 @@ type ROI = {
   low: number;
   high: number;
   integral: number;
+  rate: number;
+  lastUpdateTime: number;
   color: string;
   enabled: boolean;
 }
@@ -67,19 +69,11 @@ interface CardHolderProps {
   startTime: string | null
 }
 
-/**
- * CardHolder Component
- * 
- * Displays dashboard cards showing system status, current measurements,
- * ROI integrals, and custom metrics. Cards are conditionally shown based
- * on visualization settings.
- */
 export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const { settings } = useVisualizationStore()
   const { metrics } = useMetricsStore()
   const [visibleMetrics, setVisibleMetrics] = useState(() => metrics.filter(metric => metric.isVisible))
 
-  // State for various measurements and data
   const [roiCards, setRoiCards] = useState<ROICardData[]>([])
   const [fileBandwidth, setFileBandwidth] = useState<number>(0)
   const [beamCurrent, setBeamCurrent] = useState<number>(0)
@@ -91,13 +85,12 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [portCurrent, setPortCurrent] = useState<string>('')
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
+  const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
-  // Update visible metrics when metrics store changes
   useEffect(() => {
     setVisibleMetrics(metrics.filter(metric => metric.isVisible))
   }, [metrics])
 
-  // Set up polling intervals for data updates
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -116,7 +109,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
     fetchInitialData()
 
-    // Set up intervals for real-time data updates
     const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
     const bandwidthInterval = setInterval(updateBandwidthData, 1000)
@@ -132,7 +124,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }, [])
 
-  // Set up intervals for custom metrics
   useEffect(() => {
     visibleMetrics.forEach(metric => {
       if (intervalRefs.current[metric.id]) return
@@ -140,10 +131,10 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       const fetchMetricData = async () => {
         try {
           const data = await getMetricData(metric.entityName)
-          const latestValue = Array.isArray(data) && data.length > 0 ? 
-            data[0][1] : 
+          const latestValue = Array.isArray(data) && data.length > 0 ?
+            data[0][1] :
             0;
-          
+
           setMetricValues(prev => ({
             ...prev,
             [metric.id]: latestValue * (metric.multiplier || 1)
@@ -173,15 +164,12 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }
 
-  /**
-   * Updates ROI (Region of Interest) data by fetching from histogram-configs.json
-   * and calculating integrals for each enabled ROI
-   */
+  // ✅ FIXED updateROIData FUNCTION
   const updateROIData = async () => {
     try {
       const response = await fetch('/api/cache?type=histograms')
       const result = await response.json()
-      
+
       if (!result.success) {
         console.error('Failed to fetch histogram configs:', result.error)
         return
@@ -189,20 +177,15 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
       const histogramConfigs: HistogramConfig[] = result.data
       const newRoiCards: ROICardData[] = []
+      const newRoiDataHistory: { [key: string]: ROI } = {}
 
-      // Process each histogram configuration
       for (const config of histogramConfigs) {
-        // Only process visible histograms with ROIs
-        if (!config.visible || !config.rois || config.rois.length === 0) {
-          continue
-        }
+        if (!config.visible || !config.rois || config.rois.length === 0) continue
 
-        // Process each ROI in the histogram
         for (const roi of config.rois) {
           if (!roi.enabled) continue
 
           try {
-            // Get the integral value for this ROI
             const integral = await getRoiIntegral(
               config.boardId,
               config.channel.toString(),
@@ -210,29 +193,57 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
               roi.high
             )
 
-            // Create card data with updated integral
+            const roiKey = `${config.id}_${roi.id}`
+            const currentTime = Date.now()
+
+            const previousROI = roiDataHistoryRef.current[roiKey]
+            const previousIntegral = previousROI?.integral || 0
+            const previousUpdateTime = previousROI?.lastUpdateTime || currentTime
+            const timeDifferenceSeconds = (currentTime - previousUpdateTime) / 1000
+
+            let rate = previousROI?.rate || 0
+            if (timeDifferenceSeconds > 0.1 && previousIntegral !== integral) {
+              const integralDifference = integral - previousIntegral
+              rate = Math.abs(integralDifference) / (timeDifferenceSeconds / 60)
+            }
+
+            const updatedROI: ROI = {
+              ...roi,
+              integral,
+              rate: Math.max(0, rate),
+              lastUpdateTime: currentTime
+            }
+
+            roiDataHistoryRef.current[roiKey] = updatedROI
+
             const cardData: ROICardData = {
               histogramId: config.id,
               histogramLabel: config.customLabel || config.label,
               boardId: config.boardId,
               channel: config.channel,
-              roi: {
-                ...roi,
-                integral: integral
-              }
+              roi: updatedROI
             }
 
             newRoiCards.push(cardData)
           } catch (error) {
             console.error(`Failed to get ROI integral for ${config.id}, ROI ${roi.id}:`, error)
-            
-            // Still add the card but with previous integral value
+
+            const roiKey = `${config.id}_${roi.id}`
+            const previousROI = roiDataHistory[roiKey] || {
+              ...roi,
+              rate: 0,
+              lastUpdateTime: Date.now(),
+              integral: 0
+            }
+
+            newRoiDataHistory[roiKey] = previousROI
+
             const cardData: ROICardData = {
               histogramId: config.id,
               histogramLabel: config.customLabel || config.label,
               boardId: config.boardId,
               channel: config.channel,
-              roi: roi
+              roi: previousROI
             }
 
             newRoiCards.push(cardData)
@@ -240,6 +251,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
         }
       }
 
+      // ✅ Update state once, safely
       setRoiCards(newRoiCards)
     } catch (error) {
       console.error('Failed to update ROI data:', error)
@@ -431,10 +443,12 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{cardData.roi.integral}</div>
-                <p className="text-xs text-muted-foreground">
-                  {cardData.roi.name}: {cardData.roi.low} - {cardData.roi.high}
-                </p>
+                <div className="text-2xl font-bold">{cardData.roi.integral.toFixed(0)}</div>
+                <div className="flex flex-col gap-1">
+                  <p className="text-xs text-muted-foreground">
+                    ROI: {cardData.roi.low} - {cardData.roi.high}   Rate: {cardData.roi.rate.toFixed(2)} cps
+                  </p>
+                </div>
               </CardContent>
             </Card>
           ))

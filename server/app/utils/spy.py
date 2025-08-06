@@ -429,7 +429,16 @@ class ReadoutUnitSpy:
                 self.data[histogram_type][channel_index] is not None):
                 
                 if ROOT_AVAILABLE:
-                    return self.data[histogram_type][channel_index].Clone()
+                    if( TEST_FLAG ):
+                        # Fill with gaussian data with mean=10000, sigma=100
+                        hist = self.data[histogram_type][channel_index]
+                        hist.Reset()
+                        for bin_idx in range(1, hist.GetNbinsX() + 1):
+                            content = ROOT.gRandom.Gaus(10000, 100)
+                            hist.SetBinContent(bin_idx, content)
+                        return hist.Clone()
+                    else:
+                        return self.data[histogram_type][channel_index].Clone()
                 else:
                     # Return placeholder in test mode
                     return None
