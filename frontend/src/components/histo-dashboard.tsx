@@ -133,10 +133,7 @@ const SortableHistogramCard = ({ config, onAddROI, onEditHistogram, onEditROI, o
                     {dashboardSettings.showIntegrals && (
                       <div className="flex flex-col gap-1">
                         <span className="text-sm font-mono bg-background px-2 py-1 rounded border">
-                          {roi.integral.toLocaleString()} counts
-                        </span>
-                        <span className="text-xs font-mono bg-muted px-2 py-1 rounded border text-muted-foreground">
-                          {roi.rate.toFixed(1)} cps
+                          {roi.integral.toFixed(0)} counts
                         </span>
                       </div>
                     )}
@@ -1361,7 +1358,7 @@ export default function EnhancedHistogramDashboard() {
                 const integralDifference = integralResult.integral - previousIntegral
                 rate = Math.abs(integralDifference) / timeDifferenceSeconds 
               }
-              
+
               return { 
                 ...roi, 
                 integral: integralResult.integral,

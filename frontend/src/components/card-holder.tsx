@@ -229,7 +229,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
             console.error(`Failed to get ROI integral for ${config.id}, ROI ${roi.id}:`, error)
 
             const roiKey = `${config.id}_${roi.id}`
-            const previousROI = roiDataHistory[roiKey] || {
+            const previousROI = roiDataHistoryRef[roiKey] || {
               ...roi,
               rate: 0,
               lastUpdateTime: Date.now(),
@@ -446,7 +446,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                 <div className="text-2xl font-bold">{cardData.roi.integral.toFixed(0)}</div>
                 <div className="flex flex-col gap-1">
                   <p className="text-xs text-muted-foreground">
-                    ROI: {cardData.roi.low} - {cardData.roi.high}   Rate: {cardData.roi.rate.toFixed(2)} cps
+                    ROI: {cardData.roi.low} - {cardData.roi.high}
                   </p>
                 </div>
               </CardContent>
