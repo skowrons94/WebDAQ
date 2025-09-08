@@ -729,6 +729,57 @@ class DAQManager:
         """
         return self.board_status.copy()
 
+    def check_board_connectivity(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Check connectivity status of all configured boards.
+        
+        Returns:
+            Dictionary mapping board_id to connectivity status: 
+            {'connected': bool, 'ready': bool, 'failed': bool}
+        """
+        board_connectivity = {}
+
+        for board in self.daq_state['boards']:
+            board_id = str(board['id'])
+            connectivity_status = {
+                'connected': False,
+                'ready': False,
+                'failed': self.board_status.get(board_id, {}).get('failed', False)
+            }
+            
+            if self.test_flag:
+                # In test mode, simulate connectivity
+                connectivity_status['connected'] = True
+                connectivity_status['ready'] = not self.is_running
+            else:
+                # Create digitizer connection
+                link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
+                link_type = link_type_map.get(board["link_type"], 0)
+                
+                # Try to connect to the actual board
+                dgtz = digitizer(
+                            link_type, 
+                            int(board["link_num"]), 
+                            int(board["id"]), 
+                            int(board["vme"], 16)
+                        )
+                try:
+                    dgtz.open()
+                    if dgtz.get_connected():
+                        connectivity_status['connected'] = True
+                        connectivity_status['ready'] = not self.is_running
+                        dgtz.close()
+                    else:
+                        connectivity_status['connected'] = False
+                        self.logger.warning(f"Could not connect to board {board_id}")
+                except Exception as e:
+                    connectivity_status['connected'] = False
+                    self.logger.error(f"Error checking connectivity for board {board_id}: {e}")
+            
+            board_connectivity[board_id] = connectivity_status
+        
+        return board_connectivity
+
 
 # Global instance - will be initialized by the application
 daq_manager = None

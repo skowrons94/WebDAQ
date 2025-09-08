@@ -80,6 +80,17 @@ def update():
     # DAQ manager automatically keeps configurations up to date
     return jsonify(0)
 
+@bp.route('/digitizer/connectivity', methods=['GET'])
+@jwt_required_custom
+def get_board_connectivity():
+    """Get connectivity status of all boards."""
+    try:
+        connectivity = daq_mgr.check_board_connectivity()
+        print(f"Board connectivity: {connectivity}")
+        return jsonify(connectivity)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @bp.route('/digitizer/polarity/<id>/<channel>', methods=['GET'])
 @jwt_required_custom
 def get_polarity(id, channel):

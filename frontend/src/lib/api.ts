@@ -221,6 +221,9 @@ export const setChannelEnabled = (id: string, channel: string, value: string) =>
 export const getBoardSettings = (id: string) =>
     api.get(`/digitizer/${id}/registers`).then(res => res.data);
 
+export const getBoardConnectivity = () =>
+    api.get('/digitizer/connectivity').then(res => res.data);
+
 // Generic metric data fetching function
 export const getMetricData = (entityName: string, from: string = '-10s', until: string = 'now') =>
     api.get(`/stats/${entityName}`, { params: { from, until } }).then(res => res.data);

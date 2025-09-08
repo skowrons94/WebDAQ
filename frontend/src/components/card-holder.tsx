@@ -11,6 +11,8 @@ import {
   CheckCircle,
   XCircle,
   Cpu,
+  Wifi,
+  WifiOff,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -34,6 +36,7 @@ import {
   getMetricData,
   getBoardStatus,
   getBoardConfiguration,
+  getBoardConnectivity,
 } from '@/lib/api'
 
 type ROI = {
@@ -73,6 +76,12 @@ type BoardStatus = {
   last_value: number;
 }
 
+type BoardConnectivity = {
+  connected: boolean;
+  ready: boolean;
+  failed: boolean;
+}
+
 type BoardInfo = {
   id: string;
   name: string;
@@ -105,6 +114,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [portCurrent, setPortCurrent] = useState<string>('')
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
+  const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
   const [boards, setBoards] = useState<BoardInfo[]>([])
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
@@ -131,6 +141,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
     fetchInitialData()
     fetchBoardConfiguration()
+    updateBoardConnectivity() // Initial connectivity check on page load
 
     const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
@@ -138,6 +149,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     const accumulatedChargeInterval = setInterval(updateAccumulatedCharge, 1000)
     const totalAccumulatedChargeInterval = setInterval(updateTotalAccumulatedCharge, 1000)
     const boardStatusInterval = setInterval(updateBoardStatus, 2000)
+    const boardConnectivityInterval = setInterval(updateBoardConnectivity, 5000) // Check every 5 seconds
 
     return () => {
       clearInterval(beamCurrentInterval)
@@ -146,6 +158,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       clearInterval(accumulatedChargeInterval)
       clearInterval(totalAccumulatedChargeInterval)
       clearInterval(boardStatusInterval)
+      clearInterval(boardConnectivityInterval)
     }
   }, [])
 
@@ -341,6 +354,15 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }
 
+  const updateBoardConnectivity = async () => {
+    try {
+      const connectivity = await getBoardConnectivity()
+      setBoardConnectivity(connectivity)
+    } catch (error) {
+      console.error('Failed to update board connectivity:', error)
+    }
+  }
+
   const formatTime = (seconds: number) => {
     return `${seconds} seconds`
   }
@@ -387,7 +409,47 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
         {/* Board Status Cards */}
         {settings.showStatus && boards.map((board) => {
           const status = boardStatus[board.id];
+          const connectivity = boardConnectivity[board.id];
           const isOk = !status || !status.failed;
+          const isConnected = connectivity?.connected ?? false;
+          const isReady = connectivity?.ready ?? false;
+          
+          // Determine display status based on requirements:
+          // - If running, don't update ready status, maintain current version
+          // - If not running and connected, show "Ready" in green
+          // - If not connected, show "Disconnected" in red
+          let displayText = "Unknown";
+          let displayColor = "text-gray-600";
+          
+          if (!isConnected) {
+            displayText = "Disconnected";
+            displayColor = "text-red-600";
+          } else if (isRunning) {
+            // If running, maintain current status - don't update to "Ready"
+            if (!isOk) {
+              if( status.last_value.toString(16).toUpperCase() === "10") {
+                displayText = "PLL Lock Lost";
+                displayColor = "text-red-600";
+              }
+              else if( status.last_value.toString(16).toUpperCase() === "1") {
+                displayText = "Connection Error";
+                displayColor = "text-red-600";
+              }
+              else {
+                displayText = "Generic Failure";
+                displayColor = "text-red-600";
+              }
+            } else {
+              displayText = "Running";
+              displayColor = "text-green-600";
+            }
+          } else if (isConnected) {
+            displayText = "Ready";
+            displayColor = "text-green-600";
+          } else {
+            displayText = "Failed";
+            displayColor = "text-red-600";
+          }
           
           return (
             <Card key={`board-status-${board.id}`}>
@@ -396,6 +458,11 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                   Board {board.id}
                 </CardTitle>
                 <div className="flex items-center gap-2">
+                  {isConnected ? (
+                    <Wifi className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <WifiOff className="h-4 w-4 text-red-500" />
+                  )}
                   {isOk ? (
                     <CheckCircle className="h-4 w-4 text-green-500" />
                   ) : (
@@ -405,17 +472,12 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${isOk ? 'text-green-600' : 'text-red-600'}`}>
-                  {isOk ? "OK" : "Failed"}
+                <div className={`text-2xl font-bold ${displayColor}`}>
+                  {displayText}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {board.name} • {board.dpp}
+                  {board.name} • {board.dpp} - {isConnected ? 'Connected' : 'Disconnected'}
                 </p>
-                {status && (
-                  <p className="text-xs text-muted-foreground">
-                    Status: 0x{status.last_value.toString(16).toUpperCase()}
-                  </p>
-                )}
               </CardContent>
             </Card>
           )
