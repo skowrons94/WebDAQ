@@ -53,8 +53,14 @@ class DAQManager:
         
         # Initialize board monitoring
         self.board_status = {}  # Track board failure status: {board_id: {'failed': bool, 'last_value': int}}
+        self.board_locks = {}  # Track board connection locks: {board_id: threading.Lock()}
         self.monitor_thread = None
         self.monitor_stop_event = threading.Event()
+        
+        # Initialize locks for existing boards
+        for board in self.daq_state.get('boards', []):
+            board_id = str(board['id'])
+            self.board_locks[board_id] = threading.Lock()
         
         # Initialize XDAQ topology if not in test mode
         if not self.test_flag:
@@ -303,6 +309,10 @@ class DAQManager:
             
             # Add board to configuration
             self.daq_state['boards'].append(board_config)
+            
+            # Initialize lock for this board
+            board_id = str(board_config['id'])
+            self.board_locks[board_id] = threading.Lock()
             
             # Read and save register configuration
             config_file = f"conf/{board_config['name']}_{board_config['id']}.json"
@@ -637,35 +647,43 @@ class DAQManager:
                         continue
                     
                     try:
-                        # Create digitizer connection
-                        link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
-                        link_type = link_type_map.get(board["link_type"], 0)
+                        # Use lock to prevent concurrent connections to the same board
+                        board_lock = self.board_locks.get(board_id)
+                        if board_lock is None:
+                            # Create lock if it doesn't exist (shouldn't happen, but safety first)
+                            board_lock = threading.Lock()
+                            self.board_locks[board_id] = board_lock
                         
-                        dgtz = digitizer(
-                            link_type, 
-                            int(board["link_num"]), 
-                            int(board["id"]), 
-                            int(board["vme"], 16)
-                        )
-                        
-                        # If already have a non-zero last value, skip further checks
-                        if( self.board_status[board_id]['last_value'] != 0):
-                            continue
-                        
-                        # Open connection and read address 0x8178
-                        dgtz.open()
-                        if dgtz.get_connected():
-                            value = dgtz.read_register(0x8178)
-                            self.board_status[board_id]['last_value'] = value
+                        with board_lock:
+                            # Create digitizer connection
+                            link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
+                            link_type = link_type_map.get(board["link_type"], 0)
                             
-                            # Check if value is non-zero (indicates failure)
-                            if value != 0:
-                                self.board_status[board_id]['failed'] = True
-                                self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
+                            dgtz = digitizer(
+                                link_type, 
+                                int(board["link_num"]), 
+                                int(board["id"]), 
+                                int(board["vme"], 16)
+                            )
                             
-                            dgtz.close()
-                        else:
-                            self.logger.warning(f"Could not connect to board {board_id} for monitoring")
+                            # If already have a non-zero last value, skip further checks
+                            if( self.board_status[board_id]['last_value'] != 0):
+                                continue
+                            
+                            # Open connection and read address 0x8178
+                            dgtz.open()
+                            if dgtz.get_connected():
+                                value = dgtz.read_register(0x8178)
+                                self.board_status[board_id]['last_value'] = value
+                                
+                                # Check if value is non-zero (indicates failure)
+                                if value != 0:
+                                    self.board_status[board_id]['failed'] = True
+                                    self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
+                                
+                                dgtz.close()
+                            else:
+                                self.logger.warning(f"Could not connect to board {board_id} for monitoring")
                             
                     except Exception as e:
                         self.logger.error(f"Error monitoring board {board_id}: {e}")
@@ -752,29 +770,37 @@ class DAQManager:
                 connectivity_status['connected'] = True
                 connectivity_status['ready'] = not self.is_running
             else:
-                # Create digitizer connection
-                link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
-                link_type = link_type_map.get(board["link_type"], 0)
+                # Use lock to prevent concurrent connections to the same board
+                board_lock = self.board_locks.get(board_id)
+                if board_lock is None:
+                    # Create lock if it doesn't exist (shouldn't happen, but safety first)
+                    board_lock = threading.Lock()
+                    self.board_locks[board_id] = board_lock
                 
-                # Try to connect to the actual board
-                dgtz = digitizer(
-                            link_type, 
-                            int(board["link_num"]), 
-                            int(board["id"]), 
-                            int(board["vme"], 16)
-                        )
-                try:
-                    dgtz.open()
-                    if dgtz.get_connected():
-                        connectivity_status['connected'] = True
-                        connectivity_status['ready'] = not self.is_running
-                        dgtz.close()
-                    else:
+                with board_lock:
+                    # Create digitizer connection
+                    link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
+                    link_type = link_type_map.get(board["link_type"], 0)
+                    
+                    # Try to connect to the actual board
+                    dgtz = digitizer(
+                                link_type, 
+                                int(board["link_num"]), 
+                                int(board["id"]), 
+                                int(board["vme"], 16)
+                            )
+                    try:
+                        dgtz.open()
+                        if dgtz.get_connected():
+                            connectivity_status['connected'] = True
+                            connectivity_status['ready'] = not self.is_running
+                            dgtz.close()
+                        else:
+                            connectivity_status['connected'] = False
+                            self.logger.warning(f"Could not connect to board {board_id}")
+                    except Exception as e:
                         connectivity_status['connected'] = False
-                        self.logger.warning(f"Could not connect to board {board_id}")
-                except Exception as e:
-                    connectivity_status['connected'] = False
-                    self.logger.error(f"Error checking connectivity for board {board_id}: {e}")
+                        self.logger.error(f"Error checking connectivity for board {board_id}: {e}")
             
             board_connectivity[board_id] = connectivity_status
         
