@@ -21,6 +21,7 @@ import os
 import json
 import time
 import logging
+import threading
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -49,6 +50,11 @@ class DAQManager:
         
         # Initialize DAQ state
         self.daq_state = self._load_or_create_state()
+        
+        # Initialize board monitoring
+        self.board_status = {}  # Track board failure status: {board_id: {'failed': bool, 'last_value': int}}
+        self.monitor_thread = None
+        self.monitor_stop_event = threading.Event()
         
         # Initialize XDAQ topology if not in test mode
         if not self.test_flag:
@@ -609,6 +615,119 @@ class DAQManager:
         if 0 <= index < len(self.daq_state['boards']):
             return self.daq_state['boards'][index].copy()
         return None
+    
+    def _monitor_boards_thread(self) -> None:
+        """
+        Thread function to monitor board status by reading address 0x8178.
+        Runs every second and checks for non-zero values which indicate board failure.
+        """
+        self.logger.info("Board monitoring thread started")
+        
+        while not self.monitor_stop_event.is_set():
+            try:
+                for board in self.daq_state['boards']:
+                    board_id = str(board['id'])
+                    
+                    # Initialize board status if not exists
+                    if board_id not in self.board_status:
+                        self.board_status[board_id] = {'failed': False, 'last_value': 0}
+                    
+                    # Skip if already failed (once failed, stays failed)
+                    if self.board_status[board_id]['failed']:
+                        continue
+                    
+                    try:
+                        # Create digitizer connection
+                        link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
+                        link_type = link_type_map.get(board["link_type"], 0)
+                        
+                        dgtz = digitizer(
+                            link_type, 
+                            int(board["link_num"]), 
+                            int(board["id"]), 
+                            int(board["vme"], 16)
+                        )
+                        
+                        # If already have a non-zero last value, skip further checks
+                        if( self.board_status[board_id]['last_value'] != 0):
+                            continue
+                        
+                        # Open connection and read address 0x8178
+                        dgtz.open()
+                        if dgtz.get_connected():
+                            value = dgtz.read_register(0x8178)
+                            self.board_status[board_id]['last_value'] = value
+                            
+                            # Check if value is non-zero (indicates failure)
+                            if value != 0:
+                                self.board_status[board_id]['failed'] = True
+                                self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
+                            
+                            dgtz.close()
+                        else:
+                            self.logger.warning(f"Could not connect to board {board_id} for monitoring")
+                            
+                    except Exception as e:
+                        self.logger.error(f"Error monitoring board {board_id}: {e}")
+                
+                # Sleep for 1 second or until stop event is set
+                if not self.monitor_stop_event.wait(1.0):
+                    continue
+                else:
+                    break
+                    
+            except Exception as e:
+                self.logger.error(f"Error in board monitoring thread: {e}")
+                if not self.monitor_stop_event.wait(1.0):
+                    continue
+                else:
+                    break
+        
+        self.logger.info("Board monitoring thread stopped")
+    
+    def start_board_monitoring(self) -> None:
+        """
+        Start the board monitoring thread.
+        Should be called when a run starts.
+        """
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.logger.warning("Board monitoring thread already running")
+            return
+        
+        # Reset all board statuses
+        for board in self.daq_state['boards']:
+            board_id = str(board['id'])
+            self.board_status[board_id] = {'failed': False, 'last_value': 0}
+        
+        # Start monitoring thread
+        self.monitor_stop_event.clear()
+        self.monitor_thread = threading.Thread(target=self._monitor_boards_thread, daemon=True)
+        self.monitor_thread.start()
+        self.logger.info("Board monitoring started")
+    
+    def stop_board_monitoring(self) -> None:
+        """
+        Stop the board monitoring thread.
+        Should be called when a run stops.
+        """
+        if self.monitor_thread and self.monitor_thread.is_alive():
+            self.monitor_stop_event.set()
+            self.monitor_thread.join(timeout=5.0)
+            if self.monitor_thread.is_alive():
+                self.logger.warning("Board monitoring thread did not stop gracefully")
+            else:
+                self.logger.info("Board monitoring stopped")
+        else:
+            self.logger.info("Board monitoring was not running")
+    
+    def get_board_status(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get current status of all boards.
+        
+        Returns:
+            Dictionary mapping board_id to status info: {'failed': bool, 'last_value': int}
+        """
+        return self.board_status.copy()
 
 
 # Global instance - will be initialized by the application

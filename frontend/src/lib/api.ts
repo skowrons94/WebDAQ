@@ -232,4 +232,8 @@ export const openFaraday = () =>
 export const closeFaraday = () =>
     api.get('/faraday/close').then(res => res.data);
 
+// Board status monitoring
+export const getBoardStatus = () =>
+    api.get('/experiment/get_board_status').then(res => res.data);
+
 export default api;

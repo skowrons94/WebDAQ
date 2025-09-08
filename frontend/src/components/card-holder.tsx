@@ -8,6 +8,9 @@ import {
   Database,
   HardDrive,
   Thermometer,
+  CheckCircle,
+  XCircle,
+  Cpu,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -29,6 +32,8 @@ import {
   getIpCurrent,
   getPortCurrent,
   getMetricData,
+  getBoardStatus,
+  getBoardConfiguration,
 } from '@/lib/api'
 
 type ROI = {
@@ -63,6 +68,21 @@ type ROICardData = {
   roi: ROI;
 }
 
+type BoardStatus = {
+  failed: boolean;
+  last_value: number;
+}
+
+type BoardInfo = {
+  id: string;
+  name: string;
+  link_type: string;
+  link_num: number;
+  vme: string;
+  dpp: string;
+  chan: number;
+}
+
 interface CardHolderProps {
   isRunning: boolean
   timer: number
@@ -84,6 +104,8 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [ipCurrent, setIpCurrent] = useState<string>('')
   const [portCurrent, setPortCurrent] = useState<string>('')
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
+  const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
+  const [boards, setBoards] = useState<BoardInfo[]>([])
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
@@ -108,12 +130,14 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
 
     fetchInitialData()
+    fetchBoardConfiguration()
 
     const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
     const bandwidthInterval = setInterval(updateBandwidthData, 1000)
     const accumulatedChargeInterval = setInterval(updateAccumulatedCharge, 1000)
     const totalAccumulatedChargeInterval = setInterval(updateTotalAccumulatedCharge, 1000)
+    const boardStatusInterval = setInterval(updateBoardStatus, 2000)
 
     return () => {
       clearInterval(beamCurrentInterval)
@@ -121,6 +145,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       clearInterval(bandwidthInterval)
       clearInterval(accumulatedChargeInterval)
       clearInterval(totalAccumulatedChargeInterval)
+      clearInterval(boardStatusInterval)
     }
   }, [])
 
@@ -298,6 +323,24 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }
 
+  const fetchBoardConfiguration = async () => {
+    try {
+      const response = await getBoardConfiguration()
+      setBoards(response.data || [])
+    } catch (error) {
+      console.error('Failed to fetch board configuration:', error)
+    }
+  }
+
+  const updateBoardStatus = async () => {
+    try {
+      const status = await getBoardStatus()
+      setBoardStatus(status)
+    } catch (error) {
+      console.error('Failed to update board status:', error)
+    }
+  }
+
   const formatTime = (seconds: number) => {
     return `${seconds} seconds`
   }
@@ -340,6 +383,43 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
             </CardContent>
           </Card>
         )}
+
+        {/* Board Status Cards */}
+        {settings.showStatus && boards.map((board) => {
+          const status = boardStatus[board.id];
+          const isOk = !status || !status.failed;
+          
+          return (
+            <Card key={`board-status-${board.id}`}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Board {board.id}
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  {isOk ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-red-500" />
+                  )}
+                  <Cpu className="h-4 w-4 text-muted-foreground" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${isOk ? 'text-green-600' : 'text-red-600'}`}>
+                  {isOk ? "OK" : "Failed"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {board.name} • {board.dpp}
+                </p>
+                {status && (
+                  <p className="text-xs text-muted-foreground">
+                    Status: 0x{status.last_value.toString(16).toUpperCase()}
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )
+        })}
 
         {/* Beam Current Card */}
         {settings.showCurrent && (

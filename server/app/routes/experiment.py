@@ -50,6 +50,9 @@ def start_run():
     # Set running state
     daq_mgr.set_running_state(True)
 
+    # Start board monitoring thread
+    daq_mgr.start_board_monitoring()
+
     # Start spy server
     daq_state = daq_mgr.get_state()
     if not spy_mgr.start_spy(daq_state):
@@ -85,6 +88,9 @@ def stop_run():
 
     # Stop spy server first
     spy_mgr.stop_spy()
+    
+    # Stop board monitoring thread
+    daq_mgr.stop_board_monitoring()
     
     # Stop XDAQ
     daq_mgr.stop_xdaq()
@@ -371,3 +377,14 @@ def update_run_notes():
     db.session.commit()
     
     return jsonify({'message': 'Notes updated successfully', 'notes': notes}), 200
+
+# Route to get board status information
+@bp.route("/experiment/get_board_status", methods=['GET'])
+@jwt_required_custom
+def get_board_status():
+    """
+    Get current status of all boards from the monitoring thread.
+    Returns status information including whether boards have failed.
+    """
+    board_status = daq_mgr.get_board_status()
+    return jsonify(board_status), 200
