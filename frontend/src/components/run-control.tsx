@@ -72,7 +72,7 @@ export function RunControl() {
       const updateTimer = () => {
         const start = new Date(startTime).getTime()
         const now = new Date().getTime()
-        const elapsed = Math.floor((now - start) / 1000)
+        const elapsed = Math.floor((now - start) / 1000 + 60)
         setTimer(elapsed)
       }
       updateTimer()
