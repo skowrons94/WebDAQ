@@ -388,3 +388,41 @@ def get_board_status():
     """
     board_status = daq_mgr.get_board_status()
     return jsonify(board_status), 200
+
+# Route to refresh all board connections
+@bp.route("/experiment/refresh_board_connections", methods=['POST'])
+@jwt_required_custom
+def refresh_board_connections():
+    """
+    Refresh all persistent digitizer connections.
+    Useful when boards are not responding properly.
+    """
+    try:
+        # Check if DAQ is running - don't refresh during acquisition
+        if daq_mgr.is_running():
+            return jsonify({'message': 'Cannot refresh board connections while DAQ is running'}), 400
+        
+        boards = daq_mgr.get_boards()
+        if not boards:
+            return jsonify({'message': 'No boards configured'}), 404
+        
+        refreshed_count = 0
+        failed_boards = []
+        
+        # Refresh each board connection
+        for board in boards:
+            board_id = str(board['id'])
+            if daq_mgr.refresh_board_connection(board_id):
+                refreshed_count += 1
+            else:
+                failed_boards.append(board_id)
+        
+        if failed_boards:
+            message = f'Refreshed {refreshed_count}/{len(boards)} board connections. Failed boards: {", ".join(failed_boards)}'
+            return jsonify({'message': message, 'refreshed': refreshed_count, 'failed': failed_boards}), 207
+        else:
+            message = f'Successfully refreshed all {refreshed_count} board connections'
+            return jsonify({'message': message, 'refreshed': refreshed_count}), 200
+            
+    except Exception as e:
+        return jsonify({'message': f'Error refreshing board connections: {str(e)}'}), 500

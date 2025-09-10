@@ -239,4 +239,8 @@ export const closeFaraday = () =>
 export const getBoardStatus = () =>
     api.get('/experiment/get_board_status').then(res => res.data);
 
+// Refresh board connections
+export const refreshBoardConnections = () =>
+    api.post('/experiment/refresh_board_connections');
+
 export default api;

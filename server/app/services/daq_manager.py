@@ -30,6 +30,230 @@ from ..utils.dgtz import digitizer
 
 logger = logging.getLogger(__name__)
 
+class DigitizerContainer:
+    """
+    Container class to manage persistent digitizer connections.
+    Maintains open digitizer connections to avoid frequent open/close operations.
+    """
+    
+    def __init__(self, test_flag: bool = False):
+        """
+        Initialize the digitizer container.
+        
+        Args:
+            test_flag: Enable test mode for development
+        """
+        self.logger = logging.getLogger(__name__ + '.DigitizerContainer')
+        self.test_flag = test_flag
+        self.digitizers = {}  # {board_id: digitizer_instance}
+        self.connection_locks = {}  # {board_id: threading.Lock}
+    
+    def _create_digitizer(self, board_config: Dict[str, Any]) -> Optional[digitizer]:
+        """
+        Create and open a digitizer connection with retry logic.
+        
+        Args:
+            board_config: Board configuration dictionary
+            
+        Returns:
+            Digitizer instance or None if failed
+        """
+        if self.test_flag:
+            return None
+        
+        link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
+        link_type = link_type_map.get(board_config["link_type"], 0)
+        
+        dgtz = digitizer(
+            link_type, 
+            int(board_config["link_num"]), 
+            int(board_config["id"]), 
+            int(board_config["vme"], 16)
+        )
+        
+        # Try to open connection with up to 3 attempts
+        for attempt in range(3):
+            try:
+                dgtz.open()
+                if dgtz.get_connected():
+                    self.logger.info(f"Successfully connected to board {board_config['id']} on attempt {attempt + 1}")
+                    return dgtz
+                else:
+                    self.logger.warning(f"Failed to connect to board {board_config['id']} on attempt {attempt + 1}")
+            except Exception as e:
+                self.logger.error(f"Exception connecting to board {board_config['id']} on attempt {attempt + 1}: {e}")
+            
+            # Wait 1 second before retry (except on the last attempt)
+            if attempt < 2:
+                time.sleep(1.0)
+        
+        # All attempts failed
+        self.logger.error(f"Failed to connect to board {board_config['id']} after 3 attempts")
+        return None
+    
+    def add_board(self, board_config: Dict[str, Any]) -> bool:
+        """
+        Add a board and create persistent digitizer connection.
+        
+        Args:
+            board_config: Board configuration dictionary
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        board_id = str(board_config['id'])
+        
+        # Create lock for this board
+        self.connection_locks[board_id] = threading.Lock()
+        
+        # Create and store digitizer connection
+        dgtz = self._create_digitizer(board_config)
+        if dgtz is not None:
+            self.digitizers[board_id] = dgtz
+            self.logger.info(f"Added persistent connection for board {board_id}")
+            return True
+        else:
+            # Clean up lock if connection failed
+            self.connection_locks.pop(board_id, None)
+            return False
+    
+    def remove_board(self, board_id: str) -> None:
+        """
+        Remove a board and close its digitizer connection.
+        
+        Args:
+            board_id: Board ID string
+        """
+        board_id = str(board_id)
+        
+        # Close and remove digitizer connection
+        if board_id in self.digitizers:
+            try:
+                self.digitizers[board_id].close()
+                self.logger.info(f"Closed connection for board {board_id}")
+            except Exception as e:
+                self.logger.error(f"Error closing connection for board {board_id}: {e}")
+            
+            del self.digitizers[board_id]
+        
+        # Remove lock
+        self.connection_locks.pop(board_id, None)
+    
+    def get_digitizer(self, board_id: str) -> Optional[digitizer]:
+        """
+        Get digitizer instance for a board.
+        
+        Args:
+            board_id: Board ID string
+            
+        Returns:
+            Digitizer instance or None if not found
+        """
+        return self.digitizers.get(str(board_id))
+    
+    def get_connection_lock(self, board_id: str) -> Optional[threading.Lock]:
+        """
+        Get connection lock for a board.
+        
+        Args:
+            board_id: Board ID string
+            
+        Returns:
+            Lock instance or None if not found
+        """
+        return self.connection_locks.get(str(board_id))
+    
+    def is_connected(self, board_id: str) -> bool:
+        """
+        Check if board is connected.
+        
+        Args:
+            board_id: Board ID string
+            
+        Returns:
+            True if connected, False otherwise
+        """
+        if self.test_flag:
+            return True
+        
+        dgtz = self.get_digitizer(board_id)
+        if dgtz is None:
+            return False
+        
+        try:
+            return dgtz.get_connected()
+        except Exception as e:
+            self.logger.error(f"Error checking connection for board {board_id}: {e}")
+            return False
+    
+    def read_register(self, board_id: str, address: int) -> Optional[int]:
+        """
+        Read register from a board using persistent connection.
+        
+        Args:
+            board_id: Board ID string
+            address: Register address
+            
+        Returns:
+            Register value or None if failed
+        """
+        if self.test_flag:
+            return 0
+        
+        dgtz = self.get_digitizer(board_id)
+        if dgtz is None:
+            return None
+        
+        lock = self.get_connection_lock(board_id)
+        if lock is None:
+            return None
+        
+        try:
+            with lock:
+                if dgtz.get_connected():
+                    return dgtz.read_register(address)
+                else:
+                    self.logger.warning(f"Board {board_id} not connected for register read")
+                    return None
+        except Exception as e:
+            self.logger.error(f"Error reading register 0x{address:X} from board {board_id}: {e}")
+            return None
+    
+    def refresh_board_connection(self, board_id: str, board_config: Dict[str, Any]) -> bool:
+        """
+        Refresh connection for a specific board (close and reopen).
+        
+        Args:
+            board_id: Board ID string
+            board_config: Board configuration dictionary
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        self.remove_board(board_id)
+        return self.add_board(board_config)
+    
+    def get_all_board_ids(self) -> List[str]:
+        """
+        Get list of all board IDs with persistent connections.
+        
+        Returns:
+            List of board ID strings
+        """
+        return list(self.digitizers.keys())
+    
+    def cleanup(self) -> None:
+        """Close all digitizer connections."""
+        for board_id, dgtz in self.digitizers.items():
+            try:
+                dgtz.close()
+                self.logger.info(f"Closed connection for board {board_id}")
+            except Exception as e:
+                self.logger.error(f"Error closing connection for board {board_id}: {e}")
+        
+        self.digitizers.clear()
+        self.connection_locks.clear()
+
 class DAQManager:
     """
     Centralized manager for DAQ system state and operations.
@@ -51,16 +275,19 @@ class DAQManager:
         # Initialize DAQ state
         self.daq_state = self._load_or_create_state()
         
+        # Initialize digitizer container for persistent connections
+        self.digitizer_container = DigitizerContainer(test_flag=test_flag)
+        
         # Initialize board monitoring
         self.board_status = {}  # Track board failure status: {board_id: {'failed': bool, 'last_value': int}}
-        self.board_locks = {}  # Track board connection locks: {board_id: threading.Lock()}
         self.monitor_thread = None
         self.monitor_stop_event = threading.Event()
         
-        # Initialize locks for existing boards
+        # Initialize persistent connections for existing boards
         for board in self.daq_state.get('boards', []):
             board_id = str(board['id'])
-            self.board_locks[board_id] = threading.Lock()
+            if not self.digitizer_container.add_board(board):
+                self.logger.warning(f"Failed to create persistent connection for board {board_id}")
         
         # Initialize XDAQ topology if not in test mode
         if not self.test_flag:
@@ -285,41 +512,37 @@ class DAQManager:
             True if successful, False otherwise
         """
         try:
-            # Convert link type to numeric value
-            link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
-            link_type = link_type_map.get(board_config["link_type"], 0)
+            # Create persistent digitizer connection
+            if not self.digitizer_container.add_board(board_config):
+                self.logger.error(f"Failed to create persistent connection for board {board_config['id']}")
+                return False
             
-            # Create digitizer instance and connect
-            dgtz = digitizer(
-                link_type, 
-                int(board_config["link_num"]), 
-                int(board_config["id"]), 
-                int(board_config["vme"], 16)
-            )
-            dgtz.open()
+            # Get board information from the persistent connection
+            board_id = str(board_config['id'])
+            dgtz = self.digitizer_container.get_digitizer(board_id)
             
-            if not dgtz.get_connected():
-                self.logger.error(f"Failed to connect to board {board_config['id']}")
+            if dgtz is None:
+                self.logger.error(f"Failed to get digitizer instance for board {board_id}")
                 return False
             
             # Get board information
-            board_info = dgtz.get_info()
-            board_config["name"] = board_info["ModelName"]
-            board_config["chan"] = int(board_info["Channels"])
-            
-            # Add board to configuration
-            self.daq_state['boards'].append(board_config)
-            
-            # Initialize lock for this board
-            board_id = str(board_config['id'])
-            self.board_locks[board_id] = threading.Lock()
-            
-            # Read and save register configuration
-            config_file = f"conf/{board_config['name']}_{board_config['id']}.json"
-            if board_config["dpp"] == "DPP-PHA":
-                dgtz.read_pha(config_file)
-            elif board_config["dpp"] == "DPP-PSD":
-                dgtz.read_psd(config_file)
+            lock = self.digitizer_container.get_connection_lock(board_id)
+            with lock:
+                if dgtz.get_connected():
+                    board_info = dgtz.get_info()
+                    board_config["name"] = board_info["ModelName"]
+                    board_config["chan"] = int(board_info["Channels"])
+                    
+                    # Read and save register configuration
+                    config_file = f"conf/{board_config['name']}_{board_config['id']}.json"
+                    if board_config["dpp"] == "DPP-PHA":
+                        dgtz.read_pha(config_file)
+                    elif board_config["dpp"] == "DPP-PSD":
+                        dgtz.read_psd(config_file)
+                else:
+                    self.logger.error(f"Board {board_id} not connected after creation")
+                    self.digitizer_container.remove_board(board_id)
+                    return False
 
             # Open the file and search for reg_ef08 to set the "value" to board id
             with open(config_file, 'r') as f:
@@ -332,11 +555,11 @@ class DAQManager:
             # Create calibration file
             calib_file = f"calib/{board_config['name']}_{board_config['id']}.cal"
             with open(calib_file, 'w') as f:
-                for i in range(board_config['chan']):
+                for channel in range(board_config['chan']):
                     f.write("0.0 1.0\n")
             
-            # Close connection
-            dgtz.close()
+            # Add board to configuration
+            self.daq_state['boards'].append(board_config)
             
             # Update project
             self._update_project()
@@ -346,6 +569,10 @@ class DAQManager:
             
         except Exception as e:
             self.logger.error(f"Error adding board: {e}")
+            # Clean up persistent connection on error
+            board_id = str(board_config.get('id', ''))
+            if board_id:
+                self.digitizer_container.remove_board(board_id)
             return False
     
     def remove_board(self, board_index: int) -> bool:
@@ -361,6 +588,10 @@ class DAQManager:
         try:
             if 0 <= board_index < len(self.daq_state['boards']):
                 board = self.daq_state['boards'][board_index]
+                board_id = str(board['id'])
+                
+                # Remove persistent digitizer connection
+                self.digitizer_container.remove_board(board_id)
                 
                 # Remove calibration file
                 calib_file = f"calib/{board['name']}_{board['id']}.cal"
@@ -628,7 +859,7 @@ class DAQManager:
     
     def _monitor_boards_thread(self) -> None:
         """
-        Thread function to monitor board status by reading address 0x8178.
+        Thread function to monitor board status by reading address 0x8178 using persistent connections.
         Runs every second and checks for non-zero values which indicate board failure.
         """
         self.logger.info("Board monitoring thread started")
@@ -646,44 +877,23 @@ class DAQManager:
                     if self.board_status[board_id]['failed']:
                         continue
                     
+                    # If already have a non-zero last value, skip further checks
+                    if self.board_status[board_id]['last_value'] != 0:
+                        continue
+                    
                     try:
-                        # Use lock to prevent concurrent connections to the same board
-                        board_lock = self.board_locks.get(board_id)
-                        if board_lock is None:
-                            # Create lock if it doesn't exist (shouldn't happen, but safety first)
-                            board_lock = threading.Lock()
-                            self.board_locks[board_id] = board_lock
+                        # Read register 0x8178 using persistent connection
+                        value = self.digitizer_container.read_register(board_id, 0x8178)
                         
-                        with board_lock:
-                            # Create digitizer connection
-                            link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
-                            link_type = link_type_map.get(board["link_type"], 0)
+                        if value is not None:
+                            self.board_status[board_id]['last_value'] = value
                             
-                            dgtz = digitizer(
-                                link_type, 
-                                int(board["link_num"]), 
-                                int(board["id"]), 
-                                int(board["vme"], 16)
-                            )
-                            
-                            # If already have a non-zero last value, skip further checks
-                            if( self.board_status[board_id]['last_value'] != 0):
-                                continue
-                            
-                            # Open connection and read address 0x8178
-                            dgtz.open()
-                            if dgtz.get_connected():
-                                value = dgtz.read_register(0x8178)
-                                self.board_status[board_id]['last_value'] = value
-                                
-                                # Check if value is non-zero (indicates failure)
-                                if value != 0:
-                                    self.board_status[board_id]['failed'] = True
-                                    self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
-                                
-                                dgtz.close()
-                            else:
-                                self.logger.warning(f"Could not connect to board {board_id} for monitoring")
+                            # Check if value is non-zero (indicates failure)
+                            if value != 0:
+                                self.board_status[board_id]['failed'] = True
+                                self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
+                        else:
+                            self.logger.warning(f"Could not read register from board {board_id} for monitoring")
                             
                     except Exception as e:
                         self.logger.error(f"Error monitoring board {board_id}: {e}")
@@ -749,7 +959,7 @@ class DAQManager:
 
     def check_board_connectivity(self) -> Dict[str, Dict[str, Any]]:
         """
-        Check connectivity status of all configured boards.
+        Check connectivity status of all configured boards using persistent connections.
         
         Returns:
             Dictionary mapping board_id to connectivity status: 
@@ -768,43 +978,64 @@ class DAQManager:
             if self.test_flag:
                 # In test mode, simulate connectivity
                 connectivity_status['connected'] = True
-                connectivity_status['ready'] = not self.is_running
+                connectivity_status['ready'] = not self.is_running()
             else:
-                # Use lock to prevent concurrent connections to the same board
-                board_lock = self.board_locks.get(board_id)
-                if board_lock is None:
-                    # Create lock if it doesn't exist (shouldn't happen, but safety first)
-                    board_lock = threading.Lock()
-                    self.board_locks[board_id] = board_lock
-                
-                with board_lock:
-                    # Create digitizer connection
-                    link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
-                    link_type = link_type_map.get(board["link_type"], 0)
-                    
-                    # Try to connect to the actual board
-                    dgtz = digitizer(
-                                link_type, 
-                                int(board["link_num"]), 
-                                int(board["id"]), 
-                                int(board["vme"], 16)
-                            )
-                    try:
-                        dgtz.open()
-                        if dgtz.get_connected():
-                            connectivity_status['connected'] = True
-                            connectivity_status['ready'] = not self.is_running
-                            dgtz.close()
-                        else:
-                            connectivity_status['connected'] = False
-                            self.logger.warning(f"Could not connect to board {board_id}")
-                    except Exception as e:
-                        connectivity_status['connected'] = False
-                        self.logger.error(f"Error checking connectivity for board {board_id}: {e}")
+                # Use persistent digitizer connection
+                connectivity_status['connected'] = self.digitizer_container.is_connected(board_id)
+                connectivity_status['ready'] = connectivity_status['connected'] and not self.is_running()
             
             board_connectivity[board_id] = connectivity_status
         
         return board_connectivity
+    
+    def refresh_board_connection(self, board_id: str) -> bool:
+        """
+        Refresh persistent connection for a specific board.
+        
+        Args:
+            board_id: Board ID string
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        # Find the board configuration
+        board_config = None
+        for board in self.daq_state['boards']:
+            if str(board['id']) == str(board_id):
+                board_config = board
+                break
+        
+        if board_config is None:
+            self.logger.error(f"Board configuration not found for board {board_id}")
+            return False
+        
+        return self.digitizer_container.refresh_board_connection(board_id, board_config)
+    
+    def cleanup(self) -> None:
+        """
+        Clean up resources when shutting down the DAQ manager.
+        Closes all persistent digitizer connections and stops monitoring.
+        """
+        self.logger.info("Cleaning up DAQ manager resources")
+        
+        # Stop board monitoring thread
+        self.stop_board_monitoring()
+        
+        # Clean up all digitizer connections
+        self.digitizer_container.cleanup()
+        
+        # Clear board status
+        self.board_status.clear()
+        
+        self.logger.info("DAQ manager cleanup completed")
+    
+    def __del__(self) -> None:
+        """Destructor - ensure cleanup is called."""
+        try:
+            self.cleanup()
+        except Exception as e:
+            # Use print instead of logger since logger may not be available during destruction
+            print(f"Error during DAQ manager cleanup: {e}")
 
 
 # Global instance - will be initialized by the application

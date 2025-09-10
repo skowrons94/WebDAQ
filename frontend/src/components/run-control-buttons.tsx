@@ -7,6 +7,7 @@ import {
   Plug,
   RefreshCw,
   StopCircle,
+  Wifi,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -52,6 +53,7 @@ import {
   connectCurrent,
   getCurrentRunNumber,
   getRunMetadataAll,
+  refreshBoardConnections,
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
 
@@ -345,6 +347,49 @@ export function RunControlButtons({
     }
   }
 
+  /**
+   * Refreshes all persistent board connections
+   */
+  const handleRefreshBoardConnections = async () => {
+    try {
+      toast({
+        title: 'Refreshing Connections...',
+        description: 'Please wait while board connections are being refreshed.',
+      })
+
+      const response = await refreshBoardConnections()
+      
+      toast({
+        title: 'Success',
+        description: response.data.message,
+      })
+    } catch (error: any) {
+      console.error('Failed to refresh board connections:', error)
+      
+      // Handle different response statuses
+      if (error.response?.status === 400) {
+        toast({
+          title: 'Error',
+          description: error.response.data.message,
+          variant: 'destructive',
+        })
+      } else if (error.response?.status === 207) {
+        // Partial success
+        toast({
+          title: 'Warning',
+          description: error.response.data.message,
+          variant: 'destructive',
+        })
+      } else {
+        toast({
+          title: 'Error',
+          description: error.response?.data?.message || 'Failed to refresh board connections. Please try again.',
+          variant: 'destructive',
+        })
+      }
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="space-y-1 sm:space-y-0">
@@ -431,11 +476,16 @@ export function RunControlButtons({
           </Button>
         </div>
 
-        {/* System Reset Button */}
-        <div className="flex items-center gap-4">
+        {/* System Reset Buttons */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
           <Button onClick={handleReset} className="w-full" variant="outline">
             <AlertTriangle className="mr-2 h-4 w-4" />
             Reset
+          </Button>
+          <Button onClick={handleRefreshBoardConnections} className="w-full" variant="outline" disabled={isRunning}>
+            <Wifi className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Refresh Boards</span>
+            <span className="inline md:hidden">Refresh</span>
           </Button>
         </div>
       </CardContent>
