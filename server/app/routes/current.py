@@ -30,7 +30,7 @@ else:
 
 # Initialize TetrAMMController
 controller = tetram_controller( ip=settings["tetramm_ip"], port=settings["tetramm_port"] )
-#controller.initialize( )
+controller.initialize( )
 
 # Set ip and port
 @bp.route('/current/set_ip_port/<ip>/<port>', methods=['GET'])

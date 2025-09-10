@@ -26,7 +26,7 @@ import json
 import os
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, Any, Union
 
 import numpy as np
 
@@ -122,9 +122,9 @@ class TetrAMMController:
         Check if the TetrAMM is connected and acquiring data.
         
         Returns:
-            bool: True if acquiring data, False otherwise
+            bool: True if socket is connected and acquiring data, False otherwise
         """
-        return self.is_acquiring
+        return self.socket is not None and self.is_acquiring
     
     def load_settings(self) -> None:
         """
@@ -174,10 +174,6 @@ class TetrAMMController:
     def connect(self) -> None:
         """
         Establish TCP connection to the TetrAMM device.
-        
-        Raises:
-            ConnectionError: If connection fails
-            socket.timeout: If connection times out
         """
         try:
             self.logger.info(f"Connecting to TetrAMM at {self.ip}:{self.port}")
@@ -191,14 +187,23 @@ class TetrAMMController:
         except socket.timeout as e:
             error_msg = f"Connection to TetrAMM timed out: {e}"
             self.logger.error(error_msg)
+            if self.socket:
+                self.socket.close()
+                self.socket = None
             
-        except ConnectionError as e:
+        except (ConnectionError, OSError) as e:
             error_msg = f"Failed to connect to TetrAMM: {e}"
             self.logger.error(error_msg)
+            if self.socket:
+                self.socket.close()
+                self.socket = None
             
         except Exception as e:
             error_msg = f"Unexpected error connecting to TetrAMM: {e}"
             self.logger.error(error_msg)
+            if self.socket:
+                self.socket.close()
+                self.socket = None
     
     def disconnect(self) -> None:
         """
@@ -226,9 +231,6 @@ class TetrAMMController:
         Returns:
             bytes: Response from the device
             
-        Raises:
-            ConnectionError: If device is not connected
-            socket.timeout: If command times out
         """
         if not self.socket:
             raise ConnectionError("TetrAMM device not connected")
@@ -246,11 +248,20 @@ class TetrAMMController:
             
         except socket.timeout as e:
             self.logger.warning(f"TetrAMM command timeout: {command}")
-            raise
+            
+        except (ConnectionResetError, BrokenPipeError, OSError) as e:
+            self.logger.error(f"TetrAMM connection lost during command '{command}': {e}")
+            # Mark device as disconnected
+            if self.socket:
+                try:
+                    self.socket.close()
+                except:
+                    pass
+                self.socket = None
+            self.is_acquiring = False
             
         except Exception as e:
             self.logger.error(f"Error sending TetrAMM command '{command}': {e}")
-            raise
     
     def set_setting(self, setting: str, value: str) -> Union[str, int]:
         """
@@ -285,7 +296,6 @@ class TetrAMMController:
             # Revert local setting on failure
             self.settings[setting] = old_value
             self.write_settings()
-            raise
     
     def get_setting(self, setting: str) -> str:
         """
@@ -351,7 +361,6 @@ class TetrAMMController:
             
         except Exception as e:
             self.logger.error(f"Failed to initialize TetrAMM device: {e}")
-            raise
     
     def start_acquisition(self) -> None:
         """
@@ -387,7 +396,7 @@ class TetrAMMController:
             try:
                 if self.socket:
                     self.socket.settimeout(0.1)
-                    for i in range(10):
+                    for _ in range(10):
                         data = self.socket.recv(1024)
                         if b'ACK\r\n' in data:
                             break
@@ -412,11 +421,31 @@ class TetrAMMController:
                 time.sleep(self.acquisition_interval)
                 
             except socket.timeout:
-                # Handle timeout by sending ACQ:OFF command
+                self.logger.warning("TetrAMM acquisition timeout - device may be unreachable")
+                # Try to send ACQ:OFF, but if it fails, disconnect
                 try:
                     self._send_command('ACQ:OFF')
                 except:
-                    pass
+                    self.logger.warning("Failed to send ACQ:OFF, disconnecting TetrAMM")
+                    self.is_acquiring = False
+                    if self.socket:
+                        try:
+                            self.socket.close()
+                        except:
+                            pass
+                        self.socket = None
+                    break
+                
+            except (ConnectionResetError, BrokenPipeError, OSError) as e:
+                self.logger.error(f"TetrAMM connection lost in acquisition loop: {e}")
+                self.is_acquiring = False
+                if self.socket:
+                    try:
+                        self.socket.close()
+                    except:
+                        pass
+                    self.socket = None
+                break
                 
             except Exception as e:
                 self.logger.error(f"Error in TetrAMM acquisition loop: {e}")
@@ -551,7 +580,7 @@ class TetrAMMController:
                 except Exception as e:
                     self.logger.error(f"Failed to enable data logging: {e}")
                     self.save_data = False
-                    raise
+
             else:
                 self.save_data = False
                 self.save_folder = ''
@@ -609,7 +638,7 @@ class TetrAMMController:
             
         except Exception as e:
             self.logger.error(f"Failed to reset TetrAMM controller: {e}")
-            raise
+
     
     def check_thread(self) -> bool:
         """
