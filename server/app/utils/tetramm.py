@@ -382,15 +382,16 @@ class TetrAMMController:
             # Wait for acquisition thread to finish
             if self.acquisition_thread and self.acquisition_thread.is_alive():
                 self.acquisition_thread.join(timeout=5)
-            
+                        
             # Clear any remaining data in socket buffer
             try:
                 if self.socket:
                     self.socket.settimeout(0.1)
-                    while True:
+                    for i in range(10):
                         data = self.socket.recv(1024)
                         if b'ACK\r\n' in data:
                             break
+
             except (socket.timeout, socket.error):
                 pass
             finally:
