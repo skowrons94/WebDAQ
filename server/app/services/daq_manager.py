@@ -893,9 +893,13 @@ class DAQManager:
                                 self.board_status[board_id]['failed'] = True
                                 self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
                         else:
+                            # Try refreshing the connection once
+                            self.refresh_board_connection(board_id)
                             self.logger.warning(f"Could not read register from board {board_id} for monitoring")
                             
                     except Exception as e:
+                        # Try refreshing the connection once
+                        self.refresh_board_connection(board_id)
                         self.logger.error(f"Error monitoring board {board_id}: {e}")
                 
                 # Sleep for 1 second or until stop event is set
