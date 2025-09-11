@@ -146,6 +146,10 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     setModifiedSettings((prev) => new Set(prev).add(regName))
   }
 
+  const formatBinary = (value: number) => {
+    return '0b' + value.toString(2).padStart(32, '0')
+  }
+
   const handleSave = async (regName: string) => {
     try {
       await setSetting(boardData.id, regName, settings[regName].value_dec.toString())
@@ -255,8 +259,9 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                       Save
                     </Button>
                   </div>
-                  <div className="text-xs text-muted-foreground">
-                    Hex: {registerData.value_hex} | Address: {registerData.address}
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                    <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
                   </div>
                 </div>
               ))}
@@ -294,8 +299,9 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                         Save
                       </Button>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      Hex: {registerData.value_hex} | Address: {registerData.address}
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                      <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
                     </div>
                   </div>
                 ))}
