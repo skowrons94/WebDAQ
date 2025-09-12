@@ -136,7 +136,7 @@ export function Board() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Link Type</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select link type" />
@@ -158,7 +158,7 @@ export function Board() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Link Number</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select link number" />
@@ -180,7 +180,7 @@ export function Board() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>DPP Software</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select DPP software" />

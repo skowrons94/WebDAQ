@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Switch } from "@/components/ui/switch"
 import { ReloadIcon } from "@radix-ui/react-icons"
 import { useToast } from "@/components/ui/use-toast"
 import { getBoardConfiguration, getBoardSettings, setSetting, updateJSON } from "@/lib/api"
@@ -104,6 +105,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [modifiedSettings, setModifiedSettings] = useState<Set<string>>(new Set())
+  const [binaryMode, setBinaryMode] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -147,7 +149,78 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   }
 
   const formatBinary = (value: number) => {
-    return '0b' + value.toString(2).padStart(32, '0')
+    return value.toString(2).padStart(32, '0')
+  }
+
+  const isRegisterAccessible = (hexValue: string) => {
+    // Remove '0x' prefix and check if all characters are 'F' or 'f'
+    const cleanHex = hexValue.replace('0x', '').toUpperCase()
+    return !cleanHex.match(/^F+$/)
+  }
+
+  const handleBitToggle = (regName: string, bitIndex: number) => {
+    const currentValue = settings[regName].value_dec
+    // Use unsigned right shift to handle bit 31 correctly
+    const bitMask = bitIndex === 31 ? 0x80000000 : (1 << bitIndex)
+    const newValue = (currentValue ^ bitMask) >>> 0 // Use unsigned right shift to ensure positive result
+    
+    setSettings((prev) => ({
+      ...prev,
+      [regName]: {
+        ...prev[regName],
+        value_dec: newValue,
+        value_hex: `0x${newValue.toString(16).toUpperCase()}`,
+      },
+    }))
+
+    setModifiedSettings((prev) => new Set(prev).add(regName))
+  }
+
+  const renderBinaryEditor = (regName: string, registerData: RegisterData) => {
+    const binaryString = formatBinary(registerData.value_dec)
+    
+    return (
+      <div className="space-y-2">
+        <div className="grid grid-cols-8 gap-1 text-xs font-mono">
+          {/* Bit position labels */}
+          {Array.from({ length: 32 }, (_, i) => 31 - i).map((bitPos) => (
+            <div key={bitPos} className="text-center text-muted-foreground">
+              {bitPos}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-8 gap-1">
+          {/* Clickable bits */}
+          {Array.from({ length: 32 }, (_, i) => {
+            const bitIndex = 31 - i
+            const bitValue = binaryString[i]
+            return (
+              <Button
+                key={bitIndex}
+                variant={bitValue === '1' ? 'default' : 'outline'}
+                size="sm"
+                className="h-8 w-full text-xs font-mono p-0"
+                onClick={() => handleBitToggle(regName, bitIndex)}
+              >
+                {bitValue}
+              </Button>
+            )
+          })}
+        </div>
+        <div className="grid grid-cols-4 gap-1 text-xs font-mono text-muted-foreground">
+          {/* Nibble grouping for easier reading */}
+          {Array.from({ length: 8 }, (_, i) => {
+            const start = i * 4
+            const nibble = binaryString.slice(start, start + 4)
+            return (
+              <div key={i} className="text-center">
+                {nibble}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
   }
 
   const handleSave = async (regName: string) => {
@@ -207,11 +280,16 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     )
   }
 
-  // Group settings by channel and common settings
+  // Group settings by channel and common settings, filtering out inaccessible registers
   const channelSettings: { [channel: number]: { [regName: string]: RegisterData } } = {}
   const commonSettings: { [regName: string]: RegisterData } = {}
 
   Object.entries(settings).forEach(([regName, registerData]) => {
+    // Skip registers with all 'F' values (inaccessible)
+    if (!isRegisterAccessible(registerData.value_hex)) {
+      return
+    }
+
     const address = Number.parseInt(registerData.address, 16)
 
     if (address > 0x7000) {
@@ -231,6 +309,19 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
   return (
     <div className="space-y-6">
+      {/* Mode Toggle */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Settings</h3>
+        <div className="flex items-center space-x-2">
+          <Label htmlFor="binary-mode">Binary Mode</Label>
+          <Switch
+            id="binary-mode"
+            checked={binaryMode}
+            onCheckedChange={setBinaryMode}
+          />
+        </div>
+      </div>
+      
       {/* Common Settings */}
       {Object.keys(commonSettings).length > 0 && (
         <Card>
@@ -245,24 +336,40 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                     {registerData.name}
                     {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
                   </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id={regName}
-                      type="number"
-                      min="0"
-                      max="4294967295"
-                      value={registerData.value_dec}
-                      onChange={(e) => handleSettingChange(regName, e.target.value)}
-                      className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
-                    />
-                    <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
-                      Save
-                    </Button>
-                  </div>
-                  <div className="text-xs text-muted-foreground space-y-1">
-                    <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
-                    <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
-                  </div>
+                  {binaryMode ? (
+                    <div className="space-y-2">
+                      {renderBinaryEditor(regName, registerData)}
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                          Save
+                        </Button>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        <div>Dec: {registerData.value_dec} | Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex gap-2">
+                        <Input
+                          id={regName}
+                          type="number"
+                          min="0"
+                          max="4294967295"
+                          value={registerData.value_dec}
+                          onChange={(e) => handleSettingChange(regName, e.target.value)}
+                          className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
+                        />
+                        <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                          Save
+                        </Button>
+                      </div>
+                      <div className="text-xs text-muted-foreground space-y-1">
+                        <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                        <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -285,24 +392,40 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                       {registerData.name}
                       {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
                     </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        id={`${channel}-${regName}`}
-                        type="number"
-                        min="0"
-                        max="4294967295"
-                        value={registerData.value_dec}
-                        onChange={(e) => handleSettingChange(regName, e.target.value)}
-                        className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
-                      />
-                      <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
-                        Save
-                      </Button>
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
-                      <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
-                    </div>
+                    {binaryMode ? (
+                      <div className="space-y-2">
+                        {renderBinaryEditor(regName, registerData)}
+                        <div className="flex justify-end">
+                          <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                            Save
+                          </Button>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          <div>Dec: {registerData.value_dec} | Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex gap-2">
+                          <Input
+                            id={`${channel}-${regName}`}
+                            type="number"
+                            min="0"
+                            max="4294967295"
+                            value={registerData.value_dec}
+                            onChange={(e) => handleSettingChange(regName, e.target.value)}
+                            className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
+                          />
+                          <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                            Save
+                          </Button>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                          <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
