@@ -7,6 +7,7 @@ import threading
 
 import xml.etree.ElementTree as ET
 
+from docker.types import IPAMConfig, IPAMPool
 from xml.dom import minidom
 from io import StringIO, BytesIO
 
@@ -870,12 +871,17 @@ class container:
 
     def __init__(self, directory):
         self.client = docker.from_env()
+        self.ipam_pool = IPAMPool(
+            subnet='192.168.100.0/24',
+            gateway='192.168.100.1'
+        )
+        self.ipam_config = IPAMConfig(pool_configs=[self.ipam_pool])
         self.directory = directory
 
     def initialize(self):
 
-        if not any(n.name == "xdaq-net" for n in self.client.networks.list()): self.client.networks.create("xdaq-net")
-            
+        if not any(n.name == "xdaq-net" for n in self.client.networks.list()): self.client.networks.create("xdaq-net", ipam=self.ipam_config)
+
         self.client.containers.run( "skowrons/xdaq:latest", "sleep infinity", 
                                     hostname="xdaq", 
                                     name="xdaq",
