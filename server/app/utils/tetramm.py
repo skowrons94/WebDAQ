@@ -89,6 +89,11 @@ class TetrAMMController:
             "3": np.zeros(self.buffer_size)
         }
         
+        # Charge accumulation tracking
+        self.accumulated_charge = 0.0  # Reset to 0 when run starts, only increases when saving data
+        self.total_accumulated_charge = 0.0  # Always increases
+        self.previous_time = 0.0
+        
         # Device settings
         self.settings = {}
         self.load_settings()
@@ -124,7 +129,57 @@ class TetrAMMController:
         Returns:
             bool: True if socket is connected and acquiring data, False otherwise
         """
-        return self.socket is not None and self.is_acquiring
+        if not self.socket or not self.is_acquiring:
+            return False
+        
+        try:
+            # Check socket status by attempting to get socket error state
+            error = self.socket.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if error != 0:
+                # Socket has an error, mark as disconnected
+                self.logger.warning(f"Socket error detected: {error}")
+                self._handle_disconnection()
+                return False
+            
+            # Additional check: try to peek at socket data without consuming it
+            # This will raise an exception if connection is broken
+            self.socket.settimeout(0.1)  # Very short timeout
+            try:
+                data = self.socket.recv(1, socket.MSG_PEEK | socket.MSG_DONTWAIT)
+                # If we get here, connection is alive (even if no data)
+                return True
+            except socket.timeout:
+                # Timeout is fine, means no data but connection is alive
+                return True
+            except (ConnectionResetError, BrokenPipeError, OSError):
+                # Connection is broken
+                self.logger.warning("Connection broken detected in is_connected check")
+                self._handle_disconnection()
+                return False
+            finally:
+                # Restore original timeout
+                self.socket.settimeout(self.connection_timeout)
+                
+        except Exception as e:
+            self.logger.warning(f"Error checking connection status: {e}")
+            self._handle_disconnection()
+            return False
+    
+    def _handle_disconnection(self) -> None:
+        """
+        Handle disconnection by cleaning up socket and stopping acquisition.
+        """
+        try:
+            self.is_acquiring = False
+            if self.socket:
+                try:
+                    self.socket.close()
+                except:
+                    pass
+                self.socket = None
+            self.logger.info("TetrAMM disconnection handled")
+        except Exception as e:
+            self.logger.error(f"Error handling disconnection: {e}")
     
     def load_settings(self) -> None:
         """
@@ -492,6 +547,7 @@ class TetrAMMController:
                 # Save to file if data logging is enabled
                 if self.save_data:
                     self._log_measurement_to_file(timestamp, num_channels)
+                self.update_accumulated_charge()
             
         except Exception as e:
             self.logger.warning(f"Error acquiring TetrAMM measurement: {e}")
@@ -651,6 +707,72 @@ class TetrAMMController:
             return self.acquisition_thread.is_alive()
         return False
     
+    def update_accumulated_charge(self) -> float:
+        """
+        Update accumulated charge based on current measurement and time.
+        
+        Returns:
+            float: Current accumulated charge for this run
+        """
+        current_data = float(self.values["0"][-1])  # Channel 0 current in microamps
+        current_time = datetime.now().timestamp()
+            
+        # Handle very small currents as zero
+        if current_data < 1e-9:
+            current_data = 0
+            
+        # Initialize previous_time if this is the first call
+        if self.previous_time == 0:
+            self.previous_time = current_time
+            
+        # Calculate charge increment (current * time in microamp-seconds)
+        time_diff = current_time - self.previous_time
+        charge_increment = current_data * time_diff
+            
+        # Always update total accumulated charge
+        self.total_accumulated_charge += charge_increment
+            
+        # Only update accumulated charge if data is being saved
+        if self.save_data:
+            self.accumulated_charge += charge_increment
+            
+        self.previous_time = current_time
+    
+    def reset_accumulated_charge(self) -> None:
+        """
+        Reset accumulated charge to 0 (called when starting a new run).
+        """
+        with self.buffer_lock:
+            self.accumulated_charge = 0.0
+            self.previous_time = datetime.now().timestamp()
+    
+    def get_accumulated_charge(self) -> float:
+        """
+        Get current accumulated charge for this run.
+        
+        Returns:
+            float: Accumulated charge in microamp-seconds
+        """
+        return self.accumulated_charge
+    
+    def get_total_accumulated_charge(self) -> float:
+        """
+        Get total accumulated charge across all time.
+        
+        Returns:
+            float: Total accumulated charge in microamp-seconds
+        """
+        return self.total_accumulated_charge
+    
+    def set_total_accumulated_charge(self, value: float) -> None:
+        """
+        Set the total accumulated charge (for loading from config).
+        
+        Args:
+            value: Total accumulated charge value
+        """
+        self.total_accumulated_charge = value
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get comprehensive status information.
@@ -672,7 +794,9 @@ class TetrAMMController:
             'settings': self.settings.copy(),
             'latest_measurements': latest_data,
             'buffer_size': self.buffer_size,
-            'acquisition_interval': self.acquisition_interval
+            'acquisition_interval': self.acquisition_interval,
+            'accumulated_charge': self.accumulated_charge,
+            'total_accumulated_charge': self.total_accumulated_charge
         }
 
 

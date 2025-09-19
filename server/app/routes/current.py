@@ -16,8 +16,6 @@ bp = Blueprint('current', __name__)
 TEST_FLAG = os.getenv('TEST_FLAG', False)
 
 # Default settings
-accumulated = 0
-previous_time = 0
 current_accumulating_run_number = 0
 running = False
 
@@ -31,6 +29,9 @@ else:
 # Initialize TetrAMMController
 controller = tetram_controller( ip=settings["tetramm_ip"], port=settings["tetramm_port"] )
 controller.initialize( )
+
+# Load total_accumulated from settings into controller
+controller.set_total_accumulated_charge(settings.get("total_accumulated", 0))
 
 # Set ip and port
 @bp.route('/current/set_ip_port/<ip>/<port>', methods=['GET'])
@@ -80,13 +81,15 @@ def is_connected():
 @bp.route('/current/start/<run_number>', methods=['GET'])
 @jwt_required_custom
 def start_acquisition(run_number):
-    global accumulated, running, previous_time, current_accumulating_run_number
+    global running, current_accumulating_run_number
     if( not controller.is_connected() ):
         return jsonify({"message": "TetrAMM not connected"}), 200
-    accumulated = 0
+    
+    # Reset accumulated charge for this new run
+    controller.reset_accumulated_charge()
     current_accumulating_run_number = int(run_number)
-    previous_time = datetime.now().timestamp()
     run = int(run_number)
+    
     if( not controller.is_acquiring ):
         return jsonify({"message": "Can not start TetrAMM. Device not initialized"}), 400
     if( not os.path.exists("./data/run{}".format(run)) ):
@@ -98,15 +101,16 @@ def start_acquisition(run_number):
 @bp.route('/current/stop', methods=['POST'])
 @jwt_required_custom
 def stop_acquisition():
-    global running, current_accumulating_run_number, accumulated
+    global running, current_accumulating_run_number
     if( not controller.is_connected() ):
         return jsonify({"message": "TetrAMM not connected"}), 200
     controller.set_save_data(False, "./")
     running = False
     run_number = current_accumulating_run_number
     run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
-    run_metadata.accumulated_charge = accumulated
-    db.session.commit()
+    if run_metadata:
+        run_metadata.accumulated_charge = controller.get_accumulated_charge()
+        db.session.commit()
     return jsonify({"message": "Acquisition stopped"}), 200
 
 @bp.route('/current/set/<settings>/<value>', methods=['GET'])
@@ -172,29 +176,23 @@ def get_data_array():
 @bp.route('/current/accumulated', methods=['GET'])
 @jwt_required_custom
 def get_accumulated():
-    global accumulated, previous_time, running, settings
     if( not controller.is_connected() ):
-        return jsonify(accumulated)
-    data = controller.get_data()["0"]
-    if( data < 1e-9 ): data = 0
-    if( not running ):
-        current_time = datetime.now().timestamp()
-        settings["total_accumulated"] += (current_time - previous_time) * data
-        previous_time = current_time
-        return jsonify(accumulated)
+        return jsonify(controller.get_accumulated_charge())
+    
     # If thread dead, reset controller
     if( not controller.check_thread() ):
         controller.reset( )
-    current_time = datetime.now().timestamp()
-    accumulated += (current_time - previous_time) * data
-    settings["total_accumulated"] += (current_time - previous_time) * data
-    previous_time = current_time
-    return jsonify(accumulated)
+    
+    # Update accumulated charge in TetrAMM controller
+    accumulated_charge = controller.get_accumulated_charge()
+    return jsonify(accumulated_charge)
 
 @bp.route('/current/total_accumulated', methods=['GET'])
 @jwt_required_custom
 def get_total_accumulated():
     global settings
+    # Update settings with current total from controller
+    settings["total_accumulated"] = controller.get_total_accumulated_charge()
     with open("conf/current.json", "w") as f:
         json.dump(settings, f)
     return jsonify(settings["total_accumulated"])
@@ -205,4 +203,5 @@ def get_total_accumulated():
 def reset_total_accumulated():
     global settings
     settings["total_accumulated"] = 0
+    controller.set_total_accumulated_charge(0)
     return jsonify({"message": "Total accumulated reset"}), 200

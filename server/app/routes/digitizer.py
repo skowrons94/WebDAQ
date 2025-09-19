@@ -86,7 +86,6 @@ def get_board_connectivity():
     """Get connectivity status of all boards."""
     try:
         connectivity = daq_mgr.check_board_connectivity()
-        print(f"Board connectivity: {connectivity}")
         return jsonify(connectivity)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
