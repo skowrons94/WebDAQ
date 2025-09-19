@@ -558,8 +558,16 @@ class DAQManager:
                 for channel in range(board_config['chan']):
                     f.write("0.0 1.0\n")
             
-            # Add board to configuration
-            self.daq_state['boards'].append(board_config)
+            # Add board to configuration in sorted order by board_id
+            board_id = int(board_config['id'])
+            insert_index = 0
+            for i, existing_board in enumerate(self.daq_state['boards']):
+                if int(existing_board['id']) > board_id:
+                    insert_index = i
+                    break
+                insert_index = i + 1
+            
+            self.daq_state['boards'].insert(insert_index, board_config)
             
             # Update project
             self._update_project()
@@ -575,20 +583,28 @@ class DAQManager:
                 self.digitizer_container.remove_board(board_id)
             return False
     
-    def remove_board(self, board_index: int) -> bool:
+    def remove_board(self, board_id: str) -> bool:
         """
         Remove a CAEN board from the configuration.
         
         Args:
-            board_index: Index of board to remove
+            board_id: ID of board to remove
             
         Returns:
             True if successful, False otherwise
         """
         try:
-            if 0 <= board_index < len(self.daq_state['boards']):
+            board_id = str(board_id)  # Ensure it's a string
+            
+            # Find the board by ID
+            board_index = None
+            for i, board in enumerate(self.daq_state['boards']):
+                if str(board['id']) == board_id:
+                    board_index = i
+                    break
+            
+            if board_index is not None:
                 board = self.daq_state['boards'][board_index]
-                board_id = str(board['id'])
                 
                 # Remove persistent digitizer connection
                 self.digitizer_container.remove_board(board_id)
@@ -607,7 +623,7 @@ class DAQManager:
                 self.logger.info(f"Removed board: {removed_board['name']} (ID: {removed_board['id']})")
                 return True
             else:
-                self.logger.warning(f"Invalid board index: {board_index}")
+                self.logger.warning(f"Board with ID {board_id} not found")
                 return False
                 
         except Exception as e:

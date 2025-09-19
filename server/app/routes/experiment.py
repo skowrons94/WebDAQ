@@ -223,9 +223,9 @@ def add_caen():
 @bp.route("/experiment/remove_board", methods=['POST'])
 @jwt_required_custom
 def remove_caen():
-    board_index = int(request.get_json()["id"])
+    board_id = str(request.get_json()["id"])
     
-    if daq_mgr.remove_board(board_index):
+    if daq_mgr.remove_board(board_id):
         return jsonify(daq_mgr.get_boards()), 200
     else:
         return jsonify({'message': 'Failed to remove board'}), 404
