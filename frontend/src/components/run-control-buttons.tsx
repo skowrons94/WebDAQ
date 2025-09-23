@@ -54,6 +54,8 @@ import {
   getCurrentRunNumber,
   getRunMetadataAll,
   refreshBoardConnections,
+  openFaraday,
+  closeFaraday,
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
 
@@ -390,6 +392,46 @@ export function RunControlButtons({
     }
   }
 
+  /**
+   * Opens the Faraday cup
+   */
+  const handleOpenFaraday = async () => {
+    try {
+      await openFaraday()
+      toast({
+        title: 'Success',
+        description: 'Faraday cup opened',
+      })
+    } catch (error: any) {
+      console.error('Failed to open Faraday cup:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to open Faraday cup',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  /**
+   * Closes the Faraday cup
+   */
+  const handleCloseFaraday = async () => {
+    try {
+      await closeFaraday()
+      toast({
+        title: 'Success',
+        description: 'Faraday cup closed',
+      })
+    } catch (error: any) {
+      console.error('Failed to close Faraday cup:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to close Faraday cup',
+        variant: 'destructive',
+      })
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="space-y-1 sm:space-y-0">
@@ -488,6 +530,19 @@ export function RunControlButtons({
             <span className="inline md:hidden">Refresh</span>
           </Button>
         </div>
+        {/* Faraday Cup Controls 
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
+          <Button onClick={handleOpenFaraday} className="w-full" variant="outline">
+            <Plug className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Open Faraday</span>
+            <span className="inline md:hidden">Open FC</span>
+          </Button>
+          <Button onClick={handleCloseFaraday} className="w-full" variant="outline">
+            <StopCircle className="mr-2 h-4 w-4" />
+            <span className="hidden md:inline">Close Faraday</span>
+            <span className="inline md:hidden">Close FC</span>
+          </Button>
+        </div>*/}
       </CardContent>
 
       {/* Directory Override Confirmation Dialog */}

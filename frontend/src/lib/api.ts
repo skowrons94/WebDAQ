@@ -133,6 +133,9 @@ export const getQlong = (boardId: string, channel: string) =>
 // Get the histograms for a given board_id and channel
 export const getQshort = (boardId: string, channel: string) =>
     api.get(`/qshort/${boardId}/${channel}`).then(res => res.data);
+// Get the histograms for a given board_id and channel
+export const getPsd = (boardId: string, channel: string) =>
+    api.get(`/psd/${boardId}/${channel}`).then(res => res.data);
 // Waveform control
 export const activateWaveform = () =>
     api.post('/waveforms/activate').then(res => res.data);

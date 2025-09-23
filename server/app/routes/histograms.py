@@ -367,7 +367,7 @@ def get_all_boards_summary():
                 'channels': board.get('chan', 0),
                 'dpp_type': board.get('dpp'),
                 'link_type': board.get('link_type'),
-                'available_histograms': ['energy'] if board.get('dpp') == 'DPP-PHA' else ['qlong', 'qshort'],
+                'available_histograms': ['energy'] if board.get('dpp') == 'DPP-PHA' else ['qlong', 'qshort', 'psd'],
                 'waveforms_available': True
             }
             summary.append(board_summary)
@@ -379,3 +379,20 @@ def get_all_boards_summary():
         })
     except Exception as e:
         return jsonify({'error': f'Failed to get boards summary: {str(e)}'}), 500
+    
+@bp.route('/psd/<board_id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_psd_histogram(board_id, channel):
+    """
+    Get PSD histogram data for a specific board and channel.
+    
+    Args:
+        board_id: Board ID string
+        channel: Channel number
+    """
+    try:
+        histo = spy_mgr.get_histogram(board_id, channel, histogram_type='psd')
+        json_data = spy_mgr.convert_histogram_to_json(histo)
+        return json_data if json_data else ""
+    except Exception as e:
+        return jsonify({'error': f'Failed to get PSD histogram: {str(e)}'}), 500

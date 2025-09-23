@@ -7,9 +7,43 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ReloadIcon } from "@radix-ui/react-icons"
 import { useToast } from "@/components/ui/use-toast"
 import { getBoardConfiguration, getBoardSettings, setSetting, updateJSON } from "@/lib/api"
+
+// Define which settings are shown in basic mode (change these names to customize visible settings)
+const BASIC_GENERAL_SETTINGS = [
+  "Record Length",
+  "Acquistion Control",
+  "Front Panel TRG-OUT (GPO) Enable Mask",
+  "Channel Enable Mask",
+  "Board ID",
+  "Aggregate Number per BLT"
+]
+
+const BASIC_CHANNEL_SETTINGS = [
+  "Number of Events per Aggregate",
+  "Pre Trigger",
+  "RC-CR2 Smoothing Factor",
+  "Input Rise Time",
+  "Trapezoid Rise Time",
+  "Trapezoid Flat Top",
+  "Decay Time",
+  "Trigger Threshold",
+  "Peaking Time",
+  "Trigger Hold-Off Width",
+  "DC Offset",
+  "Fine Gain",
+  "Input Dynamic Range",
+  "CFD Settings",
+  "Short Gate",
+  "Long Gate",
+  "Gate Offset",
+  "Threshold for the PSD",
+  "PUR-GAP Threshold",
+]
 
 interface BoardData {
   id: string
@@ -35,6 +69,7 @@ interface BoardSettings {
 
 export default function Dashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
+  const [selectedBoardId, setSelectedBoardId] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
@@ -46,6 +81,10 @@ export default function Dashboard() {
     try {
       const response = await getBoardConfiguration()
       setBoards(response.data)
+      // Auto-select the first board if none selected
+      if (response.data.length > 0 && !selectedBoardId) {
+        setSelectedBoardId(response.data[0].id)
+      }
     } catch (err) {
       setError("Failed to load boards data")
       toast({
@@ -80,22 +119,38 @@ export default function Dashboard() {
     )
   }
 
+  const selectedBoard = boards.find(board => board.id === selectedBoardId)
+
   return (
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Boards Configuration</h1>
+        <h1 className="text-2xl font-bold">CAEN Dashboard</h1>
         <Button onClick={fetchBoardConfiguration}>Refresh Boards Data</Button>
       </div>
-      <div className="space-y-6">
-        {boards.map((board) => (
-          <div key={board.id} className="border rounded-lg p-4">
-            <h2 className="text-xl font-bold mb-4">
-              {board.name} (ID: {board.id})
-            </h2>
-            <BoardComponent boardData={board} />
-          </div>
-        ))}
+
+      {/* Board Selection */}
+      <div className="mb-6">
+        <Label htmlFor="board-select" className="text-lg font-semibold">
+          Select Board
+        </Label>
+        <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
+          <SelectTrigger className="w-full max-w-md">
+            <SelectValue placeholder="Select a board..." />
+          </SelectTrigger>
+          <SelectContent>
+            {boards.map((board) => (
+              <SelectItem key={board.id} value={board.id}>
+                {board.name} (ID: {board.id})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      {/* Board Settings */}
+      {selectedBoard && (
+        <BoardComponent boardData={selectedBoard} />
+      )}
     </div>
   )
 }
@@ -106,6 +161,8 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   const [error, setError] = useState<string | null>(null)
   const [modifiedSettings, setModifiedSettings] = useState<Set<string>>(new Set())
   const [binaryMode, setBinaryMode] = useState(false)
+  const [advancedMode, setAdvancedMode] = useState(false)
+  const [selectedChannel, setSelectedChannel] = useState<string>("0")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -115,6 +172,17 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       try {
         const response = await getBoardSettings(boardData.id)
         setSettings(response)
+
+        // Auto-select first channel if none selected
+        const channelList = Object.values(response as BoardSettings)
+          .filter((reg: RegisterData) => Number.parseInt(reg.address, 16) <= 0x7000)
+          .map((reg: RegisterData) => reg.channel)
+          .filter((channel, index, arr) => arr.indexOf(channel) === index)
+          .sort((a, b) => a - b)
+
+        if (channelList.length > 0 && !selectedChannel) {
+          setSelectedChannel(channelList[0].toString())
+        }
       } catch (err) {
         setError("Failed to load settings data")
         toast({
@@ -284,7 +352,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   const channelSettings: { [channel: number]: { [regName: string]: RegisterData } } = {}
   const commonSettings: { [regName: string]: RegisterData } = {}
 
-  Object.entries(settings).forEach(([regName, registerData]) => {
+  Object.entries(settings).forEach(([regName, registerData]: [string, RegisterData]) => {
     // Skip registers with all 'F' values (inaccessible)
     if (!isRegisterAccessible(registerData.value_hex)) {
       return
@@ -307,132 +375,208 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     .map(Number)
     .sort((a, b) => a - b)
 
+  // Filter settings based on advanced mode
+  const filterSettings = (settingsObj: { [regName: string]: RegisterData }, isChannelSettings: boolean) => {
+    if (advancedMode) {
+      return settingsObj
+    }
+
+    const basicList = isChannelSettings ? BASIC_CHANNEL_SETTINGS : BASIC_GENERAL_SETTINGS
+    const filtered: { [regName: string]: RegisterData } = {}
+
+    Object.entries(settingsObj).forEach(([regName, registerData]: [string, RegisterData]) => {
+      if (basicList.some(basicName => registerData.name.includes(basicName))) {
+        filtered[regName] = registerData
+      }
+    })
+
+    return filtered
+  }
+
   return (
     <div className="space-y-6">
-      {/* Mode Toggle */}
+      {/* Control Panel */}
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Settings</h3>
-        <div className="flex items-center space-x-2">
-          <Label htmlFor="binary-mode">Binary Mode</Label>
-          <Switch
-            id="binary-mode"
-            checked={binaryMode}
-            onCheckedChange={setBinaryMode}
-          />
+        <h3 className="text-lg font-semibold">
+          Settings for {boardData.name}
+        </h3>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="advanced-mode">Advanced Mode</Label>
+            <Switch
+              id="advanced-mode"
+              checked={advancedMode}
+              onCheckedChange={setAdvancedMode}
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="binary-mode">Binary Mode</Label>
+            <Switch
+              id="binary-mode"
+              checked={binaryMode}
+              onCheckedChange={setBinaryMode}
+            />
+          </div>
         </div>
       </div>
-      
-      {/* Common Settings */}
-      {Object.keys(commonSettings).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Common Settings</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.entries(commonSettings).map(([regName, registerData]) => (
-                <div key={regName} className="space-y-2">
-                  <Label htmlFor={regName}>
-                    {registerData.name}
-                    {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
-                  </Label>
-                  {binaryMode ? (
-                    <div className="space-y-2">
-                      {renderBinaryEditor(regName, registerData)}
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
-                          Save
-                        </Button>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        <div>Dec: {registerData.value_dec} | Hex: {registerData.value_hex} | Address: {registerData.address}</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex gap-2">
-                        <Input
-                          id={regName}
-                          type="number"
-                          min="0"
-                          max="4294967295"
-                          value={registerData.value_dec}
-                          onChange={(e) => handleSettingChange(regName, e.target.value)}
-                          className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
-                        />
-                        <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
-                          Save
-                        </Button>
-                      </div>
-                      <div className="text-xs text-muted-foreground space-y-1">
-                        <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
-                        <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Channel Settings */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {channels.map((channel) => (
-          <Card key={channel}>
-            <CardHeader>
-              <CardTitle>Channel {channel}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {Object.entries(channelSettings[channel]).map(([regName, registerData]) => (
-                  <div key={regName} className="space-y-2">
-                    <Label htmlFor={`${channel}-${regName}`}>
-                      {registerData.name}
-                      {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
-                    </Label>
-                    {binaryMode ? (
-                      <div className="space-y-2">
-                        {renderBinaryEditor(regName, registerData)}
-                        <div className="flex justify-end">
-                          <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
-                            Save
-                          </Button>
+      {/* Tabs for General and Channel Settings */}
+      <Tabs defaultValue="general" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="general">General Settings</TabsTrigger>
+          <TabsTrigger value="channels">Channel Settings</TabsTrigger>
+        </TabsList>
+
+        {/* General Settings Tab */}
+        <TabsContent value="general" className="space-y-4">
+          {Object.keys(commonSettings).length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  General Settings
+                  {!advancedMode && <span className="text-sm text-muted-foreground ml-2">(Basic Mode)</span>}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {Object.entries(filterSettings(commonSettings, false)).map(([regName, registerData]) => (
+                    <div key={regName} className="space-y-2">
+                      <Label htmlFor={regName}>
+                        {registerData.name}
+                        {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
+                      </Label>
+                      {binaryMode ? (
+                        <div className="space-y-2">
+                          {renderBinaryEditor(regName, registerData)}
+                          <div className="flex justify-end">
+                            <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                              Save
+                            </Button>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <div>Dec: {registerData.value_dec} | Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          <div>Dec: {registerData.value_dec} | Hex: {registerData.value_hex} | Address: {registerData.address}</div>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex gap-2">
-                          <Input
-                            id={`${channel}-${regName}`}
-                            type="number"
-                            min="0"
-                            max="4294967295"
-                            value={registerData.value_dec}
-                            onChange={(e) => handleSettingChange(regName, e.target.value)}
-                            className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
-                          />
-                          <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
-                            Save
-                          </Button>
-                        </div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
-                          <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ))}
+                      ) : (
+                        <>
+                          <div className="flex gap-2">
+                            <Input
+                              id={regName}
+                              type="number"
+                              min="0"
+                              max="4294967295"
+                              value={registerData.value_dec}
+                              onChange={(e) => handleSettingChange(regName, e.target.value)}
+                              className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
+                            />
+                            <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                              Save
+                            </Button>
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-1">
+                            <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                            <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="text-center text-muted-foreground py-8">
+              No general settings available for this board.
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Channel Settings Tab */}
+        <TabsContent value="channels" className="space-y-4">
+          {channels.length > 0 ? (
+            <>
+              {/* Channel Selection */}
+              <div className="flex items-center space-x-4">
+                <Label htmlFor="channel-select">Select Channel:</Label>
+                <Select value={selectedChannel} onValueChange={setSelectedChannel}>
+                  <SelectTrigger className="w-48">
+                    <SelectValue placeholder="Select channel..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {channels.map((channel) => (
+                      <SelectItem key={channel} value={channel.toString()}>
+                        Channel {channel}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+
+              {/* Selected Channel Settings */}
+              {selectedChannel && channelSettings[parseInt(selectedChannel)] && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>
+                      Channel {selectedChannel} Settings
+                      {!advancedMode && <span className="text-sm text-muted-foreground ml-2">(Basic Mode)</span>}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {Object.entries(filterSettings(channelSettings[parseInt(selectedChannel)], true)).map(([regName, registerData]) => (
+                        <div key={regName} className="space-y-2">
+                          <Label htmlFor={`${selectedChannel}-${regName}`}>
+                            {registerData.name}
+                            {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
+                          </Label>
+                          {binaryMode ? (
+                            <div className="space-y-2">
+                              {renderBinaryEditor(regName, registerData)}
+                              <div className="flex justify-end">
+                                <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                                  Save
+                                </Button>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                <div>Dec: {registerData.value_dec} | Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex gap-2">
+                                <Input
+                                  id={`${selectedChannel}-${regName}`}
+                                  type="number"
+                                  min="0"
+                                  max="4294967295"
+                                  value={registerData.value_dec}
+                                  onChange={(e) => handleSettingChange(regName, e.target.value)}
+                                  className={modifiedSettings.has(regName) ? "border-orange-500" : ""}
+                                />
+                                <Button size="sm" onClick={() => handleSave(regName)} disabled={!modifiedSettings.has(regName)}>
+                                  Save
+                                </Button>
+                              </div>
+                              <div className="text-xs text-muted-foreground space-y-1">
+                                <div>Hex: {registerData.value_hex} | Address: {registerData.address}</div>
+                                <div className="font-mono break-all">Bin: {formatBinary(registerData.value_dec)}</div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          ) : (
+            <div className="text-center text-muted-foreground py-8">
+              No channel settings available for this board.
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* Save All Button */}
       {modifiedSettings.size > 0 && (

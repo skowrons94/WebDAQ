@@ -4,7 +4,7 @@ from flask import Blueprint, jsonify, request
 bp = Blueprint('faraday', __name__)
 
 # URL to the Arduino
-FC_API = 'http://192.168.200.202/'
+FC_API = 'http://192.168.0.30/'
 
 @bp.route('/faraday/open', methods=['GET'])
 def open_fc():

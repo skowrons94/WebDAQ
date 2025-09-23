@@ -89,25 +89,45 @@ class ReadoutUnitSpy:
             self.obj = ROOT.MakeNullPointer(ROOT.TH1F)
             
             # Initialize histogram buffers and data storage
-            # Supports up to 32 channels across all histogram types
-            histogram_types = ["energy", "qshort", "qlong", "wave1", "wave2"]
-            max_channels = 32
+            # Supports up to 128 channels across all histogram types
+            histogram_types = ["energy", "qshort", "qlong", "wave1", "wave2", "psd"]
+            max_channels = 128
             
             # Buffer for temporary storage during collection
             self.buff = {}
             for hist_type in histogram_types:
                 self.buff[hist_type] = []
-                for i in range(max_channels):
-                    self.buff[hist_type].append(ROOT.MakeNullPointer(ROOT.TH1F))
+                if( hist_type == "psd" ):
+                    # PSD histograms are not provided by RUSpy, fill with null pointers
+                    for i in range(max_channels):
+                        self.buff[hist_type].append(ROOT.MakeNullPointer(ROOT.TH2F))
+                else:
+                    for i in range(max_channels):
+                        self.buff[hist_type].append(ROOT.MakeNullPointer(ROOT.TH1F))
             
             # Persistent data storage
             self.data = {}
             for hist_type in histogram_types:
                 self.data[hist_type] = []
-                for i in range(max_channels):
-                    hist_name = f"{hist_type}_ch{i}"
-                    hist_title = f"{hist_type.capitalize()} Channel {i}"
-                    self.data[hist_type].append(
+                if( hist_type == "psd" ):
+                    for i in range(max_channels):
+                        hist_name = f"{hist_type}_ch{i}"
+                        hist_title = f"{hist_type.upper()} Channel {i}"
+                        self.data[hist_type].append(
+                            ROOT.TH2F(hist_name, hist_title, 32768, 0, 32768, 100, 0, 1)
+                        )
+                elif ("wave" in hist_type):
+                    for i in range(max_channels):
+                        hist_name = f"{hist_type}_ch{i}"
+                        hist_title = f"{hist_type.capitalize()} Channel {i}"
+                        self.data[hist_type].append(
+                            ROOT.TH1F(hist_name, hist_title, 10000, 0, 10000)
+                        )
+                else:
+                    for i in range(max_channels):
+                        hist_name = f"{hist_type}_ch{i}"
+                        hist_title = f"{hist_type.capitalize()} Channel {i}"
+                        self.data[hist_type].append(
                         ROOT.TH1F(hist_name, hist_title, 32768, 0, 32768)
                     )
             
@@ -120,9 +140,9 @@ class ReadoutUnitSpy:
     def _initialize_test_mode(self) -> None:
         """Initialize simulation objects for test mode."""
         # Create placeholder data structures for test mode
-        self.buff = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": []}
-        self.data = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": []}
-        
+        self.buff = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [], "psd": []}
+        self.data = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [], "psd": []}
+
         # Fill with None placeholders
         for hist_type in self.buff:
             for i in range(32):
@@ -288,7 +308,7 @@ class ReadoutUnitSpy:
         try:
             # Track histogram indices for each type
             histogram_indices = {
-                "energy": 0, "qshort": 0, "qlong": 0, "wave1": 0, "wave2": 0
+                "energy": 0, "qshort": 0, "qlong": 0, "wave1": 0, "wave2": 0, "psd": 0
             }
             
             # Connect and request data
@@ -345,7 +365,15 @@ class ReadoutUnitSpy:
                         histogram_indices["energy"] += 1
                     else:
                         obj.Delete()
-                        
+
+                elif "PSD" in histogram_name:
+                    idx = histogram_indices["psd"]
+                    if idx < len(self.buff["psd"]):
+                        self.buff["psd"][idx] = obj
+                        histogram_indices["psd"] += 1
+                    else:
+                        obj.Delete()
+
                 else:
                     # Unknown histogram type - clean up
                     obj.Delete()
@@ -366,11 +394,10 @@ class ReadoutUnitSpy:
                 for i, buffered_hist in enumerate(self.buff[hist_type]):
                     if buffered_hist and i < len(self.data[hist_type]):
                         try:
-                            # Copy bin contents from buffer to persistent histogram
+                            # Copy data to persistent histogram (fast)
                             persistent_hist = self.data[hist_type][i]
-                            for bin_idx in range(32768):
-                                content = buffered_hist.GetBinContent(bin_idx)
-                                persistent_hist.SetBinContent(bin_idx, content)
+                            persistent_hist.Reset()
+                            persistent_hist.Add(buffered_hist)
                             
                             # Clean up buffer
                             buffered_hist.Delete()
@@ -430,13 +457,23 @@ class ReadoutUnitSpy:
                 
                 if ROOT_AVAILABLE:
                     if( TEST_FLAG ):
-                        # Fill with gaussian data with mean=10000, sigma=100
-                        hist = self.data[histogram_type][channel_index]
-                        hist.Reset()
-                        for bin_idx in range(1, hist.GetNbinsX() + 1):
-                            content = ROOT.gRandom.Gaus(10000, 100)
-                            hist.SetBinContent(bin_idx, content)
-                        return hist.Clone()
+                        if( histogram_type == "psd" ):
+                            # PSD histograms are not provided by RUSpy, fill with gaussian data
+                            hist = self.data[histogram_type][channel_index]
+                            hist.Reset()
+                            for x_bin in range(1, hist.GetNbinsX() + 1):
+                                for y_bin in range(1, hist.GetNbinsY() + 1):
+                                    content = ROOT.gRandom.Gaus(10000, 100)
+                                    hist.SetBinContent(x_bin, y_bin, content)
+                            return hist.Clone()
+                        else:
+                            # Fill with gaussian data with mean=10000, sigma=100
+                            hist = self.data[histogram_type][channel_index]
+                            hist.Reset()
+                            for bin_idx in range(1, hist.GetNbinsX() + 1):
+                                content = ROOT.gRandom.Gaus(10000, 100)
+                                hist.SetBinContent(bin_idx, content)
+                            return hist.Clone()
                     else:
                         return self.data[histogram_type][channel_index].Clone()
                 else:
@@ -517,7 +554,7 @@ class BuilderUnitSpy:
             
             # BuilderUnit histogram types (coincidence analysis)
             histogram_types = ["energyAnti", "qshortAnti", "qlongAnti", "energySum", "qshortSum", "qlongSum"]
-            max_channels = 32
+            max_channels = 128
             
             # Buffer and data storage initialization
             self.buff = {}
