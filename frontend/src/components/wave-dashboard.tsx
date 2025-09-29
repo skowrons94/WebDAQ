@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
+import { useVisualizationStore } from '@/store/visualization-settings-store'
 
 type BoardData = {
   id: string;
@@ -79,6 +80,15 @@ export default function WaveformDashboard() {
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
+  const { settings, updateBoardChannelSelection, clearAllSelections } = useVisualizationStore()
+  const [storeReady, setStoreReady] = useState(false)
+
+  useEffect(() => {
+    // Wait for store to be hydrated
+    if (settings && settings.selectedBoardsChannelsWaveform !== undefined) {
+      setStoreReady(true)
+    }
+  }, [settings])
 
   useEffect(() => {
     fetchBoardConfiguration()
@@ -171,7 +181,7 @@ export default function WaveformDashboard() {
   const parseWaveformConfig = (settings: BoardSettings): WaveformConfig => {
     // Look for "Board Configuration" register
     const boardConfigReg = Object.values(settings).find(
-      reg => reg.name.includes("Board Configuration")
+      (reg): reg is RegisterData => (reg as RegisterData).name?.includes("Board Configuration")
     )
 
     if (!boardConfigReg) {
@@ -186,8 +196,8 @@ export default function WaveformDashboard() {
     const dualTrace = (value & (1 << 11)) !== 0
 
     // Find the board type from settings to determine PHA vs PSD
-    const isPSD = Object.values(settings).some(reg =>
-      reg.name.toLowerCase().includes('psd')
+    const isPSD = Object.values(settings).some((reg): reg is RegisterData =>
+      (reg as RegisterData).name?.toLowerCase().includes('psd')
     )
 
     const bits12_13 = (value >> 12) & 0x3
@@ -281,31 +291,80 @@ export default function WaveformDashboard() {
     }
   }, [createBlankHistogram])
 
+  const getSelectedChannels = useCallback((boardId: string): number[] => {
+    if (!storeReady || !settings?.selectedBoardsChannelsWaveform) return []
+    const selection = settings.selectedBoardsChannelsWaveform.find((sel: { boardId: string; channels: number[] }) => sel.boardId === boardId)
+    return selection ? selection.channels : []
+  }, [storeReady, settings?.selectedBoardsChannelsWaveform])
+
+  const isChannelSelected = useCallback((boardId: string, channel: number): boolean => {
+    const selectedChannels = getSelectedChannels(boardId)
+    return selectedChannels.includes(channel)
+  }, [getSelectedChannels])
+
+  const handleChannelToggle = useCallback((boardId: string, channel: number, checked: boolean) => {
+    const currentSelection = getSelectedChannels(boardId)
+    let newSelection: number[]
+
+    if (checked) {
+      newSelection = [...currentSelection, channel].sort((a, b) => a - b)
+    } else {
+      newSelection = currentSelection.filter((ch: number) => ch !== channel)
+    }
+
+    updateBoardChannelSelection('Waveform', boardId, newSelection)
+  }, [getSelectedChannels, updateBoardChannelSelection])
+
+  const handleSelectAllChannels = useCallback((boardId: string, checked: boolean) => {
+    const board = boards.find((b: BoardData) => b.id === boardId)
+    if (!board) return
+
+    const allChannels = Array.from({ length: parseInt(board.chan) }, (_, i) => i)
+    updateBoardChannelSelection('Waveform', boardId, checked ? allChannels : [])
+  }, [boards, updateBoardChannelSelection])
+
+  const handleShowAllChannels = useCallback(() => {
+    boards.forEach((board: BoardData) => {
+      const allChannels = Array.from({ length: parseInt(board.chan) }, (_, i) => i)
+      updateBoardChannelSelection('Waveform', board.id, allChannels)
+    })
+  }, [boards, updateBoardChannelSelection])
+
+  const handleHideAllChannels = useCallback(() => {
+    boards.forEach((board: BoardData) => {
+      updateBoardChannelSelection('Waveform', board.id, [])
+    })
+  }, [boards, updateBoardChannelSelection])
+
   const updateHistograms = useCallback(async () => {
     for (const board of boards) {
-      for (let i = 0; i < parseInt(board.chan); i++) {
-        const histoId = `board${board.id}_channel${i}`
+      const selectedChannels = getSelectedChannels(board.id)
+      // Only fetch data for explicitly selected channels
+      if (selectedChannels.length === 0) continue
+
+      for (const channelIndex of selectedChannels) {
+        const histoId = `board${board.id}_channel${channelIndex}`
         const histoElement = histogramRefs.current[histoId]
         if (histoElement && window.JSROOT) {
           try {
             const waveformNum = selectedWaveform[board.id] || 1
             const histogramData = waveformNum === 1
-              ? await getWaveform1(board.id, i.toString())
-              : await getWaveform2(board.id, i.toString())
+              ? await getWaveform1(board.id, channelIndex.toString())
+              : await getWaveform2(board.id, channelIndex.toString())
             const histogram = window.JSROOT.parse(histogramData)
             window.JSROOT.redraw(histoElement, histogram, "colz")
           } catch (error) {
             console.error(`Failed to fetch histogram for ${histoId}:`, error)
             toast({
               title: "Error",
-              description: `Failed to update histogram for ${board.name} - Channel ${i}`,
+              description: `Failed to update histogram for ${board.name} - Channel ${channelIndex}`,
               variant: "destructive",
             })
           }
         }
       }
     }
-  }, [boards, selectedWaveform])
+  }, [boards, selectedWaveform, getSelectedChannels, toast])
 
   useEffect(() => {
     if (jsrootLoaded && boards.length > 0) {
@@ -324,7 +383,7 @@ export default function WaveformDashboard() {
     try {
       const settings = boardSettings[boardId]
       const boardConfigReg = Object.values(settings).find(
-        reg => reg.name.includes("Board Configuration")
+        (reg): reg is RegisterData => (reg as RegisterData).name?.includes("Board Configuration")
       )
 
       if (!boardConfigReg) {
@@ -393,7 +452,7 @@ export default function WaveformDashboard() {
     try {
       const settings = boardSettings[boardId]
       const boardConfigReg = Object.values(settings).find(
-        reg => reg.name.includes("Board Configuration")
+        (reg): reg is RegisterData => (reg as RegisterData).name?.includes("Board Configuration")
       )
 
       if (!boardConfigReg) {
@@ -461,8 +520,8 @@ export default function WaveformDashboard() {
     const settings = boardSettings[boardId]
     if (!settings) return []
 
-    const isPSD = Object.values(settings).some((reg: RegisterData) =>
-      reg.name.toLowerCase().includes('psd')
+    const isPSD = Object.values(settings).some((reg): reg is RegisterData =>
+      (reg as RegisterData).name?.toLowerCase().includes('psd')
     )
 
     if (traceNumber === 1) {
@@ -472,12 +531,13 @@ export default function WaveformDashboard() {
     }
   }
 
+
   const getCurrentTraceValue = (boardId: string, traceNumber: 1 | 2) => {
     const settings = boardSettings[boardId]
     if (!settings) return 0
 
     const boardConfigReg = Object.values(settings).find(
-      (reg: RegisterData) => reg.name.includes("Board Configuration")
+      (reg): reg is RegisterData => (reg as RegisterData).name?.includes("Board Configuration")
     )
     if (!boardConfigReg) return 0
 
@@ -489,11 +549,54 @@ export default function WaveformDashboard() {
     }
   }
 
+  const hasAnySelections = storeReady && settings?.selectedBoardsChannelsWaveform && settings.selectedBoardsChannelsWaveform.length > 0
+  const totalSelectedChannels = storeReady && settings?.selectedBoardsChannelsWaveform ?
+    settings.selectedBoardsChannelsWaveform.reduce((total: number, board: { boardId: string; channels: number[] }) => total + board.channels.length, 0) : 0
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <main className="flex-1 container mx-auto p-4">
-        {boards.map((board) => {
+        <div className="mb-4 flex justify-between items-center">
+          <div className="text-sm text-muted-foreground">
+            {totalSelectedChannels > 0 ?
+              `${totalSelectedChannels} channel(s) selected across ${settings?.selectedBoardsChannelsWaveform?.length || 0} board(s)` :
+              'No channels selected - only board names shown'
+            }
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShowAllChannels}
+            >
+              Show All Channels
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleHideAllChannels}
+            >
+              Hide All Channels
+            </Button>
+            {hasAnySelections && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => clearAllSelections('Waveform')}
+                className="text-destructive hover:text-destructive"
+              >
+                Clear All Selections
+              </Button>
+            )}
+          </div>
+        </div>
+        {boards.map((board: BoardData) => {
           const config = waveformConfigs[board.id]
+          const selectedChannels = getSelectedChannels(board.id)
+          const allChannels = Array.from({ length: parseInt(board.chan) }, (_, i) => i)
+          const channelsToShow = selectedChannels // Only show explicitly selected channels
+          const isAllSelected = selectedChannels.length === allChannels.length && selectedChannels.length > 0
+
           return (
             <Card key={board.id} className="mb-6">
               <CardHeader>
@@ -575,22 +678,59 @@ export default function WaveformDashboard() {
                     </div>
                   </div>
                 )}
+                <div className="flex flex-col space-y-4 mt-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`select-all-wave-${board.id}`}
+                        checked={isAllSelected}
+                        onCheckedChange={(checked: boolean) => handleSelectAllChannels(board.id, checked)}
+                      />
+                      <Label htmlFor={`select-all-wave-${board.id}`} className="text-sm font-medium">
+                        Select All Channels
+                      </Label>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {selectedChannels.length > 0 ? `${selectedChannels.length}/${board.chan} channels selected` : `All ${board.chan} channels shown`}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {allChannels.map(channelIndex => (
+                      <div key={channelIndex} className="flex items-center space-x-1">
+                        <Checkbox
+                          id={`wave-channel-${board.id}-${channelIndex}`}
+                          checked={isChannelSelected(board.id, channelIndex)}
+                          onCheckedChange={(checked: boolean) => handleChannelToggle(board.id, channelIndex, checked)}
+                        />
+                        <Label htmlFor={`wave-channel-${board.id}-${channelIndex}`} className="text-xs">
+                          Ch {channelIndex}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {Array.from({ length: parseInt(board.chan) }).map((_, channelIndex) => {
-                    const histoId = `board${board.id}_channel${channelIndex}`
-                    return (
-                      <div key={histoId} className="relative">
-                        <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
-                        <div
-                          ref={(el: HTMLDivElement | null) => { histogramRefs.current[histoId] = el }}
-                          className="w-full h-80 border rounded-lg shadow-sm"
-                        ></div>
-                      </div>
-                    )
-                  })}
-                </div>
+                {channelsToShow.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {channelsToShow.map((channelIndex: number) => {
+                      const histoId = `board${board.id}_channel${channelIndex}`
+                      return (
+                        <div key={histoId} className="relative">
+                          <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
+                          <div
+                            ref={(el: HTMLDivElement | null) => { histogramRefs.current[histoId] = el }}
+                            className="w-full h-80 border rounded-lg shadow-sm"
+                          ></div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-center text-muted-foreground py-8">
+                    No channels selected for this board. Use the checkboxes above to select channels to visualize.
+                  </div>
+                )}
               </CardContent>
             </Card>
           )

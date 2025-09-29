@@ -391,7 +391,9 @@ def get_psd_histogram(board_id, channel):
         channel: Channel number
     """
     try:
-        histo = spy_mgr.get_histogram(board_id, channel, histogram_type='psd')
+        boards = daq_mgr.get_boards()
+        histo = spy_mgr.get_histogram(board_id, channel, boards, histogram_type='psd')
+        histo.RebinX(100)
         json_data = spy_mgr.convert_histogram_to_json(histo)
         return json_data if json_data else ""
     except Exception as e:

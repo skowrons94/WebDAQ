@@ -224,12 +224,15 @@ class ReadoutUnitSpy:
             return False
         
         try:
-            self.obj = ROOT.MakeNullPointer(ROOT.TH1F)
             nbytes = self.socket.Recv(self.msg)
             
             if nbytes <= 0:
                 return False
             
+            if( "TH2F" in self.msg.GetClass().GetName( )):
+                self.obj = ROOT.MakeNullPointer(ROOT.TH2F)
+            else:
+                self.obj = ROOT.MakeNullPointer(ROOT.TH1F)
             self.obj = self.msg.ReadObject(self.msg.GetClass())
             self.msg.Delete()
             
@@ -396,8 +399,7 @@ class ReadoutUnitSpy:
                         try:
                             # Copy data to persistent histogram (fast)
                             persistent_hist = self.data[hist_type][i]
-                            persistent_hist.Reset()
-                            persistent_hist.Add(buffered_hist)
+                            buffered_hist.Copy(persistent_hist)
                             
                             # Clean up buffer
                             buffered_hist.Delete()
