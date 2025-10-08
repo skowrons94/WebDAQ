@@ -348,16 +348,11 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     )
   }
 
-  // Group settings by channel and common settings, filtering out inaccessible registers
+  // Group settings by channel and common settings
   const channelSettings: { [channel: number]: { [regName: string]: RegisterData } } = {}
   const commonSettings: { [regName: string]: RegisterData } = {}
 
   Object.entries(settings).forEach(([regName, registerData]: [string, RegisterData]) => {
-    // Skip registers with all 'F' values (inaccessible)
-    if (!isRegisterAccessible(registerData.value_hex)) {
-      return
-    }
-
     const address = Number.parseInt(registerData.address, 16)
 
     if (address > 0x7000) {
