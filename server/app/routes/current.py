@@ -4,7 +4,8 @@ import numpy as np
 
 from datetime import datetime
 from flask import Blueprint, jsonify, request
-from ..utils.tetramm import tetram_controller
+from ..utils.tetramm import tetram_controller, TetrAMMController
+from ..utils.rbd9103 import rbd9103_controller, RBD9103Controller
 
 from app import db
 from ..models.run_metadata import RunMetadata
@@ -19,19 +20,51 @@ TEST_FLAG = os.getenv('TEST_FLAG', False)
 current_accumulating_run_number = 0
 running = False
 
-# Open conf/settings.json if exists
-if( os.path.exists("conf/current.json") ):
+# Open conf/current.json if exists, create default if not
+if os.path.exists("conf/current.json"):
     with open("conf/current.json") as f:
         settings = json.load(f)
 else:
-    settings = { "tetramm_ip": "169.254.145.10", "tetramm_port": 10001, "total_accumulated": 0 }
+    settings = {
+        "module_type": "tetramm",  # "tetramm" or "rbd9103"
+        "tetramm_ip": "169.254.145.10",
+        "tetramm_port": 10001,
+        "rbd9103_port": "/dev/tty.usbserial-A50285BI",
+        "rbd9103_baudrate": 57600,
+        "rbd9103_high_speed": False,
+        "total_accumulated": 0
+    }
+    os.makedirs("conf", exist_ok=True)
+    with open("conf/current.json", "w") as f:
+        json.dump(settings, f, indent=2)
 
-# Initialize TetrAMMController
-controller = tetram_controller( ip=settings["tetramm_ip"], port=settings["tetramm_port"] )
-controller.initialize( )
+# Initialize controllers
+tetramm_ctrl = None
+rbd9103_ctrl = None
+controller = None  # Active controller
 
-# Load total_accumulated from settings into controller
-controller.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+# Initialize the selected module
+module_type = settings.get("module_type", "tetramm")
+
+if module_type == "tetramm":
+    tetramm_ctrl = tetram_controller(ip=settings["tetramm_ip"], port=settings["tetramm_port"])
+    tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+    try:
+        tetramm_ctrl.initialize()
+    except Exception as e:
+        print(f"Failed to initialize TetrAMM: {e}")
+    controller = tetramm_ctrl
+elif module_type == "rbd9103":
+    rbd9103_ctrl = rbd9103_controller
+    rbd9103_ctrl.set_port(settings.get("rbd9103_port", "/dev/tty.usbserial-A50285BI"))
+    rbd9103_ctrl.set_baudrate(settings.get("rbd9103_baudrate", 57600))
+    rbd9103_ctrl.set_high_speed(settings.get("rbd9103_high_speed", False))
+    rbd9103_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+    try:
+        rbd9103_ctrl.initialize()
+    except Exception as e:
+        print(f"Failed to initialize RBD 9103: {e}")
+    controller = rbd9103_ctrl
 
 # Set ip and port
 @bp.route('/current/set_ip_port/<ip>/<port>', methods=['GET'])
@@ -205,3 +238,180 @@ def reset_total_accumulated():
     settings["total_accumulated"] = 0
     controller.set_total_accumulated_charge(0)
     return jsonify({"message": "Total accumulated reset"}), 200
+
+# Get current module type
+@bp.route('/current/module_type', methods=['GET'])
+@jwt_required_custom
+def get_module_type():
+    global settings
+    return jsonify({"module_type": settings.get("module_type", "tetramm")})
+
+# Set module type (switch between tetramm and rbd9103)
+@bp.route('/current/module_type', methods=['POST'])
+@jwt_required_custom
+def set_module_type():
+    global settings, controller, tetramm_ctrl, rbd9103_ctrl, running
+
+    data = request.get_json()
+    new_module_type = data.get('module_type')
+
+    if new_module_type not in ['tetramm', 'rbd9103']:
+        return jsonify({"error": "Invalid module type. Must be 'tetramm' or 'rbd9103'"}), 400
+
+    if new_module_type == settings.get("module_type"):
+        return jsonify({"message": "Module type already set"}), 200
+
+    # Stop current controller if running
+    if controller:
+        try:
+            if running:
+                controller.set_save_data(False, "./")
+                running = False
+            if controller.is_acquiring:
+                controller.stop_acquisition()
+            controller.disconnect()
+        except Exception as e:
+            print(f"Error stopping current controller: {e}")
+
+    # Save total accumulated charge before switching
+    if controller:
+        settings["total_accumulated"] = controller.get_total_accumulated_charge()
+
+    # Update settings
+    settings["module_type"] = new_module_type
+    with open("conf/current.json", "w") as f:
+        json.dump(settings, f, indent=2)
+
+    # Initialize new controller
+    try:
+        if new_module_type == "tetramm":
+            if not tetramm_ctrl:
+                tetramm_ctrl = TetrAMMController(
+                    ip=settings.get("tetramm_ip", "169.254.145.10"),
+                    port=settings.get("tetramm_port", 10001)
+                )
+            tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+            tetramm_ctrl.initialize()
+            controller = tetramm_ctrl
+        else:  # rbd9103
+            if not rbd9103_ctrl:
+                rbd9103_ctrl = RBD9103Controller(
+                    port=settings.get("rbd9103_port", "/dev/tty.usbserial-A50285BI"),
+                    baudrate=settings.get("rbd9103_baudrate", 57600),
+                    high_speed=settings.get("rbd9103_high_speed", False)
+                )
+            rbd9103_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+            rbd9103_ctrl.initialize()
+            controller = rbd9103_ctrl
+
+        return jsonify({"message": f"Switched to {new_module_type}"}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to initialize {new_module_type}: {str(e)}"}), 500
+
+# Get module-specific settings
+@bp.route('/current/module_settings', methods=['GET'])
+@jwt_required_custom
+def get_module_settings():
+    global settings
+
+    module_type = settings.get("module_type", "tetramm")
+
+    if module_type == "tetramm":
+        return jsonify({
+            "module_type": "tetramm",
+            "ip": settings.get("tetramm_ip", "169.254.145.10"),
+            "port": settings.get("tetramm_port", 10001),
+            "settings": controller.settings if controller else {}
+        })
+    else:  # rbd9103
+        return jsonify({
+            "module_type": "rbd9103",
+            "port": settings.get("rbd9103_port", "/dev/tty.usbserial-A50285BI"),
+            "baudrate": settings.get("rbd9103_baudrate", 57600),
+            "high_speed": settings.get("rbd9103_high_speed", False),
+            "settings": controller.settings if controller else {}
+        })
+
+# Update module-specific settings
+@bp.route('/current/module_settings', methods=['POST'])
+@jwt_required_custom
+def update_module_settings():
+    global settings, controller
+
+    data = request.get_json()
+    module_type = settings.get("module_type", "tetramm")
+
+    try:
+        if module_type == "tetramm":
+            # Update TetrAMM settings
+            if "ip" in data:
+                settings["tetramm_ip"] = data["ip"]
+                if controller:
+                    controller.set_ip(data["ip"])
+
+            if "port" in data:
+                settings["tetramm_port"] = int(data["port"])
+                if controller:
+                    controller.set_port(int(data["port"]))
+
+            # Update device-specific settings (CHN, RNG, ASCII, etc.)
+            if "device_settings" in data:
+                for key, value in data["device_settings"].items():
+                    if controller and controller.is_connected():
+                        controller.set_setting(key, value)
+
+        else:  # rbd9103
+            # Update RBD 9103 settings
+            if "port" in data:
+                settings["rbd9103_port"] = data["port"]
+                # Requires reconnection
+
+            if "baudrate" in data:
+                settings["rbd9103_baudrate"] = int(data["baudrate"])
+                # Requires reconnection
+
+            if "high_speed" in data:
+                settings["rbd9103_high_speed"] = bool(data["high_speed"])
+                # Requires reconnection
+
+            # Update device-specific settings (range, filter, bias, etc.)
+            if "device_settings" in data:
+                for key, value in data["device_settings"].items():
+                    if controller and controller.is_connected():
+                        if key == "range":
+                            controller.set_range(value)
+                        elif key == "filter":
+                            controller.set_filter(value)
+                        elif key == "input_mode":
+                            controller.set_input_mode(value)
+                        elif key == "bias":
+                            controller.set_bias(value)
+
+        # Save settings to file
+        with open("conf/current.json", "w") as f:
+            json.dump(settings, f, indent=2)
+
+        return jsonify({"message": "Settings updated successfully"}), 200
+
+    except Exception as e:
+        return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500
+
+# Get comprehensive status including module type
+@bp.route('/current/status', methods=['GET'])
+@jwt_required_custom
+def get_status():
+    global settings, controller, running
+
+    if not controller:
+        return jsonify({
+            "module_type": settings.get("module_type", "tetramm"),
+            "connected": False,
+            "running": False
+        })
+
+    status = controller.get_status()
+    status["module_type"] = settings.get("module_type", "tetramm")
+    status["running"] = running
+
+    return jsonify(status)

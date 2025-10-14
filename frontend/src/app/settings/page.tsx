@@ -13,7 +13,8 @@ import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
 import { VisualizationSettings } from '@/components/visualization-settings';
-import { MetricsSettings } from '@/components/metrics-settings'
+import { MetricsSettings } from '@/components/metrics-settings';
+import { CurrentModuleSettings } from '@/components/current-module-settings';
 
 const queryClient = new QueryClient()
 
@@ -47,6 +48,8 @@ export default function SettingsPage() {
                 return <Board />;
             case 'metrics':
                 return <MetricsSettings />;
+            case 'current':
+                return <CurrentModuleSettings />;
             default:
                 return (
                     < VisualizationSettings />
@@ -79,12 +82,19 @@ export default function SettingsPage() {
                             </Link>
                             <Link
                                 href="#"
+                                className={`font-semibold ${activeView === 'current' ? 'text-primary' : ''}`}
+                                onClick={() => setActiveView('current')}
+                            >
+                                Current Module
+                            </Link>
+                            <Link
+                                href="#"
                                 className={`font-semibold ${activeView === 'metrics' ? 'text-primary' : ''}`}
                                 onClick={() => setActiveView('metrics')}
                             >
                                 Metrics
                             </Link>
-                            
+
                         </nav>
                         <div className="grid gap-6">
                             {renderActiveView()}

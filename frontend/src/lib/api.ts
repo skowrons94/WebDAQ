@@ -199,6 +199,18 @@ export const connectCurrent = () =>
 export const getConnectedCurrent = () =>
     api.get('/current/is_connected').then(res => res.data);
 
+// Current module management APIs
+export const getCurrentModuleType = () =>
+    api.get('/current/module_type').then(res => res.data);
+export const setCurrentModuleType = (moduleType: string) =>
+    api.post('/current/module_type', { module_type: moduleType });
+export const getCurrentModuleSettings = () =>
+    api.get('/current/module_settings').then(res => res.data);
+export const updateCurrentModuleSettings = (settings: any) =>
+    api.post('/current/module_settings', settings);
+export const getCurrentStatus = () =>
+    api.get('/current/status').then(res => res.data);
+
 // Get boards JSON
 export const getSetting = (id: string, setting: string) =>
     api.get(`/digitizer/${id}/${setting}`).then(res => res.data);
