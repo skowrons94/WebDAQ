@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/card"
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
+import { useStatsStore } from '@/store/stats-store'
 import {
   getRoiIntegral,
   getFileBandwidth,
@@ -37,6 +38,8 @@ import {
   getBoardStatus,
   getBoardConfiguration,
   getBoardConnectivity,
+  getStatsPaths,
+  getStatsMetricLastValue,
   getCurrentModuleType,
 } from '@/lib/api'
 
@@ -102,6 +105,7 @@ interface CardHolderProps {
 export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const { settings } = useVisualizationStore()
   const { metrics } = useMetricsStore()
+  const { paths, currentValues, setPaths, setCurrentValue } = useStatsStore()
   const [visibleMetrics, setVisibleMetrics] = useState(() => metrics.filter(metric => metric.isVisible))
 
   const [roiCards, setRoiCards] = useState<ROICardData[]>([])
@@ -125,6 +129,20 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   useEffect(() => {
     setVisibleMetrics(metrics.filter(metric => metric.isVisible))
   }, [metrics])
+
+  // Load stats paths on mount
+  useEffect(() => {
+    const loadStatsPaths = async () => {
+      try {
+        const data = await getStatsPaths()
+        setPaths(data || [])
+      } catch (error) {
+        console.error('Failed to fetch stats paths:', error)
+      }
+    }
+
+    loadStatsPaths()
+  }, [setPaths])
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -156,6 +174,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     const totalAccumulatedChargeInterval = setInterval(updateTotalAccumulatedCharge, 1000)
     const boardStatusInterval = setInterval(updateBoardStatus, 2000)
     const boardConnectivityInterval = setInterval(updateBoardConnectivity, 5000) // Check every 5 seconds
+    const statsInterval = setInterval(updateStatsValues, 5000) // Refresh stats every 5 seconds
 
     return () => {
       clearInterval(beamCurrentInterval)
@@ -165,6 +184,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       clearInterval(totalAccumulatedChargeInterval)
       clearInterval(boardStatusInterval)
       clearInterval(boardConnectivityInterval)
+      clearInterval(statsInterval)
     }
   }, [])
 
@@ -366,6 +386,23 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       setBoardConnectivity(connectivity)
     } catch (error) {
       console.error('Failed to update board connectivity:', error)
+    }
+  }
+
+  const updateStatsValues = async () => {
+    try {
+      for (const path of paths.filter(p => p.enabled)) {
+        try {
+          const data = await getStatsMetricLastValue(path.path)
+          if (data && data.value !== undefined) {
+            setCurrentValue(path.path, data.value, data.timestamp)
+          }
+        } catch (error) {
+          console.error(`Failed to fetch value for ${path.path}:`, error)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to update stats values:', error)
     }
   }
 
@@ -607,7 +644,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
           <Card key={metric.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                {metric.metricName.split('_').map(word => 
+                {metric.metricName.split('_').map(word =>
                   word.charAt(0).toUpperCase() + word.slice(1)
                 ).join(' ')}
               </CardTitle>
@@ -625,6 +662,32 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
             </CardContent>
           </Card>
         ))}
+
+        {/* Stats/Graphite Metric Cards */}
+        {settings.showStats &&
+          paths.filter((p: any) => p.enabled).map((path: any) => (
+            <Card key={path.path}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  {path.alias}
+                </CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {currentValues[path.path]?.value !== undefined && currentValues[path.path]?.value !== null
+                    ? (Number(currentValues[path.path].value)).toFixed(2)
+                    : 'N/A'}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {currentValues[path.path]?.timestamp
+                    ? new Date(currentValues[path.path].timestamp!).toLocaleTimeString()
+                    : 'No data'}
+                </p>
+              </CardContent>
+            </Card>
+          ))
+        }
       </div>
     </ScrollArea>
   )

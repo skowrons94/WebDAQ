@@ -258,4 +258,29 @@ export const getBoardStatus = () =>
 export const refreshBoardConnections = () =>
     api.post('/experiment/refresh_board_connections');
 
+// Stats/Graphite path management APIs
+export const getStatsPaths = () =>
+    api.get('/stats/paths').then(res => res.data);
+
+export const addStatsPath = (path: string, alias?: string) =>
+    api.post('/stats/paths', { path, alias }).then(res => res.data);
+
+export const removeStatsPath = (path: string) =>
+    api.delete(`/stats/paths/${path}`).then(res => res.data);
+
+export const updateStatsPath = (path: string, alias?: string, enabled?: boolean) =>
+    api.put(`/stats/paths/${path}`, { alias, enabled }).then(res => res.data);
+
+export const getStatsMetricLastValue = (metric: string, from: string = '-10s') =>
+    api.get(`/stats/metric/${metric}/last`, { params: { from } }).then(res => res.data);
+
+export const startStatsRun = (runNumber: number) =>
+    api.post(`/stats/run/${runNumber}/start`).then(res => res.data);
+
+export const stopStatsRun = () =>
+    api.post('/stats/run/stop').then(res => res.data);
+
+export const getStatsRunStatus = () =>
+    api.get('/stats/run/status').then(res => res.data);
+
 export default api;

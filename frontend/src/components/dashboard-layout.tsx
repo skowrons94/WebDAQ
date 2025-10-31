@@ -82,6 +82,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         Logbook
                     </Link>
                     <Link
+                        href="/stats"
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+
+                        Stats
+                    </Link>
+                    <Link
                         href="http://lunaserver:3000"
                         target="_blank"
                         rel="noopener noreferrer"
@@ -130,6 +137,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 className="text-muted-foreground hover:text-foreground"
                             >
                                 Logbook
+                            </Link>
+                            <Link
+                                href="/stats"
+                                className="text-muted-foreground transition-colors hover:text-foreground"
+                            >
+
+                                Stats
                             </Link>
                             <Link
                                 href="http://lunaserver:3000"
