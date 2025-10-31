@@ -47,6 +47,7 @@ import {
   getIpCurrent,
   getPortCurrent,
   getConnectedCurrent,
+  getCurrentModuleType,
 } from '@/lib/api'
 
 interface DAQStateProps {
@@ -96,6 +97,21 @@ export function DAQState({
 }: DAQStateProps) {
   const { toast } = useToast()
   const [showParametersDialog, setShowParametersDialog] = useState(false)
+  const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
+  const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
+
+  useEffect(() => {
+    const fetchModuleType = async () => {
+      try {
+        const response = await getCurrentModuleType()
+        setCurrentModuleType(response.module_type)
+        setCurrentModuleName(response.module_type === 'rbd9103' ? 'RBD 9103' : 'TetrAMM')
+      } catch (error) {
+        console.error('Failed to fetch module type:', error)
+      }
+    }
+    fetchModuleType()
+  }, [])
 
   /**
    * Handles run number input changes with validation
@@ -161,16 +177,20 @@ export function DAQState({
    * Handles TetrAMM IP address changes
    */
   const handleIpCurrent = async (value: string) => {
-    onIpCurrentChange(value)
-    await setIpPortCurrent(value, portCurrent)
+    if (currentModuleType === 'tetramm') {
+      onIpCurrentChange(value)
+      await setIpPortCurrent(value, portCurrent)
+    }
   }
 
   /**
    * Handles TetrAMM port changes
    */
   const handlePortCurrent = async (value: string) => {
-    onPortCurrentChange(value)
-    await setIpPortCurrent(ipCurrent, value)
+    if (currentModuleType === 'tetramm') {
+      onPortCurrentChange(value)
+      await setIpPortCurrent(ipCurrent, value)
+    }
   }
 
   return (
@@ -249,12 +269,14 @@ export function DAQState({
                 </TableCell>
               </TableRow>
               
-              {/* TetrAMM Address Row */}
+              {/* Current Device Address Row */}
               <TableRow>
-                <TableCell className="text-xs sm:text-sm py-2">TetrAMM Address</TableCell>
+                <TableCell className="text-xs sm:text-sm py-2">{currentModuleName} Address</TableCell>
                 <TableCell className="text-xs sm:text-sm py-2">
                   <div className="block sm:hidden">...</div>
-                  <div className="hidden sm:block">{`${ipCurrent}:${portCurrent}`}</div>
+                  <div className="hidden sm:block">
+                    {currentModuleType === 'tetramm' ? `${ipCurrent}:${portCurrent}` : 'Serial Port'}
+                  </div>
                 </TableCell>
                 <TableCell className="text-xs sm:text-sm py-2">
                   <Badge 
@@ -340,27 +362,40 @@ export function DAQState({
               <Label htmlFor="waveforms">Waveforms</Label>
             </div>
             
-            {/* TetrAMM IP Input */}
-            <div className="flex flex-col gap-4">
-              <Label htmlFor="ipCurrent">TetrAMM IP</Label>
-              <Input
-                id="ipCurrent"
-                type="text"
-                value={ipCurrent}
-                onChange={(e) => handleIpCurrent(e.target.value)}
-              />
-            </div>
-            
-            {/* TetrAMM Port Input */}
-            <div className="flex flex-col gap-4">
-              <Label htmlFor="portCurrent">TetrAMM Port</Label>
-              <Input
-                id="portCurrent"
-                type="text"
-                value={portCurrent}
-                onChange={(e) => handlePortCurrent(e.target.value)}
-              />
-            </div>
+            {/* Current Device Configuration */}
+            {currentModuleType === 'tetramm' && (
+              <>
+                {/* TetrAMM IP Input */}
+                <div className="flex flex-col gap-4">
+                  <Label htmlFor="ipCurrent">TetrAMM IP</Label>
+                  <Input
+                    id="ipCurrent"
+                    type="text"
+                    value={ipCurrent}
+                    onChange={(e) => handleIpCurrent(e.target.value)}
+                  />
+                </div>
+                
+                {/* TetrAMM Port Input */}
+                <div className="flex flex-col gap-4">
+                  <Label htmlFor="portCurrent">TetrAMM Port</Label>
+                  <Input
+                    id="portCurrent"
+                    type="text"
+                    value={portCurrent}
+                    onChange={(e) => handlePortCurrent(e.target.value)}
+                  />
+                </div>
+              </>
+            )}
+            {currentModuleType === 'rbd9103' && (
+              <div className="flex flex-col gap-4">
+                <Label>Current Device: RBD 9103</Label>
+                <p className="text-sm text-muted-foreground">
+                  RBD 9103 settings are configured in the device settings page.
+                </p>
+              </div>
+            )}
           </div>
           
           <DialogFooter>

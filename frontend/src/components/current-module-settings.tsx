@@ -62,12 +62,14 @@ export function CurrentModuleSettings() {
     try {
       setLoading(true)
 
-      // Get current module type
+      // Get current module type first
       const typeResponse = await getCurrentModuleType()
       setModuleTypeState(typeResponse.module_type)
 
-      // Get module settings
+      // Get module settings - this should work even if device is disconnected
+      console.log('Loading module settings...')
       const settingsResponse = await getCurrentModuleSettings()
+      console.log('Module settings loaded:', settingsResponse)
       setModuleSettings(settingsResponse)
 
       // Populate form fields based on module type
@@ -91,14 +93,26 @@ export function CurrentModuleSettings() {
         }
       }
 
-      // Load status
-      await loadStatus()
+      // Load status - continue even if this fails
+      try {
+        await loadStatus()
+      } catch (statusError) {
+        console.warn('Failed to load status, but continuing:', statusError)
+        // Set a default status if status loading fails
+        setStatus({
+          connected: false,
+          running: false,
+          acquiring: false,
+          thread_alive: false,
+          module_type: typeResponse.module_type
+        })
+      }
 
     } catch (error: any) {
       console.error('Error loading settings:', error)
       toast({
         title: 'Error',
-        description: 'Failed to load module settings',
+        description: `Failed to load module settings: ${error.response?.data?.error || error.message || 'Unknown error'}`,
         variant: 'destructive'
       })
     } finally {
@@ -108,10 +122,20 @@ export function CurrentModuleSettings() {
 
   const loadStatus = async () => {
     try {
+      console.log('Loading status...')
       const statusResponse = await getCurrentStatus()
+      console.log('Status loaded:', statusResponse)
       setStatus(statusResponse)
     } catch (error) {
       console.error('Error loading status:', error)
+      // Don't throw the error, just set a default status
+      setStatus({
+        connected: false,
+        running: false,
+        acquiring: false,
+        thread_alive: false,
+        module_type: moduleType
+      })
     }
   }
 
@@ -361,7 +385,7 @@ export function CurrentModuleSettings() {
                   id="rbd-port"
                   value={rbdPort}
                   onChange={(e) => setRbdPort(e.target.value)}
-                  placeholder="/dev/tty.usbserial-A50285BI"
+                  placeholder="/dev/ttyUSB0"
                 />
                 <p className="text-xs text-muted-foreground">
                   USB serial port device path (e.g., /dev/ttyUSB0 on Linux, COM3 on Windows)

@@ -45,7 +45,7 @@ class RBD9103Controller:
     """
 
     def __init__(self,
-                 port: str = '/dev/tty.usbserial-A50285BI',
+                 port: str = '/dev/ttyUSB0',
                  baudrate: int = 57600,
                  high_speed: bool = False,
                  graphite_host: str = '172.18.9.54',
@@ -372,6 +372,11 @@ class RBD9103Controller:
             # Connect to device
             self.connect()
 
+            # Only proceed if connection was successful
+            if not self.serial_port or not self.serial_port.is_open:
+                self.logger.warning("RBD 9103 connection failed, skipping initialization")
+                return
+
             # Apply device settings
             self.set_range(self.settings.get('range', 'R0'))
             self.set_filter(self.settings.get('filter', 'F032'))
@@ -382,14 +387,22 @@ class RBD9103Controller:
             sample_rate = self.settings.get('sample_rate', 'I1000')
             self._send_command(sample_rate)
 
-            # Start data acquisition thread
-            self.start_acquisition()
-
-            self.logger.info("RBD 9103 device initialized successfully")
+            # Start data acquisition thread only if connected
+            if self.serial_port and self.serial_port.is_open:
+                self.start_acquisition()
+                self.logger.info("RBD 9103 device initialized successfully")
+            else:
+                self.logger.warning("RBD 9103 device not connected, acquisition not started")
 
         except Exception as e:
             self.logger.error(f"Failed to initialize RBD 9103 device: {e}")
-            raise
+            # Ensure we don't leave the device in a broken state
+            self.is_acquiring = False
+            if self.serial_port and self.serial_port.is_open:
+                try:
+                    self.serial_port.close()
+                except:
+                    pass
 
     def start_acquisition(self) -> None:
         """
@@ -428,51 +441,53 @@ class RBD9103Controller:
 
             self.logger.info("RBD 9103 data acquisition stopped")
 
-    def _parse_standard_speed_sample(self, msg: str) -> Optional[tuple]:
+    def _parse_standard_speed_sample(self, msg: str):
         """
-        Parse standard speed sample message.
-        Format: &S,stability,range,value,unit
-
-        Args:
-            msg: Message string from device
+        Parse standard speed sample message from format like:
+            S=,Range=002nA,+0.0072,nA
 
         Returns:
-            tuple: (stability, range, value_amps) or None if invalid
+            (stability, range, value_in_amps) or None if invalid
         """
-        if '&S' not in msg:
-            return None
-
         try:
-            msg = msg.strip('&\r\n')
-            parts = msg.split(',')
+            msg = msg.strip()
+            parts = [p.strip() for p in msg.split(',') if p.strip()]
+            if len(parts) < 4:
+                return None
 
-            if len(parts) >= 4:
-                stability = parts[1]  # S=stable, U=unstable
-                range_str = parts[2]
-                value_str = parts[3]
+            # Stability can be blank or something like 'S=S' or 'S=U'
+            stability_part = parts[0]
+            stability = stability_part.replace('S=', '').strip() or None
 
-                # Extract numeric value and unit
-                # Format: "1.234e-6A" or "1.234nA"
-                value_with_unit = value_str
-                if 'A' in value_with_unit:
-                    value_num = float(value_with_unit.rstrip('A').rstrip('n').rstrip('u').rstrip('m'))
+            # Range (e.g., "Range=002nA")
+            range_part = parts[1]
+            if not range_part.startswith("Range="):
+                return None
+            range_str = range_part.replace("Range=", "").strip()
 
-                    # Convert to amps based on unit prefix
-                    if 'nA' in value_with_unit:
-                        value_amps = value_num * 1e-9
-                    elif 'uA' in value_with_unit or 'µA' in value_with_unit:
-                        value_amps = value_num * 1e-6
-                    elif 'mA' in value_with_unit:
-                        value_amps = value_num * 1e-3
-                    else:
-                        value_amps = value_num
+            # Value and unit
+            value_str = parts[2]
+            unit_str = parts[3]
 
-                    return (stability, range_str, value_amps)
+            # Parse numeric value
+            value_num = float(value_str)
+
+            # Determine multiplier
+            unit_prefix = unit_str[0] if len(unit_str) > 1 else ''
+            multiplier = {
+                '': 1.0,
+                'm': 1e-3,
+                'u': 1e-6,
+                'µ': 1e-6,
+                'n': 1e-9,
+            }.get(unit_prefix, 1.0)
+
+            value_amps = value_num * multiplier
+            return (stability, range_str, value_amps)
 
         except Exception as e:
             self.logger.warning(f"Error parsing standard speed sample: {e}, msg: {msg}")
-
-        return None
+            return None
 
     def _parse_high_speed_sample(self, msg: str) -> list:
         """

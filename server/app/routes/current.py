@@ -49,10 +49,8 @@ module_type = settings.get("module_type", "tetramm")
 if module_type == "tetramm":
     tetramm_ctrl = tetram_controller(ip=settings["tetramm_ip"], port=settings["tetramm_port"])
     tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
-    try:
-        tetramm_ctrl.initialize()
-    except Exception as e:
-        print(f"Failed to initialize TetrAMM: {e}")
+    # Don't initialize at startup - initialize only when needed
+    # This prevents hanging when device is disconnected at startup
     controller = tetramm_ctrl
 elif module_type == "rbd9103":
     rbd9103_ctrl = rbd9103_controller
@@ -60,10 +58,8 @@ elif module_type == "rbd9103":
     rbd9103_ctrl.set_baudrate(settings.get("rbd9103_baudrate", 57600))
     rbd9103_ctrl.set_high_speed(settings.get("rbd9103_high_speed", False))
     rbd9103_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
-    try:
-        rbd9103_ctrl.initialize()
-    except Exception as e:
-        print(f"Failed to initialize RBD 9103: {e}")
+    # Don't initialize at startup - initialize only when needed
+    # This prevents hanging when device is disconnected at startup
     controller = rbd9103_ctrl
 
 # Set ip and port
@@ -178,9 +174,14 @@ def reset_device():
 @bp.route('/current/data', methods=['GET'])
 @jwt_required_custom
 def get_data():
-    data = controller.get_data()["0"]
-    if( data < 1e-9 ): data = 0
-    return jsonify(data)
+    if( "rbd9103" in settings.get("module_type", "") ):
+        data = controller.get_data()
+        if( data < 1e-9 ): data = 0
+        return jsonify(data)
+    else:
+        data = controller.get_data()["0"]
+        if( data < 1e-9 ): data = 0
+        return jsonify(data)
 
 @bp.route('/current/collimator/1', methods=['GET'])
 @jwt_required_custom
@@ -200,7 +201,10 @@ def get_data_2():
 @jwt_required_custom
 def get_data_array():
     # Real thing
-    data = controller.get_data_array()["0"].tolist()
+    if( "rbd9103" in settings.get("module_type", "") ):
+        data = controller.get_data_array().tolist()
+    else:
+        data = controller.get_data_array()["0"].tolist()
     # For test: sample 100 points from normal distribution with mean 100 and std 10
     #data = np.random.normal(100, 10, 100)
     #data = data.tolist()
@@ -316,13 +320,24 @@ def get_module_settings():
     global settings
 
     module_type = settings.get("module_type", "tetramm")
+    
+    # Safely get controller settings
+    controller_settings = {}
+    if controller:
+        try:
+            controller_settings = getattr(controller, 'settings', {})
+            if controller_settings is None:
+                controller_settings = {}
+        except Exception as e:
+            print(f"Error accessing controller settings: {e}")
+            controller_settings = {}
 
     if module_type == "tetramm":
         return jsonify({
             "module_type": "tetramm",
             "ip": settings.get("tetramm_ip", "169.254.145.10"),
             "port": settings.get("tetramm_port", 10001),
-            "settings": controller.settings if controller else {}
+            "settings": controller_settings
         })
     else:  # rbd9103
         return jsonify({
@@ -330,7 +345,7 @@ def get_module_settings():
             "port": settings.get("rbd9103_port", "/dev/tty.usbserial-A50285BI"),
             "baudrate": settings.get("rbd9103_baudrate", 57600),
             "high_speed": settings.get("rbd9103_high_speed", False),
-            "settings": controller.settings if controller else {}
+            "settings": controller_settings
         })
 
 # Update module-specific settings
@@ -358,8 +373,29 @@ def update_module_settings():
             # Update device-specific settings (CHN, RNG, ASCII, etc.)
             if "device_settings" in data:
                 for key, value in data["device_settings"].items():
-                    if controller and controller.is_connected():
-                        controller.set_setting(key, value)
+                    if controller:
+                        # Always update local settings first (for persistence)
+                        if hasattr(controller, 'settings') and key in controller.settings:
+                            controller.settings[key] = value
+                            
+                        # Try to send to device if we have a socket connection
+                        device_updated = False
+                        try:
+                            if hasattr(controller, 'socket') and controller.socket:
+                                # Send command to device and let set_setting handle the file save
+                                response = controller._send_command(f'{key}:{value}')
+                                device_updated = True
+                                print(f"TetrAMM setting sent to device: {key}={value}")
+                        except Exception as e:
+                            print(f"Failed to send setting to device: {e}")
+                            
+                        # Always save to file (whether device update succeeded or not)
+                        try:
+                            controller.write_settings()  # Save to tetram.json
+                            if not device_updated:
+                                print(f"TetrAMM disconnected, saved setting {key}={value} to file only")
+                        except Exception as e:
+                            print(f"Failed to save settings to file: {e}")
 
         else:  # rbd9103
             # Update RBD 9103 settings
@@ -407,11 +443,52 @@ def get_status():
         return jsonify({
             "module_type": settings.get("module_type", "tetramm"),
             "connected": False,
-            "running": False
+            "running": False,
+            "acquiring": False,
+            "thread_alive": False
         })
 
-    status = controller.get_status()
-    status["module_type"] = settings.get("module_type", "tetramm")
-    status["running"] = running
+    try:
+        # Get basic status without calling potentially hanging methods
+        module_type = settings.get("module_type", "tetramm")
+        
+        # Safely check basic controller state without socket operations
+        basic_status = {
+            "module_type": module_type,
+            "running": running,
+            "acquiring": getattr(controller, 'is_acquiring', False),
+            "thread_alive": False,
+            "connected": False,
+            "settings": getattr(controller, 'settings', {})
+        }
+        
+        # Safely check thread status
+        try:
+            if hasattr(controller, 'acquisition_thread') and controller.acquisition_thread:
+                basic_status["thread_alive"] = controller.acquisition_thread.is_alive()
+        except:
+            pass
+            
+        # Try to get connection status with timeout protection
+        try:
+            # Only check connection if we have a valid socket/port
+            if module_type == "tetramm" and hasattr(controller, 'socket') and controller.socket:
+                basic_status["connected"] = True  # Socket exists, assume connected
+            elif module_type == "rbd9103" and hasattr(controller, 'serial_port') and controller.serial_port:
+                basic_status["connected"] = controller.serial_port.is_open if controller.serial_port else False
+        except:
+            basic_status["connected"] = False
 
-    return jsonify(status)
+        return jsonify(basic_status)
+        
+    except Exception as e:
+        print(f"Error getting controller status: {e}")
+        # Return default status if controller fails
+        return jsonify({
+            "module_type": settings.get("module_type", "tetramm"),
+            "connected": False,
+            "running": False,
+            "acquiring": False,
+            "thread_alive": False,
+            "error": str(e)
+        })

@@ -37,6 +37,7 @@ import {
   getBoardStatus,
   getBoardConfiguration,
   getBoardConnectivity,
+  getCurrentModuleType,
 } from '@/lib/api'
 
 type ROI = {
@@ -112,6 +113,8 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false)
   const [ipCurrent, setIpCurrent] = useState<string>('')
   const [portCurrent, setPortCurrent] = useState<string>('')
+  const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
+  const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
@@ -126,16 +129,19 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [ip, port, isConnected] = await Promise.all([
+        const [ip, port, isConnected, moduleType] = await Promise.all([
           getIpCurrent(),
           getPortCurrent(),
-          getConnectedCurrent()
+          getConnectedCurrent(),
+          getCurrentModuleType()
         ])
         setIpCurrent(ip)
         setPortCurrent(port)
         setIsConnectedCurrent(isConnected)
+        setCurrentModuleType(moduleType.module_type)
+        setCurrentModuleName(moduleType.module_type === 'rbd9103' ? 'RBD 9103' : 'TetrAMM')
       } catch (error) {
-        console.error('Failed to fetch initial TetrAMM data:', error)
+        console.error('Failed to fetch initial current device data:', error)
       }
     }
 
@@ -388,19 +394,19 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
           </Card>
         )}
 
-        {/* TetrAMM Connection Status Card */}
+        {/* Current Device Connection Status Card */}
         {settings.showStatus && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                TetrAMM
+                {currentModuleName}
               </CardTitle>
               <BatteryCharging className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{isConnectedCurrent ? "Connected" : "Disconnected"}</div>
               <p className="text-xs text-muted-foreground">
-                {`IP: ${ipCurrent} Port: ${portCurrent}`}
+                {currentModuleType === 'tetramm' ? `IP: ${ipCurrent} Port: ${portCurrent}` : 'Serial Port'}
               </p>
             </CardContent>
           </Card>

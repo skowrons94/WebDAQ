@@ -402,6 +402,11 @@ class TetrAMMController:
             # Connect to device
             self.connect()
             
+            # Only proceed if connection was successful
+            if not self.socket:
+                self.logger.warning("TetrAMM connection failed, skipping initialization")
+                return
+            
             # Apply all settings
             for setting, value in self.settings.items():
                 try:
@@ -409,13 +414,23 @@ class TetrAMMController:
                 except Exception as e:
                     self.logger.warning(f"Failed to apply setting {setting}={value}: {e}")
             
-            # Start data acquisition
-            self.start_acquisition()
-            
-            self.logger.info("TetrAMM device initialized successfully")
+            # Start data acquisition only if connected
+            if self.socket:
+                self.start_acquisition()
+                self.logger.info("TetrAMM device initialized successfully")
+            else:
+                self.logger.warning("TetrAMM device not connected, acquisition not started")
             
         except Exception as e:
             self.logger.error(f"Failed to initialize TetrAMM device: {e}")
+            # Ensure we don't leave the device in a broken state
+            self.is_acquiring = False
+            if self.socket:
+                try:
+                    self.socket.close()
+                except:
+                    pass
+                self.socket = None
     
     def start_acquisition(self) -> None:
         """
@@ -472,8 +487,20 @@ class TetrAMMController:
         
         while self.is_acquiring:
             try:
+                # Check if we're still connected before trying to acquire
+                if not self.socket:
+                    self.logger.warning("TetrAMM socket is None, stopping acquisition")
+                    self.is_acquiring = False
+                    break
+                    
                 self._acquire_measurement()
                 time.sleep(self.acquisition_interval)
+                
+            except ConnectionError as e:
+                self.logger.warning(f"TetrAMM connection error: {e}")
+                self.is_acquiring = False
+                self._handle_disconnection()
+                break
                 
             except socket.timeout:
                 self.logger.warning("TetrAMM acquisition timeout - device may be unreachable")
@@ -483,23 +510,13 @@ class TetrAMMController:
                 except:
                     self.logger.warning("Failed to send ACQ:OFF, disconnecting TetrAMM")
                     self.is_acquiring = False
-                    if self.socket:
-                        try:
-                            self.socket.close()
-                        except:
-                            pass
-                        self.socket = None
+                    self._handle_disconnection()
                     break
                 
             except (ConnectionResetError, BrokenPipeError, OSError) as e:
                 self.logger.error(f"TetrAMM connection lost in acquisition loop: {e}")
                 self.is_acquiring = False
-                if self.socket:
-                    try:
-                        self.socket.close()
-                    except:
-                        pass
-                    self.socket = None
+                self._handle_disconnection()
                 break
                 
             except Exception as e:
