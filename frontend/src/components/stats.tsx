@@ -21,8 +21,14 @@ import {
   getTerminalVoltage,
   getExtractionVoltage,
   getColumnCurrent,
-  getBoardRates
+  getBoardRates,
+  getStatsGraphiteConfig,
+  setStatsGraphiteConfig
 } from '@/lib/api'
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useToast } from '@/components/ui/use-toast'
 
 type BoardData = {
   id: string;
@@ -41,8 +47,42 @@ type StatData = {
 }
 
 export function Stats() {
+  const { toast } = useToast()
   const [boards, setBoards] = useState<BoardData[]>([])
   const [stats, setStats] = useState<StatData[]>([])
+  const [graphiteHost, setGraphiteHost] = useState('localhost')
+  const [graphitePort, setGraphitePort] = useState('80')
+  const [showConfig, setShowConfig] = useState(false)
+
+  const loadGraphiteConfig = async () => {
+    try {
+      console.log('Loading graphite config for stats...')
+      const config = await getStatsGraphiteConfig()
+      console.log('Graphite config loaded:', config)
+      setGraphiteHost(config.graphite_host || 'localhost')
+      setGraphitePort(String(config.graphite_port || 80))
+    } catch (error) {
+      console.error('Failed to load graphite config:', error)
+    }
+  }
+
+  const handleSaveGraphiteConfig = async () => {
+    try {
+      await setStatsGraphiteConfig(graphiteHost, parseInt(graphitePort))
+      toast({
+        title: 'Success',
+        description: 'Graphite server configuration updated'
+      })
+      await loadGraphiteConfig()
+    } catch (error: any) {
+      console.error('Error saving Graphite config:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to save Graphite configuration',
+        variant: 'destructive'
+      })
+    }
+  }
 
   const fetchBoardConfiguration = useCallback(async () => {
     try {
@@ -125,6 +165,7 @@ export function Stats() {
 
   useEffect(() => {
     fetchBoardConfiguration()
+    loadGraphiteConfig()
   }, [fetchBoardConfiguration])
 
   useEffect(() => {
@@ -136,8 +177,53 @@ export function Stats() {
   }, [boards, fetchStats])
 
   return (
-    <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-5 gap-4 p-2 ">
-      {stats.map((stat, index) => (
+    <div className="space-y-4 p-2">
+      {/* Graphite Server Configuration */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div>
+            <CardTitle className="text-sm font-medium">Graphite Server Configuration</CardTitle>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowConfig(!showConfig)}
+          >
+            {showConfig ? 'Hide' : 'Show'} Configuration
+          </Button>
+        </CardHeader>
+        {showConfig && (
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="stats-graphite-host">Graphite Host</Label>
+                <Input
+                  id="stats-graphite-host"
+                  value={graphiteHost}
+                  onChange={(e) => setGraphiteHost(e.target.value)}
+                  placeholder="localhost"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stats-graphite-port">Graphite Port</Label>
+                <Input
+                  id="stats-graphite-port"
+                  value={graphitePort}
+                  onChange={(e) => setGraphitePort(e.target.value)}
+                  placeholder="80"
+                />
+              </div>
+            </div>
+            <Button onClick={handleSaveGraphiteConfig} className="w-full">
+              Save Graphite Configuration
+            </Button>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Stats Grid */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-5 gap-4">
+        {stats.map((stat, index) => (
         <Card key={index}>
           <CardHeader>
             <CardTitle className="text-sm font-medium">{stat.name}</CardTitle>
@@ -175,6 +261,7 @@ export function Stats() {
           </CardContent>
         </Card>
       ))}
+      </div>
     </div>
   )
 }

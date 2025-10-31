@@ -8,11 +8,54 @@ from ..utils.jwt_utils import jwt_required_custom
 bp = Blueprint('stats', __name__)
 
 # Initialize StatsManager with single Graphite client
-stats_manager = StatsManager(graphite_host='lunaserver', graphite_port=80)
+stats_manager = StatsManager(graphite_host='localhost', graphite_port=80)
 
 DEBUG = os.getenv('DEBUG', False)
 
 # Configuration Management Endpoints
+
+@bp.route('/stats/graphite_config', methods=['GET'])
+@jwt_required_custom
+def get_graphite_config():
+    """Get current Graphite server configuration."""
+    try:
+        config = stats_manager.get_config_info()
+        return jsonify({
+            'graphite_host': config['graphite_host'],
+            'graphite_port': config['graphite_port']
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/stats/graphite_config', methods=['POST'])
+@jwt_required_custom
+def set_graphite_config():
+    """Update Graphite server configuration."""
+    try:
+        data = request.get_json()
+        graphite_host = data.get('graphite_host')
+        graphite_port = data.get('graphite_port')
+
+        if not graphite_host or not graphite_port:
+            return jsonify({'error': 'Missing graphite_host or graphite_port'}), 400
+
+        # Update the stats_manager's graphite client
+        stats_manager.graphite_client.host = graphite_host
+        stats_manager.graphite_client.port = int(graphite_port)
+        # IMPORTANT: Update base_url as well since it's cached
+        stats_manager.graphite_client.base_url = f"http://{graphite_host}:{int(graphite_port)}"
+
+        # Update the config file
+        stats_manager.stats_config['graphite_host'] = graphite_host
+        stats_manager.stats_config['graphite_port'] = int(graphite_port)
+        stats_manager._save_config(stats_manager.stats_config)
+
+        return jsonify({'message': 'Graphite configuration updated'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @bp.route('/stats/paths', methods=['GET'])
 @jwt_required_custom

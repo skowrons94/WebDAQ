@@ -14,7 +14,9 @@ import {
   setCurrentModuleType,
   getCurrentModuleSettings,
   updateCurrentModuleSettings,
-  getCurrentStatus
+  getCurrentStatus,
+  getCurrentGraphiteConfig,
+  setCurrentGraphiteConfig
 } from '@/lib/api'
 
 interface ModuleSettings {
@@ -50,6 +52,10 @@ export function CurrentModuleSettings() {
   const [rbdInputMode, setRbdInputMode] = useState('G0')
   const [rbdBias, setRbdBias] = useState('B0')
 
+  // Graphite configuration
+  const [graphiteHost, setGraphiteHost] = useState('172.18.9.54')
+  const [graphitePort, setGraphitePort] = useState('2003')
+
   useEffect(() => {
     loadSettings()
     const interval = setInterval(() => {
@@ -58,6 +64,16 @@ export function CurrentModuleSettings() {
     return () => clearInterval(interval)
   }, [])
 
+  const loadGraphiteConfig = async () => {
+    try {
+      const config = await getCurrentGraphiteConfig()
+      setGraphiteHost(config.graphite_host || '172.18.9.54')
+      setGraphitePort(String(config.graphite_port || 2003))
+    } catch (error) {
+      console.error('Error loading graphite config:', error)
+    }
+  }
+
   const loadSettings = async () => {
     try {
       setLoading(true)
@@ -65,6 +81,9 @@ export function CurrentModuleSettings() {
       // Get current module type first
       const typeResponse = await getCurrentModuleType()
       setModuleTypeState(typeResponse.module_type)
+
+      // Load graphite configuration
+      await loadGraphiteConfig()
 
       // Get module settings - this should work even if device is disconnected
       console.log('Loading module settings...')
@@ -226,6 +245,27 @@ export function CurrentModuleSettings() {
       toast({
         title: 'Error',
         description: error.response?.data?.error || 'Failed to save RBD 9103 settings',
+        variant: 'destructive'
+      })
+    }
+  }
+
+  const handleSaveGraphiteConfig = async () => {
+    try {
+      await setCurrentGraphiteConfig(graphiteHost, parseInt(graphitePort))
+
+      toast({
+        title: 'Success',
+        description: 'Graphite server configuration updated'
+      })
+
+      await loadGraphiteConfig()
+
+    } catch (error: any) {
+      console.error('Error saving Graphite config:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to save Graphite configuration',
         variant: 'destructive'
       })
     }
@@ -541,6 +581,41 @@ export function CurrentModuleSettings() {
           </CardContent>
         </Card>
       )}
+
+      {/* Graphite Server Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Graphite Server Configuration</CardTitle>
+          <CardDescription>
+            Configure the Graphite server for sending current measurement metrics
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="graphite-host">Graphite Host</Label>
+              <Input
+                id="graphite-host"
+                value={graphiteHost}
+                onChange={(e) => setGraphiteHost(e.target.value)}
+                placeholder="172.18.9.54"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="graphite-port">Graphite Port</Label>
+              <Input
+                id="graphite-port"
+                value={graphitePort}
+                onChange={(e) => setGraphitePort(e.target.value)}
+                placeholder="2003"
+              />
+            </div>
+          </div>
+          <Button onClick={handleSaveGraphiteConfig} className="w-full">
+            Save Graphite Configuration
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

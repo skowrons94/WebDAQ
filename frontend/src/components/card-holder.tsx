@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Activity,
   BarChart,
@@ -136,13 +136,26 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       try {
         const data = await getStatsPaths()
         setPaths(data || [])
+        // Immediately fetch values after loading paths to avoid showing N/A on page refresh
+        if (data && data.length > 0) {
+          for (const path of data.filter((p: any) => p.enabled)) {
+            try {
+              const valueData = await getStatsMetricLastValue(path.path)
+              if (valueData && valueData.value !== undefined) {
+                setCurrentValue(path.path, valueData.value, valueData.timestamp)
+              }
+            } catch (error) {
+              console.error(`Failed to fetch initial value for ${path.path}:`, error)
+            }
+          }
+        }
       } catch (error) {
         console.error('Failed to fetch stats paths:', error)
       }
     }
 
     loadStatsPaths()
-  }, [setPaths])
+  }, [setPaths, setCurrentValue])
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -166,6 +179,10 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     fetchInitialData()
     fetchBoardConfiguration()
     updateBoardConnectivity() // Initial connectivity check on page load
+
+    // Call updateStatsValues immediately and then set up interval
+    // Small delay to ensure paths are loaded from store
+    setTimeout(updateStatsValues, 500)
 
     const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
@@ -389,9 +406,11 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }
 
-  const updateStatsValues = async () => {
+  const updateStatsValues = useCallback(async () => {
     try {
-      for (const path of paths.filter(p => p.enabled)) {
+      // Get current paths from store instead of closure
+      const currentPaths = useStatsStore.getState().paths
+      for (const path of currentPaths.filter(p => p.enabled)) {
         try {
           const data = await getStatsMetricLastValue(path.path)
           if (data && data.value !== undefined) {
@@ -404,7 +423,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     } catch (error) {
       console.error('Failed to update stats values:', error)
     }
-  }
+  }, [setCurrentValue])
 
   const formatTime = (seconds: number) => {
     return `${seconds} seconds`
@@ -455,8 +474,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
           const connectivity = boardConnectivity[board.id];
           const isOk = !status || !status.failed;
           const isConnected = connectivity?.connected ?? false;
-          const isReady = connectivity?.ready ?? false;
-          
+
           // Determine display status based on requirements:
           // - If running, don't update ready status, maintain current version
           // - If not running and connected, show "Ready" in green

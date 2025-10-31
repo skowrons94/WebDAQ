@@ -186,11 +186,11 @@ class TetrAMMController:
         Load TetrAMM configuration settings from file or create defaults.
         """
         settings_file = 'conf/tetram.json'
-        
+
         try:
             # Ensure conf directory exists
             os.makedirs('conf', exist_ok=True)
-            
+
             if os.path.exists(settings_file):
                 with open(settings_file, 'r') as f:
                     self.settings = json.load(f)
@@ -207,7 +207,7 @@ class TetrAMMController:
                 }
                 self.write_settings()
                 self.logger.info("Default TetrAMM settings created")
-                
+
         except Exception as e:
             self.logger.error(f"Failed to load TetrAMM settings: {e}")
             # Use minimal defaults
@@ -784,7 +784,7 @@ class TetrAMMController:
     def set_total_accumulated_charge(self, value: float) -> None:
         """
         Set the total accumulated charge (for loading from config).
-        
+
         Args:
             value: Total accumulated charge value
         """

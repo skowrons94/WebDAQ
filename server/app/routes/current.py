@@ -32,7 +32,9 @@ else:
         "rbd9103_port": "/dev/tty.usbserial-A50285BI",
         "rbd9103_baudrate": 57600,
         "rbd9103_high_speed": False,
-        "total_accumulated": 0
+        "total_accumulated": 0,
+        "graphite_host": "172.18.9.54",
+        "graphite_port": 2003
     }
     os.makedirs("conf", exist_ok=True)
     with open("conf/current.json", "w") as f:
@@ -47,10 +49,18 @@ controller = None  # Active controller
 module_type = settings.get("module_type", "tetramm")
 
 if module_type == "tetramm":
-    tetramm_ctrl = tetram_controller(ip=settings["tetramm_ip"], port=settings["tetramm_port"])
+    tetramm_ctrl = tetram_controller(
+        ip=settings["tetramm_ip"],
+        port=settings["tetramm_port"],
+        graphite_host=settings.get("graphite_host", "172.18.9.54"),
+        graphite_port=settings.get("graphite_port", 2003)
+    )
     tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
-    # Don't initialize at startup - initialize only when needed
-    # This prevents hanging when device is disconnected at startup
+    # Initialize at startup
+    try:
+        tetramm_ctrl.initialize()
+    except Exception as e:
+        print(f"Warning: Could not initialize TetrAMM at startup: {e}")
     controller = tetramm_ctrl
 elif module_type == "rbd9103":
     rbd9103_ctrl = rbd9103_controller
@@ -58,8 +68,11 @@ elif module_type == "rbd9103":
     rbd9103_ctrl.set_baudrate(settings.get("rbd9103_baudrate", 57600))
     rbd9103_ctrl.set_high_speed(settings.get("rbd9103_high_speed", False))
     rbd9103_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
-    # Don't initialize at startup - initialize only when needed
-    # This prevents hanging when device is disconnected at startup
+    # Initialize at startup
+    try:
+        rbd9103_ctrl.initialize()
+    except Exception as e:
+        print(f"Warning: Could not initialize RBD 9103 at startup: {e}")
     controller = rbd9103_ctrl
 
 # Set ip and port
@@ -432,6 +445,48 @@ def update_module_settings():
 
     except Exception as e:
         return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500
+
+# Get graphite server configuration
+@bp.route('/current/graphite_config', methods=['GET'])
+@jwt_required_custom
+def get_graphite_config():
+    global settings
+    return jsonify({
+        "graphite_host": settings.get("graphite_host", "172.18.9.54"),
+        "graphite_port": settings.get("graphite_port", 2003)
+    })
+
+# Set graphite server configuration
+@bp.route('/current/graphite_config', methods=['POST'])
+@jwt_required_custom
+def set_graphite_config():
+    global settings, controller
+
+    data = request.get_json()
+    graphite_host = data.get('graphite_host')
+    graphite_port = data.get('graphite_port')
+
+    if not graphite_host or not graphite_port:
+        return jsonify({"error": "Missing graphite_host or graphite_port"}), 400
+
+    try:
+        # Update settings
+        settings["graphite_host"] = graphite_host
+        settings["graphite_port"] = int(graphite_port)
+
+        # Save to file
+        with open("conf/current.json", "w") as f:
+            json.dump(settings, f, indent=2)
+
+        # Update controller if it's tetramm
+        if controller and hasattr(controller, 'graphite_host'):
+            controller.graphite_host = graphite_host
+            controller.graphite_port = int(graphite_port)
+
+        return jsonify({"message": "Graphite configuration updated"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # Get comprehensive status including module type
 @bp.route('/current/status', methods=['GET'])

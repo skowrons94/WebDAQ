@@ -48,7 +48,7 @@ class RBD9103Controller:
                  port: str = '/dev/ttyUSB0',
                  baudrate: int = 57600,
                  high_speed: bool = False,
-                 graphite_host: str = '172.18.9.54',
+                 graphite_host: str = 'localhost',
                  graphite_port: int = 2003):
         """
         Initialize RBD 9103 controller with serial parameters.

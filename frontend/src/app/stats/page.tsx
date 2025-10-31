@@ -26,7 +26,11 @@ import {
   removeStatsPath,
   updateStatsPath,
   getStatsMetricLastValue,
+  getStatsGraphiteConfig,
+  setStatsGraphiteConfig,
 } from '@/lib/api'
+import { Label } from '@/components/ui/label'
+import { useToast } from '@/components/ui/use-toast'
 
 type StatPath = {
   path: string
@@ -35,12 +39,33 @@ type StatPath = {
 }
 
 export default function StatsPage() {
+  const { toast } = useToast()
   const { paths, currentValues, setCurrentValue, setPaths, setError } = useStatsStore()
   const [newPath, setNewPath] = useState('')
   const [newAlias, setNewAlias] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [pathToDelete, setPathToDelete] = useState<string | null>(null)
   const [error, setLocalError] = useState<string | null>(null)
+
+  // Graphite configuration
+  const [graphiteHost, setGraphiteHost] = useState('localhost')
+  const [graphitePort, setGraphitePort] = useState('80')
+  const [showGraphiteConfig, setShowGraphiteConfig] = useState(false)
+
+  // Load graphite config
+  useEffect(() => {
+    const loadGraphiteConfig = async () => {
+      try {
+        const config = await getStatsGraphiteConfig()
+        setGraphiteHost(config.graphite_host || 'localhost')
+        setGraphitePort(String(config.graphite_port || 80))
+      } catch (error) {
+        console.error('Failed to load graphite config:', error)
+      }
+    }
+
+    loadGraphiteConfig()
+  }, [])
 
   // Load paths on mount
   useEffect(() => {
@@ -164,6 +189,23 @@ export default function StatsPage() {
     }
   }
 
+  const handleSaveGraphiteConfig = async () => {
+    try {
+      await setStatsGraphiteConfig(graphiteHost, parseInt(graphitePort))
+      toast({
+        title: 'Success',
+        description: 'Graphite server configuration updated'
+      })
+    } catch (error: any) {
+      console.error('Error saving Graphite config:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to save Graphite configuration',
+        variant: 'destructive'
+      })
+    }
+  }
+
   return (
     <Layout>
     <div className="space-y-6 p-6">
@@ -197,6 +239,47 @@ export default function StatsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Graphite Server Configuration */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle>Graphite Server Configuration</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowGraphiteConfig(!showGraphiteConfig)}
+          >
+            {showGraphiteConfig ? 'Hide' : 'Show'}
+          </Button>
+        </CardHeader>
+        {showGraphiteConfig && (
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="stats-graphite-host">Graphite Host</Label>
+                <Input
+                  id="stats-graphite-host"
+                  value={graphiteHost}
+                  onChange={(e) => setGraphiteHost(e.target.value)}
+                  placeholder="localhost"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stats-graphite-port">Graphite Port</Label>
+                <Input
+                  id="stats-graphite-port"
+                  value={graphitePort}
+                  onChange={(e) => setGraphitePort(e.target.value)}
+                  placeholder="80"
+                />
+              </div>
+            </div>
+            <Button onClick={handleSaveGraphiteConfig} className="w-full">
+              Save Graphite Configuration
+            </Button>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Add New Path */}
       <Card>

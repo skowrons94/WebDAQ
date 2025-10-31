@@ -283,4 +283,17 @@ export const stopStatsRun = () =>
 export const getStatsRunStatus = () =>
     api.get('/stats/run/status').then(res => res.data);
 
+// Graphite server configuration APIs
+export const getCurrentGraphiteConfig = () =>
+    api.get('/current/graphite_config').then(res => res.data);
+
+export const setCurrentGraphiteConfig = (graphite_host: string, graphite_port: number) =>
+    api.post('/current/graphite_config', { graphite_host, graphite_port }).then(res => res.data);
+
+export const getStatsGraphiteConfig = () =>
+    api.get('/stats/graphite_config').then(res => res.data);
+
+export const setStatsGraphiteConfig = (graphite_host: string, graphite_port: number) =>
+    api.post('/stats/graphite_config', { graphite_host, graphite_port }).then(res => res.data);
+
 export default api;

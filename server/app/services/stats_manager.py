@@ -79,6 +79,13 @@ class StatsManager:
             try:
                 with open(self.config_path, 'r') as f:
                     config = json.load(f)
+                # Update graphite client settings if they exist in config
+                if 'graphite_host' in config:
+                    self.graphite_client.host = config['graphite_host']
+                if 'graphite_port' in config:
+                    self.graphite_client.port = config['graphite_port']
+                if 'graphite_host' in config or 'graphite_port' in config:
+                    self.graphite_client.base_url = f"http://{self.graphite_client.host}:{self.graphite_client.port}"
                 self.logger.info(f"Loaded stats config with {len(config.get('paths', []))} paths")
                 return config
             except Exception as e:
