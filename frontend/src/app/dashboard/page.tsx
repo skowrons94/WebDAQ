@@ -41,16 +41,12 @@ export default function DashboardPage() {
             <div className="flex items-center">
             <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
-                {settings.showStats && <TabsTrigger value="stats">Stats</TabsTrigger>}
                 {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
                 {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
               </TabsList>
             </div>
           <TabsContent value="overview">
             <RunControl />
-          </TabsContent>
-          <TabsContent value="stats">
-            <Stats />
           </TabsContent>
           <TabsContent value="histograms">
             <HistogramDashboard />
