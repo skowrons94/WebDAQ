@@ -372,10 +372,11 @@ export default function StatsPage() {
                     {path.enabled && currentValues[path.path] ? (
                       <div>
                         <p className="text-lg font-semibold">
-                          {currentValues[path.path].value !== null
-                            ? typeof currentValues[path.path].value === 'number'
-                              ? (currentValues[path.path].value as number).toFixed(2)
-                              : currentValues[path.path].value
+                          {currentValues[path.path]?.value !== undefined && currentValues[path.path]?.value !== null
+                            ? (() => {
+                                const value = Number(currentValues[path.path].value);
+                                return value < 1 ? value.toExponential(5) : value.toFixed(3);
+                              })()
                             : 'N/A'}
                         </p>
                         <p className="text-xs text-muted-foreground">

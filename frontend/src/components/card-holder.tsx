@@ -694,7 +694,10 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
               <CardContent>
                 <div className="text-2xl font-bold">
                   {currentValues[path.path]?.value !== undefined && currentValues[path.path]?.value !== null
-                    ? (Number(currentValues[path.path].value)).toFixed(2)
+                    ? (() => {
+                        const value = Number(currentValues[path.path].value);
+                        return value < 1 ? value.toExponential(5) : value.toFixed(3);
+                      })()
                     : 'N/A'}
                 </div>
                 <p className="text-xs text-muted-foreground">
