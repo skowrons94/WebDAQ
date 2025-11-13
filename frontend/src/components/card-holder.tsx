@@ -41,6 +41,7 @@ import {
   getStatsPaths,
   getStatsMetricLastValue,
   getCurrentModuleType,
+  getRunMetadataAll,
 } from '@/lib/api'
 
 type ROI = {
@@ -123,6 +124,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
   const [boards, setBoards] = useState<BoardInfo[]>([])
+  const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
@@ -156,6 +158,13 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
     loadStatsPaths()
   }, [setPaths, setCurrentValue])
+
+  // Update last run duration when run stops
+  useEffect(() => {
+    if (!isRunning) {
+      updateLastRunDuration()
+    }
+  }, [isRunning])
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -425,6 +434,24 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }, [setCurrentValue])
 
+  const updateLastRunDuration = async () => {
+    try {
+      const response = await getRunMetadataAll()
+      if (response.data && response.data.length > 0) {
+        // Get the last run (most recent)
+        const lastRun = response.data[response.data.length - 1]
+        if (lastRun.start_time && lastRun.end_time) {
+          const startTime = new Date(lastRun.start_time)
+          const endTime = new Date(lastRun.end_time)
+          const durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000)
+          setLastRunDuration(durationSeconds)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch last run duration:', error)
+    }
+  }
+
   const formatTime = (seconds: number) => {
     return `${seconds} seconds`
   }
@@ -444,7 +471,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
             <CardContent>
               <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
               <p className="text-xs text-muted-foreground">
-                {isRunning ? `Started ${formatTime(timer)} ago` : "Stopped"}
+                {isRunning ? `Started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `Last run: ${lastRunDuration}s` : "Stopped")}
               </p>
             </CardContent>
           </Card>

@@ -113,12 +113,14 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
     const exportExcel = (rows: Row<TData>[]) => {
         //const rowData = rows.map((row) => row.original)
         const rowData = rows.map((row) => {
+            const startTime = row.original.start_time ? new Date(row.original.start_time) : null
+            const endTime = row.original.end_time ? new Date(row.original.end_time) : null
+            const durationSeconds = (startTime && endTime) ? Math.round((endTime.getTime() - startTime.getTime()) / 1000) : ''
             return {
                 'Run Number': row.original.run_number,
-                'Start Time': row.original.start_time ?
-                    new Date(row.original.start_time).toLocaleString() : '',
-                'End Time': row.original.end_time ?
-                    new Date(row.original.end_time).toLocaleString() : '',
+                'Start Time': startTime ? startTime.toLocaleString() : '',
+                'End Time': endTime ? endTime.toLocaleString() : '',
+                'Duration (s)': durationSeconds,
                 'Target': row.original.target_name,
                 'Run Type': row.original.run_type,
                 'Terminal Voltage': row.original.terminal_voltage,

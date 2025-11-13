@@ -223,6 +223,20 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
         }
     },
     {
+        id: "duration",
+        header: "Duration (s)",
+        cell: ({ row }) => {
+            const startTime = new Date(row.original.start_time)
+            const endTime = new Date(row.original.end_time)
+            const durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000)
+            return (
+                <div className="text-center">
+                    {durationSeconds}
+                </div>
+            )
+        }
+    },
+    {
         accessorKey: "accumulated_charge",
         header: "Accumulated Charge",
         cell: ({ row }) => {
