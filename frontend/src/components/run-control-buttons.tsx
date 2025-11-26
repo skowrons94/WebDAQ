@@ -56,6 +56,8 @@ import {
   refreshBoardConnections,
   openFaraday,
   closeFaraday,
+  startStatsRun,
+  stopStatsRun
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
 
@@ -212,6 +214,7 @@ export function RunControlButtons({
       // Start current measurement if data saving is enabled
       if (saveData) {
         await startAcquisitionCurrent(String(runNumber))
+        await startStatsRun(runNumber)
       }
 
       // Store initial beam current for comparison
@@ -261,6 +264,7 @@ export function RunControlButtons({
       await stopRun()
       if (saveData) {
         await stopAcquisitionCurrent()
+        await stopStatsRun()
       }
 
       toast({

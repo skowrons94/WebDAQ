@@ -6,6 +6,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 from ..utils.tetramm import tetram_controller, TetrAMMController
 from ..utils.rbd9103 import rbd9103_controller, RBD9103Controller
+from ..services.daq_manager import get_daq_manager
 
 from app import db
 from ..models.run_metadata import RunMetadata
@@ -15,6 +16,9 @@ bp = Blueprint('current', __name__)
 
 #TEST_FLAG = True
 TEST_FLAG = os.getenv('TEST_FLAG', False)
+
+# Initialize DAQ manager for accessing save flag
+daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 
 # Default settings
 current_accumulating_run_number = 0
@@ -134,9 +138,14 @@ def start_acquisition(run_number):
     
     if( not controller.is_acquiring ):
         return jsonify({"message": "Can not start TetrAMM. Device not initialized"}), 400
-    if( not os.path.exists("./data/run{}".format(run)) ):
-        os.makedirs("./data/run{}".format(run))
-    controller.set_save_data(True, "./data/run{}/".format(run))
+
+    # Only save data if save data is enabled in DAQ settings
+    if daq_mgr.get_save_data():
+        if( not os.path.exists("./data/run{}".format(run)) ):
+            os.makedirs("./data/run{}".format(run))
+        controller.set_save_data(True, "./data/run{}/".format(run))
+    else:
+        controller.set_save_data(False, "./")
     running = True
     return jsonify({"message": "Acquisition started"}), 200
 

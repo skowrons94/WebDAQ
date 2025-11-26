@@ -36,13 +36,14 @@ import {
 import {CSS} from '@dnd-kit/utilities'
 
 // Sortable Histogram Card Component
-const SortableHistogramCard = ({ config, onAddROI, onEditHistogram, onEditROI, onSaveHistogram, onRemoveHistogramFromCache, dashboardSettings, getHistogramSize, histogramRefs }: {
+const SortableHistogramCard = ({ config, onAddROI, onEditHistogram, onEditROI, onSaveHistogram, onRemoveHistogramFromCache, onReloadDashboard, dashboardSettings, getHistogramSize, histogramRefs }: {
   config: HistogramConfig
   onAddROI: (id: string) => void
   onEditHistogram: (config: HistogramConfig) => void
   onEditROI: (histogramId: string, roi: ROI) => void
   onSaveHistogram: (config: HistogramConfig) => void
   onRemoveHistogramFromCache: (id: string) => void
+  onReloadDashboard: () => void
   dashboardSettings: DashboardSettings
   getHistogramSize: (size: "small" | "medium" | "large") => string
   histogramRefs: React.MutableRefObject<{ [key: string]: HTMLDivElement | null }>
@@ -93,21 +94,6 @@ const SortableHistogramCard = ({ config, onAddROI, onEditHistogram, onEditROI, o
             <Edit className="h-3 w-3" />
           </Button>
 
-          {/* Toggle Visibility */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const updated = { ...config, visible: !config.visible }
-              if (!updated.visible) {
-                onRemoveHistogramFromCache(config.id)
-              }
-              onSaveHistogram(updated)
-            }}
-            title="Toggle Visibility"
-          >
-            {config.visible ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-          </Button>
         </div>
       </CardHeader>
 
@@ -1076,8 +1062,6 @@ export default function EnhancedHistogramDashboard() {
         body: JSON.stringify({ type: "histogram", id: histogramId }),
       })
 
-      reloadDashboard() // Trigger complete reload to remove from UI
-
       // Clean up refs
 
     } catch (error) {
@@ -1302,13 +1286,8 @@ export default function EnhancedHistogramDashboard() {
     setHistograms(updatedHistograms)
     saveHistogramConfigs(updatedHistograms)
 
-    // Refresh the specific histogram after ROI deletion
-    setTimeout(() => {
-      const config = updatedHistograms.find((h) => h.id === histogramId)
-      if (config && config.visible) {
-        updateHistogramData(config)
-      }
-    }, 100)
+    // Reload dashboard after ROI deletion
+    reloadDashboard()
   }
 
   // Update ROI integrals for all visible histograms
@@ -1566,6 +1545,7 @@ export default function EnhancedHistogramDashboard() {
                     onEditROI={editROI}
                     onSaveHistogram={saveHistogram}
                     onRemoveHistogramFromCache={removeHistogramFromCache}
+                    onReloadDashboard={reloadDashboard}
                     dashboardSettings={dashboardSettings}
                     getHistogramSize={getHistogramSize}
                     histogramRefs={histogramRefs}

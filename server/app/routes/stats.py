@@ -3,12 +3,17 @@ from typing import Dict, Any
 from flask import Blueprint, jsonify, request
 
 from ..services.stats_manager import StatsManager
+from ..services.daq_manager import get_daq_manager
 from ..utils.jwt_utils import jwt_required_custom
 
 bp = Blueprint('stats', __name__)
 
 # Initialize StatsManager with single Graphite client
 stats_manager = StatsManager(graphite_host='localhost', graphite_port=80)
+
+# Initialize DAQ manager for accessing save flag
+TEST_FLAG = os.getenv('TEST_FLAG', False)
+daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 
 DEBUG = os.getenv('DEBUG', False)
 
@@ -125,6 +130,10 @@ def update_path(path):
 def start_stats_run(run_number):
     """Start statistics collection for a new run."""
     try:
+        # Only start stats collection if save data is enabled
+        if not daq_mgr.get_save_data():
+            return jsonify({'error': 'Cannot start stats collection when save data is disabled'}), 400
+
         if stats_manager.start_run(run_number):
             return jsonify({
                 'message': 'Stats collection started',
