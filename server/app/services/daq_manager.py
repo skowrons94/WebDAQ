@@ -61,7 +61,7 @@ class DigitizerContainer:
         if self.test_flag:
             return None
         
-        link_type_map = {"USB": 0, "Optical": 1, "A4818": 2}
+        link_type_map = {"USB": 0, "Optical": 1, "A4818": 5}
         link_type = link_type_map.get(board_config["link_type"], 0)
         
         dgtz = digitizer(

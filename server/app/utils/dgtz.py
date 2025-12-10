@@ -104,7 +104,7 @@ class Digitizer:
         Initialize digitizer connection parameters.
         
         Args:
-            link_type: Connection type (0=USB, 1=Optical, 2=A4818)
+            link_type: Connection type (0=USB, 1=Optical, 5=A4818)
             link_num: Link number for the connection
             board_id: Board identifier
             vme_address: VME address (for VME boards)

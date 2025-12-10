@@ -18,7 +18,7 @@ const formSchema = z.object({
   id: z.string().min(1, "Board ID is required"),
   vme: z.string().min(1, "VME Address is required"),
   link_type: z.enum(["Optical", "USB", "A4818"]),
-  link_num: z.enum(["0", "1", "2", "3"]),
+  link_num: z.string().min(1, "Link Number/PID is required"),
   dpp: z.enum(["DPP-PHA", "DPP-PSD"])
 })
 
@@ -155,24 +155,38 @@ export function Board() {
                 <FormField
                   control={form.control}
                   name="link_num"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Link Number</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select link number" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {["0", "1", "2", "3"].map((num) => (
-                            <SelectItem key={num} value={num}>{num}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const linkType = form.watch("link_type")
+                    const isA4818 = linkType === "A4818"
+
+                    return (
+                      <FormItem>
+                        <FormLabel>{isA4818 ? "PID" : "Link Number"}</FormLabel>
+                        {isA4818 ? (
+                          <FormControl>
+                            <Input
+                              placeholder="Enter PID (e.g., 23456)"
+                              {...field}
+                            />
+                          </FormControl>
+                        ) : (
+                          <Select onValueChange={field.onChange} value={field.value}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select link number" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {["0", "1", "2", "3"].map((num) => (
+                                <SelectItem key={num} value={num}>{num}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )
+                  }}
                 />
                 <FormField
                   control={form.control}
@@ -212,11 +226,11 @@ export function Board() {
                   <strong>Board ID:</strong> {board.id} <br />
                   <strong>VME Address:</strong> {board.vme} <br />
                   <strong>Link Type:</strong> {board.link_type} <br />
-                  <strong>Link Number:</strong> {board.link_num} <br />
+                  <strong>{board.link_type === "A4818" ? "PID" : "Link Number"}:</strong> {board.link_num} <br />
                   <strong>DPP Software:</strong> {board.dpp} <br />
-                  <Button 
-                    variant="destructive" 
-                    className="mt-2" 
+                  <Button
+                    variant="destructive"
+                    className="mt-2"
                     onClick={() => handleRemoveBoard(board.id)}
                   >
                     Remove
