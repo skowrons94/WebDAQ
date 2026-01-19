@@ -33,8 +33,8 @@ TUNABLE_PARAMETERS = {
     "Peaking Time": 0x1064,
     "Decay Time": 0x1068,
     "Input Rise Time": 0x1058,
-    "Trigger Hold Off": 0x1070,
-    "Peak Hold Time": 0x1078,
+    "Trigger Hold-Off": 0x1074,
+    "Peak Hold-Off": 0x1078,
 }
 
 
