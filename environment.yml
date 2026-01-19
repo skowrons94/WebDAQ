@@ -28,3 +28,4 @@ dependencies:
     - pyjwt<2.10
     - pycurl
     - pyserial
+    - scipy

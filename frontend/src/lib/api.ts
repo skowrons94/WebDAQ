@@ -296,4 +296,81 @@ export const getStatsGraphiteConfig = () =>
 export const setStatsGraphiteConfig = (graphite_host: string, graphite_port: number) =>
     api.post('/stats/graphite_config', { graphite_host, graphite_port }).then(res => res.data);
 
+// Resolution Tuning APIs
+export interface TuningConfig {
+    board_id: string;
+    channel: number;
+    parameter_name: string;
+    param_min: number;
+    param_max: number;
+    num_steps: number;
+    run_duration: number;
+    fit_range_min: number;
+    fit_range_max: number;
+}
+
+export interface TuningPoint {
+    parameter_value: number;
+    sigma: number;
+    sigma_error: number;
+    mean: number;
+    chi_squared: number;
+    integral: number;
+    timestamp: number;
+    fit_success: boolean;
+    error?: string;
+}
+
+export interface TuningSession {
+    session_id: string;
+    board_id: string;
+    channel: number;
+    parameter_name: string;
+    param_min: number;
+    param_max: number;
+    num_steps: number;
+    run_duration: number;
+    fit_range_min: number;
+    fit_range_max: number;
+    points: TuningPoint[];
+    best_point: TuningPoint | null;
+    status: 'running' | 'completed' | 'stopped' | 'error';
+    start_time: number;
+    end_time: number | null;
+    error_message: string | null;
+    current_step: number;
+    total_steps: number;
+    config_backup_path: string | null;
+}
+
+export const startTuning = (config: TuningConfig) =>
+    api.post('/tuning/start', config);
+
+export const stopTuning = () =>
+    api.post('/tuning/stop');
+
+export const getTuningStatus = () =>
+    api.get('/tuning/status').then(res => res.data);
+
+export const getTuningData = () =>
+    api.get('/tuning/data').then(res => res.data);
+
+export const getTuningHistory = (params?: { board_id?: string; limit?: number }) =>
+    api.get('/tuning/history', { params }).then(res => res.data);
+
+export const getTunableParameters = () =>
+    api.get('/tuning/parameters').then(res => res.data);
+
+export const getTuningHistogram = (boardId: string, channel: number) =>
+    api.get(`/tuning/histogram/${boardId}/${channel}`).then(res => res.data);
+
+export const resetTuningHistory = () =>
+    api.post('/tuning/reset_history');
+
+export const getTuningSession = (sessionId: string) =>
+    api.get(`/tuning/session/${sessionId}`).then(res => res.data);
+
+export const getPhaBoards = () =>
+    api.get('/tuning/boards').then(res => res.data);
+
 export default api;
