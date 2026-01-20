@@ -513,12 +513,20 @@ class ResolutionTuner:
                     self.spy_manager.stop_spy()
                     self.daq_manager.set_running_state(False)
 
-                # Record point
+                # Record point with relative resolution (sigma/mean)
+                sigma = fit_result.get("sigma", float('inf'))
+                mean = fit_result.get("mean", 0)
+                # Calculate relative resolution (sigma/mean) - lower is better
+                relative_resolution = (sigma / mean * 100) if mean > 0 else float('inf')
+
                 point = {
                     "parameter_value": param_value,
-                    "sigma": fit_result.get("sigma", float('inf')),
+                    "sigma": sigma,
                     "sigma_error": fit_result.get("sigma_error", 0),
-                    "mean": fit_result.get("mean", 0),
+                    "mean": mean,
+                    "relative_resolution": relative_resolution,
+                    "amplitude": fit_result.get("amplitude", 0),
+                    "baseline": fit_result.get("baseline", 0),
                     "chi_squared": fit_result.get("chi_squared", float('inf')),
                     "integral": fit_result.get("integral", 0),
                     "timestamp": time.time(),
@@ -528,10 +536,10 @@ class ResolutionTuner:
                 session.points.append(point)
                 tested_values.append(param_value)
 
-                # Update best point
-                if point["fit_success"] and point["sigma"] > 0:
+                # Update best point using relative resolution (sigma/mean)
+                if point["fit_success"] and point["relative_resolution"] > 0:
                     if (session.best_point is None or
-                        point["sigma"] < session.best_point.get("sigma", float('inf'))):
+                        point["relative_resolution"] < session.best_point.get("relative_resolution", float('inf'))):
                         session.best_point = point.copy()
 
                 # Save progress
@@ -598,11 +606,19 @@ class ResolutionTuner:
                             self.spy_manager.stop_spy()
                             self.daq_manager.set_running_state(False)
 
+                        # Record point with relative resolution
+                        sigma = fit_result.get("sigma", float('inf'))
+                        mean = fit_result.get("mean", 0)
+                        relative_resolution = (sigma / mean * 100) if mean > 0 else float('inf')
+
                         point = {
                             "parameter_value": param_value,
-                            "sigma": fit_result.get("sigma", float('inf')),
+                            "sigma": sigma,
                             "sigma_error": fit_result.get("sigma_error", 0),
-                            "mean": fit_result.get("mean", 0),
+                            "mean": mean,
+                            "relative_resolution": relative_resolution,
+                            "amplitude": fit_result.get("amplitude", 0),
+                            "baseline": fit_result.get("baseline", 0),
                             "chi_squared": fit_result.get("chi_squared", float('inf')),
                             "integral": fit_result.get("integral", 0),
                             "timestamp": time.time(),
@@ -612,8 +628,8 @@ class ResolutionTuner:
                         session.points.append(point)
                         tested_values.append(param_value)
 
-                        if point["fit_success"] and point["sigma"] > 0:
-                            if point["sigma"] < session.best_point.get("sigma", float('inf')):
+                        if point["fit_success"] and point["relative_resolution"] > 0:
+                            if point["relative_resolution"] < session.best_point.get("relative_resolution", float('inf')):
                                 session.best_point = point.copy()
 
                         self.history[session.session_id] = session
@@ -629,7 +645,7 @@ class ResolutionTuner:
                 )
                 self.logger.info(f"Best parameter value set: "
                                f"{session.parameter_name} = {session.best_point['parameter_value']} "
-                               f"(sigma = {session.best_point['sigma']:.2f})")
+                               f"(resolution = {session.best_point['relative_resolution']:.2f}%)")
 
             # Restore original save data setting
             self.daq_manager.set_save_data(original_save)
@@ -815,6 +831,145 @@ class ResolutionTuner:
             {"name": name, "address": f"0x{addr:04X}"}
             for name, addr in TUNABLE_PARAMETERS.items()
         ]
+
+    def get_parameter_value(self, board_id: str, parameter_name: str,
+                            channel: int) -> Dict[str, Any]:
+        """
+        Get the current value of a parameter.
+
+        Args:
+            board_id: Board ID
+            parameter_name: Name of parameter
+            channel: Channel number
+
+        Returns:
+            Dict with value or error
+        """
+        if parameter_name not in TUNABLE_PARAMETERS:
+            return {"error": f"Unknown parameter: {parameter_name}"}
+
+        value = self._get_parameter_value(board_id, parameter_name, channel)
+        if value is not None:
+            return {"value": value, "parameter_name": parameter_name}
+        return {"error": "Could not read parameter value"}
+
+    def set_parameter_value(self, board_id: str, parameter_name: str,
+                            channel: int, value: int) -> Dict[str, Any]:
+        """
+        Set a parameter value.
+
+        Args:
+            board_id: Board ID
+            parameter_name: Name of parameter
+            channel: Channel number
+            value: Value to set
+
+        Returns:
+            Dict with success status or error
+        """
+        if parameter_name not in TUNABLE_PARAMETERS:
+            return {"error": f"Unknown parameter: {parameter_name}"}
+
+        if self._set_parameter_value(board_id, parameter_name, channel, value):
+            return {"success": True, "value": value}
+        return {"error": "Failed to set parameter value"}
+
+    def get_histogram_with_fit(self, board_id: str, channel: int,
+                                fit_params: Optional[Dict[str, float]] = None) -> Optional[Any]:
+        """
+        Get histogram with Gaussian fit function added.
+
+        Args:
+            board_id: Board ID
+            channel: Channel number
+            fit_params: Optional fit parameters (amplitude, mean, sigma, baseline)
+                        If not provided, uses best_point from current/last session
+
+        Returns:
+            ROOT histogram with TF1 fit function or None
+        """
+        try:
+            boards = self.daq_manager.get_boards()
+            histogram = self.spy_manager.get_histogram(board_id, channel, boards)
+
+            if histogram is None:
+                return None
+
+            # Get fit parameters
+            if fit_params is None:
+                # Try to get from current session or last history
+                if self.current_session and self.current_session.best_point:
+                    fit_params = self.current_session.best_point
+                else:
+                    # Find most recent session for this board/channel
+                    for session in sorted(self.history.values(),
+                                         key=lambda s: s.start_time, reverse=True):
+                        if (session.board_id == str(board_id) and
+                            session.channel == channel and
+                            session.best_point):
+                            fit_params = session.best_point
+                            break
+
+            # Add Gaussian fit function if we have parameters
+            if fit_params and fit_params.get("fit_success", True):
+                try:
+                    import ROOT
+
+                    amplitude = fit_params.get("amplitude", 0)
+                    mean = fit_params.get("mean", 0)
+                    sigma = fit_params.get("sigma", 1)
+                    baseline = fit_params.get("baseline", 0)
+
+                    if amplitude > 0 and sigma > 0:
+                        # Create TF1 Gaussian function
+                        fit_func = ROOT.TF1("fit_gaussian",
+                                           "[0]*exp(-0.5*((x-[1])/[2])^2)+[3]",
+                                           mean - 4*sigma, mean + 4*sigma)
+                        fit_func.SetParameters(amplitude, mean, sigma, baseline)
+                        fit_func.SetLineColor(ROOT.kRed)
+                        fit_func.SetLineWidth(2)
+                        fit_func.SetNpx(500)
+
+                        # Add function to histogram's list of functions
+                        histogram.GetListOfFunctions().Add(fit_func)
+
+                except ImportError:
+                    self.logger.warning("ROOT not available, cannot add fit function")
+                except Exception as e:
+                    self.logger.error(f"Error adding fit function: {e}")
+
+            return histogram
+
+        except Exception as e:
+            self.logger.error(f"Error getting histogram with fit: {e}")
+            return None
+
+    def get_last_session(self, board_id: Optional[str] = None,
+                         channel: Optional[int] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get the most recent tuning session.
+
+        Args:
+            board_id: Optional filter by board ID
+            channel: Optional filter by channel
+
+        Returns:
+            Session dict or None
+        """
+        sessions = list(self.history.values())
+
+        # Filter
+        if board_id is not None:
+            sessions = [s for s in sessions if s.board_id == str(board_id)]
+        if channel is not None:
+            sessions = [s for s in sessions if s.channel == channel]
+
+        if not sessions:
+            return None
+
+        # Sort by start time and return most recent
+        sessions.sort(key=lambda s: s.start_time, reverse=True)
+        return sessions[0].to_dict()
 
 
 # Global instance

@@ -314,6 +314,9 @@ export interface TuningPoint {
     sigma: number;
     sigma_error: number;
     mean: number;
+    relative_resolution: number;
+    amplitude: number;
+    baseline: number;
     chi_squared: number;
     integral: number;
     timestamp: number;
@@ -372,5 +375,27 @@ export const getTuningSession = (sessionId: string) =>
 
 export const getPhaBoards = () =>
     api.get('/tuning/boards').then(res => res.data);
+
+export const getParameterValue = (boardId: string, channel: number, parameterName: string) =>
+    api.get(`/tuning/parameter_value/${boardId}/${channel}/${encodeURIComponent(parameterName)}`).then(res => res.data);
+
+export const setParameterValue = (boardId: string, channel: number, parameterName: string, value: number) =>
+    api.post('/tuning/parameter_value', {
+        board_id: boardId,
+        channel,
+        parameter_name: parameterName,
+        value
+    });
+
+export const getTuningHistogramWithFit = (boardId: string, channel: number, fitParams?: {
+    amplitude?: number;
+    mean?: number;
+    sigma?: number;
+    baseline?: number;
+}) =>
+    api.get(`/tuning/histogram_with_fit/${boardId}/${channel}`, { params: fitParams }).then(res => res.data);
+
+export const getLastTuningSession = (boardId?: string, channel?: number) =>
+    api.get('/tuning/last_session', { params: { board_id: boardId, channel } }).then(res => res.data);
 
 export default api;

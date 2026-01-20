@@ -253,3 +253,141 @@ def get_pha_boards():
 
     except Exception as e:
         return jsonify({'error': f'Failed to get boards: {str(e)}'}), 500
+
+
+@bp.route('/parameter_value/<board_id>/<channel>/<parameter_name>', methods=['GET'])
+@jwt_required_custom
+def get_parameter_value(board_id, channel, parameter_name):
+    """
+    Get current value of a parameter.
+
+    Args:
+        board_id: Board ID string
+        channel: Channel number
+        parameter_name: Parameter name
+
+    Returns:
+        JSON with current value
+    """
+    try:
+        result = tuner.get_parameter_value(board_id, parameter_name, int(channel))
+
+        if 'error' in result:
+            return jsonify(result), 400
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to get parameter value: {str(e)}'}), 500
+
+
+@bp.route('/parameter_value', methods=['POST'])
+@jwt_required_custom
+def set_parameter_value():
+    """
+    Set a parameter value.
+
+    Request JSON:
+        {
+            "board_id": "0",
+            "channel": 0,
+            "parameter_name": "Trapezoid Rise Time",
+            "value": 500
+        }
+
+    Returns:
+        JSON with success status
+    """
+    try:
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        required_fields = ['board_id', 'channel', 'parameter_name', 'value']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+
+        result = tuner.set_parameter_value(
+            data['board_id'],
+            data['parameter_name'],
+            int(data['channel']),
+            int(data['value'])
+        )
+
+        if 'error' in result:
+            return jsonify(result), 400
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to set parameter value: {str(e)}'}), 500
+
+
+@bp.route('/histogram_with_fit/<board_id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_histogram_with_fit(board_id, channel):
+    """
+    Get histogram with Gaussian fit overlay for a board/channel.
+
+    Args:
+        board_id: Board ID string
+        channel: Channel number
+
+    Query parameters:
+        amplitude, mean, sigma, baseline: Optional fit parameters
+
+    Returns:
+        JSON representation of histogram with fit function
+    """
+    try:
+        # Check for explicit fit parameters
+        fit_params = None
+        if request.args.get('amplitude'):
+            fit_params = {
+                'amplitude': float(request.args.get('amplitude', 0)),
+                'mean': float(request.args.get('mean', 0)),
+                'sigma': float(request.args.get('sigma', 1)),
+                'baseline': float(request.args.get('baseline', 0)),
+                'fit_success': True,
+            }
+
+        histogram = tuner.get_histogram_with_fit(board_id, int(channel), fit_params)
+
+        if histogram is None:
+            return "", 204
+
+        json_data = spy_mgr.convert_histogram_to_json(histogram)
+        return json_data if json_data else ""
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to get histogram with fit: {str(e)}'}), 500
+
+
+@bp.route('/last_session', methods=['GET'])
+@jwt_required_custom
+def get_last_session():
+    """
+    Get the most recent tuning session.
+
+    Query parameters:
+        board_id: Optional filter by board ID
+        channel: Optional filter by channel
+
+    Returns:
+        JSON with session details or null
+    """
+    try:
+        board_id = request.args.get('board_id')
+        channel = request.args.get('channel')
+
+        session = tuner.get_last_session(
+            board_id=board_id,
+            channel=int(channel) if channel else None
+        )
+
+        return jsonify({'session': session}), 200
+
+    except Exception as e:
+        return jsonify({'error': f'Failed to get last session: {str(e)}'}), 500

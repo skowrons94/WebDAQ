@@ -7,10 +7,13 @@ import {
     getTuningStatus,
     getTuningData,
     getTuningHistory,
-    getTuningHistogram,
     startTuning,
     stopTuning,
     resetTuningHistory,
+    getParameterValue,
+    setParameterValue,
+    getTuningHistogramWithFit,
+    getLastTuningSession,
     TuningConfig,
     TuningPoint,
     TuningSession,
@@ -36,6 +39,8 @@ import {
     CheckCircle2,
     Clock,
     XCircle,
+    Pencil,
+    Save,
 } from "lucide-react"
 import {
     LineChart,
@@ -112,10 +117,14 @@ export default function ResolutionTuner() {
     const [historyOpen, setHistoryOpen] = useState<boolean>(false)
     const [selectedHistorySession, setSelectedHistorySession] = useState<TuningSession | null>(null)
 
+    // Current parameter value state
+    const [currentParamValue, setCurrentParamValue] = useState<number | null>(null)
+    const [editingParamValue, setEditingParamValue] = useState<boolean>(false)
+    const [editParamValue, setEditParamValue] = useState<number>(0)
+
     // JSROOT state
     const [jsrootLoaded, setJsrootLoaded] = useState(false)
     const histogramRef = useRef<HTMLDivElement>(null)
-    const histogramPainterRef = useRef<any>(null)
 
     const { toast } = useToast()
 
@@ -128,15 +137,48 @@ export default function ResolutionTuner() {
                     getTunableParameters(),
                 ])
 
-                setBoards(boardsRes.boards || [])
-                setParameters(paramsRes.parameters || [])
+                const loadedBoards = boardsRes.boards || []
+                const loadedParams = paramsRes.parameters || []
+
+                setBoards(loadedBoards)
+                setParameters(loadedParams)
 
                 // Set default selection
-                if (boardsRes.boards && boardsRes.boards.length > 0) {
-                    setSelectedBoardId(boardsRes.boards[0].id)
+                let defaultBoardId = ""
+                let defaultParam = ""
+                if (loadedBoards.length > 0) {
+                    defaultBoardId = loadedBoards[0].id
+                    setSelectedBoardId(defaultBoardId)
                 }
-                if (paramsRes.parameters && paramsRes.parameters.length > 0) {
-                    setSelectedParameter(paramsRes.parameters[0].name)
+                if (loadedParams.length > 0) {
+                    defaultParam = loadedParams[0].name
+                    setSelectedParameter(defaultParam)
+                }
+
+                // Load last session if available
+                try {
+                    const lastSessionRes = await getLastTuningSession()
+                    if (lastSessionRes.session) {
+                        const session = lastSessionRes.session as TuningSession
+                        setTuningData({
+                            points: session.points,
+                            best_point: session.best_point,
+                            current_step: session.current_step,
+                            total_steps: session.total_steps,
+                        })
+                        // Set form values from last session
+                        setSelectedBoardId(session.board_id)
+                        setSelectedChannel(session.channel)
+                        setSelectedParameter(session.parameter_name)
+                        setParamMin(session.param_min)
+                        setParamMax(session.param_max)
+                        setNumSteps(session.num_steps)
+                        setRunDuration(session.run_duration)
+                        setFitRangeMin(session.fit_range_min)
+                        setFitRangeMax(session.fit_range_max)
+                    }
+                } catch (e) {
+                    // No last session, that's fine
                 }
             } catch (error) {
                 console.error("Failed to fetch initial data:", error)
@@ -218,12 +260,39 @@ export default function ResolutionTuner() {
         }
     }
 
-    // Update histogram preview
+    // Fetch current parameter value when selection changes
+    const fetchCurrentParamValue = useCallback(async () => {
+        if (!selectedBoardId || !selectedParameter) {
+            setCurrentParamValue(null)
+            return
+        }
+
+        try {
+            const res = await getParameterValue(selectedBoardId, selectedChannel, selectedParameter)
+            if (res.value !== undefined) {
+                setCurrentParamValue(res.value)
+                setEditParamValue(res.value)
+            } else {
+                setCurrentParamValue(null)
+            }
+        } catch (error) {
+            console.error("Failed to fetch parameter value:", error)
+            setCurrentParamValue(null)
+        }
+    }, [selectedBoardId, selectedChannel, selectedParameter])
+
+    // Fetch parameter value when selection changes
+    useEffect(() => {
+        fetchCurrentParamValue()
+    }, [fetchCurrentParamValue])
+
+    // Update histogram preview with fit overlay
     const updateHistogramPreview = useCallback(async () => {
         if (!jsrootLoaded || !selectedBoardId || !histogramRef.current) return
 
         try {
-            const histData = await getTuningHistogram(selectedBoardId, selectedChannel)
+            // Use histogram with fit if we have fit params from current/last session
+            const histData = await getTuningHistogramWithFit(selectedBoardId, selectedChannel)
             if (!histData) return
 
             const histogram = window.JSROOT.parse(histData)
@@ -349,6 +418,28 @@ export default function ResolutionTuner() {
         }
     }
 
+    // Handle save parameter value
+    const handleSaveParamValue = async () => {
+        if (!selectedBoardId || !selectedParameter) return
+
+        try {
+            await setParameterValue(selectedBoardId, selectedChannel, selectedParameter, editParamValue)
+            setCurrentParamValue(editParamValue)
+            setEditingParamValue(false)
+
+            toast({
+                title: "Parameter Updated",
+                description: `${selectedParameter} set to ${editParamValue}`,
+            })
+        } catch (error: any) {
+            toast({
+                title: "Error",
+                description: error.response?.data?.error || "Failed to set parameter value",
+                variant: "destructive",
+            })
+        }
+    }
+
     // Select a history session to display
     const handleSelectHistorySession = (session: TuningSession) => {
         setSelectedHistorySession(session)
@@ -381,21 +472,82 @@ export default function ResolutionTuner() {
         return new Date(timestamp * 1000).toLocaleString()
     }
 
-    // Prepare chart data
+    // Prepare chart data - use relative resolution (sigma/mean * 100)
     const chartData = tuningData?.points
-        .filter((p) => p.fit_success && p.sigma > 0)
+        .filter((p) => p.fit_success && p.relative_resolution > 0 && p.relative_resolution < 100)
         .sort((a, b) => a.parameter_value - b.parameter_value)
         .map((p) => ({
             parameter: p.parameter_value,
+            resolution: p.relative_resolution,
             sigma: p.sigma,
-            error: [p.sigma_error, p.sigma_error],
+            mean: p.mean,
         })) || []
 
-    const bestSigma = tuningData?.best_point?.sigma
+    const bestResolution = tuningData?.best_point?.relative_resolution
     const bestParam = tuningData?.best_point?.parameter_value
 
     return (
         <div className="flex flex-col gap-6">
+            {/* Current Parameter Value Card */}
+            {selectedParameter && currentParamValue !== null && (
+                <Card>
+                    <CardContent className="pt-6">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div>
+                                    <Label className="text-muted-foreground text-sm">Current {selectedParameter}</Label>
+                                    {editingParamValue ? (
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <Input
+                                                type="number"
+                                                value={editParamValue}
+                                                onChange={(e) => setEditParamValue(parseInt(e.target.value) || 0)}
+                                                className="w-32 h-8"
+                                            />
+                                            <Button size="sm" onClick={handleSaveParamValue}>
+                                                <Save className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="sm" variant="ghost" onClick={() => {
+                                                setEditingParamValue(false)
+                                                setEditParamValue(currentParamValue)
+                                            }}>
+                                                Cancel
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-2xl font-bold">{currentParamValue}</p>
+                                            <Button
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => setEditingParamValue(true)}
+                                                disabled={tuningStatus === "running"}
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="text-muted-foreground">
+                                    Board {selectedBoardId}, Channel {selectedChannel}
+                                </div>
+                            </div>
+                            {tuningData?.best_point && (
+                                <div className="text-right">
+                                    <Label className="text-muted-foreground text-sm">Best Value Found</Label>
+                                    <p className="text-xl font-bold text-green-600">
+                                        {tuningData.best_point.parameter_value}
+                                        <span className="text-sm font-normal ml-2">
+                                            ({tuningData.best_point.relative_resolution?.toFixed(2)}%)
+                                        </span>
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Configuration Card */}
             <Card>
                 <CardHeader>
@@ -596,10 +748,10 @@ export default function ResolutionTuner() {
                     <CardHeader>
                         <CardTitle>Resolution vs Parameter</CardTitle>
                         <CardDescription>
-                            Sigma (resolution) as a function of {selectedParameter || "parameter"}
-                            {bestSigma && bestParam && (
+                            Relative resolution (σ/μ %) as a function of {selectedParameter || "parameter"}
+                            {bestResolution && bestParam && (
                                 <span className="ml-2 text-green-600">
-                                    Best: sigma = {bestSigma.toFixed(2)} at {bestParam}
+                                    Best: {bestResolution.toFixed(2)}% at {bestParam}
                                 </span>
                             )}
                         </CardDescription>
@@ -619,32 +771,28 @@ export default function ResolutionTuner() {
                                         />
                                         <YAxis
                                             label={{
-                                                value: "Sigma (Resolution)",
+                                                value: "Resolution (σ/μ %)",
                                                 angle: -90,
                                                 position: "insideLeft",
                                             }}
                                         />
                                         <Tooltip
-                                            formatter={(value: number) => [value.toFixed(3), "Sigma"]}
+                                            formatter={(value: number, name: string) => {
+                                                if (name === "Resolution (%)") return [value.toFixed(3) + "%", name]
+                                                return [value.toFixed(1), name]
+                                            }}
                                             labelFormatter={(label) => `${selectedParameter}: ${label}`}
                                         />
                                         <Legend />
                                         <Line
                                             type="monotone"
-                                            dataKey="sigma"
+                                            dataKey="resolution"
                                             stroke="#2563eb"
                                             strokeWidth={2}
                                             dot={{ r: 4 }}
                                             activeDot={{ r: 6 }}
-                                            name="Sigma"
-                                        >
-                                            <ErrorBar
-                                                dataKey="error"
-                                                stroke="#94a3b8"
-                                                strokeWidth={1}
-                                                direction="y"
-                                            />
-                                        </Line>
+                                            name="Resolution (%)"
+                                        />
                                         {bestParam && (
                                             <ReferenceLine
                                                 x={bestParam}
@@ -694,7 +842,7 @@ export default function ResolutionTuner() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid gap-4 md:grid-cols-4">
+                        <div className="grid gap-4 md:grid-cols-5">
                             <div>
                                 <Label className="text-muted-foreground">Parameter Value</Label>
                                 <p className="text-2xl font-bold">
@@ -702,8 +850,14 @@ export default function ResolutionTuner() {
                                 </p>
                             </div>
                             <div>
-                                <Label className="text-muted-foreground">Sigma (Resolution)</Label>
+                                <Label className="text-muted-foreground">Resolution (σ/μ)</Label>
                                 <p className="text-2xl font-bold text-green-600">
+                                    {tuningData.best_point.relative_resolution?.toFixed(3)}%
+                                </p>
+                            </div>
+                            <div>
+                                <Label className="text-muted-foreground">Sigma</Label>
+                                <p className="text-2xl font-bold">
                                     {tuningData.best_point.sigma.toFixed(3)}
                                 </p>
                             </div>
@@ -784,7 +938,7 @@ export default function ResolutionTuner() {
                                             <TableHead>Board</TableHead>
                                             <TableHead>Channel</TableHead>
                                             <TableHead>Parameter</TableHead>
-                                            <TableHead>Best Sigma</TableHead>
+                                            <TableHead>Best Resolution</TableHead>
                                             <TableHead>Best Value</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead></TableHead>
@@ -808,7 +962,7 @@ export default function ResolutionTuner() {
                                                 <TableCell>{session.channel}</TableCell>
                                                 <TableCell>{session.parameter_name}</TableCell>
                                                 <TableCell className="font-mono">
-                                                    {session.best_point?.sigma.toFixed(3) || "-"}
+                                                    {session.best_point?.relative_resolution?.toFixed(3) || "-"}%
                                                 </TableCell>
                                                 <TableCell className="font-mono">
                                                     {session.best_point?.parameter_value || "-"}
@@ -855,8 +1009,8 @@ export default function ResolutionTuner() {
                                 <TableHeader>
                                     <TableRow>
                                         <TableHead>Parameter</TableHead>
+                                        <TableHead>Resolution (%)</TableHead>
                                         <TableHead>Sigma</TableHead>
-                                        <TableHead>Error</TableHead>
                                         <TableHead>Mean</TableHead>
                                         <TableHead>Chi-sq</TableHead>
                                         <TableHead>Integral</TableHead>
@@ -875,10 +1029,10 @@ export default function ResolutionTuner() {
                                         >
                                             <TableCell className="font-mono">{point.parameter_value}</TableCell>
                                             <TableCell className="font-mono">
-                                                {point.fit_success ? point.sigma.toFixed(3) : "-"}
+                                                {point.fit_success ? point.relative_resolution?.toFixed(3) + "%" : "-"}
                                             </TableCell>
                                             <TableCell className="font-mono">
-                                                {point.fit_success ? `+/- ${point.sigma_error.toFixed(3)}` : "-"}
+                                                {point.fit_success ? point.sigma.toFixed(3) : "-"}
                                             </TableCell>
                                             <TableCell className="font-mono">
                                                 {point.fit_success ? point.mean.toFixed(1) : "-"}
@@ -887,7 +1041,7 @@ export default function ResolutionTuner() {
                                                 {point.fit_success ? point.chi_squared.toFixed(2) : "-"}
                                             </TableCell>
                                             <TableCell className="font-mono">
-                                                {point.integral.toFixed(0)}
+                                                {point.integral?.toFixed(0) || "-"}
                                             </TableCell>
                                             <TableCell>
                                                 {point.fit_success ? (
