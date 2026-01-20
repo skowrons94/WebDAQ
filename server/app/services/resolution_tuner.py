@@ -235,7 +235,7 @@ class ResolutionTuner:
 
         # Calculate channel-specific address
         address = base_address + (channel * 0x100)
-        return f"reg_{address:04X}"
+        return f"reg_{address:04X}".lower()
 
     def _set_parameter_value(self, board_id: str, parameter_name: str,
                               channel: int, value: int) -> bool:
@@ -289,7 +289,8 @@ class ResolutionTuner:
             with open(config_file, 'r') as f:
                 config = json.load(f)
 
-            reg_key = self._get_register_key(parameter_name, channel)
+            # Make key lowercase to match JSON format
+            reg_key = self._get_register_key(parameter_name, channel).lower()
 
             if reg_key in config.get("registers", {}):
                 value_str = config["registers"][reg_key]["value"]

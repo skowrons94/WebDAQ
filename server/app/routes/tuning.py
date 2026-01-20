@@ -145,6 +145,14 @@ def get_history():
         limit = int(request.args.get('limit', 50))
 
         history = tuner.get_history(board_id=board_id, limit=limit)
+
+        # Filter any NaNs, infinities or 0s from history data
+        for session in history:
+            for point in session.get('points', []):
+                for key, value in point.items():
+                    if isinstance(value, float) and (value != value or value == float('inf') or value == float('-inf') or value == 0):
+                        point[key] = None
+
         return jsonify({'sessions': history}), 200
 
     except Exception as e:
@@ -386,6 +394,13 @@ def get_last_session():
             board_id=board_id,
             channel=int(channel) if channel else None
         )
+
+        # Filter any infinities and NaNs and 0s from session data
+        if session:
+            for point in session.get('points', []):
+                for key, value in point.items():
+                    if isinstance(value, float) and (value != value or value == float('inf') or value == float('-inf') or value == 0):
+                        point[key] = None
 
         return jsonify({'session': session}), 200
 
