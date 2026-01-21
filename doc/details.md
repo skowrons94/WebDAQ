@@ -32,7 +32,7 @@ XDAQ comprises three core units that interact via **TCP/IP sockets**:
    - Identifies coincidences between data streams to enhance event detection.
    - Provides a structured and refined dataset for further analysis.
 
-Each of these units can be configured and activated based on the **topology file** (`server/configuration/topology.xml`). Currently, only the **ReadoutUnit** is enabled for simplicity.
+Each of these units can be configured and activated based on the **topology file** (`server/conf/topology.xml`). Currently, only the **ReadoutUnit** is enabled for simplicity.
 
 ## Flask Server
 The LunaDAQ system is managed by a **Flask-based web server**, which acts as the central control unit. Flask is a lightweight Python web framework that provides an easy-to-use API for managing the DAQ system.
@@ -56,8 +56,12 @@ The LunaDAQ system is managed by a **Flask-based web server**, which acts as the
   - JSON file configuration of the connected boards
 
 ### Configuration and Topology
-- The **topology file** (`server/configuration/topology.xml`) governs which units are activated and what ports are used. The present topolgy activates only the ReadoutUnit for simplicity and stableness.
+- The **topology file** (`server/conf/topology.xml`) governs which units are activated and what ports are used. The present topology activates only the ReadoutUnit for simplicity and stability.
 - Configuration files are automatically generated based on the detected boards to ensure a seamless setup process.
+
+```{note}
+For a detailed technical reference of all server classes, services, and routes, see the [Server Architecture Guide](server-architecture.md).
+```
 
 ## Board Communication
 LunaDAQ includes direct communication with hardware boards to ensure smooth operation.

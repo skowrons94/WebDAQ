@@ -11,10 +11,11 @@ Welcome to LunaDAQ, the modern data acquisition and visualization system develop
 
 | Section          | Description                                                                 | Link                               |
 |------------------|-----------------------------------------------------------------------------|------------------------------------|
-| **[Installation]**  | Detailed guide for setting up LunaDAQ      | [View Installation Guide](installation.md) |
-| **[User Guide]**    | Detailed guide for the LunaDAQ functionalities         | [View Usage Guide](usage.md)               |
-| **[Details]**    | Detailed description of how LunaDAQ works         | [View Details Page](details.md)               |
-| **[Usage]**    | User guide for the LunaDAQ features         | [View Details Page](usage.md)               |
+| **Installation**  | Step-by-step guide for setting up LunaDAQ      | [View Installation Guide](installation.md) |
+| **User Guide**    | Comprehensive guide for operating the DAQ system         | [View Usage Guide](usage.md)               |
+| **System Details**    | How LunaDAQ works internally         | [View Details Page](details.md)               |
+| **Server Architecture**    | Technical reference for developers         | [View Architecture Guide](server-architecture.md)               |
+| **Troubleshooting**    | Common issues and solutions         | [View Troubleshooting Guide](troubleshooting.md)               |
 
 ## Key Capabilities
 

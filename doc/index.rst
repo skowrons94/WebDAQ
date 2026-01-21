@@ -12,5 +12,7 @@ Welcome to LunaDAQ's documentation!
 
    welcome.md
    installation.md
-   details.md
    usage.md
+   details.md
+   server-architecture.md
+   troubleshooting.md

@@ -227,5 +227,10 @@ The web page will be looking for the server at the IP and port reported in `fron
 | Database migration errors      | Delete the `migrations/` folder and re-run `flask db init`. |
 | npm build failures             | Clear `node_modules/` and run `npm install --force`. |
 | Missing environment variables  | Ensure `.env` files exist in both `server/` and `frontend/` directories. |
+| CAEN library errors            | Verify CAENVMElib, CAENComm, and CAENDigitizer are properly installed. |
+| Docker permission denied       | Add your user to the docker group: `sudo usermod -a -G docker $USER` |
+| ROOT conflicts                 | Follow the Common Issues section above to configure Conda environment. |
+
+For more detailed troubleshooting, see the [Troubleshooting Guide](troubleshooting.md).
 
 For further assistance, contact [LunaDAQ Support Team](mailto:jakub.skowronski@pd.infn.it).
