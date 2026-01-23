@@ -345,6 +345,7 @@ def get_histogram_with_fit(board_id, channel):
 
     Query parameters:
         amplitude, mean, sigma, baseline: Optional fit parameters
+        use_last_fitted: If 'false', use running histogram instead of last fitted (default: true)
 
     Returns:
         JSON representation of histogram with fit function
@@ -361,7 +362,12 @@ def get_histogram_with_fit(board_id, channel):
                 'fit_success': True,
             }
 
-        histogram = tuner.get_histogram_with_fit(board_id, int(channel), fit_params)
+        # Check if user wants the running histogram instead of last fitted
+        use_last_fitted = request.args.get('use_last_fitted', 'true').lower() != 'false'
+
+        histogram = tuner.get_histogram_with_fit(
+            board_id, int(channel), fit_params, use_last_fitted=use_last_fitted
+        )
 
         if histogram is None:
             return "", 204

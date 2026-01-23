@@ -151,6 +151,9 @@ class ResolutionTuner:
         self.stop_event = threading.Event()
         self.lock = threading.Lock()
 
+        # Buffer for last fitted histogram data (x, y arrays)
+        self.last_fitted_histogram_data: Optional[Dict[str, Any]] = None
+
         # History persistence
         self.history_file = "conf/tuning.pkl"
         self.backup_dir = "conf/tuning_backups"
@@ -341,21 +344,33 @@ class ResolutionTuner:
             idx_max = np.argmax(y_fit)
             amplitude_init = y_fit[idx_max]
             mean_init = x_fit[idx_max]
-            sigma_init = (fit_max - fit_min) / 6
+
+            # For the sigma, go above and find half max
+            half_max = amplitude_init / 2
+            right_idx = idx_max
+            for i in range(idx_max, len(y_fit)):
+                if y_fit[i] <= half_max:
+                    right_idx = i
+                    break
+            sigma_init = (right_idx - idx_max)
             baseline_init = np.min(y_fit)
 
-            # Bounds for fitting
-            bounds = (
-                [0, fit_min, 0.1, 0],  # Lower bounds
-                [amplitude_init * 10, fit_max, (fit_max - fit_min) / 2, amplitude_init]  # Upper bounds
-            )
+            print( f"Initial fit params: amplitude={amplitude_init}, mean={mean_init}, sigma={sigma_init}, baseline={baseline_init}")
+
+            # Now make new fit region between mean +/- 2*sigma_init
+            min_fit = idx_max - sigma_init
+            max_fit = idx_max + sigma_init
+            print( f"Refined fit range indices: {min_fit} to {max_fit}")
+            mask = (x_fit >= x_fit[max(0, min_fit)]) & (x_fit <= x_fit[min(len(x_fit)-1, max_fit)])
+            x_fit = x_fit[mask]
+            y_fit = y_fit[mask]
 
             # Perform fit
             popt, pcov = curve_fit(
                 gaussian, x_fit, y_fit,
                 p0=[amplitude_init, mean_init, sigma_init, baseline_init],
-                bounds=bounds,
-                maxfev=10000
+                maxfev=10000,
+                method="lm"
             )
 
             amplitude, mean, sigma, baseline = popt
@@ -384,6 +399,34 @@ class ResolutionTuner:
         except Exception as e:
             self.logger.error(f"Gaussian fit failed: {e}")
             return {"error": str(e), "fit_success": False}
+
+    def _store_histogram_data(self, histogram, fit_result: Dict[str, Any]) -> None:
+        """
+        Store histogram data for later retrieval.
+
+        Args:
+            histogram: ROOT histogram object
+            fit_result: Fit result dictionary
+        """
+        try:
+            n_bins = histogram.GetNbinsX()
+            x_data = [histogram.GetBinCenter(i) for i in range(1, n_bins + 1)]
+            y_data = [histogram.GetBinContent(i) for i in range(1, n_bins + 1)]
+
+            self.last_fitted_histogram_data = {
+                "x": x_data,
+                "y": y_data,
+                "n_bins": n_bins,
+                "x_min": histogram.GetXaxis().GetXmin(),
+                "x_max": histogram.GetXaxis().GetXmax(),
+                "fit_params": fit_result,
+                "fit_range_min": self.current_session.fit_range_min if self.current_session else None,
+                "fit_range_max": self.current_session.fit_range_max if self.current_session else None,
+                "board_id": self.current_session.board_id if self.current_session else None,
+                "channel": self.current_session.channel if self.current_session else None,
+            }
+        except Exception as e:
+            self.logger.error(f"Error storing histogram data: {e}")
 
     def _generate_parameter_values(self, param_min: float, param_max: float,
                                      num_steps: int) -> List[int]:
@@ -508,6 +551,10 @@ class ResolutionTuner:
                 )
                 fit_result = self._fit_gaussian(histogram)
 
+                # Store histogram data for later retrieval
+                if histogram is not None:
+                    self._store_histogram_data(histogram, fit_result)
+
                 # Stop DAQ run
                 if not self.test_flag:
                     self.daq_manager.stop_xdaq()
@@ -601,6 +648,10 @@ class ResolutionTuner:
                             session.board_id, session.channel, boards
                         )
                         fit_result = self._fit_gaussian(histogram)
+
+                        # Store histogram data for later retrieval
+                        if histogram is not None:
+                            self._store_histogram_data(histogram, fit_result)
 
                         if not self.test_flag:
                             self.daq_manager.stop_xdaq()
@@ -876,7 +927,8 @@ class ResolutionTuner:
         return {"error": "Failed to set parameter value"}
 
     def get_histogram_with_fit(self, board_id: str, channel: int,
-                                fit_params: Optional[Dict[str, float]] = None) -> Optional[Any]:
+                                fit_params: Optional[Dict[str, float]] = None,
+                                use_last_fitted: bool = True) -> Optional[Any]:
         """
         Get histogram with Gaussian fit function added.
 
@@ -885,18 +937,38 @@ class ResolutionTuner:
             channel: Channel number
             fit_params: Optional fit parameters (amplitude, mean, sigma, baseline)
                         If not provided, uses best_point from current/last session
+            use_last_fitted: If True, uses the last fitted histogram from buffer
+                             instead of the current running histogram
 
         Returns:
             ROOT histogram with TF1 fit function or None
         """
         try:
-            boards = self.daq_manager.get_boards()
-            histogram = self.spy_manager.get_histogram(board_id, channel, boards)
+            import ROOT
+
+            histogram = None
+
+            # Use buffered histogram data if available and requested
+            if use_last_fitted and self.last_fitted_histogram_data:
+                data = self.last_fitted_histogram_data
+                # Recreate histogram from stored data
+                histogram = ROOT.TH1F("histo_fit", "Last Fitted Histogram",
+                                     data["n_bins"], data["x_min"], data["x_max"])
+                for i, y in enumerate(data["y"]):
+                    histogram.SetBinContent(i + 1, y)
+
+                # Use fit params from stored data if not provided
+                if fit_params is None:
+                    fit_params = data.get("fit_params")
+            else:
+                # Fall back to current running histogram
+                boards = self.daq_manager.get_boards()
+                histogram = self.spy_manager.get_histogram(board_id, channel, boards)
 
             if histogram is None:
                 return None
 
-            # Get fit parameters
+            # Get fit parameters if still not set
             if fit_params is None:
                 # Try to get from current session or last history
                 if self.current_session and self.current_session.best_point:
@@ -914,8 +986,6 @@ class ResolutionTuner:
             # Add Gaussian fit function if we have parameters
             if fit_params and fit_params.get("fit_success", True):
                 try:
-                    import ROOT
-
                     amplitude = fit_params.get("amplitude", 0)
                     mean = fit_params.get("mean", 0)
                     sigma = fit_params.get("sigma", 1)
@@ -934,16 +1004,26 @@ class ResolutionTuner:
                         # Add function to histogram's list of functions
                         histogram.GetListOfFunctions().Add(fit_func)
 
-                except ImportError:
-                    self.logger.warning("ROOT not available, cannot add fit function")
                 except Exception as e:
                     self.logger.error(f"Error adding fit function: {e}")
 
             return histogram
 
+        except ImportError:
+            self.logger.warning("ROOT not available, cannot add fit function")
+            return None
         except Exception as e:
             self.logger.error(f"Error getting histogram with fit: {e}")
             return None
+
+    def get_last_fitted_histogram_data(self) -> Optional[Dict[str, Any]]:
+        """
+        Get the raw data of the last fitted histogram.
+
+        Returns:
+            Dictionary with x, y arrays and fit parameters, or None
+        """
+        return self.last_fitted_histogram_data
 
     def get_last_session(self, board_id: Optional[str] = None,
                          channel: Optional[int] = None) -> Optional[Dict[str, Any]]:
