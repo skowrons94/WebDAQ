@@ -237,7 +237,9 @@ export default function ResolutionTuner() {
     const fetchHistory = async () => {
         try {
             const res = await getTuningHistory({ limit: 50 })
-            const sessions = res.sessions || []
+            const sanitized = res.replace(/:\s*Infinity/g, ': null');
+            const parsed = JSON.parse(sanitized);
+            const sessions = parsed.sessions || [];
 
             setHistory(sessions)
 
