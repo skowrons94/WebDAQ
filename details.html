@@ -1,0 +1,323 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LunaDAQ Details &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Server Architecture Reference" href="server-architecture.html" />
+    <link rel="prev" title="User Guide" href="usage.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">LUNA Experiment Data Acquisition System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">LunaDAQ Details</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#overview">Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#system-architecture">System Architecture</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#xdaq-in-docker">XDAQ in Docker</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#xdaq-components">XDAQ Components</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#flask-server">Flask Server</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#flask-responsibilities">Flask Responsibilities</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#configuration-and-topology">Configuration and Topology</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#board-communication">Board Communication</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#initial-board-communication">Initial Board Communication</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#tetramm-module-integration">TetrAMM Module Integration</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#data-storage-and-monitoring">Data Storage and Monitoring</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#graphite-database-integration">Graphite Database Integration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#spy-functionality">Spy Functionality</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#api-and-web-interface">API and Web Interface</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#rest-api">REST API</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sql-database">SQL Database</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#web-frontend">Web Frontend</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">LunaDAQ Details</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/details.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="lunadaq-details">
+<h1>LunaDAQ Details<a class="headerlink" href="#lunadaq-details" title="Link to this heading"></a></h1>
+<p>LunaDAQ is a data acquisition (DAQ) system designed to collect and process data from connected boards using XDAQ within a Docker container. The system is managed by a Flask-based server that controls the data flow, stores configurations, and provides a web-based interface for monitoring and interaction.</p>
+<section id="overview">
+<h2>Overview<a class="headerlink" href="#overview" title="Link to this heading"></a></h2>
+<p>LunaDAQ is designed to provide a scalable and flexible DAQ system capable of handling multiple hardware boards efficiently. It leverages Docker to encapsulate the complex XDAQ dependencies, ensuring portability across different Linux environments. The system is structured into several key components:</p>
+<ul class="simple">
+<li><p><strong>XDAQ in Docker</strong> (Data acquisition and processing)</p></li>
+<li><p><strong>Flask Server</strong> (System management and control)</p></li>
+<li><p><strong>Board Communication</strong> (Device interfacing)</p></li>
+<li><p><strong>Data Storage and Monitoring</strong> (Graphite and SQL database integration)</p></li>
+<li><p><strong>Web Interface</strong> (User-friendly interaction)</p></li>
+</ul>
+</section>
+<section id="system-architecture">
+<h2>System Architecture<a class="headerlink" href="#system-architecture" title="Link to this heading"></a></h2>
+<section id="xdaq-in-docker">
+<h3>XDAQ in Docker<a class="headerlink" href="#xdaq-in-docker" title="Link to this heading"></a></h3>
+<p>At the heart of WebDAQ is the <strong>XDAQ-based Docker image</strong> <a class="reference external" href="https://hub.docker.com/r/skowrons/xdaq"><code class="docutils literal notranslate"><span class="pre">skowrons/xdaq:latest</span></code></a>. The use of Docker ensures compatibility with any Linux-based system by packaging all necessary dependencies within a self-contained environment.</p>
+<section id="xdaq-components">
+<h4>XDAQ Components<a class="headerlink" href="#xdaq-components" title="Link to this heading"></a></h4>
+<p>XDAQ comprises three core units that interact via <strong>TCP/IP sockets</strong>:</p>
+<ol class="arabic simple">
+<li><p><strong>ReadoutUnit</strong></p>
+<ul class="simple">
+<li><p>Acquires raw data buffers directly from the connected hardware.</p></li>
+<li><p>Manages data flow from multiple boards simultaneously.</p></li>
+<li><p>Provides a “spy” port for parallel real-time monitoring.</p></li>
+</ul>
+</li>
+<li><p><strong>LocalFilter</strong></p>
+<ul class="simple">
+<li><p>Processes the raw data to extract only relevant information.</p></li>
+<li><p>Compresses and optimizes buffer sizes to enhance storage efficiency.</p></li>
+<li><p>Filters noise and unwanted data for better signal clarity.</p></li>
+</ul>
+</li>
+<li><p><strong>BuilderUnit</strong></p>
+<ul class="simple">
+<li><p>Analyzes and correlates data across multiple channels.</p></li>
+<li><p>Identifies coincidences between data streams to enhance event detection.</p></li>
+<li><p>Provides a structured and refined dataset for further analysis.</p></li>
+</ul>
+</li>
+</ol>
+<p>Each of these units can be configured and activated based on the <strong>topology file</strong> (<code class="docutils literal notranslate"><span class="pre">server/conf/topology.xml</span></code>). Currently, only the <strong>ReadoutUnit</strong> is enabled for simplicity.</p>
+</section>
+</section>
+</section>
+<section id="flask-server">
+<h2>Flask Server<a class="headerlink" href="#flask-server" title="Link to this heading"></a></h2>
+<p>The LunaDAQ system is managed by a <strong>Flask-based web server</strong>, which acts as the central control unit. Flask is a lightweight Python web framework that provides an easy-to-use API for managing the DAQ system.</p>
+<section id="flask-responsibilities">
+<h3>Flask Responsibilities<a class="headerlink" href="#flask-responsibilities" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Instantiates and manages the XDAQ Docker container.</strong></p></li>
+<li><p><strong>Controls acquisition settings</strong> based on the topology configuration.</p></li>
+<li><p><strong>Handles system status monitoring</strong>, including:</p>
+<ul>
+<li><p>Number of connected boards</p></li>
+<li><p>Current run number</p></li>
+<li><p>Accumulated charge statistics</p></li>
+<li><p>Acquired spectra for each DAQ channel</p></li>
+</ul>
+</li>
+<li><p><strong>Allows dynamic reconfiguration</strong> of DAQ settings, such as:</p>
+<ul>
+<li><p>Maximum file size for data collection</p></li>
+<li><p>Current run number and session tracking</p></li>
+<li><p>CAEN board settings through modifying the JSON configuration file</p></li>
+</ul>
+</li>
+<li><p><strong>Generates unit-specific configuration files</strong>, including:</p>
+<ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">RUCaen.conf</span></code> (Readout Unit settings)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">LocalFilter.conf</span></code> (Local Filter settings)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">Builder.conf</span></code> (Builder Unit settings)</p></li>
+<li><p>JSON file configuration of the connected boards</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="configuration-and-topology">
+<h3>Configuration and Topology<a class="headerlink" href="#configuration-and-topology" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The <strong>topology file</strong> (<code class="docutils literal notranslate"><span class="pre">server/conf/topology.xml</span></code>) governs which units are activated and what ports are used. The present topology activates only the ReadoutUnit for simplicity and stability.</p></li>
+<li><p>Configuration files are automatically generated based on the detected boards to ensure a seamless setup process.</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>For a detailed technical reference of all server classes, services, and routes, see the <a class="reference internal" href="server-architecture.html"><span class="std std-doc">Server Architecture Guide</span></a>.</p>
+</div>
+</section>
+</section>
+<section id="board-communication">
+<h2>Board Communication<a class="headerlink" href="#board-communication" title="Link to this heading"></a></h2>
+<p>LunaDAQ includes direct communication with hardware boards to ensure smooth operation.</p>
+<section id="initial-board-communication">
+<h3>Initial Board Communication<a class="headerlink" href="#initial-board-communication" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Managed by <code class="docutils literal notranslate"><span class="pre">server/app/services/dgtz.py</span></code></p></li>
+<li><p>Uses the <strong>CAENDigitizer Library</strong> to:</p>
+<ul>
+<li><p>Verify if a board is properly connected.</p></li>
+<li><p>Extract and store the board’s configuration as a JSON file in (<code class="docutils literal notranslate"><span class="pre">server/conf/</span></code>).</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="tetramm-module-integration">
+<h3>TetrAMM Module Integration<a class="headerlink" href="#tetramm-module-integration" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Managed by <code class="docutils literal notranslate"><span class="pre">server/app/services/tetramm.py</span></code></p></li>
+<li><p>Acquires TetrAMM values and calculates <strong>mean values over 0.1-second intervals</strong>.</p></li>
+<li><p>Ensures real-time data streaming to Graphite for monitoring and processing.</p></li>
+<li><p>The module is always acquiring. In order to save the data, when the run is started, the flag to save the data is simply enabled.</p></li>
+</ul>
+</section>
+</section>
+<section id="data-storage-and-monitoring">
+<h2>Data Storage and Monitoring<a class="headerlink" href="#data-storage-and-monitoring" title="Link to this heading"></a></h2>
+<section id="graphite-database-integration">
+<h3>Graphite Database Integration<a class="headerlink" href="#graphite-database-integration" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>LunaDAQ interfaces with <strong>Graphite</strong>, a time-series database designed for storing and visualizing system metrics.</p></li>
+<li><p>Graphite is hosted on the <code class="docutils literal notranslate"><span class="pre">lunaserver</span></code> machine and is used to store DAQ statistics such as:</p>
+<ul>
+<li><p>DAQ rates</p></li>
+<li><p>Current values</p></li>
+<li><p>MV accelerator values</p></li>
+</ul>
+</li>
+<li><p>The server communicates with Graphite via <code class="docutils literal notranslate"><span class="pre">server/app/services/graphite.py</span></code>, retrieving system metrics for visualization.</p></li>
+</ul>
+</section>
+<section id="spy-functionality">
+<h3>Spy Functionality<a class="headerlink" href="#spy-functionality" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Handled by <code class="docutils literal notranslate"><span class="pre">server/app/services/spy.py</span></code></p></li>
+<li><p>Enables <strong>real-time data acquisition monitoring</strong>.</p></li>
+<li><p>Extracts histograms from active acquisitions for live analysis.</p></li>
+<li><p>Requires <strong>LunaSpy</strong> (<a class="reference external" href="https://github.com/skowrons94/LunaSpy">LunaSpy GitHub</a>), which must be installed and accessible in the system path.</p></li>
+</ul>
+</section>
+</section>
+<section id="api-and-web-interface">
+<h2>API and Web Interface<a class="headerlink" href="#api-and-web-interface" title="Link to this heading"></a></h2>
+<section id="rest-api">
+<h3>REST API<a class="headerlink" href="#rest-api" title="Link to this heading"></a></h3>
+<p>LunaDAQ exposes a <strong>REST API</strong> that allows external applications to interact with the system. API endpoints are defined in <code class="docutils literal notranslate"><span class="pre">server/app/routes/</span></code> and include:</p>
+<ul class="simple">
+<li><p>Starting and stopping acquisition runs.</p></li>
+<li><p>Retrieving real-time system metrics.</p></li>
+<li><p>Modifying DAQ configurations dynamically.</p></li>
+</ul>
+<p><strong>What is an API?</strong>
+An <strong>API (Application Programming Interface)</strong> is a way for different software components to communicate. LunaDAQ’s API enables seamless interaction between the frontend and backend.</p>
+</section>
+<section id="sql-database">
+<h3>SQL Database<a class="headerlink" href="#sql-database" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>LunaDAQ maintains a structured SQL database to store run metadata, including:</p>
+<ul>
+<li><p>Start and stop times</p></li>
+<li><p>Accumulated charge per session</p></li>
+<li><p>Target type and run type</p></li>
+<li><p>Terminal Voltages and Probe Voltages (manually inserted for the 400kV compatibility)</p></li>
+</ul>
+</li>
+</ul>
+</section>
+<section id="web-frontend">
+<h3>Web Frontend<a class="headerlink" href="#web-frontend" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>The <strong>web interface</strong> provides a <strong>JavaScript-based</strong> control panel for LunaDAQ.</p></li>
+<li><p>It uses <strong>Node.js</strong> for backend processing and communicates with the Flask server through API calls.</p></li>
+<li><p><strong>Frontend independence:</strong> Unlike CoMPASS, WebDAQ’s frontend operates separately from the backend, preventing any possible crash of the DAQ.</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="usage.html" class="btn btn-neutral float-left" title="User Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="server-architecture.html" class="btn btn-neutral float-right" title="Server Architecture Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
