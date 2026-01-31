@@ -268,6 +268,16 @@ export const setAutoRestart = (enabled: boolean, delay?: number) =>
 export const getRestartStatus = () =>
     api.get('/experiment/get_restart_status').then(res => res.data);
 
+// Telegram notification settings
+export const getTelegramSettings = () =>
+    api.get('/experiment/get_telegram_settings').then(res => res.data);
+
+export const setTelegramSettings = (settings: { enabled?: boolean; bot_token?: string; chat_id?: string }) =>
+    api.post('/experiment/set_telegram_settings', settings);
+
+export const testTelegram = () =>
+    api.post('/experiment/test_telegram');
+
 // Stats/Graphite path management APIs
 export const getStatsPaths = () =>
     api.get('/stats/paths').then(res => res.data);

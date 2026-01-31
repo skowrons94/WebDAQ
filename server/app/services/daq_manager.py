@@ -22,6 +22,9 @@ import json
 import time
 import logging
 import threading
+import urllib.request
+import urllib.parse
+import urllib.error
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 
@@ -289,6 +292,10 @@ class DAQManager:
         self.restart_pending = False  # Flag to indicate restart is in progress
         self.last_restart_info = None  # Info about the last auto-restart event
         self.restart_callback = None  # Callback function to trigger restart
+
+        # Telegram notification settings (loaded from persistent storage)
+        self._load_telegram_settings()
+        self.telegram_notification_sent = False  # Track if notification was sent for current run
         
         # Initialize persistent connections for existing boards
         for board in self.daq_state.get('boards', []):
@@ -933,9 +940,18 @@ class DAQManager:
                         self.refresh_board_connection(board_id)
                         self.logger.error(f"Error monitoring board {board_id}: {e}")
 
-                # Handle auto-restart if failure detected and enabled
-                if failure_detected and self.auto_restart_enabled and not self.restart_pending:
-                    self._handle_auto_restart(failed_board_id, failure_value)
+                # Handle failure: send notification and trigger auto-restart if enabled
+                if failure_detected:
+                    # Send Telegram notification (only once per run)
+                    self.send_board_failure_notification(
+                        failed_board_id,
+                        self._get_failure_type_string(failure_value),
+                        self.daq_state['run']
+                    )
+
+                    # Trigger auto-restart if enabled
+                    if self.auto_restart_enabled and not self.restart_pending:
+                        self._handle_auto_restart(failed_board_id, failure_value)
 
                 # Sleep for 1 second or until stop event is set
                 if not self.monitor_stop_event.wait(1.0):
@@ -952,6 +968,23 @@ class DAQManager:
 
         self.logger.info("Board monitoring thread stopped")
 
+    def _get_failure_type_string(self, failure_value: int) -> str:
+        """
+        Convert failure register value to human-readable string.
+
+        Args:
+            failure_value: The register value indicating the failure type
+
+        Returns:
+            Human-readable failure type string
+        """
+        if failure_value & 0x04:  # Bit 2 indicates PLL Lock Loss
+            return "PLL Lock Loss"
+        elif failure_value & 0x01:  # Bit 0 indicates Generic Failure
+            return "Generic Failure"
+        else:
+            return f"Board Error (0x{failure_value:X})"
+
     def _handle_auto_restart(self, board_id: str, failure_value: int) -> None:
         """
         Handle auto-restart when a board failure is detected.
@@ -964,13 +997,7 @@ class DAQManager:
         self.restart_pending = True
 
         # Determine failure type from the register value
-        failure_type = "Unknown Failure"
-        if failure_value & 0x04:  # Bit 2 indicates PLL Lock Loss
-            failure_type = "PLL Lock Loss"
-        elif failure_value & 0x01:  # Bit 0 indicates Generic Failure
-            failure_type = "Generic Failure"
-        else:
-            failure_type = f"Board Error (0x{failure_value:X})"
+        failure_type = self._get_failure_type_string(failure_value)
 
         self.logger.warning(f"Auto-restart triggered: Board {board_id} - {failure_type}")
         self.logger.info(f"Waiting {self.auto_restart_delay} seconds before restart...")
@@ -1012,12 +1039,15 @@ class DAQManager:
         if self.monitor_thread and self.monitor_thread.is_alive():
             self.logger.warning("Board monitoring thread already running")
             return
-        
+
         # Reset all board statuses
         for board in self.daq_state['boards']:
             board_id = str(board['id'])
             self.board_status[board_id] = {'failed': False, 'last_value': 0}
-        
+
+        # Reset Telegram notification flag for new run
+        self.reset_telegram_notification_flag()
+
         # Start monitoring thread
         self.monitor_stop_event.clear()
         self.monitor_thread = threading.Thread(target=self._monitor_boards_thread, daemon=True)
@@ -1114,6 +1144,212 @@ class DAQManager:
             True if restart is pending
         """
         return self.restart_pending
+
+    # ==================== Telegram Notification Methods ====================
+
+    def _load_telegram_settings(self) -> None:
+        """Load Telegram settings from persistent storage."""
+        telegram_file = 'conf/telegram_settings.json'
+
+        if os.path.exists(telegram_file):
+            try:
+                with open(telegram_file, 'r') as f:
+                    settings = json.load(f)
+                self.telegram_enabled = settings.get('enabled', False)
+                self.telegram_bot_token = settings.get('bot_token', '')
+                self.telegram_chat_id = settings.get('chat_id', '')
+                self.logger.info("Loaded Telegram settings from file")
+            except Exception as e:
+                self.logger.error(f"Error loading Telegram settings: {e}")
+                self.telegram_enabled = False
+                self.telegram_bot_token = ''
+                self.telegram_chat_id = ''
+        else:
+            self.telegram_enabled = False
+            self.telegram_bot_token = ''
+            self.telegram_chat_id = ''
+            # Save default settings
+            self._save_telegram_settings()
+
+    def _save_telegram_settings(self) -> None:
+        """Save Telegram settings to persistent storage."""
+        telegram_file = 'conf/telegram_settings.json'
+        settings = {
+            'enabled': self.telegram_enabled,
+            'bot_token': self.telegram_bot_token,
+            'chat_id': self.telegram_chat_id,
+        }
+        try:
+            with open(telegram_file, 'w') as f:
+                json.dump(settings, f, indent=4)
+            self.logger.debug("Saved Telegram settings to file")
+        except Exception as e:
+            self.logger.error(f"Error saving Telegram settings: {e}")
+
+    def get_telegram_settings(self) -> Dict[str, Any]:
+        """
+        Get current Telegram notification settings.
+
+        Returns:
+            Dictionary with enabled, bot_token (masked), and chat_id
+        """
+        return {
+            'enabled': self.telegram_enabled,
+            'bot_token': self._mask_token(self.telegram_bot_token),
+            'chat_id': self.telegram_chat_id,
+            'configured': bool(self.telegram_bot_token and self.telegram_chat_id),
+        }
+
+    def _mask_token(self, token: str) -> str:
+        """Mask the bot token for display (show first 10 and last 5 chars)."""
+        if not token or len(token) < 20:
+            return '*' * len(token) if token else ''
+        return token[:10] + '*' * (len(token) - 15) + token[-5:]
+
+    def set_telegram_settings(self, enabled: bool = None, bot_token: str = None, chat_id: str = None) -> None:
+        """
+        Update Telegram notification settings.
+
+        Args:
+            enabled: Enable/disable Telegram notifications
+            bot_token: Telegram bot API token
+            chat_id: Telegram chat ID to send messages to
+        """
+        if enabled is not None:
+            self.telegram_enabled = enabled
+        if bot_token is not None:
+            self.telegram_bot_token = bot_token
+        if chat_id is not None:
+            self.telegram_chat_id = chat_id
+
+        self._save_telegram_settings()
+        self.logger.info(f"Telegram settings updated: enabled={self.telegram_enabled}")
+
+    def send_telegram_message(self, message: str) -> bool:
+        """
+        Send a message via Telegram bot.
+
+        Args:
+            message: The message text to send
+
+        Returns:
+            True if message was sent successfully, False otherwise
+        """
+        if not self.telegram_enabled:
+            self.logger.debug("Telegram notifications disabled, not sending message")
+            return False
+
+        if not self.telegram_bot_token or not self.telegram_chat_id:
+            self.logger.warning("Telegram bot token or chat ID not configured")
+            return False
+
+        try:
+            url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
+            data = urllib.parse.urlencode({
+                'chat_id': self.telegram_chat_id,
+                'text': message,
+                'parse_mode': 'HTML'
+            }).encode('utf-8')
+
+            request = urllib.request.Request(url, data=data, method='POST')
+            request.add_header('Content-Type', 'application/x-www-form-urlencoded')
+
+            with urllib.request.urlopen(request, timeout=10) as response:
+                result = json.loads(response.read().decode('utf-8'))
+                if result.get('ok'):
+                    self.logger.info("Telegram message sent successfully")
+                    return True
+                else:
+                    self.logger.error(f"Telegram API error: {result}")
+                    return False
+
+        except urllib.error.HTTPError as e:
+            self.logger.error(f"Telegram HTTP error: {e.code} - {e.reason}")
+            return False
+        except urllib.error.URLError as e:
+            self.logger.error(f"Telegram URL error: {e.reason}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error sending Telegram message: {e}")
+            return False
+
+    def test_telegram_connection(self) -> Dict[str, Any]:
+        """
+        Test the Telegram bot connection by sending a test message.
+
+        Returns:
+            Dictionary with success status and message
+        """
+        if not self.telegram_bot_token or not self.telegram_chat_id:
+            return {
+                'success': False,
+                'message': 'Bot token or chat ID not configured'
+            }
+
+        test_message = "🔬 <b>WebDAQ Test Message</b>\n\nTelegram notifications are working correctly!"
+
+        # Temporarily enable for test
+        original_enabled = self.telegram_enabled
+        self.telegram_enabled = True
+
+        success = self.send_telegram_message(test_message)
+
+        # Restore original state
+        self.telegram_enabled = original_enabled
+
+        if success:
+            return {
+                'success': True,
+                'message': 'Test message sent successfully'
+            }
+        else:
+            return {
+                'success': False,
+                'message': 'Failed to send test message. Check bot token and chat ID.'
+            }
+
+    def reset_telegram_notification_flag(self) -> None:
+        """Reset the notification sent flag. Call this when a new run starts."""
+        self.telegram_notification_sent = False
+        self.logger.debug("Telegram notification flag reset for new run")
+
+    def send_board_failure_notification(self, board_id: str, failure_type: str, run_number: int) -> bool:
+        """
+        Send a Telegram notification about board failure.
+        Only sends if notification hasn't been sent for this run yet.
+
+        Args:
+            board_id: ID of the failed board
+            failure_type: Description of the failure type
+            run_number: Current run number
+
+        Returns:
+            True if notification was sent, False otherwise
+        """
+        if self.telegram_notification_sent:
+            self.logger.debug("Telegram notification already sent for this run, skipping")
+            return False
+
+        message = (
+            f"⚠️ <b>LUNA DAQ Board Failure Alert</b>\n\n"
+            f"<b>Run Number:</b> {run_number}\n"
+            f"<b>Board ID:</b> {board_id}\n"
+            f"<b>Failure Type:</b> {failure_type}\n"
+            f"<b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        )
+
+        if self.auto_restart_enabled:
+            message += f"🔄 Auto-restart is enabled. Run will restart in {self.auto_restart_delay} seconds."
+        else:
+            message += "⏹️ Auto-restart is disabled. Manual intervention required."
+
+        success = self.send_telegram_message(message)
+        if success:
+            self.telegram_notification_sent = True
+
+        return success
+
+    # ==================== End Telegram Methods ====================
 
     def check_board_connectivity(self) -> Dict[str, Dict[str, Any]]:
         """

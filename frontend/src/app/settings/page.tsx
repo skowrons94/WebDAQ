@@ -15,6 +15,7 @@ import { Board } from '@/components/board';
 import { VisualizationSettings } from '@/components/visualization-settings';
 import { MetricsSettings } from '@/components/metrics-settings';
 import { CurrentModuleSettings } from '@/components/current-module-settings';
+import { TelegramSettings } from '@/components/telegram-settings';
 
 const queryClient = new QueryClient()
 
@@ -50,6 +51,8 @@ export default function SettingsPage() {
                 return <MetricsSettings />;
             case 'current':
                 return <CurrentModuleSettings />;
+            case 'notifications':
+                return <TelegramSettings />;
             default:
                 return (
                     < VisualizationSettings />
@@ -93,6 +96,13 @@ export default function SettingsPage() {
                                 onClick={() => setActiveView('metrics')}
                             >
                                 Metrics
+                            </Link>
+                            <Link
+                                href="#"
+                                className={`font-semibold ${activeView === 'notifications' ? 'text-primary' : ''}`}
+                                onClick={() => setActiveView('notifications')}
+                            >
+                                Notifications
                             </Link>
 
                         </nav>

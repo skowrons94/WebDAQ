@@ -1,11 +1,10 @@
 # app/routes/experiment.py
 import os
 import json
-import threading
 import logging
 from datetime import datetime
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify
 from app import db
 
 from ..models.run_metadata import RunMetadata
@@ -635,3 +634,48 @@ def get_restart_status():
         'pending': daq_mgr.is_restart_pending(),
         'last_restart_info': daq_mgr.get_last_restart_info()
     }), 200
+
+
+# Telegram notification routes
+
+@bp.route("/experiment/get_telegram_settings", methods=['GET'])
+@jwt_required_custom
+def get_telegram_settings():
+    """
+    Get current Telegram notification settings.
+    Returns enabled status, masked bot token, and chat ID.
+    """
+    settings = daq_mgr.get_telegram_settings()
+    return jsonify(settings), 200
+
+
+@bp.route("/experiment/set_telegram_settings", methods=['POST'])
+@jwt_required_custom
+def set_telegram_settings():
+    """
+    Update Telegram notification settings.
+    Request body: { "enabled": bool, "bot_token": string, "chat_id": string }
+    All fields are optional - only provided fields will be updated.
+    """
+    data = request.get_json()
+    enabled = data.get('enabled')
+    bot_token = data.get('bot_token')
+    chat_id = data.get('chat_id')
+
+    daq_mgr.set_telegram_settings(enabled=enabled, bot_token=bot_token, chat_id=chat_id)
+
+    return jsonify({
+        'message': 'Telegram settings updated',
+        'settings': daq_mgr.get_telegram_settings()
+    }), 200
+
+
+@bp.route("/experiment/test_telegram", methods=['POST'])
+@jwt_required_custom
+def test_telegram():
+    """
+    Send a test message to verify Telegram configuration.
+    """
+    result = daq_mgr.test_telegram_connection()
+    status_code = 200 if result['success'] else 400
+    return jsonify(result), status_code
