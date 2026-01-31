@@ -282,6 +282,13 @@ class DAQManager:
         self.board_status = {}  # Track board failure status: {board_id: {'failed': bool, 'last_value': int}}
         self.monitor_thread = None
         self.monitor_stop_event = threading.Event()
+
+        # Auto-restart on board failure settings
+        self.auto_restart_enabled = False
+        self.auto_restart_delay = 30  # seconds to wait before restarting
+        self.restart_pending = False  # Flag to indicate restart is in progress
+        self.last_restart_info = None  # Info about the last auto-restart event
+        self.restart_callback = None  # Callback function to trigger restart
         
         # Initialize persistent connections for existing boards
         for board in self.daq_state.get('boards', []):
@@ -877,61 +884,125 @@ class DAQManager:
         """
         Thread function to monitor board status by reading address 0x8178 using persistent connections.
         Runs every second and checks for non-zero values which indicate board failure.
+        If auto-restart is enabled, will trigger a restart after 30 seconds delay.
         """
         self.logger.info("Board monitoring thread started")
-        
+
         while not self.monitor_stop_event.is_set():
             try:
+                failure_detected = False
+                failed_board_id = None
+                failure_value = 0
+
                 for board in self.daq_state['boards']:
                     board_id = str(board['id'])
-                    
+
                     # Initialize board status if not exists
                     if board_id not in self.board_status:
                         self.board_status[board_id] = {'failed': False, 'last_value': 0}
-                    
+
                     # Skip if already failed (once failed, stays failed)
                     if self.board_status[board_id]['failed']:
                         continue
-                    
+
                     # If already have a non-zero last value, skip further checks
                     if self.board_status[board_id]['last_value'] != 0:
                         continue
-                    
+
                     try:
                         # Read register 0x8178 using persistent connection
                         value = self.digitizer_container.read_register(board_id, 0x8178)
-                        
+
                         if value is not None:
                             self.board_status[board_id]['last_value'] = value
-                            
+
                             # Check if value is non-zero (indicates failure)
                             if value != 0:
                                 self.board_status[board_id]['failed'] = True
                                 self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
+                                failure_detected = True
+                                failed_board_id = board_id
+                                failure_value = value
                         else:
                             # Try refreshing the connection once
                             self.refresh_board_connection(board_id)
                             self.logger.warning(f"Could not read register from board {board_id} for monitoring")
-                            
+
                     except Exception as e:
                         # Try refreshing the connection once
                         self.refresh_board_connection(board_id)
                         self.logger.error(f"Error monitoring board {board_id}: {e}")
-                
+
+                # Handle auto-restart if failure detected and enabled
+                if failure_detected and self.auto_restart_enabled and not self.restart_pending:
+                    self._handle_auto_restart(failed_board_id, failure_value)
+
                 # Sleep for 1 second or until stop event is set
                 if not self.monitor_stop_event.wait(1.0):
                     continue
                 else:
                     break
-                    
+
             except Exception as e:
                 self.logger.error(f"Error in board monitoring thread: {e}")
                 if not self.monitor_stop_event.wait(1.0):
                     continue
                 else:
                     break
-        
+
         self.logger.info("Board monitoring thread stopped")
+
+    def _handle_auto_restart(self, board_id: str, failure_value: int) -> None:
+        """
+        Handle auto-restart when a board failure is detected.
+        Waits for the configured delay, then triggers the restart callback.
+
+        Args:
+            board_id: ID of the failed board
+            failure_value: The register value indicating the failure type
+        """
+        self.restart_pending = True
+
+        # Determine failure type from the register value
+        failure_type = "Unknown Failure"
+        if failure_value & 0x04:  # Bit 2 indicates PLL Lock Loss
+            failure_type = "PLL Lock Loss"
+        elif failure_value & 0x01:  # Bit 0 indicates Generic Failure
+            failure_type = "Generic Failure"
+        else:
+            failure_type = f"Board Error (0x{failure_value:X})"
+
+        self.logger.warning(f"Auto-restart triggered: Board {board_id} - {failure_type}")
+        self.logger.info(f"Waiting {self.auto_restart_delay} seconds before restart...")
+
+        # Store restart info for later use
+        self.last_restart_info = {
+            'board_id': board_id,
+            'failure_type': failure_type,
+            'failure_value': failure_value,
+            'timestamp': datetime.now().isoformat(),
+            'run_number': self.daq_state['run']
+        }
+
+        # Wait for the configured delay (checking if we should stop)
+        for _ in range(self.auto_restart_delay):
+            if self.monitor_stop_event.is_set():
+                self.logger.info("Auto-restart cancelled - monitoring stopped")
+                self.restart_pending = False
+                return
+            time.sleep(1)
+
+        # Trigger the restart callback if registered
+        if self.restart_callback:
+            self.logger.info("Triggering restart callback...")
+            try:
+                self.restart_callback(board_id, failure_type)
+            except Exception as e:
+                self.logger.error(f"Error in restart callback: {e}")
+        else:
+            self.logger.warning("No restart callback registered - cannot auto-restart")
+
+        self.restart_pending = False
     
     def start_board_monitoring(self) -> None:
         """
@@ -971,11 +1042,78 @@ class DAQManager:
     def get_board_status(self) -> Dict[str, Dict[str, Any]]:
         """
         Get current status of all boards.
-        
+
         Returns:
             Dictionary mapping board_id to status info: {'failed': bool, 'last_value': int}
         """
         return self.board_status.copy()
+
+    def get_auto_restart_enabled(self) -> bool:
+        """
+        Get auto-restart on failure setting.
+
+        Returns:
+            True if auto-restart is enabled
+        """
+        return self.auto_restart_enabled
+
+    def set_auto_restart_enabled(self, enabled: bool) -> None:
+        """
+        Set auto-restart on failure setting.
+
+        Args:
+            enabled: Enable/disable auto-restart on board failure
+        """
+        self.auto_restart_enabled = enabled
+        self.logger.info(f"Auto-restart on failure set to {enabled}")
+
+    def get_auto_restart_delay(self) -> int:
+        """
+        Get auto-restart delay in seconds.
+
+        Returns:
+            Delay in seconds before auto-restart
+        """
+        return self.auto_restart_delay
+
+    def set_auto_restart_delay(self, delay: int) -> None:
+        """
+        Set auto-restart delay in seconds.
+
+        Args:
+            delay: Delay in seconds before auto-restart (minimum 5 seconds)
+        """
+        self.auto_restart_delay = max(5, delay)
+        self.logger.info(f"Auto-restart delay set to {self.auto_restart_delay} seconds")
+
+    def register_restart_callback(self, callback) -> None:
+        """
+        Register a callback function to be called when auto-restart is triggered.
+        The callback receives (board_id, failure_type) as arguments.
+
+        Args:
+            callback: Callable that takes (board_id: str, failure_type: str)
+        """
+        self.restart_callback = callback
+        self.logger.info("Restart callback registered")
+
+    def get_last_restart_info(self) -> Optional[Dict[str, Any]]:
+        """
+        Get information about the last auto-restart event.
+
+        Returns:
+            Dictionary with restart info or None if no restart has occurred
+        """
+        return self.last_restart_info
+
+    def is_restart_pending(self) -> bool:
+        """
+        Check if a restart is currently pending (waiting for delay).
+
+        Returns:
+            True if restart is pending
+        """
+        return self.restart_pending
 
     def check_board_connectivity(self) -> Dict[str, Dict[str, Any]]:
         """

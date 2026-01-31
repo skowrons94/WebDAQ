@@ -48,6 +48,8 @@ import {
   getPortCurrent,
   getConnectedCurrent,
   getCurrentModuleType,
+  getAutoRestart,
+  setAutoRestart,
 } from '@/lib/api'
 
 interface DAQStateProps {
@@ -99,6 +101,8 @@ export function DAQState({
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
   const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
+  const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)
+  const [autoRestartDelay, setAutoRestartDelay] = useState(30)
 
   useEffect(() => {
     const fetchModuleType = async () => {
@@ -111,6 +115,19 @@ export function DAQState({
       }
     }
     fetchModuleType()
+  }, [])
+
+  useEffect(() => {
+    const fetchAutoRestart = async () => {
+      try {
+        const response = await getAutoRestart()
+        setAutoRestartEnabled(response.enabled)
+        setAutoRestartDelay(response.delay)
+      } catch (error) {
+        console.error('Failed to fetch auto-restart setting:', error)
+      }
+    }
+    fetchAutoRestart()
   }, [])
 
   /**
@@ -190,6 +207,46 @@ export function DAQState({
     if (currentModuleType === 'tetramm') {
       onPortCurrentChange(value)
       await setIpPortCurrent(ipCurrent, value)
+    }
+  }
+
+  /**
+   * Handles auto-restart on board failure toggle
+   */
+  const handleAutoRestartChange = async (checked: boolean) => {
+    try {
+      await setAutoRestart(checked, autoRestartDelay)
+      setAutoRestartEnabled(checked)
+      toast({
+        title: checked ? 'Auto-Restart Enabled' : 'Auto-Restart Disabled',
+        description: checked
+          ? `Runs will automatically restart ${autoRestartDelay}s after board failure`
+          : 'Runs will not automatically restart on board failure',
+      })
+    } catch (error) {
+      console.error('Failed to change auto-restart setting:', error)
+      toast({
+        title: "Error",
+        description: "Failed to change auto-restart setting. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  /**
+   * Handles auto-restart delay changes
+   */
+  const handleAutoRestartDelayChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value)
+    if (!isNaN(value) && value >= 5) {
+      setAutoRestartDelay(value)
+      if (autoRestartEnabled) {
+        try {
+          await setAutoRestart(autoRestartEnabled, value)
+        } catch (error) {
+          console.error('Failed to update auto-restart delay:', error)
+        }
+      }
     }
   }
 
@@ -279,11 +336,27 @@ export function DAQState({
                   </div>
                 </TableCell>
                 <TableCell className="text-xs sm:text-sm py-2">
-                  <Badge 
-                    variant={isConnectedCurrent ? "outline" : "destructive"} 
+                  <Badge
+                    variant={isConnectedCurrent ? "outline" : "destructive"}
                     className="text-xs"
                   >
                     {isConnectedCurrent ? 'Connected' : 'Disconnected'}
+                  </Badge>
+                </TableCell>
+              </TableRow>
+
+              {/* Auto-Restart Row */}
+              <TableRow>
+                <TableCell className="text-xs sm:text-sm py-2">Auto-Restart</TableCell>
+                <TableCell className="text-xs sm:text-sm py-2">
+                  {autoRestartEnabled ? `${autoRestartDelay}s delay` : ''}
+                </TableCell>
+                <TableCell className="text-xs sm:text-sm py-2">
+                  <Badge
+                    variant={autoRestartEnabled ? "outline" : "secondary"}
+                    className="text-xs"
+                  >
+                    {autoRestartEnabled ? 'Enabled' : 'Disabled'}
                   </Badge>
                 </TableCell>
               </TableRow>
@@ -396,6 +469,38 @@ export function DAQState({
                 </p>
               </div>
             )}
+
+            {/* Auto-Restart on Board Failure */}
+            <div className="border-t pt-4 mt-2">
+              <div className="flex items-center space-x-2 mb-4">
+                <Checkbox
+                  id="autoRestart"
+                  checked={autoRestartEnabled}
+                  onCheckedChange={handleAutoRestartChange}
+                />
+                <Label htmlFor="autoRestart">Auto-Restart on Board Failure</Label>
+              </div>
+              <p className="text-sm text-muted-foreground mb-4">
+                When enabled, if a board reports &quot;Generic Failure&quot; or &quot;PLL Lock&quot; error,
+                the run will automatically stop and restart with the next run number.
+              </p>
+
+              {autoRestartEnabled && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="autoRestartDelay">Restart Delay (seconds)</Label>
+                  <Input
+                    id="autoRestartDelay"
+                    type="number"
+                    min={5}
+                    value={autoRestartDelay}
+                    onChange={handleAutoRestartDelayChange}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Time to wait before stopping and restarting the run (minimum 5 seconds)
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
           
           <DialogFooter>

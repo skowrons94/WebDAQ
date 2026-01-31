@@ -453,7 +453,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   }
 
   const formatTime = (seconds: number) => {
-    return `${seconds} seconds`
+    return `${seconds % 60} seconds`
   }
 
   return (

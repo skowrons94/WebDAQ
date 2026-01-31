@@ -1,15 +1,19 @@
 # app/routes/experiment.py
 import os
 import json
+import threading
+import logging
 from datetime import datetime
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from app import db
 
 from ..models.run_metadata import RunMetadata
 from ..utils.jwt_utils import jwt_required_custom, get_current_user
 from ..services.daq_manager import get_daq_manager
 from ..services.spy_manager import get_spy_manager
+
+logger = logging.getLogger(__name__)
 
 TEST_FLAG = os.getenv('TEST_FLAG', False)
 
@@ -23,6 +27,159 @@ if not TEST_FLAG:
 # Initialize managers
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 spy_mgr = get_spy_manager(test_flag=TEST_FLAG)
+
+
+# Store app reference for use in restart callback
+_flask_app = None
+
+
+def set_flask_app(app):
+    """Store Flask app reference for use in background threads."""
+    global _flask_app
+    _flask_app = app
+
+
+def perform_auto_restart(board_id: str, failure_type: str) -> None:
+    """
+    Perform auto-restart when board failure is detected.
+    This function is called from the board monitoring thread.
+
+    Args:
+        board_id: ID of the failed board
+        failure_type: Description of the failure type
+    """
+    global _flask_app
+
+    logger.info(f"Performing auto-restart due to {failure_type} on board {board_id}")
+
+    # Get the Flask app - try stored reference first, then import
+    app = _flask_app
+    if app is None:
+        try:
+            from app import create_app
+            app = create_app()
+            logger.warning("Created new Flask app instance for auto-restart (app reference was not set)")
+        except Exception as e:
+            logger.error(f"Failed to create Flask app for auto-restart: {e}")
+            return
+
+    # We need to create an app context since this runs in a thread
+    with app.app_context():
+        try:
+            current_run_number = daq_mgr.get_run_number()
+            save_data = daq_mgr.get_save_data()
+
+            # Stop spy server first
+            spy_mgr.stop_spy()
+
+            # Stop board monitoring thread (will be restarted when new run starts)
+            daq_mgr.stop_board_monitoring()
+
+            # Stop XDAQ
+            daq_mgr.stop_xdaq()
+
+            # Update run metadata with note about auto-stop
+            if save_data:
+                try:
+                    run_metadata = RunMetadata.query.filter_by(run_number=current_run_number).first()
+                    if run_metadata:
+                        run_metadata.end_time = datetime.now()
+                        # Append auto-restart note to existing notes
+                        auto_note = f"[AUTO-RESTART] Run stopped due to {failure_type} on board {board_id}"
+                        if run_metadata.notes:
+                            run_metadata.notes = run_metadata.notes + "\n" + auto_note
+                        else:
+                            run_metadata.notes = auto_note
+                        # Mark run as potentially bad
+                        run_metadata.flag = 'bad'
+
+                        # Write metadata.json
+                        metadata = {
+                            "Start Time": run_metadata.start_time.isoformat() if run_metadata.start_time else None,
+                            "Stop Time": run_metadata.end_time.isoformat(),
+                            "Terminal Voltage": run_metadata.terminal_voltage,
+                            "Probe Voltage": run_metadata.probe_voltage,
+                            "Run Type": run_metadata.run_type,
+                            "Target Name": run_metadata.target_name,
+                            "Accumulated Charge": run_metadata.accumulated_charge,
+                            "Auto Restart Note": auto_note
+                        }
+
+                        run_dir = f'data/run{current_run_number}/metadata.json'
+                        if os.path.exists(os.path.dirname(run_dir)):
+                            with open(run_dir, 'w') as f:
+                                json.dump(metadata, f, indent=4)
+
+                        db.session.commit()
+                        logger.info(f"Updated metadata for run {current_run_number} with auto-restart note")
+                except Exception as e:
+                    logger.error(f"Error updating run metadata: {e}")
+
+            # Increment run number for next run
+            if save_data:
+                daq_mgr.increment_run_number()
+
+            # Set not running state
+            daq_mgr.set_running_state(False)
+
+            logger.info(f"Run {current_run_number} stopped. Preparing to start new run...")
+
+            # Small delay before starting new run
+            import time
+            time.sleep(2)
+
+            # Start new run
+            new_run_number = daq_mgr.get_run_number()
+
+            # Prepare for run start
+            if not daq_mgr.prepare_run_start():
+                logger.error("Failed to prepare run start during auto-restart")
+                return
+
+            # Configure and start XDAQ
+            if not daq_mgr.configure_xdaq_for_run():
+                logger.error("Failed to configure XDAQ during auto-restart")
+                return
+
+            if not daq_mgr.start_xdaq():
+                logger.error("Failed to start XDAQ during auto-restart")
+                return
+
+            # Set running state
+            daq_mgr.set_running_state(True)
+
+            # Start board monitoring thread
+            daq_mgr.start_board_monitoring()
+
+            # Start spy server
+            daq_state = daq_mgr.get_state()
+            if not spy_mgr.start_spy(daq_state):
+                logger.error("Failed to start spy server during auto-restart")
+                return
+
+            # Add new run to database
+            if save_data:
+                try:
+                    run_metadata = RunMetadata.query.filter_by(run_number=new_run_number).first()
+                    if not run_metadata:
+                        run_metadata = RunMetadata(
+                            run_number=new_run_number,
+                            start_time=datetime.now(),
+                            notes=f"[AUTO-RESTART] Automatically started after {failure_type} on board {board_id} in run {current_run_number}"
+                        )
+                        db.session.add(run_metadata)
+                        db.session.commit()
+                except Exception as e:
+                    logger.error(f"Error creating new run metadata: {e}")
+
+            logger.info(f"Auto-restart complete. New run {new_run_number} started.")
+
+        except Exception as e:
+            logger.error(f"Error during auto-restart: {e}")
+
+
+# Register the restart callback with the DAQ manager
+daq_mgr.register_restart_callback(perform_auto_restart)
 
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
@@ -426,3 +583,55 @@ def refresh_board_connections():
             
     except Exception as e:
         return jsonify({'message': f'Error refreshing board connections: {str(e)}'}), 500
+
+
+# Auto-restart on board failure routes
+
+@bp.route("/experiment/get_auto_restart", methods=['GET'])
+@jwt_required_custom
+def get_auto_restart():
+    """
+    Get auto-restart on board failure setting.
+    Returns whether auto-restart is enabled and the delay before restart.
+    """
+    return jsonify({
+        'enabled': daq_mgr.get_auto_restart_enabled(),
+        'delay': daq_mgr.get_auto_restart_delay(),
+        'pending': daq_mgr.is_restart_pending(),
+        'last_restart_info': daq_mgr.get_last_restart_info()
+    }), 200
+
+
+@bp.route("/experiment/set_auto_restart", methods=['POST'])
+@jwt_required_custom
+def set_auto_restart():
+    """
+    Set auto-restart on board failure setting.
+    Request body: { "enabled": bool, "delay": int (optional, default 30 seconds) }
+    """
+    data = request.get_json()
+    enabled = data.get('enabled', False)
+    delay = data.get('delay', 30)
+
+    daq_mgr.set_auto_restart_enabled(enabled)
+    if delay:
+        daq_mgr.set_auto_restart_delay(delay)
+
+    return jsonify({
+        'message': f'Auto-restart {"enabled" if enabled else "disabled"}',
+        'enabled': daq_mgr.get_auto_restart_enabled(),
+        'delay': daq_mgr.get_auto_restart_delay()
+    }), 200
+
+
+@bp.route("/experiment/get_restart_status", methods=['GET'])
+@jwt_required_custom
+def get_restart_status():
+    """
+    Get current restart status.
+    Returns whether a restart is pending and info about the last restart.
+    """
+    return jsonify({
+        'pending': daq_mgr.is_restart_pending(),
+        'last_restart_info': daq_mgr.get_last_restart_info()
+    }), 200

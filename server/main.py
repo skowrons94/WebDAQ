@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 app = create_app()
 
+# Store app reference for use in background threads (e.g., auto-restart)
+from app.routes.experiment import set_flask_app
+set_flask_app(app)
+
 @app.cli.command("create-user")
 def create_user():
     """Create a new user."""

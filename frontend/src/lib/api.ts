@@ -258,6 +258,16 @@ export const getBoardStatus = () =>
 export const refreshBoardConnections = () =>
     api.post('/experiment/refresh_board_connections');
 
+// Auto-restart on board failure
+export const getAutoRestart = () =>
+    api.get('/experiment/get_auto_restart').then(res => res.data);
+
+export const setAutoRestart = (enabled: boolean, delay?: number) =>
+    api.post('/experiment/set_auto_restart', { enabled, delay });
+
+export const getRestartStatus = () =>
+    api.get('/experiment/get_restart_status').then(res => res.data);
+
 // Stats/Graphite path management APIs
 export const getStatsPaths = () =>
     api.get('/stats/paths').then(res => res.data);
