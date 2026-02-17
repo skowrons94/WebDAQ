@@ -28,41 +28,29 @@ daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 spy_mgr = get_spy_manager(test_flag=TEST_FLAG)
 
 
-# Store app reference for use in restart callback
-_flask_app = None
-
-
 def set_flask_app(app):
-    """Store Flask app reference for use in background threads."""
-    global _flask_app
-    _flask_app = app
+    """Store Flask app reference for use in background threads (e.g., auto-restart)."""
+    daq_mgr.flask_app = app
 
 
 def perform_auto_restart(board_id: str, failure_type: str) -> None:
     """
     Perform auto-restart when board failure is detected.
-    This function is called from the board monitoring thread.
+    This function is called from a dedicated restart thread (not the monitoring thread).
 
     Args:
         board_id: ID of the failed board
         failure_type: Description of the failure type
     """
-    global _flask_app
-
     logger.info(f"Performing auto-restart due to {failure_type} on board {board_id}")
 
-    # Get the Flask app - try stored reference first, then import
-    app = _flask_app
+    # Get the Flask app reference from the daq_manager singleton
+    app = daq_mgr.flask_app
     if app is None:
-        try:
-            from app import create_app
-            app = create_app()
-            logger.warning("Created new Flask app instance for auto-restart (app reference was not set)")
-        except Exception as e:
-            logger.error(f"Failed to create Flask app for auto-restart: {e}")
-            return
+        logger.error("Flask app reference not set on daq_manager - cannot auto-restart")
+        return
 
-    # We need to create an app context since this runs in a thread
+    # We need to create an app context since this runs in a background thread
     with app.app_context():
         try:
             current_run_number = daq_mgr.get_run_number()
@@ -70,9 +58,6 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
 
             # Stop spy server first
             spy_mgr.stop_spy()
-
-            # Stop board monitoring thread (will be restarted when new run starts)
-            daq_mgr.stop_board_monitoring()
 
             # Stop XDAQ
             daq_mgr.stop_xdaq()

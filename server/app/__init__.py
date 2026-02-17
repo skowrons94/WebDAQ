@@ -29,4 +29,7 @@ def create_app(config_class=Config):
     app.register_blueprint(histograms.bp)
     app.register_blueprint(tuning.bp)
 
+    # Pass Flask app reference to experiment module for background threads (auto-restart)
+    experiment.set_flask_app(app)
+
     return app

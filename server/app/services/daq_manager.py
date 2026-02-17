@@ -293,6 +293,9 @@ class DAQManager:
         self.last_restart_info = None  # Info about the last auto-restart event
         self.restart_callback = None  # Callback function to trigger restart
 
+        # Flask app reference for background threads that need app context
+        self.flask_app = None
+
         # Telegram notification settings (loaded from persistent storage)
         self._load_telegram_settings()
         self.telegram_notification_sent = False  # Track if notification was sent for current run
@@ -1019,17 +1022,42 @@ class DAQManager:
                 return
             time.sleep(1)
 
-        # Trigger the restart callback if registered
+        # Signal the monitoring thread to stop its loop
+        self.monitor_stop_event.set()
+
+        # Run the restart callback in a separate thread so we don't try to
+        # join the monitoring thread from within itself
         if self.restart_callback:
             self.logger.info("Triggering restart callback...")
-            try:
-                self.restart_callback(board_id, failure_type)
-            except Exception as e:
-                self.logger.error(f"Error in restart callback: {e}")
+            restart_thread = threading.Thread(
+                target=self._execute_restart_callback,
+                args=(board_id, failure_type),
+                daemon=True
+            )
+            restart_thread.start()
         else:
             self.logger.warning("No restart callback registered - cannot auto-restart")
+            self.restart_pending = False
 
-        self.restart_pending = False
+    def _execute_restart_callback(self, board_id: str, failure_type: str) -> None:
+        """
+        Execute the restart callback in a separate thread.
+        Waits for the monitoring thread to exit first to avoid conflicts.
+
+        Args:
+            board_id: ID of the failed board
+            failure_type: Description of the failure type
+        """
+        try:
+            # Wait for the monitoring thread to finish exiting
+            if self.monitor_thread and self.monitor_thread.is_alive():
+                self.monitor_thread.join(timeout=10.0)
+
+            self.restart_callback(board_id, failure_type)
+        except Exception as e:
+            self.logger.error(f"Error in restart callback: {e}")
+        finally:
+            self.restart_pending = False
     
     def start_board_monitoring(self) -> None:
         """
