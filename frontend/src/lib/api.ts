@@ -127,6 +127,10 @@ export const getWaveform1 = (boardId: string, channel: string) =>
     api.get(`/waveforms/1/${boardId}/${channel}`).then(res => res.data);
 export const getWaveform2 = (boardId: string, channel: string) =>
     api.get(`/waveforms/2/${boardId}/${channel}`).then(res => res.data);
+export const getProbe1 = (boardId: string, channel: string) =>
+    api.get(`/waveforms/probe1/${boardId}/${channel}`).then(res => res.data);
+export const getProbe2 = (boardId: string, channel: string) =>
+    api.get(`/waveforms/probe2/${boardId}/${channel}`).then(res => res.data);
 // Get the histograms for a given board_id and channel
 export const getQlong = (boardId: string, channel: string) =>
     api.get(`/qlong/${boardId}/${channel}`).then(res => res.data);

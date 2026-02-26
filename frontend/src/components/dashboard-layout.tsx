@@ -110,6 +110,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         Tuning
                     </Link>
                     <Link
+                        href="/tuner"
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                        Tuner
+                    </Link>
+                    <Link
                         href="/settings"
                         className="text-muted-foreground transition-colors hover:text-foreground"
                     >
@@ -171,6 +177,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 className="text-muted-foreground hover:text-foreground"
                             >
                                 Tuning
+                            </Link>
+                            <Link
+                                href="/tuner"
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                Tuner
                             </Link>
                             <Link
                                 href="/settings"

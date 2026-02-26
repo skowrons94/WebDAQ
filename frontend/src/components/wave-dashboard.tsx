@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getWaveform1, getWaveform2, getBoardSettings, setSetting } from '@/lib/api'
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getWaveform1, getWaveform2, getProbe1, getProbe2, getBoardSettings, setSetting } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -37,6 +37,7 @@ interface WaveformConfig {
   dualTrace: boolean
   trace1Type: string
   trace2Type: string
+  digitalProbe: number
 }
 
 // Trace type options for different board types
@@ -66,6 +67,15 @@ const PSD_TRACE2_OPTIONS = [
   { value: 1, label: "Baseline" },
   { value: 2, label: "CFD" },
   { value: 3, label: "Reserved" }
+]
+
+const DIGITAL_PROBE_OPTIONS = [
+  { value: 0,  label: "Peaking" },
+  { value: 1,  label: "RC-CR2 Crossing" },
+  { value: 3,  label: "Pile-up" },
+  { value: 6,  label: "Baseline Freeze" },
+  { value: 7,  label: "Trigger Hold-Off" },
+  { value: 10, label: "RC-CR Crossing" },
 ]
 
 export default function WaveformDashboard() {
@@ -188,7 +198,8 @@ export default function WaveformDashboard() {
       return {
         dualTrace: false,
         trace1Type: "Input",
-        trace2Type: "Input"
+        trace2Type: "Input",
+        digitalProbe: 0
       }
     }
 
@@ -242,10 +253,13 @@ export default function WaveformDashboard() {
       }
     }
 
+    const digitalProbe = (value >> 20) & 0xF
+
     return {
       dualTrace,
       trace1Type,
-      trace2Type
+      trace2Type,
+      digitalProbe
     }
   }
 
@@ -352,7 +366,24 @@ export default function WaveformDashboard() {
               ? await getWaveform1(board.id, channelIndex.toString())
               : await getWaveform2(board.id, channelIndex.toString())
             const histogram = window.JSROOT.parse(histogramData)
-            window.JSROOT.redraw(histoElement, histogram, "colz")
+            await window.JSROOT.redraw(histoElement, histogram, "hist")
+            // Overlay probe1 (trigger, green) and probe2 (peaking, red) on the same canvas
+            try {
+              const p1Data = await getProbe1(board.id, channelIndex.toString())
+              if (p1Data) {
+                const p1 = window.JSROOT.parse(p1Data)
+                p1.fLineColor = 3 // ROOT kGreen
+                await window.JSROOT.draw(histoElement, p1, "hist same")
+              }
+            } catch {}
+            try {
+              const p2Data = await getProbe2(board.id, channelIndex.toString())
+              if (p2Data) {
+                const p2 = window.JSROOT.parse(p2Data)
+                p2.fLineColor = 2 // ROOT kRed
+                await window.JSROOT.draw(histoElement, p2, "hist same")
+              }
+            } catch {}
           } catch (error) {
             console.error(`Failed to fetch histogram for ${histoId}:`, error)
             toast({
@@ -549,6 +580,50 @@ export default function WaveformDashboard() {
     }
   }
 
+  const getCurrentDigitalProbeValue = (boardId: string) => {
+    const settings = boardSettings[boardId]
+    if (!settings) return 0
+    const boardConfigReg = Object.values(settings).find(
+      (reg): reg is RegisterData => (reg as RegisterData).name?.includes("Board Configuration")
+    )
+    if (!boardConfigReg) return 0
+    return (boardConfigReg.value_dec >> 20) & 0xF
+  }
+
+  const handleDigitalProbeChange = async (boardId: string, newValue: number) => {
+    try {
+      const settings = boardSettings[boardId]
+      const boardConfigReg = Object.values(settings).find(
+        (reg): reg is RegisterData => (reg as RegisterData).name?.includes("Board Configuration")
+      )
+      if (!boardConfigReg) {
+        toast({ title: "Error", description: "Board Configuration register not found", variant: "destructive" })
+        return
+      }
+      const regName = Object.keys(settings).find(key => settings[key] === boardConfigReg)
+      if (!regName) return
+
+      const newRegValue = (boardConfigReg.value_dec & ~(0xF << 20)) | (newValue << 20)
+      await setSetting(boardId, regName, newRegValue.toString())
+
+      const updatedSettings = {
+        ...settings,
+        [regName]: {
+          ...boardConfigReg,
+          value_dec: newRegValue,
+          value_hex: `0x${newRegValue.toString(16).toUpperCase()}`
+        }
+      }
+      setBoardSettings(prev => ({ ...prev, [boardId]: updatedSettings }))
+      setWaveformConfigs(prev => ({ ...prev, [boardId]: parseWaveformConfig(updatedSettings) }))
+
+      const boardName = boards.find((b: BoardData) => b.id === boardId)?.name
+      toast({ title: "Success", description: `Digital Probe updated for ${boardName}` })
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update Digital Probe setting", variant: "destructive" })
+    }
+  }
+
   const hasAnySelections = storeReady && settings?.selectedBoardsChannelsWaveform && settings.selectedBoardsChannelsWaveform.length > 0
   const totalSelectedChannels = storeReady && settings?.selectedBoardsChannelsWaveform ?
     settings.selectedBoardsChannelsWaveform.reduce((total: number, board: { boardId: string; channels: number[] }) => total + board.channels.length, 0) : 0
@@ -675,6 +750,24 @@ export default function WaveformDashboard() {
                           </Select>
                         </div>
                       )}
+                      <div className="flex items-center space-x-2">
+                        <Label className="text-sm min-w-24">Digital Probe:</Label>
+                        <Select
+                          value={getCurrentDigitalProbeValue(board.id).toString()}
+                          onValueChange={(value: string) => handleDigitalProbeChange(board.id, parseInt(value))}
+                        >
+                          <SelectTrigger className="w-48 h-8 text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DIGITAL_PROBE_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value.toString()}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
                   </div>
                 )}

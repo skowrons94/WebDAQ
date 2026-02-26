@@ -90,7 +90,7 @@ class ReadoutUnitSpy:
             
             # Initialize histogram buffers and data storage
             # Supports up to 128 channels across all histogram types
-            histogram_types = ["energy", "qshort", "qlong", "wave1", "wave2", "psd"]
+            histogram_types = ["energy", "qshort", "qlong", "wave1", "wave2", "psd", "probe1", "probe2"]
             max_channels = 128
             
             # Buffer for temporary storage during collection
@@ -123,6 +123,13 @@ class ReadoutUnitSpy:
                         self.data[hist_type].append(
                             ROOT.TH1F(hist_name, hist_title, 10000, 0, 10000)
                         )
+                elif ("probe" in hist_type):
+                    for i in range(max_channels):
+                        hist_name = f"{hist_type}_ch{i}"
+                        hist_title = f"{hist_type.capitalize()} Channel {i}"
+                        self.data[hist_type].append(
+                            ROOT.TH1F(hist_name, hist_title, 10000, 0, 10000)
+                        )
                 else:
                     for i in range(max_channels):
                         hist_name = f"{hist_type}_ch{i}"
@@ -140,8 +147,8 @@ class ReadoutUnitSpy:
     def _initialize_test_mode(self) -> None:
         """Initialize simulation objects for test mode."""
         # Create placeholder data structures for test mode
-        self.buff = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [], "psd": []}
-        self.data = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [], "psd": []}
+        self.buff = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [], "psd": [], "probe1": [], "probe2": []}
+        self.data = {"energy": [], "qshort": [], "qlong": [], "wave1": [], "wave2": [], "psd": [], "probe1": [], "probe2": []}
 
         # Fill with None placeholders
         for hist_type in self.buff:
@@ -311,7 +318,7 @@ class ReadoutUnitSpy:
         try:
             # Track histogram indices for each type
             histogram_indices = {
-                "energy": 0, "qshort": 0, "qlong": 0, "wave1": 0, "wave2": 0, "psd": 0
+                "energy": 0, "qshort": 0, "qlong": 0, "wave1": 0, "wave2": 0, "psd": 0, "probe1": 0, "probe2": 0
             }
             
             # Connect and request data
@@ -374,6 +381,22 @@ class ReadoutUnitSpy:
                     if idx < len(self.buff["psd"]):
                         self.buff["psd"][idx] = obj
                         histogram_indices["psd"] += 1
+                    else:
+                        obj.Delete()
+
+                elif "Probe1" in histogram_name:
+                    idx = histogram_indices["probe1"]
+                    if idx < len(self.buff["probe1"]):
+                        self.buff["probe1"][idx] = obj
+                        histogram_indices["probe1"] += 1
+                    else:
+                        obj.Delete()
+
+                elif "Probe2" in histogram_name:
+                    idx = histogram_indices["probe2"]
+                    if idx < len(self.buff["probe2"]):
+                        self.buff["probe2"][idx] = obj
+                        histogram_indices["probe2"] += 1
                     else:
                         obj.Delete()
 

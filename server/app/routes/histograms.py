@@ -197,6 +197,49 @@ def get_waveform2(board_id, channel):
         return json_data if json_data else ""
     except Exception as e:
         return jsonify({'error': f'Failed to get waveform2: {str(e)}'}), 500
+    
+# Waveform Routes
+@bp.route('/waveforms/probe1/<board_id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_probe1(board_id, channel):
+    """
+    Get waveform data (type 1) for a specific board and channel.
+    
+    Args:
+        board_id: Board ID string
+        channel: Channel number
+        
+    Returns:
+        JSON representation of waveform
+    """
+    try:
+        boards = daq_mgr.get_boards()
+        waveform = spy_mgr.get_waveform(board_id, channel, boards, "probe1")
+        json_data = spy_mgr.convert_histogram_to_json(waveform)
+        return json_data if json_data else ""
+    except Exception as e:
+        return jsonify({'error': f'Failed to get waveform1: {str(e)}'}), 500
+
+@bp.route('/waveforms/probe2/<board_id>/<channel>', methods=['GET'])
+@jwt_required_custom
+def get_probe2(board_id, channel):
+    """
+    Get waveform data (type 2) for a specific board and channel.
+    
+    Args:
+        board_id: Board ID string
+        channel: Channel number
+        
+    Returns:
+        JSON representation of waveform
+    """
+    try:
+        boards = daq_mgr.get_boards()
+        waveform = spy_mgr.get_waveform(board_id, channel, boards, "probe2")
+        json_data = spy_mgr.convert_histogram_to_json(waveform)
+        return json_data if json_data else ""
+    except Exception as e:
+        return jsonify({'error': f'Failed to get waveform2: {str(e)}'}), 500
 
 @bp.route('/waveforms/<waveform_type>/<board_id>/<channel>', methods=['GET'])
 @jwt_required_custom
@@ -213,11 +256,16 @@ def get_waveform_by_type(waveform_type, board_id, channel):
         JSON representation of waveform
     """
     try:
-        if waveform_type not in ['wave1', 'wave2']:
+        if waveform_type not in ['wave1', 'wave2', 'probe1', 'probe2']:
             return jsonify({'error': 'Invalid waveform type. Use wave1 or wave2.'}), 400
         
         boards = daq_mgr.get_boards()
         waveform = spy_mgr.get_waveform(board_id, channel, boards, waveform_type)
+        # If type is probe1, make it green, if probe2 make it red
+        if waveform_type == "probe1":
+            waveform.SetLineColor(ROOT.kGreen)
+        elif waveform_type == "probe2":
+            waveform.SetLineColor(ROOT.kRed)
         json_data = spy_mgr.convert_histogram_to_json(waveform)
         return json_data if json_data else ""
     except Exception as e:
