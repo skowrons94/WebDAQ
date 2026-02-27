@@ -245,6 +245,32 @@ const BASIC_GENERAL_SETTINGS = [
   "Global Trigger Mask",
 ]
 
+// ── Unit conversion helpers ──────────────────────────────────
+
+const TIME_REG_KEYWORDS = [
+  'Trapezoid Rise Time',
+  'Trapezoid Flat Top',
+  'Peaking Time',
+  'Decay Time',
+  'Input Rise Time',
+  'Trigger Hold-Off',
+]
+
+function getNsPerSample(boardName: string): number {
+  if (boardName.includes('1730')) return 8
+  if (boardName.includes('1725')) return 16
+  if (boardName.includes('1724')) return 10
+  return 1
+}
+
+function isTimeReg(name: string): boolean {
+  return TIME_REG_KEYWORDS.some(t => name.toLowerCase().includes(t.toLowerCase()))
+}
+
+function isDcOffsetReg(name: string): boolean {
+  return name.toLowerCase().includes('dc offset')
+}
+
 // ============================================================
 // Top-level page component
 // ============================================================
@@ -342,6 +368,29 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   const [binaryMode, setBinaryMode] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState<string>("0")
   const { toast } = useToast()
+
+  // ── Unit conversion (board-specific) ─────────────────────
+  const nsPerSample = getNsPerSample(boardData.name)
+
+  const toDisplay = (reg: RegisterData): string => {
+    if (isDcOffsetReg(reg.name)) return ((reg.value_dec / 65535) * 100).toFixed(1)
+    if (isTimeReg(reg.name) && nsPerSample > 1) return (reg.value_dec * nsPerSample).toString()
+    return reg.value_dec.toString()
+  }
+
+  const fromDisplay = (reg: RegisterData, displayVal: string): number => {
+    const v = parseFloat(displayVal)
+    if (isNaN(v)) return reg.value_dec
+    if (isDcOffsetReg(reg.name)) return Math.round((v / 100) * 65535)
+    if (isTimeReg(reg.name) && nsPerSample > 1) return Math.round(v / nsPerSample)
+    return Math.round(v)
+  }
+
+  const unitForName = (name: string): string => {
+    if (isDcOffsetReg(name)) return '%'
+    if (isTimeReg(name) && nsPerSample > 1) return 'ns'
+    return ''
+  }
 
   // ── Data fetching ──────────────────────────────────────────
 
@@ -667,17 +716,21 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     const isModified = modifiedSettings.has(regName)
 
     if (compact) {
+      const unit = unitForName(reg.name)
+      const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
       return (
         <div className="space-y-1">
           <div className="flex gap-1 items-center">
             <Input
               type="number"
               min="0"
-              max="4294967295"
-              value={reg.value_dec}
-              onChange={e => handleSettingChange(regName, e.target.value)}
+              max={isDcOffsetReg(reg.name) ? "100" : "4294967295"}
+              step={step}
+              value={toDisplay(reg)}
+              onChange={e => handleSettingChange(regName, fromDisplay(reg, e.target.value).toString())}
               className={`h-8 text-sm ${isModified ? "border-orange-500" : ""}`}
             />
+            {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
             <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified} className="h-8 px-2 text-xs">
               Save
             </Button>
@@ -710,17 +763,21 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     }
 
     // Plain numeric input
+    const unit = unitForName(reg.name)
+    const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
     return (
       <div className="space-y-1">
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <Input
             type="number"
             min="0"
-            max="4294967295"
-            value={reg.value_dec}
-            onChange={e => handleSettingChange(regName, e.target.value)}
+            max={isDcOffsetReg(reg.name) ? "100" : "4294967295"}
+            step={step}
+            value={toDisplay(reg)}
+            onChange={e => handleSettingChange(regName, fromDisplay(reg, e.target.value).toString())}
             className={isModified ? "border-orange-500" : ""}
           />
+          {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
           <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified}>Save</Button>
         </div>
         <div className="text-xs text-muted-foreground font-mono">
@@ -808,7 +865,14 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                   <tbody>
                     {uniqueTriggerNames.map(settingName => (
                       <tr key={settingName} className="border-b last:border-0">
-                        <td className="py-3 pr-6 font-medium whitespace-nowrap">{settingName}</td>
+                        <td className="py-3 pr-6 font-medium whitespace-nowrap">
+                          {settingName}
+                          {unitForName(settingName) && (
+                            <span className="text-xs font-normal text-muted-foreground ml-1">
+                              ({unitForName(settingName)})
+                            </span>
+                          )}
+                        </td>
                         {enabledChannels.map(ch => {
                           const entry = findRegForChannelAndName(ch, settingName)
                           if (!entry) {

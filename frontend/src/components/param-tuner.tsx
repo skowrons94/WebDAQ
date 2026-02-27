@@ -111,6 +111,32 @@ function isTrapezoidReg(name: string): boolean {
   return TRAPEZOID_REG_NAMES.some(n => name.toLowerCase().includes(n.toLowerCase()))
 }
 
+// ── Unit conversion helpers ──────────────────────────────────
+
+const TIME_REG_KEYWORDS = [
+  'Trapezoid Rise Time',
+  'Trapezoid Flat Top',
+  'Peaking Time',
+  'Decay Time',
+  'Input Rise Time',
+  'Trigger Hold-Off',
+]
+
+function getNsPerSample(boardName: string): number {
+  if (boardName.includes('1730')) return 8
+  if (boardName.includes('1725')) return 16
+  if (boardName.includes('1724')) return 10
+  return 1
+}
+
+function isTimeReg(name: string): boolean {
+  return TIME_REG_KEYWORDS.some(t => name.toLowerCase().includes(t.toLowerCase()))
+}
+
+function isDcOffsetReg(name: string): boolean {
+  return name.toLowerCase().includes('dc offset')
+}
+
 // Safe 32-bit bit-field setter using BigInt to avoid signed overflow
 function setFieldInRegister(regVal: number, start: number, end: number, fieldVal: number): number {
   const width = end - start + 1
@@ -137,12 +163,16 @@ export default function ParamTuner() {
 
   const waveformRef = useRef<HTMLDivElement>(null)
   const histogramRef = useRef<HTMLDivElement>(null)
+  const probe1PainterRef = useRef<any>(null)
+  const probe2PainterRef = useRef<any>(null)
+  const waveformKeyRef = useRef<string>('')
   const { toast } = useToast()
 
   // --- Derived values ---
   const selectedBoard = boards.find(b => b.id === selectedBoardId)
   const channelCount = selectedBoard ? parseInt(selectedBoard.chan) : 0
   const isPSD = selectedBoard ? selectedBoard.dpp.toUpperCase().includes('PSD') : false
+  const nsPerSample = selectedBoard ? getNsPerSample(selectedBoard.name) : 1
 
   // Per-channel registers (address < 0x8000)
   const channelRegs = Object.entries(settings).filter(
@@ -253,24 +283,43 @@ export default function ParamTuner() {
             ? await getWaveform1(selectedBoardId, selectedChannel.toString())
             : await getWaveform2(selectedBoardId, selectedChannel.toString())
         const parsed = window.JSROOT.parse(data)
-        await window.JSROOT.redraw(el, parsed, 'hist')
-        // Overlay probe1 (trigger, green) and probe2 (peaking, red) on the same canvas
+
+        // When board/channel/waveformNum changes, forget the old probe painters so
+        // they get re-created fresh on the new (blank) pad.
+        const currentKey = `${selectedBoardId}-${selectedChannel}-${waveformNum}`
+        if (waveformKeyRef.current !== currentKey) {
+          waveformKeyRef.current = currentKey
+          probe1PainterRef.current = null
+          probe2PainterRef.current = null
+        }
+
+        // Fetch probe data
+        let p1: any = null
+        let p2: any = null
         try {
           const p1Data = await getProbe1(selectedBoardId, selectedChannel.toString())
-          if (p1Data) {
-            const p1 = window.JSROOT.parse(p1Data)
-            p1.fLineColor = 3 // ROOT kGreen
-            await window.JSROOT.draw(el, p1, 'hist same')
-          }
+          if (p1Data) { p1 = window.JSROOT.parse(p1Data); p1.fLineColor = 3 }
         } catch {}
         try {
           const p2Data = await getProbe2(selectedBoardId, selectedChannel.toString())
-          if (p2Data) {
-            const p2 = window.JSROOT.parse(p2Data)
-            p2.fLineColor = 2 // ROOT kRed
-            await window.JSROOT.draw(el, p2, 'hist same')
-          }
+          if (p2Data) { p2 = window.JSROOT.parse(p2Data); p2.fLineColor = 2 }
         } catch {}
+
+        // If probe painters already exist, push new data into them before redraw.
+        // JSROOT.redraw calls redrawPad internally, which repaints all painters on
+        // the pad — so the updated probe objects are picked up without any cleanup.
+        if (p1 && probe1PainterRef.current) probe1PainterRef.current.updateObject(p1)
+        if (p2 && probe2PainterRef.current) probe2PainterRef.current.updateObject(p2)
+
+        // Redraw main waveform in-place (preserves zoom, triggers full pad repaint)
+        await window.JSROOT.redraw(el, parsed, 'hist')
+
+        // First render (or after context change): add probe overlays now that the
+        // main histogram painter owns the pad.
+        if (p1 && !probe1PainterRef.current)
+          probe1PainterRef.current = await window.JSROOT.draw(el, p1, 'hist same')
+        if (p2 && !probe2PainterRef.current)
+          probe2PainterRef.current = await window.JSROOT.draw(el, p2, 'hist same')
       } catch {}
     }
     fetch()
@@ -383,18 +432,27 @@ export default function ParamTuner() {
     let savedCount = 0
     for (const [regKey, value] of entries) {
       try {
-        const numVal = parseInt(value, 10)
-        if (isNaN(numVal)) continue
-        await setSetting(selectedBoardId, regKey, numVal.toString())
+        const reg = settings[regKey]
+        // Convert display value back to raw register value
+        let rawVal: number
+        if (reg && isDcOffsetReg(reg.name)) {
+          rawVal = Math.round((parseFloat(value) / 100) * 65535)
+        } else if (reg && isTimeReg(reg.name) && nsPerSample > 1) {
+          rawVal = Math.round(parseFloat(value) / nsPerSample)
+        } else {
+          rawVal = parseInt(value, 10)
+        }
+        if (isNaN(rawVal)) continue
+        await setSetting(selectedBoardId, regKey, rawVal.toString())
         setSettings(prev => {
-          const reg = prev[regKey]
-          if (!reg) return prev
+          const r = prev[regKey]
+          if (!r) return prev
           return {
             ...prev,
             [regKey]: {
-              ...reg,
-              value_dec: numVal,
-              value_hex: `0x${numVal.toString(16).toUpperCase()}`,
+              ...r,
+              value_dec: rawVal,
+              value_hex: `0x${rawVal.toString(16).toUpperCase()}`,
             },
           }
         })
@@ -426,27 +484,38 @@ export default function ParamTuner() {
   }
 
   const getRegValue = (regKey: string): string => {
+    // Pending values are already in display units (user typed them)
     if (pendingValues[regKey] !== undefined) return pendingValues[regKey]
     const reg = settings[regKey]
-    return reg ? reg.value_dec.toString() : ''
+    if (!reg) return ''
+    const raw = reg.value_dec
+    if (isDcOffsetReg(reg.name)) return ((raw / 65535) * 100).toFixed(1)
+    if (isTimeReg(reg.name) && nsPerSample > 1) return (raw * nsPerSample).toString()
+    return raw.toString()
   }
 
-  const renderSettingRow = (regKey: string, reg: RegisterData) => (
-    <div key={regKey} className="flex items-center gap-3">
-      <Label className="text-sm w-44 shrink-0">{reg.name}</Label>
-      <Input
-        className="w-32 h-8 text-sm"
-        type="number"
-        value={getRegValue(regKey)}
-        onChange={e => handleSettingChange(regKey, e.target.value)}
-      />
-      {pendingValues[regKey] !== undefined && (
-        <Badge variant="outline" className="text-xs text-orange-500 border-orange-500">
-          unsaved
-        </Badge>
-      )}
-    </div>
-  )
+  const renderSettingRow = (regKey: string, reg: RegisterData) => {
+    const unit = isDcOffsetReg(reg.name) ? '%' : (isTimeReg(reg.name) && nsPerSample > 1 ? 'ns' : '')
+    const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
+    return (
+      <div key={regKey} className="flex items-center gap-3">
+        <Label className="text-sm w-44 shrink-0">{reg.name}</Label>
+        <Input
+          className="w-32 h-8 text-sm"
+          type="number"
+          step={step}
+          value={getRegValue(regKey)}
+          onChange={e => handleSettingChange(regKey, e.target.value)}
+        />
+        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+        {pendingValues[regKey] !== undefined && (
+          <Badge variant="outline" className="text-xs text-orange-500 border-orange-500">
+            unsaved
+          </Badge>
+        )}
+      </div>
+    )
+  }
 
   const pendingCount = Object.keys(pendingValues).length
 

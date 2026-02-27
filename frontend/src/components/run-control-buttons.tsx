@@ -60,6 +60,8 @@ import {
   stopStatsRun
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
+import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
+import { pauseAlertNonBlocking, unpauseAlertNonBlocking } from '@/lib/grafana-api'
 
 interface RunControlButtonsProps {
   saveData: boolean
@@ -98,6 +100,7 @@ export function RunControlButtons({
   const { toast } = useToast()
   const setIsRunningStore = useRunControlStore((state) => state.setIsRunning)
   const setStartTimeStore = useRunControlStore((state) => state.setStartTime)
+  const autoManageUids = useGrafanaAlertsStore((state) => state.autoManageUids)
 
   // Dialog states
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
@@ -230,11 +233,14 @@ export function RunControlButtons({
       onStartTimeChange(newStartTime)
       setIsRunningStore(true)
       setStartTimeStore(newStartTime)
-      
+
       if (saveData) {
         await addRunMetadata(runNumber, targetName, tv, pv, runType)
       }
-      
+
+      // Activate (unpause) Grafana alerts selected for auto-management
+      autoManageUids.forEach((uid) => unpauseAlertNonBlocking(uid))
+
       toast({
         title: 'Run Started',
         description: `Run ${runNumber} started successfully with all parameters set.`,
@@ -266,6 +272,9 @@ export function RunControlButtons({
         await stopAcquisitionCurrent()
         await stopStatsRun()
       }
+
+      // Silence (pause) Grafana alerts selected for auto-management
+      autoManageUids.forEach((uid) => pauseAlertNonBlocking(uid))
 
       toast({
         title: 'Run Stopped',
