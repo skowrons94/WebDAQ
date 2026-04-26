@@ -1,0 +1,414 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LunaDAQ Installation Guide &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="User Guide" href="usage.html" />
+    <link rel="prev" title="LUNA Experiment Data Acquisition System" href="welcome.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">LUNA Experiment Data Acquisition System</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">LunaDAQ Installation Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#prerequisites">Prerequisites</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#common-issues">Common Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#activate-the-luna-environment">1. Activate the <code class="docutils literal notranslate"><span class="pre">luna</span></code> Environment</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#create-the-activation-script">2. Create the Activation Script</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#add-to-env-vars-sh">3. Add to <code class="docutils literal notranslate"><span class="pre">env_vars.sh</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#create-a-custom-bashrc-luna">4. Create a Custom <code class="docutils literal notranslate"><span class="pre">.bashrc_luna</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#add-to-bashrc-luna">5. Add to <code class="docutils literal notranslate"><span class="pre">.bashrc_luna</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#installation-steps">Installation Steps</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#clone-repository">1. Clone Repository</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#docker-setup-optional">2. Docker Setup (Optional)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#conda-environment-optional">3. Conda Environment (Optional)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#server-configuration">4. Server Configuration</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#initialize-the-database">Initialize the Database</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-a-user">Create a User</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#start-the-server">Start the Server</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#frontend-setup">5. Frontend Setup</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#install-packages">Install Packages</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#build-and-start">Build and Start</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#post-installation-checks">Post-Installation Checks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#troubleshooting">Troubleshooting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">LunaDAQ Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">LunaDAQ Installation Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/installation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="lunadaq-installation-guide">
+<h1>LunaDAQ Installation Guide<a class="headerlink" href="#lunadaq-installation-guide" title="Link to this heading"></a></h1>
+<p>This page provides a detailed step-by-step guide to install and configure the LunaDAQ system for the LUNA experiment.</p>
+<hr class="docutils" />
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#prerequisites"><span class="xref myst">Prerequisites</span></a></p></li>
+<li><p><a class="reference internal" href="#installation-steps"><span class="xref myst">Installation Steps</span></a></p>
+<ul class="simple">
+<li><p><a class="reference internal" href="#1-clone-repository"><span class="xref myst">Clone Repository</span></a></p></li>
+<li><p><a class="reference internal" href="#2-docker-setup"><span class="xref myst">Docker Setup</span></a></p></li>
+<li><p><a class="reference internal" href="#3-conda-environment-optional"><span class="xref myst">Conda Environment (Optional)</span></a></p></li>
+<li><p><a class="reference internal" href="#4-server-configuration"><span class="xref myst">Server Configuration</span></a></p></li>
+<li><p><a class="reference internal" href="#5-frontend-setup"><span class="xref myst">Frontend Setup</span></a></p></li>
+</ul>
+</li>
+<li><p><a class="reference internal" href="#post-installation-checks"><span class="xref myst">Post-Installation Checks</span></a></p></li>
+<li><p><a class="reference internal" href="troubleshooting.html"><span class="doc std std-doc">Troubleshooting</span></a></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="prerequisites">
+<h2>Prerequisites<a class="headerlink" href="#prerequisites" title="Link to this heading"></a></h2>
+<p>The LunaDAQ is compatibile only with Linux systems, so ensure to use a PC with any Linux version you prefer. MacOS works as well, but the CAEN drivers are not available on it so the DAQ can be run only in test mode, i.e. without connecting to any board. Apart from the OS, the following packages are required:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Component</p></th>
+<th class="head"><p>Version</p></th>
+<th class="head"><p>Verification Command</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Docker</p></td>
+<td><p>Latest</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">--version</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Node.js</p></td>
+<td><p>≥ v14.x</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">node</span> <span class="pre">-v</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Python</p></td>
+<td><p>≥ v3.7</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">python3</span> <span class="pre">--version</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Flask</p></td>
+<td><p>≥ 2.0</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">--version</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>SQLite</p></td>
+<td><p>≥ 3.35</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">sqlite3</span> <span class="pre">--version</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>npm</p></td>
+<td><p>≥ 7.x</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">npm</span> <span class="pre">-v</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>For an easy installation of all the requirements, an <code class="docutils literal notranslate"><span class="pre">environment.yml</span></code> file is provided to create the <code class="docutils literal notranslate"><span class="pre">luna</span></code> conda environment which will install all the requirements, apart from Docker.</p>
+<p>For the Docker installation, please follow the official <a class="reference external" href="https://docs.docker.com/engine/install/">Docker guide</a> and complete the post installation steps as well. Once completed, the docker status can be checked through <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">systemctl</span> <span class="pre">status</span> <span class="pre">docker</span></code> command.</p>
+<p>In order to communicate succesfully with the CAEN boards, the <a class="reference external" href="https://www.caen.it/products/caenvmelib-library/">CAENVME Library</a>, the <a class="reference external" href="https://www.caen.it/products/caencomm-library/">CAENComm Library</a> and <a class="reference external" href="https://www.caen.it/products/caendigitizer-library/">CAENDigitizer Library</a> must be installed in the operating system. Additionally, if the USB communication is used, remember to install the drivers for the CAEN board that is being used.</p>
+<p>Finally, to have the support for the online data visualization (so in order to spy on the data acquisition), the <a class="reference external" href="https://github.com/skowrons94/LunaSpy">LunaSpy</a> software must be installed:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/skowrons94/LunaSpy.git
+<span class="nb">cd</span><span class="w"> </span>LunaSpy<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>mkdir<span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>build<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>cmake<span class="w"> </span>..<span class="w"> </span><span class="c1"># Prepare the CMake build</span>
+make<span class="w"> </span><span class="c1"># Build the software</span>
+sudo<span class="w"> </span>ln<span class="w"> </span>-s<span class="w"> </span>LunaSpy<span class="w"> </span>/usr/local/bin/LunaSpy<span class="w"> </span><span class="c1"># Create a symbolic link</span>
+</pre></div>
+</div>
+</section>
+<section id="common-issues">
+<h2>Common Issues<a class="headerlink" href="#common-issues" title="Link to this heading"></a></h2>
+<p>In case you own an already installed ROOT version (outside of <code class="docutils literal notranslate"><span class="pre">conda</span></code>), some issue might arise. The best solutions seems to be the following:</p>
+<section id="activate-the-luna-environment">
+<h3>1. Activate the <code class="docutils literal notranslate"><span class="pre">luna</span></code> Environment<a class="headerlink" href="#activate-the-luna-environment" title="Link to this heading"></a></h3>
+<p>Activate the Conda environment:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>activate<span class="w"> </span>luna
+</pre></div>
+</div>
+</section>
+<section id="create-the-activation-script">
+<h3>2. Create the Activation Script<a class="headerlink" href="#create-the-activation-script" title="Link to this heading"></a></h3>
+<p>Create the activation file:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mkdir<span class="w"> </span>-p<span class="w"> </span>~/miniconda3/envs/luna/etc/conda/activate.d
+nano<span class="w"> </span>~/miniconda3/envs/luna/etc/conda/activate.d/env_vars.sh
+</pre></div>
+</div>
+</section>
+<section id="add-to-env-vars-sh">
+<h3>3. Add to <code class="docutils literal notranslate"><span class="pre">env_vars.sh</span></code><a class="headerlink" href="#add-to-env-vars-sh" title="Link to this heading"></a></h3>
+<p>Edit the file and add the following lines:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="ch">#!/bin/bash</span>
+<span class="c1"># Source a different bashrc or other setup file when &#39;luna&#39; environment is activated</span>
+<span class="nb">source</span><span class="w"> </span>~/miniconda3/envs/luna/.bashrc_luna
+</pre></div>
+</div>
+</section>
+<section id="create-a-custom-bashrc-luna">
+<h3>4. Create a Custom <code class="docutils literal notranslate"><span class="pre">.bashrc_luna</span></code><a class="headerlink" href="#create-a-custom-bashrc-luna" title="Link to this heading"></a></h3>
+<p>Create the custom <code class="docutils literal notranslate"><span class="pre">.bashrc_luna</span></code> file:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>nano<span class="w"> </span>~/miniconda3/envs/luna/.bashrc_luna
+</pre></div>
+</div>
+</section>
+<section id="add-to-bashrc-luna">
+<h3>5. Add to <code class="docutils literal notranslate"><span class="pre">.bashrc_luna</span></code><a class="headerlink" href="#add-to-bashrc-luna" title="Link to this heading"></a></h3>
+<p>Add the following lines:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Remove all current ROOT paths from LD_LIBRARY_PATH and PYTHONPATH</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="k">$(</span><span class="nb">echo</span><span class="w"> </span><span class="nv">$LD_LIBRARY_PATH</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sed<span class="w"> </span>-e<span class="w"> </span><span class="s1">&#39;s|[^:]*ROOT[^:]*:||g&#39;</span><span class="k">)</span>
+<span class="nb">unset</span><span class="w"> </span>PYTHONPATH
+
+<span class="c1"># Point ROOTSYS to the conda environment&#39;s root directory</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">ROOTSYS</span><span class="o">=</span><span class="nv">$CONDA_PREFIX</span>
+
+<span class="c1"># Add ROOT binary directory to the PATH</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PATH</span><span class="o">=</span><span class="nv">$ROOTSYS</span>/bin:<span class="nv">$PATH</span>
+
+<span class="c1"># Add ROOT library directory to LD_LIBRARY_PATH</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="nv">$ROOTSYS</span>/lib:<span class="nv">$LD_LIBRARY_PATH</span>
+
+<span class="c1"># Add ROOT path to python path</span>
+<span class="nb">export</span><span class="w"> </span><span class="nv">PYTHONPATH</span><span class="o">=</span><span class="nv">$ROOTSYS</span>/lib:<span class="nv">$PYTHONPATH</span>
+</pre></div>
+</div>
+<p>Save and exit.</p>
+<p>Now, whenever you activate the <code class="docutils literal notranslate"><span class="pre">luna</span></code> environment, it will automatically use the Conda-installed ROOT version without conflicts.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="installation-steps">
+<h2>Installation Steps<a class="headerlink" href="#installation-steps" title="Link to this heading"></a></h2>
+<p>In the following all the steps for a fresh installation of LunaDAQ will be reported.</p>
+<section id="clone-repository">
+<h3>1. Clone Repository<a class="headerlink" href="#clone-repository" title="Link to this heading"></a></h3>
+<p>First, the repository must be cloned:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/skowrons94/WebDAQ.git
+<span class="nb">cd</span><span class="w"> </span>WebDAQ
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="docker-setup-optional">
+<h3>2. Docker Setup (Optional)<a class="headerlink" href="#docker-setup-optional" title="Link to this heading"></a></h3>
+<p>The DAQ server relies on a pre-built Docker image where all the XDAQ components are located. Run:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>pull<span class="w"> </span>skowrons/xdaq:latest
+</pre></div>
+</div>
+<p>in order to download the latest XDAQ image. This part is skippaple since when the XDAQ is being launched, Docker will automatically download the image by itself. However, it can take several minutes, so it is advisable to do beforehand.</p>
+</section>
+<hr class="docutils" />
+<section id="conda-environment-optional">
+<h3>3. Conda Environment (Optional)<a class="headerlink" href="#conda-environment-optional" title="Link to this heading"></a></h3>
+<p>A Conda environment simplifies dependency management. To create it:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-f<span class="w"> </span>environment.yml
+</pre></div>
+</div>
+<p>Once created, the environment can be activated:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>activate<span class="w"> </span>luna
+</pre></div>
+</div>
+<p>Now all the dependencies (apart from the CAEN ones) should be succesfully installed.</p>
+</section>
+<hr class="docutils" />
+<section id="server-configuration">
+<h3>4. Server Configuration<a class="headerlink" href="#server-configuration" title="Link to this heading"></a></h3>
+<p>In order to start the DAQ, first the server part must be activated. This is the one that actually handles the data acquistion, stores the variables, and communicates with the other components that are being added.</p>
+<section id="initialize-the-database">
+<h4>Initialize the Database<a class="headerlink" href="#initialize-the-database" title="Link to this heading"></a></h4>
+<p>LunaDAQ provides a SQL database where all the run information will be stored. In order to create a database we must:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+flask<span class="w"> </span>db<span class="w"> </span>init<span class="w"> </span><span class="c1"># Creates migration directory</span>
+flask<span class="w"> </span>db<span class="w"> </span>migrate<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Initial migration&quot;</span><span class="w"> </span><span class="c1"># Generates migration script</span>
+flask<span class="w"> </span>db<span class="w"> </span>upgrade<span class="w"> </span><span class="c1"># Applies migrations to the database</span>
+</pre></div>
+</div>
+<p>After these, the SQL should be ready for usage.</p>
+</section>
+<section id="create-a-user">
+<h4>Create a User<a class="headerlink" href="#create-a-user" title="Link to this heading"></a></h4>
+<p>In order to access the DAQ, the username and password are necessary. Due to security reason, these can only be created from command line as:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>flask<span class="w"> </span>--app<span class="w"> </span>server<span class="w"> </span>create-user<span class="w">  </span><span class="c1"># Follow prompts to set username/password</span>
+</pre></div>
+</div>
+</section>
+<section id="start-the-server">
+<h4>Start the Server<a class="headerlink" href="#start-the-server" title="Link to this heading"></a></h4>
+<p>If you have all the CAEN drivers installed and a board is connected to your PC:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>main.py
+</pre></div>
+</div>
+<p>Alternatively, it is possible to start the server in test mode that is useful when working on the interface without the need of having a physical board attached:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">TEST_FLAG</span><span class="o">=</span>True<span class="w"> </span>python3<span class="w"> </span>main.py
+</pre></div>
+</div>
+<p>In the test mode, LunaDAQ will not check for any board communication and will use dummy board instead. It will be still possible to start and stop the runs, and the information in the SQL database will still be populated.</p>
+<p>Note that the server will be run on a specific IP address and a dedicated port. In order to change the values of the port, open the <code class="docutils literal notranslate"><span class="pre">server/main.py</span></code> file and change the values in the last line.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="frontend-setup">
+<h3>5. Frontend Setup<a class="headerlink" href="#frontend-setup" title="Link to this heading"></a></h3>
+<p>Now, instead, it is necessary to handle the interface of the DAQ by creating a web page that communicates with the server to get information about the DAQ status, the boards that are connected and the data that will be collected.</p>
+<section id="install-packages">
+<h4>Install Packages<a class="headerlink" href="#install-packages" title="Link to this heading"></a></h4>
+<p>First we install the packages that are needed for the web page:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>frontend
+npm<span class="w"> </span>install<span class="w">    </span><span class="c1"># Installs Next.js and React dependencies</span>
+</pre></div>
+</div>
+</section>
+<section id="build-and-start">
+<h4>Build and Start<a class="headerlink" href="#build-and-start" title="Link to this heading"></a></h4>
+<p>Then we can build the web page and start it:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>npm<span class="w"> </span>run<span class="w"> </span>build<span class="w">  </span><span class="c1"># Compiles production-ready assets</span>
+npm<span class="w"> </span>run<span class="w"> </span>start<span class="w">  </span><span class="c1"># Launches frontend on http://localhost:3000</span>
+</pre></div>
+</div>
+<p>The web page will be looking for the server at the IP and port reported in <code class="docutils literal notranslate"><span class="pre">frontend/.env</span></code> files, thus ensure that matches the values with which the server was run. Beware that every time the values in <code class="docutils literal notranslate"><span class="pre">frontend/.env</span></code> are changed, the build must be redone before starting the new web page. Note that this permits to run the server and the web page on two completely different PCs, if needed.</p>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="post-installation-checks">
+<h2>Post-Installation Checks<a class="headerlink" href="#post-installation-checks" title="Link to this heading"></a></h2>
+<ol class="arabic">
+<li><p><strong>Verify Server Access</strong>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/experiment/get_run_number
+</pre></div>
+</div>
+<p>Expected response: <code class="docutils literal notranslate"><span class="pre">{&quot;status&quot;:</span> <span class="pre">&quot;ok&quot;}</span></code></p>
+</li>
+<li><p><strong>Access the Frontend</strong>:<br />
+Open <code class="docutils literal notranslate"><span class="pre">http://localhost:3000</span></code> in a browser. Log in with the credentials created earlier.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="troubleshooting">
+<h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Issue</p></th>
+<th class="head"><p>Solution</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Port conflicts (5001/3000)</p></td>
+<td><p>Stop conflicting services or modify ports in <code class="docutils literal notranslate"><span class="pre">main.py</span></code> (server) and <code class="docutils literal notranslate"><span class="pre">frontend/.env</span></code> (frontend).</p></td>
+</tr>
+<tr class="row-odd"><td><p>Database migration errors</p></td>
+<td><p>Delete the <code class="docutils literal notranslate"><span class="pre">migrations/</span></code> folder and re-run <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">db</span> <span class="pre">init</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>npm build failures</p></td>
+<td><p>Clear <code class="docutils literal notranslate"><span class="pre">node_modules/</span></code> and run <code class="docutils literal notranslate"><span class="pre">npm</span> <span class="pre">install</span> <span class="pre">--force</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Missing environment variables</p></td>
+<td><p>Ensure <code class="docutils literal notranslate"><span class="pre">.env</span></code> files exist in both <code class="docutils literal notranslate"><span class="pre">server/</span></code> and <code class="docutils literal notranslate"><span class="pre">frontend/</span></code> directories.</p></td>
+</tr>
+<tr class="row-even"><td><p>CAEN library errors</p></td>
+<td><p>Verify CAENVMElib, CAENComm, and CAENDigitizer are properly installed.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Docker permission denied</p></td>
+<td><p>Add your user to the docker group: <code class="docutils literal notranslate"><span class="pre">sudo</span> <span class="pre">usermod</span> <span class="pre">-a</span> <span class="pre">-G</span> <span class="pre">docker</span> <span class="pre">$USER</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>ROOT conflicts</p></td>
+<td><p>Follow the Common Issues section above to configure Conda environment.</p></td>
+</tr>
+</tbody>
+</table>
+<p>For more detailed troubleshooting, see the <a class="reference internal" href="troubleshooting.html"><span class="std std-doc">Troubleshooting Guide</span></a>.</p>
+<p>For further assistance, contact <a class="reference external" href="mailto:jakub&#46;skowronski&#37;&#52;&#48;pd&#46;infn&#46;it">LunaDAQ Support Team</a>.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="welcome.html" class="btn btn-neutral float-left" title="LUNA Experiment Data Acquisition System" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="usage.html" class="btn btn-neutral float-right" title="User Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

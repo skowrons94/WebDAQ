@@ -1,0 +1,2236 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Server Architecture Reference &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Troubleshooting Guide" href="troubleshooting.html" />
+    <link rel="prev" title="LunaDAQ Details" href="details.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">LUNA Experiment Data Acquisition System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">LunaDAQ Details</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Server Architecture Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#architecture-overview">Architecture Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#directory-structure">Directory Structure</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#entry-points">Entry Points</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#main-py">main.py</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#config-py">config.py</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#app-init-py">app/<strong>init</strong>.py</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#database-models">Database Models</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#user-model">User Model</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#runmetadata-model">RunMetadata Model</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#service-layer">Service Layer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#daqmanager">DAQManager</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#state-attributes">State Attributes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#digitizercontainer-inner-class">DigitizerContainer (Inner Class)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#daqmanager-methods">DAQManager Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#spymanager">SpyManager</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#key-methods">Key Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#statsmanager">StatsManager</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#id1">Key Methods</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#resolutiontuner">ResolutionTuner</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#tuningsession-class">TuningSession Class</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tunable-parameters">Tunable Parameters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#id2">Key Methods</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#route-handlers">Route Handlers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#authentication-routes">Authentication Routes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#experiment-control-routes">Experiment Control Routes</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#run-control">Run Control</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#run-metadata">Run Metadata</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#board-management">Board Management</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#data-settings">Data Settings</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#xdaq-status">XDAQ Status</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#digitizer-configuration-routes">Digitizer Configuration Routes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#histogram-routes">Histogram Routes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#current-monitoring-routes">Current Monitoring Routes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#statistics-routes">Statistics Routes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#calibration-routes">Calibration Routes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#resolution-tuning-routes">Resolution Tuning Routes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#utility-modules">Utility Modules</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#digitizer-interface">Digitizer Interface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xdaq-interface">XDAQ Interface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#spy-server-interface">Spy Server Interface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#graphite-client">Graphite Client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#current-monitor-interfaces">Current Monitor Interfaces</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-files">Configuration Files</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#conf-settings-json">conf/settings.json</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#conf-boardname-id-json">conf/BoardName_ID.json</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#conf-topology-xml">conf/topology.xml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#conf-current-json">conf/current.json</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#conf-stats-json">conf/stats.json</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#calib-boardname-id-cal">calib/BoardName_ID.cal</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#data-flow">Data Flow</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#run-start-sequence">Run Start Sequence</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#histogram-data-flow">Histogram Data Flow</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-new-features">Adding New Features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#adding-a-new-api-endpoint">Adding a New API Endpoint</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-a-new-service-manager">Adding a New Service Manager</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-a-new-database-model">Adding a New Database Model</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-a-new-hardware-interface">Adding a New Hardware Interface</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#design-patterns">Design Patterns</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#singleton-pattern">Singleton Pattern</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#persistent-connection-pattern">Persistent Connection Pattern</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#state-machine-pattern">State Machine Pattern</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#observer-pattern">Observer Pattern</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#error-handling">Error Handling</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#connection-retry-logic">Connection Retry Logic</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#resource-cleanup">Resource Cleanup</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#test-mode">Test Mode</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Server Architecture Reference</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/server-architecture.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="server-architecture-reference">
+<h1>Server Architecture Reference<a class="headerlink" href="#server-architecture-reference" title="Link to this heading"></a></h1>
+<p>This document provides a comprehensive technical reference for the LunaDAQ server codebase. It is intended for developers who want to understand the internal workings, extend functionality, or troubleshoot issues.</p>
+<hr class="docutils" />
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#architecture-overview"><span class="xref myst">Architecture Overview</span></a></p></li>
+<li><p><a class="reference internal" href="#entry-points"><span class="xref myst">Entry Points</span></a></p></li>
+<li><p><a class="reference internal" href="#database-models"><span class="xref myst">Database Models</span></a></p></li>
+<li><p><a class="reference internal" href="#service-layer"><span class="xref myst">Service Layer</span></a></p></li>
+<li><p><a class="reference internal" href="#route-handlers"><span class="xref myst">Route Handlers</span></a></p></li>
+<li><p><a class="reference internal" href="#utility-modules"><span class="xref myst">Utility Modules</span></a></p></li>
+<li><p><a class="reference internal" href="#configuration-files"><span class="xref myst">Configuration Files</span></a></p></li>
+<li><p><a class="reference internal" href="#data-flow"><span class="xref myst">Data Flow</span></a></p></li>
+<li><p><a class="reference internal" href="#adding-new-features"><span class="xref myst">Adding New Features</span></a></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="architecture-overview">
+<h2>Architecture Overview<a class="headerlink" href="#architecture-overview" title="Link to this heading"></a></h2>
+<p>The LunaDAQ server follows a layered architecture pattern:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>┌─────────────────────────────────────────────────────────────┐
+│                    Flask REST API Layer                      │
+│   (Routes: auth, experiment, digitizer, histograms, etc.)   │
+├─────────────────────────────────────────────────────────────┤
+│                      Service Layer                           │
+│   (DAQManager, SpyManager, StatsManager, ResolutionTuner)   │
+├─────────────────────────────────────────────────────────────┤
+│                      Utility Layer                           │
+│   (Digitizer, XDAQ, Graphite, TetrAMM, RBD9103)            │
+├─────────────────────────────────────────────────────────────┤
+│                    Hardware / External                       │
+│   (CAEN Boards, Docker/XDAQ, Graphite DB, Current Meters)   │
+└─────────────────────────────────────────────────────────────┘
+</pre></div>
+</div>
+<section id="directory-structure">
+<h3>Directory Structure<a class="headerlink" href="#directory-structure" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>server/
+├── main.py                 # Application entry point
+├── config.py               # Configuration settings
+├── app/
+│   ├── __init__.py         # Flask app factory
+│   ├── models/             # SQLAlchemy database models
+│   │   ├── user.py         # User authentication model
+│   │   └── run_metadata.py # Run metadata model
+│   ├── routes/             # API endpoint handlers
+│   │   ├── auth.py         # Authentication endpoints
+│   │   ├── experiment.py   # Run control endpoints
+│   │   ├── digitizer.py    # Board configuration endpoints
+│   │   ├── histograms.py   # Histogram/waveform endpoints
+│   │   ├── current.py      # Current monitoring endpoints
+│   │   ├── stats.py        # Graphite metrics endpoints
+│   │   ├── calib.py        # Calibration endpoints
+│   │   ├── faraday.py      # Faraday cup control
+│   │   └── tuning.py       # Resolution tuner endpoints
+│   ├── services/           # Business logic managers
+│   │   ├── daq_manager.py  # Centralized DAQ state
+│   │   ├── spy_manager.py  # Histogram spy server
+│   │   ├── stats_manager.py # Graphite data collection
+│   │   └── resolution_tuner.py # Parameter optimization
+│   └── utils/              # Hardware interfaces
+│       ├── dgtz.py         # CAEN digitizer wrapper
+│       ├── spy.py          # ReadoutUnit spy client
+│       ├── xdaq.py         # XDAQ/Docker management
+│       ├── graphite.py     # Graphite HTTP client
+│       ├── tetramm.py      # TetrAMM controller
+│       ├── rbd9103.py      # RBD 9103 controller
+│       └── jwt_utils.py    # JWT authentication
+├── conf/                   # Configuration files
+├── calib/                  # Calibration files
+└── migrations/             # Database migrations
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="entry-points">
+<h2>Entry Points<a class="headerlink" href="#entry-points" title="Link to this heading"></a></h2>
+<section id="main-py">
+<h3>main.py<a class="headerlink" href="#main-py" title="Link to this heading"></a></h3>
+<p>The application entry point that:</p>
+<ol class="arabic simple">
+<li><p>Creates the Flask application using the factory pattern</p></li>
+<li><p>Registers signal handlers for graceful shutdown</p></li>
+<li><p>Starts the Waitress WSGI server</p></li>
+</ol>
+<p><strong>Key Components:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Application creation</span>
+<span class="n">app</span> <span class="o">=</span> <span class="n">create_app</span><span class="p">()</span>
+
+<span class="c1"># Server startup (10 worker threads, all interfaces)</span>
+<span class="n">serve</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s1">&#39;0.0.0.0&#39;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">5001</span><span class="p">,</span> <span class="n">threads</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+</pre></div>
+</div>
+<p><strong>Shutdown Handler:</strong></p>
+<p>The <code class="docutils literal notranslate"><span class="pre">cleanup_on_shutdown</span></code> function handles graceful termination:</p>
+<ul class="simple">
+<li><p>Stops DAQ acquisition if running</p></li>
+<li><p>Stops board monitoring thread</p></li>
+<li><p>Stops Docker container</p></li>
+<li><p>Closes all digitizer connections</p></li>
+<li><p>Stops current monitoring devices</p></li>
+</ul>
+<p><strong>CLI Commands:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>flask<span class="w"> </span>--app<span class="w"> </span>server<span class="w"> </span>create-user<span class="w">  </span><span class="c1"># Create user account</span>
+</pre></div>
+</div>
+</section>
+<section id="config-py">
+<h3>config.py<a class="headerlink" href="#config-py" title="Link to this heading"></a></h3>
+<p>Application configuration with environment variable overrides:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Environment Variable</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">SECRET_KEY</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">'you-will-never-guess'</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">$SECRET_KEY</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">SQLALCHEMY_DATABASE_URI</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">'sqlite:///app.db'</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">$DATABASE_URL</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">JWT_SECRET_KEY</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">'jwt-secret-string'</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">$JWT_SECRET_KEY</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">JWT_ACCESS_TOKEN_EXPIRES</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">timedelta(days=1)</span></code></p></td>
+<td><p>-</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="app-init-py">
+<h3>app/<strong>init</strong>.py<a class="headerlink" href="#app-init-py" title="Link to this heading"></a></h3>
+<p>Flask application factory that:</p>
+<ol class="arabic simple">
+<li><p>Creates Flask app instance</p></li>
+<li><p>Loads configuration</p></li>
+<li><p>Initializes extensions (SQLAlchemy, Migrate, JWT)</p></li>
+<li><p>Enables CORS for cross-origin requests</p></li>
+<li><p>Registers all blueprint routes</p></li>
+</ol>
+<p><strong>Global Objects:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">db</span></code> - SQLAlchemy database instance</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">migrate</span></code> - Flask-Migrate for schema versioning</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">jwt</span></code> - Flask-JWT-Extended manager</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="database-models">
+<h2>Database Models<a class="headerlink" href="#database-models" title="Link to this heading"></a></h2>
+<section id="user-model">
+<h3>User Model<a class="headerlink" href="#user-model" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/models/user.py</span></code></p>
+<p>Stores user authentication credentials.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Constraints</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">id</span></code></p></td>
+<td><p>Integer</p></td>
+<td><p>Primary Key</p></td>
+<td><p>Unique identifier</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">username</span></code></p></td>
+<td><p>String(64)</p></td>
+<td><p>Unique, Indexed</p></td>
+<td><p>Login username</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">email</span></code></p></td>
+<td><p>String(120)</p></td>
+<td><p>Unique, Indexed</p></td>
+<td><p>User email</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">password_hash</span></code></p></td>
+<td><p>String(128)</p></td>
+<td><p>-</p></td>
+<td><p>Hashed password</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Methods:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">set_password(password)</span></code></p></td>
+<td><p>Hash password using werkzeug security</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">check_password(password)</span></code></p></td>
+<td><p>Verify password against stored hash</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Relationships:</strong></p>
+<ul class="simple">
+<li><p>One-to-Many with <code class="docutils literal notranslate"><span class="pre">RunMetadata</span></code> (backref: <code class="docutils literal notranslate"><span class="pre">runs</span></code>)</p></li>
+</ul>
+</section>
+<section id="runmetadata-model">
+<h3>RunMetadata Model<a class="headerlink" href="#runmetadata-model" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/models/run_metadata.py</span></code></p>
+<p>Stores metadata for each acquisition run (FAIR-compliant).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">id</span></code></p></td>
+<td><p>Integer</p></td>
+<td><p>Primary key</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_number</span></code></p></td>
+<td><p>Integer</p></td>
+<td><p>Unique run identifier (indexed)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">start_time</span></code></p></td>
+<td><p>DateTime</p></td>
+<td><p>Run start timestamp</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">end_time</span></code></p></td>
+<td><p>DateTime</p></td>
+<td><p>Run end timestamp</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">notes</span></code></p></td>
+<td><p>Text</p></td>
+<td><p>User notes for the run</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">accumulated_charge</span></code></p></td>
+<td><p>Float</p></td>
+<td><p>Total charge during run</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">target_name</span></code></p></td>
+<td><p>String(64)</p></td>
+<td><p>Target sample name</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">terminal_voltage</span></code></p></td>
+<td><p>Float</p></td>
+<td><p>Accelerator terminal voltage</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">probe_voltage</span></code></p></td>
+<td><p>Float</p></td>
+<td><p>Probe voltage setting</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_type</span></code></p></td>
+<td><p>String(64)</p></td>
+<td><p>Run type (physics, calibration, etc.)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">flag</span></code></p></td>
+<td><p>String(32)</p></td>
+<td><p>Quality flag (good/unknown/bad)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">user_id</span></code></p></td>
+<td><p>Integer</p></td>
+<td><p>Foreign key to User</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="service-layer">
+<h2>Service Layer<a class="headerlink" href="#service-layer" title="Link to this heading"></a></h2>
+<p>Services are singleton managers that encapsulate business logic and maintain state.</p>
+<section id="daqmanager">
+<h3>DAQManager<a class="headerlink" href="#daqmanager" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/services/daq_manager.py</span></code></p>
+<p>Central manager for all DAQ operations including board connections, run control, and state management.</p>
+<p><strong>Accessing the Instance:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">app.services.daq_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_daq_manager</span>
+<span class="n">daq_manager</span> <span class="o">=</span> <span class="n">get_daq_manager</span><span class="p">(</span><span class="n">test_flag</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="state-attributes">
+<h4>State Attributes<a class="headerlink" href="#state-attributes" title="Link to this heading"></a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">daq_state</span></code> dictionary contains:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Key</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">running</span></code></p></td>
+<td><p>bool</p></td>
+<td><p>DAQ acquisition status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">start_time</span></code></p></td>
+<td><p>str</p></td>
+<td><p>Run start timestamp</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">run</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Current run number</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">save</span></code></p></td>
+<td><p>bool</p></td>
+<td><p>Data saving enabled</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">limit_size</span></code></p></td>
+<td><p>bool</p></td>
+<td><p>File size limiting enabled</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">file_size_limit</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Maximum file size (bytes)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">boards</span></code></p></td>
+<td><p>List[Dict]</p></td>
+<td><p>Configured board list</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="digitizercontainer-inner-class">
+<h4>DigitizerContainer (Inner Class)<a class="headerlink" href="#digitizercontainer-inner-class" title="Link to this heading"></a></h4>
+<p>Manages persistent connections to CAEN boards to avoid frequent reconnections.</p>
+<p><strong>Key Methods:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">add_board</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_config</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p>Create persistent connection (3 retries)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">remove_board</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Close and remove connection</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_digitizer</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">Digitizer</span></code></p></td>
+<td><p>Get digitizer instance</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">is_connected</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p>Check connection status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">read_register</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">address</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>Thread-safe register read</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">refresh_board_connection</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">config</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Reconnect board</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cleanup</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Close all connections</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Thread Safety:</strong> Each board has an associated <code class="docutils literal notranslate"><span class="pre">threading.Lock</span></code> for safe concurrent access.</p>
+</section>
+<section id="daqmanager-methods">
+<h4>DAQManager Methods<a class="headerlink" href="#daqmanager-methods" title="Link to this heading"></a></h4>
+<p><strong>State Management:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_state</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Copy of current DAQ state</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">is_running</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p>Acquisition running status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_run_number</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>Current run number</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">set_run_number</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">num</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Set run number</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_save_data</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p>Data saving status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">set_save_data</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">save</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Enable/disable saving</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_limit_data_size</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p>Size limiting status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">set_limit_data_size</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">limit</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Enable/disable limiting</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_data_size_limit</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>File size limit</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">set_data_size_limit</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">limit</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Set size limit</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_start_time</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">str</span></code></p></td>
+<td><p>Run start timestamp</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Board Management:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_boards</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">List[Dict]</span></code></p></td>
+<td><p>List of configured boards</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">add_board</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_config</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Add board, create connection</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">remove_board</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Remove board and cleanup</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_board_info</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Board model/channels/DPP type</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">check_board_connectivity</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Verify all connections</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">refresh_board_connection</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Reconnect a board</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_board_status</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Failure tracking info</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Run Control:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">prepare_run_start</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Create directories, copy configs</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">configure_xdaq_for_run</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Configure XDAQ topology</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">start_xdaq</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Start XDAQ acquisition</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop_xdaq</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Stop XDAQ acquisition</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">reset_xdaq</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Reset XDAQ system</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">start_board_monitoring</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Start health monitoring thread</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stop_board_monitoring</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Stop monitoring thread</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">increment_run_number</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>Increment and persist run number</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Add Board Flow:</strong></p>
+<ol class="arabic simple">
+<li><p>Create persistent digitizer connection (3 retry attempts)</p></li>
+<li><p>Query board info (model, channels, serial number)</p></li>
+<li><p>Read DPP configuration (PHA or PSD registers)</p></li>
+<li><p>Save configuration to <code class="docutils literal notranslate"><span class="pre">conf/BoardName_ID.json</span></code></p></li>
+<li><p>Create calibration file <code class="docutils literal notranslate"><span class="pre">calib/BoardName_ID.cal</span></code></p></li>
+<li><p>Insert board in sorted order by ID</p></li>
+<li><p>Update <code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code></p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="spymanager">
+<h3>SpyManager<a class="headerlink" href="#spymanager" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/services/spy_manager.py</span></code></p>
+<p>Manages the ReadoutUnit spy server for real-time histogram monitoring.</p>
+<p><strong>Accessing the Instance:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">app.services.spy_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_spy_manager</span>
+<span class="n">spy_manager</span> <span class="o">=</span> <span class="n">get_spy_manager</span><span class="p">(</span><span class="n">test_flag</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="key-methods">
+<h4>Key Methods<a class="headerlink" href="#key-methods" title="Link to this heading"></a></h4>
+<p><strong>Spy Server Control:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">start_spy</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">daq_state</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Initialize spy server</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop_spy</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Shutdown spy server</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_spy_status</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Server state info</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Histogram Access:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_histogram</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">channel,</span> <span class="pre">boards,</span> <span class="pre">histogram_type,</span> <span class="pre">rebin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">TH1F</span></code></p></td>
+<td><p>Get ROOT histogram</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_histogram_index</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">channel,</span> <span class="pre">boards</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>Calculate spy buffer index</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_roi_histogram</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">channel,</span> <span class="pre">boards,</span> <span class="pre">roi_min,</span> <span class="pre">roi_max,</span> <span class="pre">rebin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">TH1F</span></code></p></td>
+<td><p>Histogram with ROI styling</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_roi_integral</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">channel,</span> <span class="pre">boards,</span> <span class="pre">roi_min,</span> <span class="pre">roi_max,</span> <span class="pre">rebin</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">float</span></code></p></td>
+<td><p>Calculate ROI sum</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Waveform Access:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_waveform</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">channel,</span> <span class="pre">boards,</span> <span class="pre">waveform_type</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Get waveform data</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">activate_waveforms</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">boards</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Enable bit 16 in register 0x8000</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">deactivate_waveforms</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">boards</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Disable waveform recording</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_waveform_status</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">boards</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">bool</span></code></p></td>
+<td><p>Check if waveforms enabled</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Histogram Types:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">energy</span></code> - Energy spectrum (DPP-PHA boards, default)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qlong</span></code> - Long gate charge integral (DPP-PSD boards)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">qshort</span></code> - Short gate charge integral (DPP-PSD boards)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">psd</span></code> - Pulse Shape Discrimination 2D histogram</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">wave1</span></code>, <code class="docutils literal notranslate"><span class="pre">wave2</span></code> - Waveform data</p></li>
+</ul>
+</section>
+</section>
+<hr class="docutils" />
+<section id="statsmanager">
+<h3>StatsManager<a class="headerlink" href="#statsmanager" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/services/stats_manager.py</span></code></p>
+<p>Manages Graphite time-series data collection and metric path configuration.</p>
+<p><strong>Accessing the Instance:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">app.services.stats_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_stats_manager</span>
+<span class="n">stats_manager</span> <span class="o">=</span> <span class="n">get_stats_manager</span><span class="p">()</span>
+</pre></div>
+</div>
+<section id="id1">
+<h4>Key Methods<a class="headerlink" href="#id1" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_paths</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">List[Dict]</span></code></p></td>
+<td><p>Configured metric paths</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">add_path</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">path,</span> <span class="pre">alias</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Add new metric path</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">remove_path</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">path</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Remove metric path</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">update_path</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">path,</span> <span class="pre">alias,</span> <span class="pre">enabled</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Modify path configuration</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">start_run</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">run_number</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Begin collection thread</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop_run</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Stop collection thread</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_config_info</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Graphite address and status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_last_value</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">metric,</span> <span class="pre">from_time</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">float</span></code></p></td>
+<td><p>Most recent non-null value</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="resolutiontuner">
+<h3>ResolutionTuner<a class="headerlink" href="#resolutiontuner" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/services/resolution_tuner.py</span></code></p>
+<p>Automates parameter optimization for DPP-PHA boards by varying register values and measuring energy resolution.</p>
+<p><strong>Accessing the Instance:</strong></p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">app.services.resolution_tuner</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_resolution_tuner</span>
+<span class="n">tuner</span> <span class="o">=</span> <span class="n">get_resolution_tuner</span><span class="p">(</span><span class="n">daq_manager</span><span class="p">,</span> <span class="n">spy_manager</span><span class="p">)</span>
+</pre></div>
+</div>
+<section id="tuningsession-class">
+<h4>TuningSession Class<a class="headerlink" href="#tuningsession-class" title="Link to this heading"></a></h4>
+<p>Represents one tuning session (parameter sweep).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Attribute</p></th>
+<th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">session_id</span></code></p></td>
+<td><p>str</p></td>
+<td><p>Unique session identifier</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">board_id</span></code></p></td>
+<td><p>str</p></td>
+<td><p>Target board</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">channel</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Target channel</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">parameter_name</span></code></p></td>
+<td><p>str</p></td>
+<td><p>Parameter being tuned</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">param_min</span></code>, <code class="docutils literal notranslate"><span class="pre">param_max</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Search range</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">num_steps</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Number of steps</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">run_duration</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Seconds per step</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">fit_range_min</span></code>, <code class="docutils literal notranslate"><span class="pre">fit_range_max</span></code></p></td>
+<td><p>int</p></td>
+<td><p>Gaussian fitting window</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">points</span></code></p></td>
+<td><p>List[Dict]</p></td>
+<td><p>Data points from each step</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">best_point</span></code></p></td>
+<td><p>Dict</p></td>
+<td><p>Optimal parameter value</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">status</span></code></p></td>
+<td><p>str</p></td>
+<td><p>running/completed/stopped/error</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="tunable-parameters">
+<h4>Tunable Parameters<a class="headerlink" href="#tunable-parameters" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter Name</p></th>
+<th class="head"><p>Register Address</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Trapezoid Rise Time</p></td>
+<td><p>0x105C</p></td>
+<td><p>Rising edge time</p></td>
+</tr>
+<tr class="row-odd"><td><p>Trapezoid Flat Top</p></td>
+<td><p>0x1060</p></td>
+<td><p>Flat top duration</p></td>
+</tr>
+<tr class="row-even"><td><p>Peaking Time</p></td>
+<td><p>0x1064</p></td>
+<td><p>Peak detection time</p></td>
+</tr>
+<tr class="row-odd"><td><p>Decay Time</p></td>
+<td><p>0x1068</p></td>
+<td><p>Decay constant</p></td>
+</tr>
+<tr class="row-even"><td><p>Input Rise Time</p></td>
+<td><p>0x1058</p></td>
+<td><p>Input signal rise time</p></td>
+</tr>
+<tr class="row-odd"><td><p>Trigger Hold-Off</p></td>
+<td><p>0x1074</p></td>
+<td><p>Trigger holdoff period</p></td>
+</tr>
+<tr class="row-even"><td><p>Peak Hold-Off</p></td>
+<td><p>0x1078</p></td>
+<td><p>Peak holdoff period</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="id2">
+<h4>Key Methods<a class="headerlink" href="#id2" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Parameters</p></th>
+<th class="head"><p>Returns</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">start_tuning</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">config</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Initiate new session</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop_tuning</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Halt current session</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_status</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Current session status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_current_data</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Points and best result</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_history</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">limit</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">List</span></code></p></td>
+<td><p>Past sessions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">reset_history</span></code></p></td>
+<td><p>-</p></td>
+<td><p>-</p></td>
+<td><p>Clear history file</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_tunable_parameters</span></code></p></td>
+<td><p>-</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">List[str]</span></code></p></td>
+<td><p>Parameter options</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_parameter_value</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">param_name,</span> <span class="pre">channel</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">int</span></code></p></td>
+<td><p>Read from config</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">set_parameter_value</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">param_name,</span> <span class="pre">channel,</span> <span class="pre">value</span></code></p></td>
+<td><p>-</p></td>
+<td><p>Write to config</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_histogram_with_fit</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">board_id,</span> <span class="pre">channel,</span> <span class="pre">fit_params</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">dict</span></code></p></td>
+<td><p>Histogram with Gaussian overlay</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Algorithm:</strong></p>
+<ol class="arabic simple">
+<li><p>Run short DAQ cycles (no file save)</p></li>
+<li><p>Vary one parameter systematically across range</p></li>
+<li><p>Fit histogram peaks with Gaussian: <code class="docutils literal notranslate"><span class="pre">y</span> <span class="pre">=</span> <span class="pre">A</span> <span class="pre">*</span> <span class="pre">exp(-(x-μ)²/(2σ²))</span> <span class="pre">+</span> <span class="pre">B</span></code></p></li>
+<li><p>Record sigma (resolution) vs parameter value</p></li>
+<li><p>Find optimal value with minimum sigma</p></li>
+</ol>
+</section>
+</section>
+</section>
+<hr class="docutils" />
+<section id="route-handlers">
+<h2>Route Handlers<a class="headerlink" href="#route-handlers" title="Link to this heading"></a></h2>
+<p>Routes are organized by functionality using Flask Blueprints.</p>
+<section id="authentication-routes">
+<h3>Authentication Routes<a class="headerlink" href="#authentication-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/auth.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">auth</span></code></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Auth</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/register</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>No</p></td>
+<td><p>Create user account</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/login</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>No</p></td>
+<td><p>Authenticate, receive JWT</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/protected</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Yes</p></td>
+<td><p>Test protected route</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Login Response:</strong></p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;access_token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;eyJ0eXAiOiJKV1QiLC...&quot;</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="experiment-control-routes">
+<h3>Experiment Control Routes<a class="headerlink" href="#experiment-control-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/experiment.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">experiment</span></code></p>
+<section id="run-control">
+<h4>Run Control<a class="headerlink" href="#run-control" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/start_run</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Start DAQ acquisition</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/stop_run</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Stop acquisition, save metadata</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_run_status</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Check if DAQ running</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="run-metadata">
+<h4>Run Metadata<a class="headerlink" href="#run-metadata" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_run_metadata</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>All runs (sorted by number)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_run_metadata/&lt;run_number&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Specific run details</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/add_note</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Add notes to run</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/add_run_metadata</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Set voltages, target, type</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/update_run_flag</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Mark as good/bad/unknown</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/update_run_notes</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Update run notes</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="board-management">
+<h4>Board Management<a class="headerlink" href="#board-management" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/add_board</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Connect and add board</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/remove_board</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Remove board</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_board_configuration</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>List all boards</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_board_status</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Connection status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/refresh_board_connections</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Reconnect all boards</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="data-settings">
+<h4>Data Settings<a class="headerlink" href="#data-settings" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/set_save_data</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Enable/disable saving</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_save_data</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get save status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/set_limit_data_size</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Enable size limiting</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_limit_data_size</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get limit status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/set_data_size_limit</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Set max file size</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/get_data_size_limit</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get size limit</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="xdaq-status">
+<h4>XDAQ Status<a class="headerlink" href="#xdaq-status" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/xdaq/file_bandwidth</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>File writing speed</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/xdaq/output_bandwidth</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Network output speed</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/experiment/xdaq/reset</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Reset XDAQ system</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="digitizer-configuration-routes">
+<h3>Digitizer Configuration Routes<a class="headerlink" href="#digitizer-configuration-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/digitizer.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">digitizer</span></code></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/boards</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>List all boards</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/connectivity</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Connection status</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/&lt;id&gt;/info</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Board model/channels/serial</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/&lt;id&gt;/config</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Complete board config</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/&lt;id&gt;/config</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Set board config</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/&lt;id&gt;/registers</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>All registers (hex/dec)</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/&lt;id&gt;/&lt;setting&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get register value</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/&lt;id&gt;/&lt;setting&gt;/&lt;value&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Set register value</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/polarity/&lt;id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get input polarity</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/polarity/&lt;id&gt;/&lt;channel&gt;/&lt;value&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Set input polarity</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/channel/&lt;id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get channel enable</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/channel/&lt;id&gt;/&lt;channel&gt;/&lt;value&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Set channel enable</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Register Map (partial):</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting Name</p></th>
+<th class="head"><p>Address</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Invert Input</p></td>
+<td><p>0x1080</p></td>
+<td><p>Input polarity</p></td>
+</tr>
+<tr class="row-odd"><td><p>Pre Trigger</p></td>
+<td><p>0x1038</p></td>
+<td><p>Pre-trigger samples</p></td>
+</tr>
+<tr class="row-even"><td><p>Trigger Threshold</p></td>
+<td><p>0x106C</p></td>
+<td><p>Trigger level</p></td>
+</tr>
+<tr class="row-odd"><td><p>DC Offset</p></td>
+<td><p>0x1098</p></td>
+<td><p>DC offset</p></td>
+</tr>
+<tr class="row-even"><td><p>Record Length</p></td>
+<td><p>0x1020</p></td>
+<td><p>Samples per event</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="histogram-routes">
+<h3>Histogram Routes<a class="headerlink" href="#histogram-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/histograms.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">histograms</span></code></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/histograms/&lt;board_id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Energy histogram</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/histograms/&lt;board_id&gt;/&lt;channel&gt;/&lt;type&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Specific histogram type</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/histograms/&lt;board_id&gt;/&lt;channel&gt;/rebin/&lt;factor&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Rebinned histogram</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/histograms/&lt;board_id&gt;/&lt;channel&gt;/&lt;roi_min&gt;/&lt;roi_max&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Histogram with ROI</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/psd/&lt;board_id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>PSD histogram</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/roi/&lt;board_id&gt;/&lt;channel&gt;/&lt;roi_min&gt;/&lt;roi_max&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>ROI integral</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/waveforms/1/&lt;board_id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Wave1 data</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/waveforms/2/&lt;board_id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Wave2 data</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/waveforms/activate</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Enable waveforms</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/waveforms/deactivate</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Disable waveforms</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/waveforms/status</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Waveform status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/spy/status</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Spy server status</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="current-monitoring-routes">
+<h3>Current Monitoring Routes<a class="headerlink" href="#current-monitoring-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/current.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">current</span></code></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/current/module_type</span></code></p></td>
+<td><p>GET/POST</p></td>
+<td><p>Get/set active module</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/current/connect</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Initialize connection</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/current/is_connected</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Connection status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/current/data</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Current measurement</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/current/data_array</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>100-sample array</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/current/accumulated</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Run accumulated charge</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/current/total_accumulated</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Total accumulated</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/current/reset_total_accumulated</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Reset total</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/current/start/&lt;run_number&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Begin acquisition</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/current/stop</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Stop acquisition</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/current/collimator/1</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Collimator 1 current</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/current/collimator/2</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Collimator 2 current</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Supported Modules:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">tetramm</span></code> - TetrAMM multi-channel picoammeter</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">rbd9103</span></code> - RBD 9103 serial current meter</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="statistics-routes">
+<h3>Statistics Routes<a class="headerlink" href="#statistics-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/stats.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">stats</span></code></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/stats/graphite_config</span></code></p></td>
+<td><p>GET/POST</p></td>
+<td><p>Graphite server config</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/stats/paths</span></code></p></td>
+<td><p>GET/POST</p></td>
+<td><p>Metric paths</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/stats/paths/&lt;path&gt;</span></code></p></td>
+<td><p>DELETE/PUT</p></td>
+<td><p>Manage single path</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/stats/run/&lt;run_number&gt;/start</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Start collection</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/stats/run/stop</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Stop collection</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/stats/metric/&lt;metric&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get metric data</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/stats/metric/&lt;metric&gt;/last</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Last non-null value</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Legacy Endpoints (no JWT):</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">/stats/terminal_voltage</span></code> - Accelerator terminal voltage</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/stats/board_rates</span></code> - Board event rates</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">/stats/board_rates_dt</span></code> - Dead time percentage</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="calibration-routes">
+<h3>Calibration Routes<a class="headerlink" href="#calibration-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/calib.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">calib</span></code></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/calib/get/&lt;board&gt;/&lt;id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Get calibration (a, b)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/calib/set/&lt;board&gt;/&lt;id&gt;/&lt;channel&gt;</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Set calibration</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Calibration Format:</strong></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">E</span> <span class="o">=</span> <span class="n">a</span> <span class="o">*</span> <span class="nb">bin</span> <span class="o">+</span> <span class="n">b</span>
+</pre></div>
+</div>
+<p>Stored in <code class="docutils literal notranslate"><span class="pre">calib/BoardName_ID.cal</span></code> (one line per channel: <code class="docutils literal notranslate"><span class="pre">a</span> <span class="pre">b</span></code>)</p>
+</section>
+<hr class="docutils" />
+<section id="resolution-tuning-routes">
+<h3>Resolution Tuning Routes<a class="headerlink" href="#resolution-tuning-routes" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/routes/tuning.py</span></code>
+<strong>Blueprint:</strong> <code class="docutils literal notranslate"><span class="pre">tuning</span></code></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Endpoint</p></th>
+<th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/start</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Begin tuning session</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/stop</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Stop tuning</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/status</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Session status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/data</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Current data and best</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/history</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Past sessions</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/boards</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>DPP-PHA boards only</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/parameters</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Tunable parameters</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/parameter_value/&lt;board&gt;/&lt;channel&gt;/&lt;param&gt;</span></code></p></td>
+<td><p>GET</p></td>
+<td><p>Current value</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">/tuning/parameter_value</span></code></p></td>
+<td><p>POST</p></td>
+<td><p>Set value</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="utility-modules">
+<h2>Utility Modules<a class="headerlink" href="#utility-modules" title="Link to this heading"></a></h2>
+<section id="digitizer-interface">
+<h3>Digitizer Interface<a class="headerlink" href="#digitizer-interface" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/utils/dgtz.py</span></code></p>
+<p>Python wrapper for the CAEN Digitizer C library.</p>
+<p><strong>Class: Digitizer</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">open()</span></code></p></td>
+<td><p>Establish board connection</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">close()</span></code></p></td>
+<td><p>Terminate connection</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_connected()</span></code></p></td>
+<td><p>Check connection status</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_info()</span></code></p></td>
+<td><p>Return BoardInfo structure</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">read_pha(filename)</span></code></p></td>
+<td><p>Query DPP-PHA config, save to JSON</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">read_psd(filename)</span></code></p></td>
+<td><p>Query DPP-PSD config, save to JSON</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">write_register(addr,</span> <span class="pre">value)</span></code></p></td>
+<td><p>Write register to board</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">read_register(addr)</span></code></p></td>
+<td><p>Read register from board</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Link Types:</strong></p>
+<ul class="simple">
+<li><p>0: USB direct connection</p></li>
+<li><p>1: Optical link (CONET)</p></li>
+<li><p>5: A4818 VME bridge</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="xdaq-interface">
+<h3>XDAQ Interface<a class="headerlink" href="#xdaq-interface" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/utils/xdaq.py</span></code></p>
+<p>Manages XDAQ Docker container and SOAP messaging.</p>
+<p><strong>Class: xdaq_messenger</strong></p>
+<p>Sends SOAP messages to XDAQ applications.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">create_action_message(action)</span></code></p></td>
+<td><p>Build SOAP action request</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">create_parameter_message(name,</span> <span class="pre">type,</span> <span class="pre">value)</span></code></p></td>
+<td><p>Build parameter set message</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">send_message(message)</span></code></p></td>
+<td><p>Execute HTTP request</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Class: topology</strong></p>
+<p>Manages XDAQ topology configuration.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">load_topology()</span></code></p></td>
+<td><p>Parse <code class="docutils literal notranslate"><span class="pre">topology.xml</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">configure_pt()</span></code></p></td>
+<td><p>Configure Persistent Topology</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">enable_pt()</span></code></p></td>
+<td><p>Start PT background threads</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">write_ruconf(daq_state)</span></code></p></td>
+<td><p>Update RU configuration</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_daq_status()</span></code></p></td>
+<td><p>Query DAQ state</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Class: container</strong></p>
+<p>Docker container manager.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">initialize()</span></code></p></td>
+<td><p>Start XDAQ Docker container</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">start_container()</span></code></p></td>
+<td><p>Create and run container</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stop()</span></code></p></td>
+<td><p>Stop Docker container</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="spy-server-interface">
+<h3>Spy Server Interface<a class="headerlink" href="#spy-server-interface" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/utils/spy.py</span></code></p>
+<p>Connects to XDAQ ReadoutUnit spy server (port 6060).</p>
+<p><strong>Class: ReadoutUnitSpy</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">start(daq_state)</span></code></p></td>
+<td><p>Initialize spy connection</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop()</span></code></p></td>
+<td><p>Shutdown and cleanup</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_object(hist_type,</span> <span class="pre">idx)</span></code></p></td>
+<td><p>Retrieve histogram/waveform</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="graphite-client">
+<h3>Graphite Client<a class="headerlink" href="#graphite-client" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/utils/graphite.py</span></code></p>
+<p>HTTP client for Graphite time-series database.</p>
+<p><strong>Class: GraphiteClient</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_data(target,</span> <span class="pre">from,</span> <span class="pre">until,</span> <span class="pre">format)</span></code></p></td>
+<td><p>Query metrics</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">is_connected()</span></code></p></td>
+<td><p>Test connectivity</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="current-monitor-interfaces">
+<h3>Current Monitor Interfaces<a class="headerlink" href="#current-monitor-interfaces" title="Link to this heading"></a></h3>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/utils/tetramm.py</span></code></p>
+<p><strong>Class: TetrAMMController</strong></p>
+<p>Controls TetrAMM via socket connection.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Method</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">initialize()</span></code></p></td>
+<td><p>Connect to device</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">disconnect()</span></code></p></td>
+<td><p>Close socket</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">get_data()</span></code></p></td>
+<td><p>Read current</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_accumulated_charge()</span></code></p></td>
+<td><p>Total charge during run</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">start_acquisition()</span></code></p></td>
+<td><p>Begin collection thread</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stop_acquisition()</span></code></p></td>
+<td><p>Halt collection</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Location:</strong> <code class="docutils literal notranslate"><span class="pre">server/app/utils/rbd9103.py</span></code></p>
+<p><strong>Class: RBD9103Controller</strong></p>
+<p>Controls RBD 9103 via serial port.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="configuration-files">
+<h2>Configuration Files<a class="headerlink" href="#configuration-files" title="Link to this heading"></a></h2>
+<section id="conf-settings-json">
+<h3>conf/settings.json<a class="headerlink" href="#conf-settings-json" title="Link to this heading"></a></h3>
+<p>Main DAQ state persistence.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;running&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;start_time&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;run&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;save&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;limit_size&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;file_size_limit&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;boards&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;V1725&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;chan&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">16</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;dpp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;PHA&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;link_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;link_num&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;vme&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0x0000&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="conf-boardname-id-json">
+<h3>conf/BoardName_ID.json<a class="headerlink" href="#conf-boardname-id-json" title="Link to this heading"></a></h3>
+<p>Per-board register configuration.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;registers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;reg_105C&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0x00000064&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Trapezoid Rise Time&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;channel&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;address&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0x105C&quot;</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="conf-topology-xml">
+<h3>conf/topology.xml<a class="headerlink" href="#conf-topology-xml" title="Link to this heading"></a></h3>
+<p>XDAQ topology definition (ReadoutUnit, BuilderUnit configuration).</p>
+</section>
+<section id="conf-current-json">
+<h3>conf/current.json<a class="headerlink" href="#conf-current-json" title="Link to this heading"></a></h3>
+<p>Current monitor settings.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;module_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;tetramm&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;tetramm_ip&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;169.254.145.10&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;tetramm_port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10001</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;total_accumulated&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;graphite_host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;172.18.9.54&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;graphite_port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2003</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="conf-stats-json">
+<h3>conf/stats.json<a class="headerlink" href="#conf-stats-json" title="Link to this heading"></a></h3>
+<p>Graphite metric path configuration.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;graphite_host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;lunaserver&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;graphite_port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">80</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;paths&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;accelerator.terminal_voltage&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;alias&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Terminal V&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</section>
+<section id="calib-boardname-id-cal">
+<h3>calib/BoardName_ID.cal<a class="headerlink" href="#calib-boardname-id-cal" title="Link to this heading"></a></h3>
+<p>Calibration coefficients (one line per channel).</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="mf">0.5</span> <span class="mf">10.0</span>
+<span class="mf">0.5</span> <span class="mf">12.0</span>
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="data-flow">
+<h2>Data Flow<a class="headerlink" href="#data-flow" title="Link to this heading"></a></h2>
+<section id="run-start-sequence">
+<h3>Run Start Sequence<a class="headerlink" href="#run-start-sequence" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>1. POST /experiment/start_run
+   │
+2. ├─ Verify DAQ not running
+   ├─ Verify boards configured
+   │
+3. ├─ prepare_run_start()
+   │   ├─ Create data/runN directory (if saving)
+   │   ├─ Copy board configs to run directory
+   │   └─ Copy calibration files to run directory
+   │
+4. ├─ configure_xdaq_for_run()
+   │   ├─ Write RUCaen.conf
+   │   └─ Configure topology
+   │
+5. ├─ start_xdaq()
+   │   ├─ Configure state machine
+   │   └─ Enable acquisition
+   │
+6. ├─ start_board_monitoring()
+   │   └─ Start health check thread
+   │
+7. ├─ spy_manager.start_spy()
+   │   └─ Connect to spy socket (port 6060)
+   │
+8. └─ Create RunMetadata in database
+</pre></div>
+</div>
+</section>
+<section id="histogram-data-flow">
+<h3>Histogram Data Flow<a class="headerlink" href="#histogram-data-flow" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>CAEN Digitizer Board
+       │
+       ▼
+XDAQ ReadoutUnit (Docker)
+       │
+       ├──► Data Files (if saving enabled)
+       │
+       ▼
+Spy Socket (port 6060)
+       │
+       ▼
+ReadoutUnitSpy (spy.py)
+       │
+       ▼
+SpyManager (spy_manager.py)
+       │
+       ├─ Apply rebin factor
+       └─ Convert to JSON (TBufferJSON)
+       │
+       ▼
+GET /histograms/&lt;board&gt;/&lt;channel&gt;
+       │
+       ▼
+Frontend Visualization
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="adding-new-features">
+<h2>Adding New Features<a class="headerlink" href="#adding-new-features" title="Link to this heading"></a></h2>
+<section id="adding-a-new-api-endpoint">
+<h3>Adding a New API Endpoint<a class="headerlink" href="#adding-a-new-api-endpoint" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Create or modify route file</strong> in <code class="docutils literal notranslate"><span class="pre">server/app/routes/</span></code></p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">flask</span><span class="w"> </span><span class="kn">import</span> <span class="n">Blueprint</span><span class="p">,</span> <span class="n">jsonify</span><span class="p">,</span> <span class="n">request</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">app.utils.jwt_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">jwt_required_custom</span>
+
+<span class="c1"># If new file, create blueprint</span>
+<span class="n">my_bp</span> <span class="o">=</span> <span class="n">Blueprint</span><span class="p">(</span><span class="s1">&#39;my_feature&#39;</span><span class="p">,</span> <span class="vm">__name__</span><span class="p">)</span>
+
+<span class="nd">@my_bp</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s1">&#39;/my_feature/action&#39;</span><span class="p">,</span> <span class="n">methods</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;POST&#39;</span><span class="p">])</span>
+<span class="nd">@jwt_required_custom</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">my_action</span><span class="p">():</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">request</span><span class="o">.</span><span class="n">get_json</span><span class="p">()</span>
+    <span class="c1"># Implementation</span>
+    <span class="k">return</span> <span class="n">jsonify</span><span class="p">({</span><span class="s1">&#39;status&#39;</span><span class="p">:</span> <span class="s1">&#39;ok&#39;</span><span class="p">,</span> <span class="s1">&#39;result&#39;</span><span class="p">:</span> <span class="n">result</span><span class="p">})</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Register blueprint</strong> in <code class="docutils literal notranslate"><span class="pre">server/app/__init__.py</span></code></p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">app.routes.my_feature</span><span class="w"> </span><span class="kn">import</span> <span class="n">my_bp</span>
+<span class="n">app</span><span class="o">.</span><span class="n">register_blueprint</span><span class="p">(</span><span class="n">my_bp</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Add frontend API call</strong> in <code class="docutils literal notranslate"><span class="pre">frontend/src/lib/api.ts</span></code></p></li>
+</ol>
+<div class="highlight-typescript notranslate"><div class="highlight"><pre><span></span><span class="k">export</span><span class="w"> </span><span class="kd">const</span><span class="w"> </span><span class="nx">myAction</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">(</span><span class="nx">params</span><span class="o">:</span><span class="w"> </span><span class="kt">MyParams</span><span class="p">)</span><span class="o">:</span><span class="w"> </span><span class="nb">Promise</span><span class="o">&lt;</span><span class="nx">MyResponse</span><span class="o">&gt;</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">response</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="nx">api</span><span class="p">.</span><span class="nx">post</span><span class="p">(</span><span class="s1">&#39;/my_feature/action&#39;</span><span class="p">,</span><span class="w"> </span><span class="nx">params</span><span class="p">);</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="nx">response</span><span class="p">.</span><span class="nx">data</span><span class="p">;</span>
+<span class="p">};</span>
+</pre></div>
+</div>
+</section>
+<section id="adding-a-new-service-manager">
+<h3>Adding a New Service Manager<a class="headerlink" href="#adding-a-new-service-manager" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Create service file</strong> in <code class="docutils literal notranslate"><span class="pre">server/app/services/</span></code></p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">MyManager</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_config</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_config</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_load_config</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">config_path</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="s1">&#39;conf&#39;</span><span class="p">,</span> <span class="s1">&#39;my_config.json&#39;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">config_path</span><span class="p">):</span>
+            <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">config_path</span><span class="p">,</span> <span class="s1">&#39;r&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">f</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">{}</span>
+
+<span class="n">_my_manager</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get_my_manager</span><span class="p">():</span>
+    <span class="k">global</span> <span class="n">_my_manager</span>
+    <span class="k">if</span> <span class="n">_my_manager</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">_my_manager</span> <span class="o">=</span> <span class="n">MyManager</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">_my_manager</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Use in routes</strong></p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">app.services.my_manager</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_my_manager</span>
+
+<span class="nd">@my_bp</span><span class="o">.</span><span class="n">route</span><span class="p">(</span><span class="s1">&#39;/my_feature/data&#39;</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_data</span><span class="p">():</span>
+    <span class="n">manager</span> <span class="o">=</span> <span class="n">get_my_manager</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">jsonify</span><span class="p">(</span><span class="n">manager</span><span class="o">.</span><span class="n">get_data</span><span class="p">())</span>
+</pre></div>
+</div>
+</section>
+<section id="adding-a-new-database-model">
+<h3>Adding a New Database Model<a class="headerlink" href="#adding-a-new-database-model" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Create model</strong> in <code class="docutils literal notranslate"><span class="pre">server/app/models/</span></code></p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">app</span><span class="w"> </span><span class="kn">import</span> <span class="n">db</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyModel</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Model</span><span class="p">):</span>
+    <span class="nb">id</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Column</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">Integer</span><span class="p">,</span> <span class="n">primary_key</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">name</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Column</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">String</span><span class="p">(</span><span class="mi">64</span><span class="p">),</span> <span class="n">index</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">created_at</span> <span class="o">=</span> <span class="n">db</span><span class="o">.</span><span class="n">Column</span><span class="p">(</span><span class="n">db</span><span class="o">.</span><span class="n">DateTime</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="n">datetime</span><span class="o">.</span><span class="n">utcnow</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Import in models/<strong>init</strong>.py</strong></p></li>
+<li><p><strong>Generate migration</strong></p></li>
+</ol>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+flask<span class="w"> </span>db<span class="w"> </span>migrate<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Add MyModel&quot;</span>
+flask<span class="w"> </span>db<span class="w"> </span>upgrade
+</pre></div>
+</div>
+</section>
+<section id="adding-a-new-hardware-interface">
+<h3>Adding a New Hardware Interface<a class="headerlink" href="#adding-a-new-hardware-interface" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Create utility class</strong> in <code class="docutils literal notranslate"><span class="pre">server/app/utils/</span></code></p></li>
+</ol>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">class</span><span class="w"> </span><span class="nc">MyDeviceController</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connected</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_settings</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_load_settings</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">address</span><span class="p">):</span>
+        <span class="c1"># Connection logic</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connected</span> <span class="o">=</span> <span class="kc">True</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">disconnect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connected</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">read_data</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">connected</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Not connected&quot;</span><span class="p">)</span>
+        <span class="c1"># Read logic</span>
+        <span class="k">return</span> <span class="n">data</span>
+</pre></div>
+</div>
+<ol class="arabic simple" start="2">
+<li><p><strong>Create routes</strong> for the device</p></li>
+<li><p><strong>Add cleanup</strong> to <code class="docutils literal notranslate"><span class="pre">main.py</span></code> shutdown handler</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="design-patterns">
+<h2>Design Patterns<a class="headerlink" href="#design-patterns" title="Link to this heading"></a></h2>
+<section id="singleton-pattern">
+<h3>Singleton Pattern<a class="headerlink" href="#singleton-pattern" title="Link to this heading"></a></h3>
+<p>Services (DAQManager, SpyManager, etc.) use singletons to ensure single resource connections.</p>
+</section>
+<section id="persistent-connection-pattern">
+<h3>Persistent Connection Pattern<a class="headerlink" href="#persistent-connection-pattern" title="Link to this heading"></a></h3>
+<p>DigitizerContainer maintains open board connections to reduce latency.</p>
+</section>
+<section id="state-machine-pattern">
+<h3>State Machine Pattern<a class="headerlink" href="#state-machine-pattern" title="Link to this heading"></a></h3>
+<p>DAQ uses running/stopped states; XDAQ uses Configure/Enable/Disable transitions.</p>
+</section>
+<section id="observer-pattern">
+<h3>Observer Pattern<a class="headerlink" href="#observer-pattern" title="Link to this heading"></a></h3>
+<p>Board monitoring thread watches connection health; tuning thread updates session progress.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="error-handling">
+<h2>Error Handling<a class="headerlink" href="#error-handling" title="Link to this heading"></a></h2>
+<section id="connection-retry-logic">
+<h3>Connection Retry Logic<a class="headerlink" href="#connection-retry-logic" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Digitizer: 3 attempts with 1-second delays</p></li>
+<li><p>TetrAMM: Socket timeout protection</p></li>
+<li><p>Graphite: HTTP error handling</p></li>
+</ul>
+</section>
+<section id="resource-cleanup">
+<h3>Resource Cleanup<a class="headerlink" href="#resource-cleanup" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p>Shutdown handler closes all resources</p></li>
+<li><p>Thread-safe stop events</p></li>
+<li><p>Database transactions properly committed/rolled back</p></li>
+</ul>
+</section>
+<section id="test-mode">
+<h3>Test Mode<a class="headerlink" href="#test-mode" title="Link to this heading"></a></h3>
+<p>Use <code class="docutils literal notranslate"><span class="pre">TEST_FLAG=True</span></code> environment variable to run without hardware:</p>
+<ul class="simple">
+<li><p>Creates dummy boards</p></li>
+<li><p>Returns mock histogram data</p></li>
+<li><p>All database operations remain functional</p></li>
+</ul>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="details.html" class="btn btn-neutral float-left" title="LunaDAQ Details" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="troubleshooting.html" class="btn btn-neutral float-right" title="Troubleshooting Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

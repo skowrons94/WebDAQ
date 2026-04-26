@@ -1,0 +1,1106 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Troubleshooting Guide &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Server Architecture Reference" href="server-architecture.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">LUNA Experiment Data Acquisition System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">LunaDAQ Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Troubleshooting Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#server-issues">Server Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#server-won-t-start">Server Won’t Start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#server-crashes-during-operation">Server Crashes During Operation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#api-requests-return-401-unauthorized">API Requests Return 401 Unauthorized</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#frontend-issues">Frontend Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#frontend-won-t-build">Frontend Won’t Build</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#frontend-won-t-connect-to-server">Frontend Won’t Connect to Server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#page-shows-blank-or-errors">Page Shows Blank or Errors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#login-fails">Login Fails</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#board-connection-issues">Board Connection Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#board-not-detected">Board Not Detected</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#board-connection-unstable">Board Connection Unstable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#wrong-board-parameters">Wrong Board Parameters</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#data-acquisition-issues">Data Acquisition Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#acquisition-won-t-start">Acquisition Won’t Start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#acquisition-starts-but-no-data">Acquisition Starts but No Data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#acquisition-stops-unexpectedly">Acquisition Stops Unexpectedly</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#low-count-rates">Low Count Rates</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#histogram-and-visualization-issues">Histogram and Visualization Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#histograms-not-updating">Histograms Not Updating</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#histogram-shows-wrong-data">Histogram Shows Wrong Data</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#waveforms-not-visible">Waveforms Not Visible</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#current-monitor-issues">Current Monitor Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#tetramm-not-connecting">TetrAMM Not Connecting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#rbd9103-not-connecting">RBD9103 Not Connecting</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#current-readings-incorrect">Current Readings Incorrect</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#database-issues">Database Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#migration-errors">Migration Errors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#database-corruption">Database Corruption</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#run-metadata-not-saving">Run Metadata Not Saving</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#docker-and-xdaq-issues">Docker and XDAQ Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#docker-container-won-t-start">Docker Container Won’t Start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#xdaq-state-machine-errors">XDAQ State Machine Errors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#spy-server-not-responding">Spy Server Not Responding</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#network-and-connectivity-issues">Network and Connectivity Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#api-timeout-errors">API Timeout Errors</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#graphite-connection-failed">Graphite Connection Failed</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#performance-issues">Performance Issues</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#slow-histogram-updates">Slow Histogram Updates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#high-memory-usage">High Memory Usage</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#disk-space-running-low">Disk Space Running Low</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#diagnostic-commands">Diagnostic Commands</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#server-health-check">Server Health Check</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#system-status">System Status</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#log-analysis">Log Analysis</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#database-queries">Database Queries</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#getting-help">Getting Help</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Troubleshooting Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/troubleshooting.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="troubleshooting-guide">
+<h1>Troubleshooting Guide<a class="headerlink" href="#troubleshooting-guide" title="Link to this heading"></a></h1>
+<p>This guide helps diagnose and resolve common issues with the LunaDAQ system. Issues are organized by category for quick reference.</p>
+<hr class="docutils" />
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#server-issues"><span class="xref myst">Server Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#frontend-issues"><span class="xref myst">Frontend Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#board-connection-issues"><span class="xref myst">Board Connection Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#data-acquisition-issues"><span class="xref myst">Data Acquisition Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#histogram-and-visualization-issues"><span class="xref myst">Histogram and Visualization Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#current-monitor-issues"><span class="xref myst">Current Monitor Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#database-issues"><span class="xref myst">Database Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#docker-and-xdaq-issues"><span class="xref myst">Docker and XDAQ Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#network-and-connectivity-issues"><span class="xref myst">Network and Connectivity Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#performance-issues"><span class="xref myst">Performance Issues</span></a></p></li>
+<li><p><a class="reference internal" href="#diagnostic-commands"><span class="xref myst">Diagnostic Commands</span></a></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="server-issues">
+<h2>Server Issues<a class="headerlink" href="#server-issues" title="Link to this heading"></a></h2>
+<section id="server-won-t-start">
+<h3>Server Won’t Start<a class="headerlink" href="#server-won-t-start" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">python3</span> <span class="pre">main.py</span></code> exits immediately with an error</p></li>
+<li><p>Server crashes on startup</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Cause</p></th>
+<th class="head"><p>Solution</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Port 5001 already in use</p></td>
+<td><p>Kill the existing process: <code class="docutils literal notranslate"><span class="pre">lsof</span> <span class="pre">-ti:5001</span> <span class="pre">|</span> <span class="pre">xargs</span> <span class="pre">kill</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Missing dependencies</p></td>
+<td><p>Reinstall: <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">-r</span> <span class="pre">requirements.txt</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Database not initialized</p></td>
+<td><p>Run: <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">db</span> <span class="pre">init</span> <span class="pre">&amp;&amp;</span> <span class="pre">flask</span> <span class="pre">db</span> <span class="pre">migrate</span> <span class="pre">&amp;&amp;</span> <span class="pre">flask</span> <span class="pre">db</span> <span class="pre">upgrade</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>CAEN libraries missing</p></td>
+<td><p>Install CAENVMElib, CAENComm, CAENDigitizer (see Installation Guide)</p></td>
+</tr>
+<tr class="row-even"><td><p>Python version mismatch</p></td>
+<td><p>Ensure Python 3.7+ is installed</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Run in test mode without hardware:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">TEST_FLAG</span><span class="o">=</span>True<span class="w"> </span>python3<span class="w"> </span>main.py
+</pre></div>
+</div>
+</section>
+<section id="server-crashes-during-operation">
+<h3>Server Crashes During Operation<a class="headerlink" href="#server-crashes-during-operation" title="Link to this heading"></a></h3>
+<p><strong>Check the logs for error messages:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># View recent output</span>
+tail<span class="w"> </span>-100<span class="w"> </span>server.log
+
+<span class="c1"># Monitor live output</span>
+python3<span class="w"> </span>main.py<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tee<span class="w"> </span>server.log
+</pre></div>
+</div>
+<p><strong>Common causes:</strong></p>
+<ul class="simple">
+<li><p>Board disconnection during acquisition</p></li>
+<li><p>Out of memory (check with <code class="docutils literal notranslate"><span class="pre">free</span> <span class="pre">-h</span></code>)</p></li>
+<li><p>Disk full (check with <code class="docutils literal notranslate"><span class="pre">df</span> <span class="pre">-h</span></code>)</p></li>
+</ul>
+</section>
+<section id="api-requests-return-401-unauthorized">
+<h3>API Requests Return 401 Unauthorized<a class="headerlink" href="#api-requests-return-401-unauthorized" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Frontend shows “Unauthorized” errors</p></li>
+<li><p>API calls fail with 401 status</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Token expired</strong>: Log out and log back in</p></li>
+<li><p><strong>Invalid token</strong>: Clear browser cookies and local storage, then log in again</p></li>
+<li><p><strong>Clock synchronization</strong>: Ensure server and client clocks are synchronized</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="frontend-issues">
+<h2>Frontend Issues<a class="headerlink" href="#frontend-issues" title="Link to this heading"></a></h2>
+<section id="frontend-won-t-build">
+<h3>Frontend Won’t Build<a class="headerlink" href="#frontend-won-t-build" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">npm</span> <span class="pre">run</span> <span class="pre">build</span></code> fails with errors</p></li>
+<li><p>TypeScript compilation errors</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Clear cache and reinstall</span>
+<span class="nb">cd</span><span class="w"> </span>frontend
+rm<span class="w"> </span>-rf<span class="w"> </span>node_modules<span class="w"> </span>.next
+npm<span class="w"> </span>cache<span class="w"> </span>clean<span class="w"> </span>--force
+npm<span class="w"> </span>install
+npm<span class="w"> </span>run<span class="w"> </span>build
+</pre></div>
+</div>
+</section>
+<section id="frontend-won-t-connect-to-server">
+<h3>Frontend Won’t Connect to Server<a class="headerlink" href="#frontend-won-t-connect-to-server" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>“Network Error” messages</p></li>
+<li><p>Data not loading</p></li>
+<li><p>Spinners never stop</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check .env configuration:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cat<span class="w"> </span>frontend/.env
+<span class="c1"># Should contain:</span>
+<span class="c1"># NEXT_PUBLIC_API_URL=http://127.0.0.1:5001</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Verify server is running:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/experiment/get_run_number
+</pre></div>
+</div>
+</li>
+<li><p><strong>Rebuild after .env changes:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>npm<span class="w"> </span>run<span class="w"> </span>build
+npm<span class="w"> </span>run<span class="w"> </span>start
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check CORS settings</strong> if server and frontend are on different domains</p></li>
+</ol>
+</section>
+<section id="page-shows-blank-or-errors">
+<h3>Page Shows Blank or Errors<a class="headerlink" href="#page-shows-blank-or-errors" title="Link to this heading"></a></h3>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Clear browser cache</strong>: <code class="docutils literal notranslate"><span class="pre">Ctrl+Shift+R</span></code> or <code class="docutils literal notranslate"><span class="pre">Cmd+Shift+R</span></code></p></li>
+<li><p><strong>Check browser console</strong> for JavaScript errors (F12 → Console)</p></li>
+<li><p><strong>Try a different browser</strong> to rule out browser-specific issues</p></li>
+<li><p><strong>Check for ad blockers</strong> that might interfere with API calls</p></li>
+</ol>
+</section>
+<section id="login-fails">
+<h3>Login Fails<a class="headerlink" href="#login-fails" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Correct credentials rejected</p></li>
+<li><p>Login button doesn’t respond</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Verify credentials</strong> by checking directly:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:5001/login<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;username&quot;:&quot;your_user&quot;,&quot;password&quot;:&quot;your_pass&quot;}&#39;</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Reset password</strong> by creating a new user:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+flask<span class="w"> </span>--app<span class="w"> </span>server<span class="w"> </span>create-user
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="board-connection-issues">
+<h2>Board Connection Issues<a class="headerlink" href="#board-connection-issues" title="Link to this heading"></a></h2>
+<section id="board-not-detected">
+<h3>Board Not Detected<a class="headerlink" href="#board-not-detected" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>“Failed to connect” error when adding board</p></li>
+<li><p>Board appears disconnected in status</p></li>
+</ul>
+<p><strong>Diagnostic steps:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check physical connection:</strong></p>
+<ul class="simple">
+<li><p>USB cable properly connected</p></li>
+<li><p>Board powered on</p></li>
+<li><p>Optical fiber (if applicable) properly connected</p></li>
+</ul>
+</li>
+<li><p><strong>Verify CAEN libraries:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check if libraries are installed</span>
+ldconfig<span class="w"> </span>-p<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span>caen
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check USB permissions (Linux):</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Add user to dialout group</span>
+sudo<span class="w"> </span>usermod<span class="w"> </span>-a<span class="w"> </span>-G<span class="w"> </span>dialout<span class="w"> </span><span class="nv">$USER</span>
+<span class="c1"># Log out and back in for changes to take effect</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Test with CAEN tools:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># If available, use CAEN&#39;s diagnostic tools</span>
+CAENDigitizerDemo
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="board-connection-unstable">
+<h3>Board Connection Unstable<a class="headerlink" href="#board-connection-unstable" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Board connects then disconnects</p></li>
+<li><p>Intermittent communication errors</p></li>
+<li><p>“Board not responding” during acquisition</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Cause</p></th>
+<th class="head"><p>Solution</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Loose cable</p></td>
+<td><p>Reseat USB/optical cable</p></td>
+</tr>
+<tr class="row-odd"><td><p>Power issues</p></td>
+<td><p>Check board power supply</p></td>
+</tr>
+<tr class="row-even"><td><p>USB hub problems</p></td>
+<td><p>Connect directly to computer</p></td>
+</tr>
+<tr class="row-odd"><td><p>Driver issues</p></td>
+<td><p>Reinstall CAEN drivers</p></td>
+</tr>
+<tr class="row-even"><td><p>Firmware issues</p></td>
+<td><p>Update board firmware</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Refresh board connections:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:5001/experiment/refresh_board_connections
+</pre></div>
+</div>
+</section>
+<section id="wrong-board-parameters">
+<h3>Wrong Board Parameters<a class="headerlink" href="#wrong-board-parameters" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Board connects but wrong model shown</p></li>
+<li><p>Wrong number of channels displayed</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Check link type</strong> (0=USB, 1=Optical, 5=A4818)</p></li>
+<li><p><strong>Verify VME address</strong> for VME-based systems</p></li>
+<li><p><strong>Remove and re-add the board</strong> with correct parameters</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="data-acquisition-issues">
+<h2>Data Acquisition Issues<a class="headerlink" href="#data-acquisition-issues" title="Link to this heading"></a></h2>
+<section id="acquisition-won-t-start">
+<h3>Acquisition Won’t Start<a class="headerlink" href="#acquisition-won-t-start" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Start button does nothing</p></li>
+<li><p>Error when clicking Start</p></li>
+</ul>
+<p><strong>Check list:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Check</p></th>
+<th class="head"><p>Command/Action</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Boards connected</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">curl</span> <span class="pre">http://localhost:5001/digitizer/connectivity</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Docker running</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">ps</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>XDAQ container exists</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">docker</span> <span class="pre">ps</span> <span class="pre">-a</span> <span class="pre">|</span> <span class="pre">grep</span> <span class="pre">xdaq</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Run directory writable</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">touch</span> <span class="pre">data/test</span> <span class="pre">&amp;&amp;</span> <span class="pre">rm</span> <span class="pre">data/test</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Common solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Reset XDAQ:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:5001/experiment/xdaq/reset
+</pre></div>
+</div>
+</li>
+<li><p><strong>Restart Docker container:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>restart<span class="w"> </span>xdaq_container
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check server logs</strong> for specific error messages</p></li>
+</ol>
+</section>
+<section id="acquisition-starts-but-no-data">
+<h3>Acquisition Starts but No Data<a class="headerlink" href="#acquisition-starts-but-no-data" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Run shows as “Running” but no counts</p></li>
+<li><p>Histograms stay at zero</p></li>
+<li><p>No data files created</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check spy server status:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/spy/status
+</pre></div>
+</div>
+</li>
+<li><p><strong>Verify trigger settings:</strong></p>
+<ul class="simple">
+<li><p>Trigger threshold may be too high</p></li>
+<li><p>Channel may be disabled</p></li>
+<li><p>Input polarity may be wrong</p></li>
+</ul>
+</li>
+<li><p><strong>Check signal source:</strong></p>
+<ul class="simple">
+<li><p>Verify detector is providing signals</p></li>
+<li><p>Check signal amplitude on oscilloscope</p></li>
+</ul>
+</li>
+<li><p><strong>Verify channel enabled:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/digitizer/channel/0/0
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="acquisition-stops-unexpectedly">
+<h3>Acquisition Stops Unexpectedly<a class="headerlink" href="#acquisition-stops-unexpectedly" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Run stops without user action</p></li>
+<li><p>Error message about XDAQ</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check disk space:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>df<span class="w"> </span>-h<span class="w"> </span>/path/to/data
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check file size limits:</strong></p>
+<ul class="simple">
+<li><p>If limits are enabled, acquisition may stop when limit is reached</p></li>
+</ul>
+</li>
+<li><p><strong>Check board connectivity:</strong></p>
+<ul class="simple">
+<li><p>Board may have disconnected</p></li>
+<li><p>Check server logs for error messages</p></li>
+</ul>
+</li>
+<li><p><strong>Monitor XDAQ status:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/experiment/xdaq/file_bandwidth
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="low-count-rates">
+<h3>Low Count Rates<a class="headerlink" href="#low-count-rates" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Fewer counts than expected</p></li>
+<li><p>High dead time</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check trigger threshold:</strong> May be set too high</p></li>
+<li><p><strong>Check pile-up rejection:</strong> May be rejecting good events</p></li>
+<li><p><strong>Check dead time:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/stats/board_rates_dt
+</pre></div>
+</div>
+</li>
+<li><p><strong>Reduce input rate</strong> if pile-up is excessive</p></li>
+<li><p><strong>Adjust trapezoid settings</strong> for faster processing</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="histogram-and-visualization-issues">
+<h2>Histogram and Visualization Issues<a class="headerlink" href="#histogram-and-visualization-issues" title="Link to this heading"></a></h2>
+<section id="histograms-not-updating">
+<h3>Histograms Not Updating<a class="headerlink" href="#histograms-not-updating" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Histograms frozen during acquisition</p></li>
+<li><p>Old data displayed</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check spy server:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/spy/status
+</pre></div>
+</div>
+</li>
+<li><p><strong>Verify acquisition is running:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/experiment/get_run_status
+</pre></div>
+</div>
+</li>
+<li><p><strong>Restart spy server</strong> by stopping and starting acquisition</p></li>
+<li><p><strong>Clear browser cache</strong> and refresh page</p></li>
+</ol>
+</section>
+<section id="histogram-shows-wrong-data">
+<h3>Histogram Shows Wrong Data<a class="headerlink" href="#histogram-shows-wrong-data" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Wrong channel displayed</p></li>
+<li><p>Data from previous run</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Clear histogram buffers</strong> by restarting acquisition</p></li>
+<li><p><strong>Verify board/channel selection</strong> in the interface</p></li>
+<li><p><strong>Check histogram type</strong> (energy vs. charge)</p></li>
+</ol>
+</section>
+<section id="waveforms-not-visible">
+<h3>Waveforms Not Visible<a class="headerlink" href="#waveforms-not-visible" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Waveform tab shows no data</p></li>
+<li><p>Waveforms all zero</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Enable waveform recording:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:5001/waveforms/activate
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check waveform status:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/waveforms/status
+</pre></div>
+</div>
+</li>
+<li><p><strong>Verify register 0x8000 bit 16 is set:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/digitizer/0/registers
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="current-monitor-issues">
+<h2>Current Monitor Issues<a class="headerlink" href="#current-monitor-issues" title="Link to this heading"></a></h2>
+<section id="tetramm-not-connecting">
+<h3>TetrAMM Not Connecting<a class="headerlink" href="#tetramm-not-connecting" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>“Connection failed” error</p></li>
+<li><p>Current reads as zero</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check network connectivity:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ping<span class="w"> </span><span class="m">169</span>.254.145.10<span class="w">  </span><span class="c1"># Default TetrAMM IP</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Verify IP and port settings:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/current/get_ip
+curl<span class="w"> </span>http://localhost:5001/current/get_port
+</pre></div>
+</div>
+</li>
+<li><p><strong>Try reconnecting:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/current/connect
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check firewall rules</strong> for port 10001</p></li>
+</ol>
+</section>
+<section id="rbd9103-not-connecting">
+<h3>RBD9103 Not Connecting<a class="headerlink" href="#rbd9103-not-connecting" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Serial port errors</p></li>
+<li><p>Device not found</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check serial port:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ls<span class="w"> </span>-la<span class="w"> </span>/dev/ttyUSB*
+ls<span class="w"> </span>-la<span class="w"> </span>/dev/ttyACM*
+</pre></div>
+</div>
+</li>
+<li><p><strong>Verify permissions:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>usermod<span class="w"> </span>-a<span class="w"> </span>-G<span class="w"> </span>dialout<span class="w"> </span><span class="nv">$USER</span>
+<span class="c1"># Log out and back in</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check cable connection</strong> and device power</p></li>
+</ol>
+</section>
+<section id="current-readings-incorrect">
+<h3>Current Readings Incorrect<a class="headerlink" href="#current-readings-incorrect" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Unexpected current values</p></li>
+<li><p>Noisy readings</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check range setting</strong> (may be set too high/low)</p></li>
+<li><p><strong>Verify channel selection</strong></p></li>
+<li><p><strong>Check for grounding issues</strong> in the measurement setup</p></li>
+<li><p><strong>Reset device:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:5001/current/reset
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="database-issues">
+<h2>Database Issues<a class="headerlink" href="#database-issues" title="Link to this heading"></a></h2>
+<section id="migration-errors">
+<h3>Migration Errors<a class="headerlink" href="#migration-errors" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">db</span> <span class="pre">migrate</span></code> fails</p></li>
+<li><p>“Table already exists” errors</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+
+<span class="c1"># Option 1: Reset migrations (loses history)</span>
+rm<span class="w"> </span>-rf<span class="w"> </span>migrations
+flask<span class="w"> </span>db<span class="w"> </span>init
+flask<span class="w"> </span>db<span class="w"> </span>migrate<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Fresh start&quot;</span>
+flask<span class="w"> </span>db<span class="w"> </span>upgrade
+
+<span class="c1"># Option 2: Fix specific migration</span>
+flask<span class="w"> </span>db<span class="w"> </span>stamp<span class="w"> </span>head<span class="w">  </span><span class="c1"># Mark current state</span>
+flask<span class="w"> </span>db<span class="w"> </span>migrate<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Fix&quot;</span>
+flask<span class="w"> </span>db<span class="w"> </span>upgrade
+</pre></div>
+</div>
+</section>
+<section id="database-corruption">
+<h3>Database Corruption<a class="headerlink" href="#database-corruption" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>“Database is locked” errors</p></li>
+<li><p>Queries fail with unexpected errors</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check for stale locks:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>fuser<span class="w"> </span>server/app.db<span class="w">  </span><span class="c1"># Shows processes using the file</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Backup and repair:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>cp<span class="w"> </span>server/app.db<span class="w"> </span>server/app.db.backup
+sqlite3<span class="w"> </span>server/app.db<span class="w"> </span><span class="s2">&quot;PRAGMA integrity_check;&quot;</span>
+sqlite3<span class="w"> </span>server/app.db<span class="w"> </span><span class="s2">&quot;.recover&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sqlite3<span class="w"> </span>server/app_recovered.db
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="run-metadata-not-saving">
+<h3>Run Metadata Not Saving<a class="headerlink" href="#run-metadata-not-saving" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Runs not appearing in logbook</p></li>
+<li><p>Metadata lost after stop</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check server logs</strong> for database errors</p></li>
+<li><p><strong>Verify database file is writable:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ls<span class="w"> </span>-la<span class="w"> </span>server/app.db
+touch<span class="w"> </span>server/app.db
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check disk space</strong></p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="docker-and-xdaq-issues">
+<h2>Docker and XDAQ Issues<a class="headerlink" href="#docker-and-xdaq-issues" title="Link to this heading"></a></h2>
+<section id="docker-container-won-t-start">
+<h3>Docker Container Won’t Start<a class="headerlink" href="#docker-container-won-t-start" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>XDAQ initialization fails</p></li>
+<li><p>Docker errors in logs</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check Docker status:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>systemctl<span class="w"> </span>status<span class="w"> </span>docker
+docker<span class="w"> </span>ps<span class="w"> </span>-a
+</pre></div>
+</div>
+</li>
+<li><p><strong>Pull latest image:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>pull<span class="w"> </span>skowrons/xdaq:latest
+</pre></div>
+</div>
+</li>
+<li><p><strong>Remove old container:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>stop<span class="w"> </span>xdaq_container
+docker<span class="w"> </span>rm<span class="w"> </span>xdaq_container
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check available resources:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>system<span class="w"> </span>df
+docker<span class="w"> </span>system<span class="w"> </span>prune<span class="w">  </span><span class="c1"># Careful: removes unused data</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="xdaq-state-machine-errors">
+<h3>XDAQ State Machine Errors<a class="headerlink" href="#xdaq-state-machine-errors" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>“Configure failed” errors</p></li>
+<li><p>“Enable failed” errors</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Reset XDAQ:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:5001/experiment/xdaq/reset
+</pre></div>
+</div>
+</li>
+<li><p><strong>Restart container:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>restart<span class="w"> </span>xdaq_container
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check container logs:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>docker<span class="w"> </span>logs<span class="w"> </span>xdaq_container
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+<section id="spy-server-not-responding">
+<h3>Spy Server Not Responding<a class="headerlink" href="#spy-server-not-responding" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Port 6060 connection refused</p></li>
+<li><p>Histograms not available</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check if spy server is running:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>netstat<span class="w"> </span>-an<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="m">6060</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Verify XDAQ is in correct state:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/experiment/get_run_status
+</pre></div>
+</div>
+</li>
+<li><p><strong>Check LunaSpy installation:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>which<span class="w"> </span>LunaSpy
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="network-and-connectivity-issues">
+<h2>Network and Connectivity Issues<a class="headerlink" href="#network-and-connectivity-issues" title="Link to this heading"></a></h2>
+<section id="api-timeout-errors">
+<h3>API Timeout Errors<a class="headerlink" href="#api-timeout-errors" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Requests hang then fail</p></li>
+<li><p>“Timeout” error messages</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check server responsiveness:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-w<span class="w"> </span><span class="s2">&quot;@curl-format.txt&quot;</span><span class="w"> </span>http://localhost:5001/experiment/get_run_number
+</pre></div>
+</div>
+</li>
+<li><p><strong>Reduce request frequency</strong> if overloading server</p></li>
+<li><p><strong>Check network connectivity</strong> between frontend and server</p></li>
+<li><p><strong>Increase timeout</strong> in frontend configuration</p></li>
+</ol>
+</section>
+<section id="graphite-connection-failed">
+<h3>Graphite Connection Failed<a class="headerlink" href="#graphite-connection-failed" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Metrics not loading</p></li>
+<li><p>“Cannot connect to Graphite” errors</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Verify Graphite address:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>http://localhost:5001/stats/graphite_config
+</pre></div>
+</div>
+</li>
+<li><p><strong>Test Graphite directly:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span><span class="s2">&quot;http://graphite_host/render?target=*&amp;format=json&quot;</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Update configuration:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://localhost:5001/stats/graphite_config<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;host&quot;:&quot;correct_host&quot;,&quot;port&quot;:80}&#39;</span>
+</pre></div>
+</div>
+</li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="performance-issues">
+<h2>Performance Issues<a class="headerlink" href="#performance-issues" title="Link to this heading"></a></h2>
+<section id="slow-histogram-updates">
+<h3>Slow Histogram Updates<a class="headerlink" href="#slow-histogram-updates" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Long delay between data and display</p></li>
+<li><p>UI feels sluggish</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Reduce rebin factor</strong> for faster processing</p></li>
+<li><p><strong>Close unused browser tabs</strong></p></li>
+<li><p><strong>Check server CPU usage:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>top<span class="w"> </span>-p<span class="w"> </span><span class="k">$(</span>pgrep<span class="w"> </span>-f<span class="w"> </span>main.py<span class="k">)</span>
+</pre></div>
+</div>
+</li>
+<li><p><strong>Reduce polling frequency</strong> in frontend settings</p></li>
+</ol>
+</section>
+<section id="high-memory-usage">
+<h3>High Memory Usage<a class="headerlink" href="#high-memory-usage" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Server consumes excessive memory</p></li>
+<li><p>System becomes slow</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Monitor memory:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>ps<span class="w"> </span>aux<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>main.py
+free<span class="w"> </span>-h
+</pre></div>
+</div>
+</li>
+<li><p><strong>Reduce histogram buffer sizes</strong></p></li>
+<li><p><strong>Restart server</strong> to clear accumulated buffers</p></li>
+<li><p><strong>Check for memory leaks</strong> in logs</p></li>
+</ol>
+</section>
+<section id="disk-space-running-low">
+<h3>Disk Space Running Low<a class="headerlink" href="#disk-space-running-low" title="Link to this heading"></a></h3>
+<p><strong>Symptoms:</strong></p>
+<ul class="simple">
+<li><p>Data not saving</p></li>
+<li><p>“No space left” errors</p></li>
+</ul>
+<p><strong>Solutions:</strong></p>
+<ol class="arabic">
+<li><p><strong>Check disk usage:</strong></p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>df<span class="w"> </span>-h
+du<span class="w"> </span>-sh<span class="w"> </span>data/*
+</pre></div>
+</div>
+</li>
+<li><p><strong>Archive old runs</strong> to external storage</p></li>
+<li><p><strong>Enable file size limits</strong> to prevent runaway data collection</p></li>
+<li><p><strong>Delete test/bad runs</strong> if no longer needed</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="diagnostic-commands">
+<h2>Diagnostic Commands<a class="headerlink" href="#diagnostic-commands" title="Link to this heading"></a></h2>
+<section id="server-health-check">
+<h3>Server Health Check<a class="headerlink" href="#server-health-check" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check if server is responding</span>
+curl<span class="w"> </span>http://localhost:5001/experiment/get_run_number
+
+<span class="c1"># Check run status</span>
+curl<span class="w"> </span>http://localhost:5001/experiment/get_run_status
+
+<span class="c1"># Check board connectivity</span>
+curl<span class="w"> </span>http://localhost:5001/digitizer/connectivity
+
+<span class="c1"># Check XDAQ bandwidth</span>
+curl<span class="w"> </span>http://localhost:5001/experiment/xdaq/file_bandwidth
+</pre></div>
+</div>
+</section>
+<section id="system-status">
+<h3>System Status<a class="headerlink" href="#system-status" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check all services</span>
+ps<span class="w"> </span>aux<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;main.py|docker|node&quot;</span>
+
+<span class="c1"># Check ports in use</span>
+netstat<span class="w"> </span>-tlnp<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s2">&quot;5001|3000|6060&quot;</span>
+
+<span class="c1"># Check disk space</span>
+df<span class="w"> </span>-h
+
+<span class="c1"># Check memory</span>
+free<span class="w"> </span>-h
+
+<span class="c1"># Check Docker</span>
+docker<span class="w"> </span>ps<span class="w"> </span>-a
+docker<span class="w"> </span>system<span class="w"> </span>df
+</pre></div>
+</div>
+</section>
+<section id="log-analysis">
+<h3>Log Analysis<a class="headerlink" href="#log-analysis" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># View server output</span>
+tail<span class="w"> </span>-f<span class="w"> </span>/path/to/server.log
+
+<span class="c1"># View Docker logs</span>
+docker<span class="w"> </span>logs<span class="w"> </span>-f<span class="w"> </span>xdaq_container
+
+<span class="c1"># Search for errors</span>
+grep<span class="w"> </span>-i<span class="w"> </span>error<span class="w"> </span>/path/to/server.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-50
+</pre></div>
+</div>
+</section>
+<section id="database-queries">
+<h3>Database Queries<a class="headerlink" href="#database-queries" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># Open database</span>
+sqlite3<span class="w"> </span>server/app.db
+
+<span class="c1"># Check tables</span>
+.tables
+
+<span class="c1"># View recent runs</span>
+SELECT<span class="w"> </span>run_number,<span class="w"> </span>start_time,<span class="w"> </span>end_time,<span class="w"> </span>target_name<span class="w"> </span>FROM<span class="w"> </span>run_metadata<span class="w"> </span>ORDER<span class="w"> </span>BY<span class="w"> </span>run_number<span class="w"> </span>DESC<span class="w"> </span>LIMIT<span class="w"> </span><span class="m">10</span><span class="p">;</span>
+
+<span class="c1"># Exit</span>
+.quit
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="getting-help">
+<h2>Getting Help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h2>
+<p>If you cannot resolve an issue:</p>
+<ol class="arabic simple">
+<li><p><strong>Collect diagnostic information:</strong></p>
+<ul class="simple">
+<li><p>Server logs</p></li>
+<li><p>Browser console output</p></li>
+<li><p>Docker logs</p></li>
+<li><p>System information (<code class="docutils literal notranslate"><span class="pre">uname</span> <span class="pre">-a</span></code>, <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">--version</span></code>)</p></li>
+</ul>
+</li>
+<li><p><strong>Check documentation:</strong></p>
+<ul class="simple">
+<li><p><a class="reference internal" href="installation.html"><span class="std std-doc">Installation Guide</span></a></p></li>
+<li><p><a class="reference internal" href="usage.html"><span class="std std-doc">User Guide</span></a></p></li>
+<li><p><a class="reference internal" href="server-architecture.html"><span class="std std-doc">Server Architecture</span></a></p></li>
+</ul>
+</li>
+<li><p><strong>Contact support:</strong></p>
+<ul class="simple">
+<li><p>Jakub Skowronski: jakub.skowronski&#64;pd.infn.it</p></li>
+<li><p>Alessandro Compagnucci: alessandro.compagnucci&#64;gssi.it</p></li>
+</ul>
+</li>
+<li><p><strong>Report bugs:</strong></p>
+<ul class="simple">
+<li><p>GitHub Issues: https://github.com/skowrons94/WebDAQ/issues</p></li>
+<li><p>Include logs, steps to reproduce, and system information</p></li>
+</ul>
+</li>
+</ol>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="server-architecture.html" class="btn btn-neutral float-left" title="Server Architecture Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

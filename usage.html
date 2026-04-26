@@ -1,0 +1,821 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Guide &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="LunaDAQ Details" href="details.html" />
+    <link rel="prev" title="LunaDAQ Installation Guide" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">LUNA Experiment Data Acquisition System</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">User Guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#table-of-contents">Table of Contents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#getting-started">Getting Started</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#logging-in">Logging In</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#first-time-setup">First-Time Setup</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#dashboard-overview">Dashboard Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#overview-tab">Overview Tab</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#card-view">Card View</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#experiment-controls-panel">Experiment Controls Panel</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#acquisition-parameters-panel">Acquisition Parameters Panel</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#stats-tab">Stats Tab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#histogram-tab">Histogram Tab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#waveform-tab">Waveform Tab</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#starting-and-stopping-runs">Starting and Stopping Runs</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#before-starting-a-run">Before Starting a Run</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#starting-acquisition">Starting Acquisition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#during-acquisition">During Acquisition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#stopping-acquisition">Stopping Acquisition</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#run-directory-structure">Run Directory Structure</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#monitoring-data">Monitoring Data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#real-time-histograms">Real-Time Histograms</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#setting-up-a-region-of-interest-roi">Setting Up a Region of Interest (ROI)</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#understanding-histogram-types">Understanding Histogram Types</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#waveform-monitoring">Waveform Monitoring</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#current-monitoring">Current Monitoring</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#managing-run-metadata">Managing Run Metadata</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#logbook-panel">Logbook Panel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#editing-run-information">Editing Run Information</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#quality-flags">Quality Flags</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-notes">Adding Notes</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#board-configuration">Board Configuration</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#adding-a-new-board">Adding a New Board</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#removing-a-board">Removing a Board</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#modifying-board-configuration">Modifying Board Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#energy-calibration">Energy Calibration</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#settings-and-customization">Settings and Customization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#appearance-settings">Appearance Settings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#boards-settings">Boards Settings</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#metrics-settings">Metrics Settings</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#quick-reference">Quick Reference</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#keyboard-shortcuts-frontend">Keyboard Shortcuts (Frontend)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#common-tasks">Common Tasks</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#status-indicators">Status Indicators</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#best-practices">Best Practices</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#before-long-runs">Before Long Runs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#data-management">Data Management</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#troubleshooting-during-runs">Troubleshooting During Runs</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">LunaDAQ Details</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">User Guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="user-guide">
+<h1>User Guide<a class="headerlink" href="#user-guide" title="Link to this heading"></a></h1>
+<p>This guide provides comprehensive instructions for operating the LunaDAQ system. It covers all major features from starting acquisitions to analyzing data.</p>
+<hr class="docutils" />
+<section id="table-of-contents">
+<h2>Table of Contents<a class="headerlink" href="#table-of-contents" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><a class="reference internal" href="#getting-started"><span class="xref myst">Getting Started</span></a></p></li>
+<li><p><a class="reference internal" href="#dashboard-overview"><span class="xref myst">Dashboard Overview</span></a></p></li>
+<li><p><a class="reference internal" href="#starting-and-stopping-runs"><span class="xref myst">Starting and Stopping Runs</span></a></p></li>
+<li><p><a class="reference internal" href="#monitoring-data"><span class="xref myst">Monitoring Data</span></a></p></li>
+<li><p><a class="reference internal" href="#managing-run-metadata"><span class="xref myst">Managing Run Metadata</span></a></p></li>
+<li><p><a class="reference internal" href="#board-configuration"><span class="xref myst">Board Configuration</span></a></p></li>
+<li><p><a class="reference internal" href="#settings-and-customization"><span class="xref myst">Settings and Customization</span></a></p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="getting-started">
+<h2>Getting Started<a class="headerlink" href="#getting-started" title="Link to this heading"></a></h2>
+<section id="logging-in">
+<h3>Logging In<a class="headerlink" href="#logging-in" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Open your web browser and navigate to the LunaDAQ frontend URL (typically <code class="docutils literal notranslate"><span class="pre">http://localhost:3000</span></code> or the configured server address).</p></li>
+<li><p>Enter your username and password on the login screen.</p></li>
+<li><p>Click <strong>Login</strong> to access the dashboard.</p></li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>User accounts must be created by an administrator using the command line:
+<code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">--app</span> <span class="pre">server</span> <span class="pre">create-user</span></code></p>
+</div>
+</section>
+<section id="first-time-setup">
+<h3>First-Time Setup<a class="headerlink" href="#first-time-setup" title="Link to this heading"></a></h3>
+<p>Before your first acquisition, ensure:</p>
+<ol class="arabic simple">
+<li><p><strong>Boards are configured</strong>: Go to <strong>Settings &gt; Boards</strong> to add your CAEN digitizer boards</p></li>
+<li><p><strong>Current monitor is connected</strong>: If using TetrAMM or RBD9103, configure in <strong>Settings</strong></p></li>
+<li><p><strong>Graphite metrics are set up</strong>: If monitoring slow-control data, add metric paths in <strong>Settings &gt; Metrics</strong></p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="dashboard-overview">
+<h2>Dashboard Overview<a class="headerlink" href="#dashboard-overview" title="Link to this heading"></a></h2>
+<p>The Dashboard is your central control center with multiple tabs for different functions.</p>
+<section id="overview-tab">
+<h3>Overview Tab<a class="headerlink" href="#overview-tab" title="Link to this heading"></a></h3>
+<p>The main tab displays a comprehensive summary of your acquisition status.</p>
+<section id="card-view">
+<h4>Card View<a class="headerlink" href="#card-view" title="Link to this heading"></a></h4>
+<p>The card view shows key information at a glance:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Card</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Run Status</strong></p></td>
+<td><p>Current run number and acquisition state (Running/Stopped)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Current Readings</strong></p></td>
+<td><p>Real-time current from TetrAMM/RBD9103 (if configured)</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Accumulated Charge</strong></p></td>
+<td><p>Charge accumulated in current run and total since last reset</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Data Bandwidth</strong></p></td>
+<td><p>File writing speed and output bandwidth</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>ROI Counts</strong></p></td>
+<td><p>Counts in user-defined Regions of Interest</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Metrics</strong></p></td>
+<td><p>Slow-control values from Graphite (configurable)</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="experiment-controls-panel">
+<h4>Experiment Controls Panel<a class="headerlink" href="#experiment-controls-panel" title="Link to this heading"></a></h4>
+<p>The control panel provides:</p>
+<ul class="simple">
+<li><p><strong>Start/Stop buttons</strong>: Begin or end data acquisition</p></li>
+<li><p><strong>Metadata input fields</strong>: Enter run information before starting</p></li>
+<li><p><strong>Current control</strong>: Monitor and control current acquisition settings</p></li>
+</ul>
+</section>
+<section id="acquisition-parameters-panel">
+<h4>Acquisition Parameters Panel<a class="headerlink" href="#acquisition-parameters-panel" title="Link to this heading"></a></h4>
+<p>Configure acquisition settings:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Run Number</strong></p></td>
+<td><p>Current run number (auto-increments by default)</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Auto-increment</strong></p></td>
+<td><p>Automatically increase run number after each run</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Save Data</strong></p></td>
+<td><p>Enable/disable writing data to disk</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Save Waveforms</strong></p></td>
+<td><p>Include waveform data in saved files</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Limit File Size</strong></p></td>
+<td><p>Enable maximum file size limits</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>File Size Limit</strong></p></td>
+<td><p>Maximum file size in MB</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="stats-tab">
+<h3>Stats Tab<a class="headerlink" href="#stats-tab" title="Link to this heading"></a></h3>
+<p>Displays time-series charts for slow-control metrics from the Graphite database.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This feature requires a configured Graphite server connection.</p>
+</div>
+</section>
+<section id="histogram-tab">
+<h3>Histogram Tab<a class="headerlink" href="#histogram-tab" title="Link to this heading"></a></h3>
+<p>View all energy spectra from each acquisition channel in real-time.</p>
+<p><strong>Key Features:</strong></p>
+<ul class="simple">
+<li><p><strong>Layout Toggle</strong>: Switch between grid view and list view using the toggle in the top right</p></li>
+<li><p><strong>Scale Selection</strong>: Choose linear or logarithmic scale for all histograms</p></li>
+<li><p><strong>ROI Configuration</strong>: Click the gear icon next to each channel to set up Regions of Interest</p></li>
+</ul>
+<p><strong>Interacting with Histograms:</strong></p>
+<ol class="arabic simple">
+<li><p><strong>Zoom</strong>: Click and drag to zoom into a region</p></li>
+<li><p><strong>Pan</strong>: Right-click and drag to pan across the spectrum</p></li>
+<li><p><strong>Reset</strong>: Double-click to reset the view</p></li>
+<li><p><strong>ROI Highlight</strong>: Configured ROIs are highlighted on the histogram</p></li>
+</ol>
+</section>
+<section id="waveform-tab">
+<h3>Waveform Tab<a class="headerlink" href="#waveform-tab" title="Link to this heading"></a></h3>
+<p>Monitor waveform data for each acquisition channel. This tab functions similarly to the Histogram tab but displays pulse waveforms instead of energy spectra.</p>
+<div class="admonition important">
+<p class="admonition-title">Important</p>
+<p>Waveform acquisition must be enabled in the Acquisition Parameters panel for this tab to show data.</p>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="starting-and-stopping-runs">
+<h2>Starting and Stopping Runs<a class="headerlink" href="#starting-and-stopping-runs" title="Link to this heading"></a></h2>
+<section id="before-starting-a-run">
+<h3>Before Starting a Run<a class="headerlink" href="#before-starting-a-run" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Verify board connections</strong>: Check that all boards show “Connected” status in the card view</p></li>
+<li><p><strong>Enter run metadata</strong>:</p>
+<ul class="simple">
+<li><p><strong>Target Name</strong>: Sample or target being measured</p></li>
+<li><p><strong>Run Type</strong>: Type of measurement (e.g., “long run”, “background”, “calibration”)</p></li>
+<li><p><strong>Terminal Voltage (TV)</strong>: Accelerator terminal voltage (for LUNA-400)</p></li>
+<li><p><strong>Probe Voltage (PV)</strong>: Probe voltage setting (for LUNA-400)</p></li>
+</ul>
+</li>
+</ol>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>If metadata values haven’t changed since the last run, a warning will appear. Review the values to ensure they are correct for the new run.</p>
+</div>
+<ol class="arabic simple" start="3">
+<li><p><strong>Configure acquisition settings</strong>:</p>
+<ul class="simple">
+<li><p>Verify run number is correct</p></li>
+<li><p>Check that “Save Data” is enabled if you want to record data</p></li>
+<li><p>Enable “Save Waveforms” if waveform data is needed</p></li>
+</ul>
+</li>
+</ol>
+</section>
+<section id="starting-acquisition">
+<h3>Starting Acquisition<a class="headerlink" href="#starting-acquisition" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Click the <strong>Start</strong> button in the Experiment Controls panel</p></li>
+<li><p>The system will:</p>
+<ul class="simple">
+<li><p>Create a new run directory (if saving)</p></li>
+<li><p>Configure the XDAQ system</p></li>
+<li><p>Begin data acquisition</p></li>
+<li><p>Start the spy server for monitoring</p></li>
+</ul>
+</li>
+<li><p>The run status indicator will change to “Running”</p></li>
+</ol>
+</section>
+<section id="during-acquisition">
+<h3>During Acquisition<a class="headerlink" href="#during-acquisition" title="Link to this heading"></a></h3>
+<p>While the run is active:</p>
+<ul class="simple">
+<li><p>Monitor histograms in the <strong>Histogram</strong> tab</p></li>
+<li><p>Watch waveforms in the <strong>Waveform</strong> tab (if enabled)</p></li>
+<li><p>Check current readings and accumulated charge in the card view</p></li>
+<li><p>View real-time metrics from Graphite</p></li>
+</ul>
+</section>
+<section id="stopping-acquisition">
+<h3>Stopping Acquisition<a class="headerlink" href="#stopping-acquisition" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Click the <strong>Stop</strong> button in the Experiment Controls panel</p></li>
+<li><p>The system will:</p>
+<ul class="simple">
+<li><p>Stop the XDAQ acquisition</p></li>
+<li><p>Save run metadata to the database</p></li>
+<li><p>Write a metadata.json file to the run directory</p></li>
+<li><p>Update the accumulated charge from current readings</p></li>
+</ul>
+</li>
+<li><p>The run status indicator will change to “Stopped”</p></li>
+</ol>
+</section>
+<section id="run-directory-structure">
+<h3>Run Directory Structure<a class="headerlink" href="#run-directory-structure" title="Link to this heading"></a></h3>
+<p>When data saving is enabled, each run creates a directory:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>data/
+└── runN/
+    ├── BoardName_ID.dat      # Raw data files
+    ├── BoardName_ID.json     # Board configuration snapshot
+    ├── BoardName_ID.cal      # Calibration snapshot
+    └── metadata.json         # Run metadata
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="monitoring-data">
+<h2>Monitoring Data<a class="headerlink" href="#monitoring-data" title="Link to this heading"></a></h2>
+<section id="real-time-histograms">
+<h3>Real-Time Histograms<a class="headerlink" href="#real-time-histograms" title="Link to this heading"></a></h3>
+<p>The Histogram tab provides live visualization of acquired spectra.</p>
+<section id="setting-up-a-region-of-interest-roi">
+<h4>Setting Up a Region of Interest (ROI)<a class="headerlink" href="#setting-up-a-region-of-interest-roi" title="Link to this heading"></a></h4>
+<ol class="arabic simple">
+<li><p>Navigate to the <strong>Histogram</strong> tab</p></li>
+<li><p>Click the <strong>gear icon</strong> next to the channel header you want to configure</p></li>
+<li><p>Enter the ROI boundaries:</p>
+<ul class="simple">
+<li><p><strong>ROI Min</strong>: Lower bin number</p></li>
+<li><p><strong>ROI Max</strong>: Upper bin number</p></li>
+</ul>
+</li>
+<li><p>Click <strong>Save</strong></p></li>
+</ol>
+<p>The ROI will be highlighted on the histogram, and counts within the ROI will appear in the Overview tab.</p>
+</section>
+<section id="understanding-histogram-types">
+<h4>Understanding Histogram Types<a class="headerlink" href="#understanding-histogram-types" title="Link to this heading"></a></h4>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Type</p></th>
+<th class="head"><p>Description</p></th>
+<th class="head"><p>Board Type</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Energy</strong></p></td>
+<td><p>Energy spectrum from trapezoidal filter</p></td>
+<td><p>DPP-PHA</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>QLong</strong></p></td>
+<td><p>Long gate charge integral</p></td>
+<td><p>DPP-PSD</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>QShort</strong></p></td>
+<td><p>Short gate charge integral</p></td>
+<td><p>DPP-PSD</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>PSD</strong></p></td>
+<td><p>Pulse Shape Discrimination 2D plot</p></td>
+<td><p>DPP-PSD</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="waveform-monitoring">
+<h3>Waveform Monitoring<a class="headerlink" href="#waveform-monitoring" title="Link to this heading"></a></h3>
+<p>Enable waveform recording to view individual pulses:</p>
+<ol class="arabic simple">
+<li><p>Go to the <strong>Overview</strong> tab</p></li>
+<li><p>In Acquisition Parameters, enable <strong>Save Waveforms</strong></p></li>
+<li><p>Switch to the <strong>Waveform</strong> tab</p></li>
+<li><p>Waveforms will update in real-time during acquisition</p></li>
+</ol>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Waveform recording increases data volume and file sizes significantly.</p>
+</div>
+</section>
+<section id="current-monitoring">
+<h3>Current Monitoring<a class="headerlink" href="#current-monitoring" title="Link to this heading"></a></h3>
+<p>If a current monitor (TetrAMM or RBD9103) is configured:</p>
+<ul class="simple">
+<li><p><strong>Real-time current</strong>: Displayed in the card view</p></li>
+<li><p><strong>Accumulated charge</strong>: Updated continuously during acquisition</p></li>
+<li><p><strong>Total accumulated</strong>: Cumulative charge across multiple runs</p></li>
+</ul>
+<p>To reset the total accumulated charge:</p>
+<ol class="arabic simple">
+<li><p>Use the API endpoint <code class="docutils literal notranslate"><span class="pre">/current/reset_total_accumulated</span></code></p></li>
+<li><p>Or configure through the settings panel</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="managing-run-metadata">
+<h2>Managing Run Metadata<a class="headerlink" href="#managing-run-metadata" title="Link to this heading"></a></h2>
+<section id="logbook-panel">
+<h3>Logbook Panel<a class="headerlink" href="#logbook-panel" title="Link to this heading"></a></h3>
+<p>The Logbook panel provides a table view of all recorded runs.</p>
+<p><strong>Features:</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Feature</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Filter by Target</strong></p></td>
+<td><p>Use the input field to filter runs by target name</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Column Selection</strong></p></td>
+<td><p>Click the columns button to show/hide columns</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Edit Run Info</strong></p></td>
+<td><p>Click the menu icon (three dots) to edit run metadata</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Export Data</strong></p></td>
+<td><p>Click <strong>Download CSV</strong> to export the database</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="editing-run-information">
+<h3>Editing Run Information<a class="headerlink" href="#editing-run-information" title="Link to this heading"></a></h3>
+<p>To modify a run’s metadata after acquisition:</p>
+<ol class="arabic simple">
+<li><p>Go to the <strong>Logbook</strong> panel</p></li>
+<li><p>Find the run you want to edit</p></li>
+<li><p>Click the <strong>menu icon</strong> (three dots) on the right</p></li>
+<li><p>Select the field to edit:</p>
+<ul class="simple">
+<li><p>Target Name</p></li>
+<li><p>Run Type</p></li>
+<li><p>Terminal Voltage</p></li>
+<li><p>Probe Voltage</p></li>
+<li><p>Notes</p></li>
+<li><p>Quality Flag (good/unknown/bad)</p></li>
+</ul>
+</li>
+<li><p>Make your changes and save</p></li>
+</ol>
+</section>
+<section id="quality-flags">
+<h3>Quality Flags<a class="headerlink" href="#quality-flags" title="Link to this heading"></a></h3>
+<p>Mark runs with quality flags to indicate data quality:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Flag</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Good</strong></p></td>
+<td><p>Run data is valid and suitable for analysis</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Unknown</strong></p></td>
+<td><p>Data quality has not been evaluated</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Bad</strong></p></td>
+<td><p>Run has issues and should be excluded from analysis</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="adding-notes">
+<h3>Adding Notes<a class="headerlink" href="#adding-notes" title="Link to this heading"></a></h3>
+<p>Add notes to document run conditions or observations:</p>
+<ol class="arabic simple">
+<li><p>In the Logbook, find the run</p></li>
+<li><p>Click the edit menu</p></li>
+<li><p>Select “Edit Notes”</p></li>
+<li><p>Enter your notes (supports multiple lines)</p></li>
+<li><p>Save changes</p></li>
+</ol>
+</section>
+</section>
+<hr class="docutils" />
+<section id="board-configuration">
+<h2>Board Configuration<a class="headerlink" href="#board-configuration" title="Link to this heading"></a></h2>
+<section id="adding-a-new-board">
+<h3>Adding a New Board<a class="headerlink" href="#adding-a-new-board" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Go to <strong>Settings &gt; Boards</strong></p></li>
+<li><p>Click <strong>Add Board</strong></p></li>
+<li><p>Enter the connection parameters:</p>
+<ul class="simple">
+<li><p><strong>Link Type</strong>: USB (0), Optical (1), or A4818 (5)</p></li>
+<li><p><strong>Link Number</strong>: Physical port number</p></li>
+<li><p><strong>VME Address</strong>: VME base address (for VME boards)</p></li>
+</ul>
+</li>
+<li><p>Click <strong>Connect</strong></p></li>
+</ol>
+<p>The system will:</p>
+<ul class="simple">
+<li><p>Attempt to connect to the board</p></li>
+<li><p>Read board information (model, serial, channels)</p></li>
+<li><p>Query current register configuration</p></li>
+<li><p>Create configuration files</p></li>
+</ul>
+</section>
+<section id="removing-a-board">
+<h3>Removing a Board<a class="headerlink" href="#removing-a-board" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Go to <strong>Settings &gt; Boards</strong></p></li>
+<li><p>Find the board to remove</p></li>
+<li><p>Click the <strong>Remove</strong> button</p></li>
+<li><p>Confirm the removal</p></li>
+</ol>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Removing a board deletes its configuration files. Back up configurations before removing.</p>
+</div>
+</section>
+<section id="modifying-board-configuration">
+<h3>Modifying Board Configuration<a class="headerlink" href="#modifying-board-configuration" title="Link to this heading"></a></h3>
+<p>To change board registers:</p>
+<ol class="arabic simple">
+<li><p>Go to the <strong>DAQ Configuration</strong> panel (Board icon in navigation)</p></li>
+<li><p>Select the board from the dropdown</p></li>
+<li><p>Modify register values:</p>
+<ul class="simple">
+<li><p><strong>Trigger Threshold</strong>: Trigger level in ADC counts</p></li>
+<li><p><strong>DC Offset</strong>: Baseline offset</p></li>
+<li><p><strong>Trapezoid Settings</strong>: Rise time, flat top, decay time</p></li>
+<li><p><strong>Pre-trigger</strong>: Samples before trigger</p></li>
+</ul>
+</li>
+<li><p>Changes are applied immediately to the board</p></li>
+</ol>
+</section>
+<section id="energy-calibration">
+<h3>Energy Calibration<a class="headerlink" href="#energy-calibration" title="Link to this heading"></a></h3>
+<p>Set energy calibration coefficients for each channel:</p>
+<ol class="arabic simple">
+<li><p>Go to the <strong>DAQ Configuration</strong> panel</p></li>
+<li><p>Select the board and channel</p></li>
+<li><p>Enter calibration coefficients:</p>
+<ul class="simple">
+<li><p><strong>a (slope)</strong>: Energy per bin</p></li>
+<li><p><strong>b (offset)</strong>: Energy offset</p></li>
+</ul>
+</li>
+</ol>
+<p>The calibration converts bin numbers to energy:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>Energy = a × bin + b
+</pre></div>
+</div>
+</section>
+</section>
+<hr class="docutils" />
+<section id="settings-and-customization">
+<h2>Settings and Customization<a class="headerlink" href="#settings-and-customization" title="Link to this heading"></a></h2>
+<section id="appearance-settings">
+<h3>Appearance Settings<a class="headerlink" href="#appearance-settings" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Dark Mode</strong></p></td>
+<td><p>Toggle between light and dark themes</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Visible Metrics</strong></p></td>
+<td><p>Select which metrics appear in the card view</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Visible Tabs</strong></p></td>
+<td><p>Show/hide dashboard tabs</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="boards-settings">
+<h3>Boards Settings<a class="headerlink" href="#boards-settings" title="Link to this heading"></a></h3>
+<p>Manage digitizer board connections (see Board Configuration section).</p>
+</section>
+<section id="metrics-settings">
+<h3>Metrics Settings<a class="headerlink" href="#metrics-settings" title="Link to this heading"></a></h3>
+<p>Configure Graphite metrics to display in the Overview tab:</p>
+<ol class="arabic simple">
+<li><p>Go to <strong>Settings &gt; Metrics</strong></p></li>
+<li><p>Click <strong>Add Metric</strong></p></li>
+<li><p>Enter:</p>
+<ul class="simple">
+<li><p><strong>Path</strong>: Graphite metric path (e.g., <code class="docutils literal notranslate"><span class="pre">accelerator.terminal_voltage</span></code>)</p></li>
+<li><p><strong>Alias</strong>: Display name (e.g., “Terminal V”)</p></li>
+<li><p><strong>Refresh Rate</strong>: Update interval in seconds</p></li>
+<li><p><strong>Multiplier</strong>: Scale factor for display (e.g., 0.001 to convert mV to V)</p></li>
+</ul>
+</li>
+<li><p>Click <strong>Save</strong></p></li>
+</ol>
+<p>To remove a metric, click the <strong>Delete</strong> button next to it.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="quick-reference">
+<h2>Quick Reference<a class="headerlink" href="#quick-reference" title="Link to this heading"></a></h2>
+<section id="keyboard-shortcuts-frontend">
+<h3>Keyboard Shortcuts (Frontend)<a class="headerlink" href="#keyboard-shortcuts-frontend" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Shortcut</p></th>
+<th class="head"><p>Action</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">Ctrl+S</span></code> / <code class="docutils literal notranslate"><span class="pre">Cmd+S</span></code></p></td>
+<td><p>Start/Stop acquisition (when focused on control panel)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">Esc</span></code></p></td>
+<td><p>Close modal dialogs</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="common-tasks">
+<h3>Common Tasks<a class="headerlink" href="#common-tasks" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Task</p></th>
+<th class="head"><p>Steps</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Start a run</strong></p></td>
+<td><p>Enter metadata → Click Start</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Stop a run</strong></p></td>
+<td><p>Click Stop → Verify metadata saved</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Check connectivity</strong></p></td>
+<td><p>Settings → Boards → Refresh</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>View spectrum</strong></p></td>
+<td><p>Histogram tab → Select channel</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Set ROI</strong></p></td>
+<td><p>Histogram tab → Gear icon → Enter range</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Export data</strong></p></td>
+<td><p>Logbook → Download CSV</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Add metric</strong></p></td>
+<td><p>Settings → Metrics → Add</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="status-indicators">
+<h3>Status Indicators<a class="headerlink" href="#status-indicators" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Indicator</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Green</strong></p></td>
+<td><p>System operational / Connected</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Yellow</strong></p></td>
+<td><p>Warning / Partial connectivity</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Red</strong></p></td>
+<td><p>Error / Disconnected</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Blue</strong></p></td>
+<td><p>Acquisition running</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Gray</strong></p></td>
+<td><p>Inactive / Idle</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<hr class="docutils" />
+<section id="best-practices">
+<h2>Best Practices<a class="headerlink" href="#best-practices" title="Link to this heading"></a></h2>
+<section id="before-long-runs">
+<h3>Before Long Runs<a class="headerlink" href="#before-long-runs" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Verify all boards</strong> are connected and responding</p></li>
+<li><p><strong>Check disk space</strong> on the data storage volume</p></li>
+<li><p><strong>Enable file size limits</strong> if disk space is limited</p></li>
+<li><p><strong>Document target</strong> and experimental conditions in metadata</p></li>
+<li><p><strong>Test with a short run</strong> before starting long acquisitions</p></li>
+</ol>
+</section>
+<section id="data-management">
+<h3>Data Management<a class="headerlink" href="#data-management" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p><strong>Back up data regularly</strong> to external storage</p></li>
+<li><p><strong>Use quality flags</strong> to mark problematic runs</p></li>
+<li><p><strong>Add notes</strong> about unusual conditions or observations</p></li>
+<li><p><strong>Export logbook</strong> periodically for offline records</p></li>
+</ol>
+</section>
+<section id="troubleshooting-during-runs">
+<h3>Troubleshooting During Runs<a class="headerlink" href="#troubleshooting-during-runs" title="Link to this heading"></a></h3>
+<p>If issues occur during acquisition:</p>
+<ol class="arabic simple">
+<li><p><strong>Check the card view</strong> for error indicators</p></li>
+<li><p><strong>Verify board connectivity</strong> in Settings</p></li>
+<li><p><strong>Monitor bandwidth</strong> - low bandwidth may indicate disk issues</p></li>
+<li><p><strong>Check XDAQ status</strong> via the API if needed</p></li>
+<li><p><strong>Review server logs</strong> for detailed error messages</p></li>
+</ol>
+<p>See the <a class="reference internal" href="troubleshooting.html"><span class="std std-doc">Troubleshooting Guide</span></a> for common issues and solutions.</p>
+</section>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="LunaDAQ Installation Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="details.html" class="btn btn-neutral float-right" title="LunaDAQ Details" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
