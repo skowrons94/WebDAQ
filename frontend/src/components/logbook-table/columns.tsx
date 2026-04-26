@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal } from "lucide-react"
-import { ArrowUpDown } from "lucide-react"
+import { MoreHorizontal, ArrowUpDown } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -21,7 +20,6 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-    DialogTrigger,
 } from "@/components/ui/dialog"
 import {
     Form,
@@ -43,8 +41,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { addRunMetadata, updateRunFlag, updateRunNotes } from "@/lib/api"
 import { useForm } from "react-hook-form"
 
-// This type is used to define the shape of our data.
-// You can use a Zod schema here if you want.
 export type RunMetadata = {
     id: string
     run_number: number
@@ -174,122 +170,188 @@ interface ColumnsProps {
     onDataUpdate?: () => void;
 }
 
+// Reusable sortable header with friendly label.
+const sortableHeader = (label: string) =>
+    function SortableHeader({ column }: any) {
+        const sorted = column.getIsSorted()
+        return (
+            <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => column.toggleSorting(sorted === "asc")}
+                className="-ml-2 h-8 data-[state=open]:bg-accent"
+            >
+                {label}
+                <ArrowUpDown
+                    className={`ml-2 h-3.5 w-3.5 ${sorted ? "opacity-100" : "opacity-40"}`}
+                />
+            </Button>
+        )
+    }
+
+const RUN_TYPE_LABEL: Record<string, string> = {
+    longrun: "Long Run",
+    scan: "Scan",
+    background: "Background",
+    calibration: "Calibration",
+}
+
+export const COLUMN_LABELS: Record<string, string> = {
+    run_number: "Run Number",
+    start_time: "Start Time",
+    end_time: "End Time",
+    duration: "Duration",
+    accumulated_charge: "Accumulated Charge",
+    target_name: "Target",
+    terminal_voltage: "Terminal Voltage",
+    probe_voltage: "Probe Voltage",
+    run_type: "Run Type",
+    flag: "Flag",
+    notes: "Notes",
+    actions: "Actions",
+}
+
 export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<RunMetadata>[] => [
     {
         accessorKey: "run_number",
-        header: ({ column }) => {
-            return (
-                <Button
-                    variant="ghost"
-                    onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                >
-                    Run Number
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-            )
-        },
-        cell: ({ row }) => {
-            return (
-                <div className="text-center">
-                    {row.original.run_number}
-                </div>
-            )
-        },
+        meta: { label: COLUMN_LABELS.run_number },
+        header: sortableHeader("Run #"),
+        cell: ({ row }) => (
+            <div className="text-center font-mono">{row.original.run_number}</div>
+        ),
+        size: 80,
     },
     {
         accessorKey: "start_time",
-        header: "Start Time",
+        meta: { label: COLUMN_LABELS.start_time },
+        header: sortableHeader("Start"),
         cell: ({ row }) => {
-            // Parse the date and time
+            if (!row.original.start_time) return <div className="text-muted-foreground">—</div>
             const date = new Date(row.original.start_time)
             return (
-                <div className="text-left">
-                    {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                <div className="whitespace-nowrap text-sm">
+                    {date.toLocaleDateString()}{" "}
+                    <span className="text-muted-foreground">
+                        {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
                 </div>
             )
-        }
+        },
     },
     {
         accessorKey: "end_time",
-        header: "End Time",
+        meta: { label: COLUMN_LABELS.end_time },
+        header: sortableHeader("End"),
         cell: ({ row }) => {
-            // Parse the date and time
+            if (!row.original.end_time) return <div className="text-muted-foreground">—</div>
             const date = new Date(row.original.end_time)
             return (
-                <div className="text-left">
-                    {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                <div className="whitespace-nowrap text-sm">
+                    {date.toLocaleDateString()}{" "}
+                    <span className="text-muted-foreground">
+                        {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
                 </div>
             )
-        }
+        },
     },
     {
         id: "duration",
-        header: "Duration (s)",
-        cell: ({ row }) => {
-            const startTime = new Date(row.original.start_time)
-            const endTime = new Date(row.original.end_time)
-            const durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000)
-            return (
-                <div className="text-center">
-                    {durationSeconds}
-                </div>
+        meta: { label: COLUMN_LABELS.duration },
+        header: sortableHeader("Duration"),
+        accessorFn: (row) => {
+            if (!row.start_time || !row.end_time) return 0
+            return Math.round(
+                (new Date(row.end_time).getTime() - new Date(row.start_time).getTime()) / 1000,
             )
-        }
+        },
+        cell: ({ row }) => {
+            const start = row.original.start_time ? new Date(row.original.start_time) : null
+            const end = row.original.end_time ? new Date(row.original.end_time) : null
+            if (!start || !end) return <div className="text-muted-foreground text-center">—</div>
+            const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000))
+            const h = Math.floor(seconds / 3600)
+            const m = Math.floor((seconds % 3600) / 60)
+            const s = seconds % 60
+            const pretty =
+                h > 0
+                    ? `${h}h ${m.toString().padStart(2, "0")}m`
+                    : m > 0
+                        ? `${m}m ${s.toString().padStart(2, "0")}s`
+                        : `${s}s`
+            return <div className="text-center text-sm tabular-nums">{pretty}</div>
+        },
     },
     {
         accessorKey: "accumulated_charge",
-        header: "Accumulated Charge",
-        cell: ({ row }) => {
-            return (
-                <div className="text-center">
-                    {row.original.accumulated_charge}
-                </div>
-            )
-        }
+        meta: { label: COLUMN_LABELS.accumulated_charge },
+        header: sortableHeader("Charge"),
+        cell: ({ row }) => (
+            <div className="text-right tabular-nums text-sm">
+                {row.original.accumulated_charge != null
+                    ? Number(row.original.accumulated_charge).toFixed(2)
+                    : "—"}
+            </div>
+        ),
     },
     {
         accessorKey: "target_name",
-        header: "Target Name",
+        meta: { label: COLUMN_LABELS.target_name },
+        header: sortableHeader("Target"),
+        cell: ({ row }) => (
+            <div className="text-sm font-medium">{row.original.target_name || "—"}</div>
+        ),
     },
     {
         accessorKey: "terminal_voltage",
-        header: "Terminal Voltage",
+        meta: { label: COLUMN_LABELS.terminal_voltage },
+        header: sortableHeader("Terminal V"),
+        cell: ({ row }) => (
+            <div className="text-right tabular-nums text-sm">
+                {row.original.terminal_voltage ?? "—"}
+            </div>
+        ),
     },
     {
         accessorKey: "probe_voltage",
-        header: "Probe Voltage",
+        meta: { label: COLUMN_LABELS.probe_voltage },
+        header: sortableHeader("Probe V"),
+        cell: ({ row }) => (
+            <div className="text-right tabular-nums text-sm">
+                {row.original.probe_voltage ?? "—"}
+            </div>
+        ),
     },
     {
         accessorKey: "run_type",
-        header: "Run Type",
+        meta: { label: COLUMN_LABELS.run_type },
+        header: sortableHeader("Type"),
+        // Equality filter (drives the type dropdown)
+        filterFn: (row, columnId, value) =>
+            !value || value === "all" ? true : row.getValue(columnId) === value,
         cell: ({ row }) => {
+            const type = row.original.run_type
             return (
-                <div className="text-center">
-                    {row.original.run_type === "longrun" ? "Long Run"
-                        : row.original.run_type === "scan" ? "Scan"
-                            : row.original.run_type === "background" ? "Background"
-                                : row.original.run_type === "calibration" ? "Calibration"
-                                    : row.original.run_type}
-                </div>
+                <div className="text-sm">{RUN_TYPE_LABEL[type] ?? type ?? "—"}</div>
             )
-        }
+        },
     },
     {
         accessorKey: "flag",
-        header: "Flag",
+        meta: { label: COLUMN_LABELS.flag },
+        header: sortableHeader("Flag"),
+        filterFn: (row, columnId, value) =>
+            !value || value === "all" ? true : (row.getValue(columnId) || "unknown") === value,
         cell: ({ row }) => {
-            const [flag, setFlag] = useState(row.original.flag || 'unknown')
-            
-            // Sync local state with row data when it changes
+            const [flag, setFlag] = useState(row.original.flag || "unknown")
+
             useEffect(() => {
-                setFlag(row.original.flag || 'unknown')
+                setFlag(row.original.flag || "unknown")
             }, [row.original.flag])
-            
+
             const handleFlagChange = async (newFlag: string) => {
-                console.log('Updating flag for run', row.original.run_number, 'to', newFlag)
                 try {
-                    const response = await updateRunFlag(row.original.run_number, newFlag)
-                    console.log('Flag update response:', response)
+                    await updateRunFlag(row.original.run_number, newFlag)
                     setFlag(newFlag)
                     onDataUpdate?.()
                 } catch (error) {
@@ -297,40 +359,40 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                 }
             }
 
-            const getFlagColor = (flag: string) => {
-                switch (flag) {
-                    case 'good': return 'text-green-600 bg-green-50'
-                    case 'bad': return 'text-red-600 bg-red-50'
-                    default: return 'text-orange-600 bg-orange-50'
-                }
-            }
+            const flagClass =
+                flag === "good"
+                    ? "text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-950/40 border-green-200 dark:border-green-900"
+                    : flag === "bad"
+                        ? "text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-950/40 border-red-200 dark:border-red-900"
+                        : "text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900"
 
             return (
                 <Select value={flag} onValueChange={handleFlagChange}>
-                    <SelectTrigger className={`w-24 h-8 ${getFlagColor(flag)}`}>
+                    <SelectTrigger className={`w-24 h-8 ${flagClass}`}>
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="good" className="text-green-600">Good</SelectItem>
-                        <SelectItem value="unknown" className="text-orange-600">Unknown</SelectItem>
+                        <SelectItem value="unknown" className="text-amber-600">Unknown</SelectItem>
                         <SelectItem value="bad" className="text-red-600">Bad</SelectItem>
                     </SelectContent>
                 </Select>
             )
-        }
+        },
     },
     {
         accessorKey: "notes",
-        header: "Notes",
+        meta: { label: COLUMN_LABELS.notes, expand: true },
+        // Notes is the wide column — simple "Notes" header, sorting wouldn't be useful.
+        header: () => <div className="text-sm font-medium">Notes</div>,
         cell: ({ row }) => {
-            const [notes, setNotes] = useState(row.original.notes || '')
+            const [notes, setNotes] = useState(row.original.notes || "")
             const [isEditing, setIsEditing] = useState(false)
-            
-            // Sync local state with row data when it changes
+
             useEffect(() => {
-                setNotes(row.original.notes || '')
+                setNotes(row.original.notes || "")
             }, [row.original.notes])
-            
+
             const handleNotesSubmit = async () => {
                 try {
                     await updateRunNotes(row.original.run_number, notes)
@@ -342,40 +404,48 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
             }
 
             const handleKeyDown = (e: React.KeyboardEvent) => {
-                if (e.key === 'Enter' && e.ctrlKey) {
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
                     handleNotesSubmit()
-                } else if (e.key === 'Escape') {
-                    setNotes(row.original.notes || '')
+                } else if (e.key === "Escape") {
+                    setNotes(row.original.notes || "")
                     setIsEditing(false)
                 }
             }
 
             return (
-                <div className="max-w-xs">
+                <div className="min-w-[28rem] w-full">
                     {isEditing ? (
                         <Textarea
                             value={notes}
                             onChange={(e) => setNotes(e.target.value)}
                             onBlur={handleNotesSubmit}
                             onKeyDown={handleKeyDown}
-                            className="min-h-16 text-sm"
-                            placeholder="Add notes (Ctrl+Enter to save, Esc to cancel)"
+                            className="min-h-32 text-sm w-full resize-y"
+                            placeholder="Add notes (Ctrl/⌘+Enter to save, Esc to cancel)"
                             autoFocus
                         />
                     ) : (
-                        <div 
-                            className="cursor-pointer p-2 min-h-8 text-sm hover:bg-gray-50 rounded"
+                        <div
+                            className="cursor-pointer rounded p-2 min-h-12 text-sm hover:bg-muted/50 whitespace-pre-wrap break-words"
                             onClick={() => setIsEditing(true)}
+                            title="Click to edit"
                         >
-                            {notes || <span className="text-gray-400">Click to add notes...</span>}
+                            {notes || (
+                                <span className="text-muted-foreground italic">
+                                    Click to add notes…
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>
             )
-        }
+        },
     },
     {
         id: "actions",
+        meta: { label: COLUMN_LABELS.actions },
+        enableHiding: false,
         cell: ({ row }) => {
             const data = row.original
             const [open, setOpen] = useState(false)
@@ -392,17 +462,15 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                     formData.target_name,
                     formData.terminal_voltage,
                     formData.probe_voltage,
-                    formData.run_type
-                ).then(() => {
-                    // Close the dialog
-                    setOpen(false)
-                    // refresh the data table
-                    // add a refresh callback here
-                    onDataUpdate?.()
-                }).catch(error => {
-                    console.error("Failed to update run metadata:", error)
-                    // Handle error (show toast notification, etc)
-                })
+                    formData.run_type,
+                )
+                    .then(() => {
+                        setOpen(false)
+                        onDataUpdate?.()
+                    })
+                    .catch((error) => {
+                        console.error("Failed to update run metadata:", error)
+                    })
             }
 
             return (
@@ -417,13 +485,17 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem
-                                onClick={() => navigator.clipboard.writeText(data.accumulated_charge.toString())}
+                                onClick={() =>
+                                    navigator.clipboard.writeText(
+                                        data.accumulated_charge?.toString() ?? "",
+                                    )
+                                }
                             >
-                                Copy charge to clipboard
+                                Copy charge
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => setOpen(true)}>
-                                Edit entry...
+                                Edit entry…
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>

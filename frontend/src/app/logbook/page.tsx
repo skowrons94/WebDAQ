@@ -29,13 +29,9 @@ export default  function LogbookPage() {
 
     return (
         <QueryClientProvider client={queryClient}>
-        <Layout>
-        <div className="container mx-auto px-0 py-0">
-                    <div className="container mx-auto py-2">
-                        <Logbook />
-                    </div>
-        </div>
-        </Layout>
+            <Layout>
+                <Logbook />
+            </Layout>
         </QueryClientProvider>
-  )
+    )
 }

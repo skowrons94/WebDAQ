@@ -8,6 +8,11 @@ const DASHBOARD_SETTINGS_FILE = path.join(CACHE_DIR, "dashboard-settings.json")
 const HISTOGRAM_CONFIGS_FILE = path.join(CACHE_DIR, "histogram-configs.json")
 const VIS_CHANNELS_FILE = path.join(CACHE_DIR, "visualization-channels.json")
 const WAVE_CONFIG_FILE = path.join(CACHE_DIR, "wave-config.json")
+const WORKING_DIRS_FILE = path.join(CACHE_DIR, "working-directories.json")
+
+const DEFAULT_WORKING_DIRS = {
+  directories: [] as Array<{ id: string; label: string; path: string }>,
+}
 
 const DEFAULT_VIS_CHANNELS = {
   selectedBoardsChannelsPSD: [] as Array<{ boardId: string; channels: number[] }>,
@@ -146,6 +151,14 @@ export async function GET(request: Request) {
           data: { ...DEFAULT_WAVE_CONFIG, ...JSON.parse(waveConfigData) },
         })
 
+      case "working-directories":
+        await ensureFileExists(WORKING_DIRS_FILE, JSON.stringify(DEFAULT_WORKING_DIRS))
+        const workingDirsData = await fs.readFile(WORKING_DIRS_FILE, "utf-8")
+        return NextResponse.json({
+          success: true,
+          data: { ...DEFAULT_WORKING_DIRS, ...JSON.parse(workingDirsData) },
+        })
+
       case "zoom-ranges":
         // For backward compatibility, extract zoom ranges from histogram configs
         await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
@@ -267,6 +280,10 @@ export async function POST(request: Request) {
 
       case "wave-config":
         await fs.writeFile(WAVE_CONFIG_FILE, JSON.stringify(data, null, 2))
+        break
+
+      case "working-directories":
+        await fs.writeFile(WORKING_DIRS_FILE, JSON.stringify(data, null, 2))
         break
 
       case "zoom-range":
