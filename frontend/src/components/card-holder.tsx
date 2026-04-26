@@ -13,6 +13,9 @@ import {
   Cpu,
   Wifi,
   WifiOff,
+  Save,
+  AudioWaveform,
+  Server,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -42,6 +45,8 @@ import {
   getStatsMetricLastValue,
   getCurrentModuleType,
   getRunMetadataAll,
+  getSaveData,
+  getWaveformStatus,
 } from '@/lib/api'
 
 type ROI = {
@@ -125,6 +130,8 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
   const [boards, setBoards] = useState<BoardInfo[]>([])
   const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
+  const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
+  const [waveformsActive, setWaveformsActive] = useState<boolean>(false)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
@@ -188,6 +195,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     fetchInitialData()
     fetchBoardConfiguration()
     updateBoardConnectivity() // Initial connectivity check on page load
+    updateDaqStatuses() // Initial DAQ status check
 
     // Call updateStatsValues immediately and then set up interval
     // Small delay to ensure paths are loaded from store
@@ -201,6 +209,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     const boardStatusInterval = setInterval(updateBoardStatus, 2000)
     const boardConnectivityInterval = setInterval(updateBoardConnectivity, 5000) // Check every 5 seconds
     const statsInterval = setInterval(updateStatsValues, 5000) // Refresh stats every 5 seconds
+    const daqStatusInterval = setInterval(updateDaqStatuses, 3000)
 
     return () => {
       clearInterval(beamCurrentInterval)
@@ -211,6 +220,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       clearInterval(boardStatusInterval)
       clearInterval(boardConnectivityInterval)
       clearInterval(statsInterval)
+      clearInterval(daqStatusInterval)
     }
   }, [])
 
@@ -415,6 +425,19 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }
 
+  const updateDaqStatuses = async () => {
+    try {
+      const [save, wave] = await Promise.all([
+        getSaveData().catch(() => null),
+        getWaveformStatus().catch(() => null),
+      ])
+      if (save !== null && save !== undefined) setDataSavingEnabled(Boolean(save))
+      if (wave !== null && wave !== undefined) setWaveformsActive(Boolean(wave))
+    } catch (error) {
+      console.error('Failed to update DAQ statuses:', error)
+    }
+  }
+
   const updateStatsValues = useCallback(async () => {
     try {
       // Get current paths from store instead of closure
@@ -476,6 +499,71 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
             </CardContent>
           </Card>
         )}
+
+        {/* DAQ Status Card — data saving / waveforms / XDAQ */}
+        {settings.showStatus && (() => {
+          // XDAQ heuristic: when running we expect non-zero file bandwidth and at least
+          // one healthy board; when not running it's just idle.
+          const anyBoardFailed = Object.values(boardStatus).some((s) => s?.failed)
+          let xdaqText: string
+          let xdaqColor: string
+          if (!isRunning) {
+            xdaqText = 'Idle'
+            xdaqColor = 'text-muted-foreground'
+          } else if (anyBoardFailed) {
+            xdaqText = 'Board Error'
+            xdaqColor = 'text-red-600'
+          } else if (fileBandwidth > 0) {
+            xdaqText = 'OK'
+            xdaqColor = 'text-green-600'
+          } else {
+            xdaqText = 'No Data'
+            xdaqColor = 'text-yellow-600'
+          }
+
+          const okIcon = <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+          const offIcon = <XCircle className="h-3.5 w-3.5 text-red-500" />
+
+          return (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">DAQ Status</CardTitle>
+                <Server className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Save className="h-3.5 w-3.5" />
+                      Data Saving
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold">
+                      {dataSavingEnabled ? 'On' : 'Off'}
+                      {dataSavingEnabled ? okIcon : offIcon}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <AudioWaveform className="h-3.5 w-3.5" />
+                      Waveforms
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold">
+                      {waveformsActive ? 'On' : 'Off'}
+                      {waveformsActive ? okIcon : offIcon}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Server className="h-3.5 w-3.5" />
+                      XDAQ
+                    </span>
+                    <span className={`font-semibold ${xdaqColor}`}>{xdaqText}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })()}
 
         {/* Current Device Connection Status Card */}
         {settings.showStatus && (
@@ -652,33 +740,35 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
         )}
 
         {/* ROI Cards */}
-        {settings.showROIs && 
+        {settings.showROIs &&
           roiCards.map((cardData) => (
             <Card key={`${cardData.histogramId}_${cardData.roi.id}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="flex flex-col">
-                  <CardTitle className="text-sm font-medium">
+                <div className="flex flex-col min-w-0">
+                  <CardTitle className="text-sm font-medium truncate">
                     {cardData.histogramLabel}
                   </CardTitle>
+                  <p
+                    className="text-xs font-medium truncate flex items-center gap-1.5"
+                    style={{ color: cardData.roi.color }}
+                  >
+                    <span
+                      className="inline-block h-2 w-2 rounded-sm shrink-0"
+                      style={{ backgroundColor: cardData.roi.color }}
+                    />
+                    {cardData.roi.name}
+                  </p>
                   <p className="text-xs text-muted-foreground">
                     Board {cardData.boardId} • Channel {cardData.channel}
                   </p>
                 </div>
-                <div className="flex items-center gap-1">
-                  <div 
-                    className="w-3 h-3 rounded-full" 
-                    style={{ backgroundColor: cardData.roi.color }}
-                  />
-                  <BarChart className="h-4 w-4 text-muted-foreground" />
-                </div>
+                <BarChart className="h-4 w-4 text-muted-foreground shrink-0" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{cardData.roi.integral.toFixed(0)}</div>
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs text-muted-foreground">
-                    ROI: {cardData.roi.low} - {cardData.roi.high}
-                  </p>
-                </div>
+                <p className="text-xs text-muted-foreground">
+                  Range: {cardData.roi.low} – {cardData.roi.high}
+                </p>
               </CardContent>
             </Card>
           ))

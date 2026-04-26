@@ -6,6 +6,17 @@ const CACHE_DIR = path.join(process.cwd(), "cache")
 const ROI_CACHE_FILE = path.join(CACHE_DIR, "roi-cache-enhanced.json")
 const DASHBOARD_SETTINGS_FILE = path.join(CACHE_DIR, "dashboard-settings.json")
 const HISTOGRAM_CONFIGS_FILE = path.join(CACHE_DIR, "histogram-configs.json")
+const VIS_CHANNELS_FILE = path.join(CACHE_DIR, "visualization-channels.json")
+const WAVE_CONFIG_FILE = path.join(CACHE_DIR, "wave-config.json")
+
+const DEFAULT_VIS_CHANNELS = {
+  selectedBoardsChannelsPSD: [] as Array<{ boardId: string; channels: number[] }>,
+  selectedBoardsChannelsWaveform: [] as Array<{ boardId: string; channels: number[] }>,
+}
+
+const DEFAULT_WAVE_CONFIG = {
+  selectedWaveform: {} as Record<string, number>,
+}
 
 // Enhanced ROI structure
 type ROI = {
@@ -117,6 +128,22 @@ export async function GET(request: Request) {
         return NextResponse.json({
           success: true,
           data: JSON.parse(histogramData) as HistogramConfig[],
+        })
+
+      case "visualization-channels":
+        await ensureFileExists(VIS_CHANNELS_FILE, JSON.stringify(DEFAULT_VIS_CHANNELS))
+        const visChannelsData = await fs.readFile(VIS_CHANNELS_FILE, "utf-8")
+        return NextResponse.json({
+          success: true,
+          data: { ...DEFAULT_VIS_CHANNELS, ...JSON.parse(visChannelsData) },
+        })
+
+      case "wave-config":
+        await ensureFileExists(WAVE_CONFIG_FILE, JSON.stringify(DEFAULT_WAVE_CONFIG))
+        const waveConfigData = await fs.readFile(WAVE_CONFIG_FILE, "utf-8")
+        return NextResponse.json({
+          success: true,
+          data: { ...DEFAULT_WAVE_CONFIG, ...JSON.parse(waveConfigData) },
         })
 
       case "zoom-ranges":
@@ -232,6 +259,14 @@ export async function POST(request: Request) {
 
       case "histograms":
         await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(data, null, 2))
+        break
+
+      case "visualization-channels":
+        await fs.writeFile(VIS_CHANNELS_FILE, JSON.stringify(data, null, 2))
+        break
+
+      case "wave-config":
+        await fs.writeFile(WAVE_CONFIG_FILE, JSON.stringify(data, null, 2))
         break
 
       case "zoom-range":

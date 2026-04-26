@@ -13,7 +13,6 @@ import Link from 'next/link';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
 import { VisualizationSettings } from '@/components/visualization-settings';
-import { MetricsSettings } from '@/components/metrics-settings';
 import { CurrentModuleSettings } from '@/components/current-module-settings';
 import { TelegramSettings } from '@/components/telegram-settings';
 
@@ -47,8 +46,6 @@ export default function SettingsPage() {
                 return < VisualizationSettings />;
             case 'boards':
                 return <Board />;
-            case 'metrics':
-                return <MetricsSettings />;
             case 'current':
                 return <CurrentModuleSettings />;
             case 'notifications':
@@ -89,13 +86,6 @@ export default function SettingsPage() {
                                 onClick={() => setActiveView('current')}
                             >
                                 Current Module
-                            </Link>
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'metrics' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('metrics')}
-                            >
-                                Metrics
                             </Link>
                             <Link
                                 href="#"

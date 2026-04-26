@@ -29,15 +29,12 @@ export default function PSDDashboard() {
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
-  const { settings, updateBoardChannelSelection, clearAllSelections } = useVisualizationStore()
-  const [storeReady, setStoreReady] = useState(false)
+  const { settings, updateBoardChannelSelection, clearAllSelections, hydrateFromServer, hydrated } = useVisualizationStore()
+  const storeReady = hydrated
 
   useEffect(() => {
-    // Wait for store to be hydrated
-    if (settings && settings.selectedBoardsChannelsPSD !== undefined) {
-      setStoreReady(true)
-    }
-  }, [settings])
+    hydrateFromServer()
+  }, [hydrateFromServer])
 
   useEffect(() => {
     fetchBoardConfiguration()

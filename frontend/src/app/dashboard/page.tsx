@@ -8,6 +8,7 @@ import { RunControl } from '@/components/run-control';
 import { Stats } from '@/components/stats';
 import HistogramDashboard from '@/components/histo-dashboard';
 import WaveformDashboard from '@/components/wave-dashboard';
+import PSDDashboard from '@/components/psd-dashboard';
 import { Layout } from '@/components/dashboard-layout'; import {
   Tabs,
   TabsContent,
@@ -43,17 +44,27 @@ export default function DashboardPage() {
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
                 {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
+                {(settings.showPSD ?? true) && <TabsTrigger value="psd">PSD</TabsTrigger>}
               </TabsList>
             </div>
           <TabsContent value="overview">
             <RunControl />
           </TabsContent>
-          <TabsContent value="histograms">
-            <HistogramDashboard />
-          </TabsContent>
-          <TabsContent value="waveforms">
-            <WaveformDashboard />
-          </TabsContent>
+          {settings.showHistograms && (
+            <TabsContent value="histograms">
+              <HistogramDashboard />
+            </TabsContent>
+          )}
+          {settings.showWaveforms && (
+            <TabsContent value="waveforms">
+              <WaveformDashboard />
+            </TabsContent>
+          )}
+          {(settings.showPSD ?? true) && (
+            <TabsContent value="psd">
+              <PSDDashboard />
+            </TabsContent>
+          )}
         </Tabs>
       </Layout>
     </QueryClientProvider>

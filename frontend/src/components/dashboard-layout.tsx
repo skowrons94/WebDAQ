@@ -42,6 +42,7 @@ import useAuthStore from '@/store/auth-store'
 import { useRouter } from 'next/navigation'
 import { ModeToggle } from '@/components/ui/mode-toggle'
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { ServerStatus } from '@/components/server-status'
 
 export function Layout({ children }: { children: React.ReactNode }) {
     const clearToken = useAuthStore((state) => state.clearToken)
@@ -90,30 +91,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         Stats
                     </Link>
                     <Link
-                        href="http://lunaserver:3000"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        Grafana
-                    </Link>
-                    <Link
                         href="/DAQ"
                         className="text-muted-foreground transition-colors hover:text-foreground"
                     >
                         DAQ
                     </Link>
                     <Link
-                        href="/tuning"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        Tuning
-                    </Link>
-                    <Link
                         href="/tuner"
                         className="text-muted-foreground transition-colors hover:text-foreground"
                     >
                         Tuner
+                    </Link>
+                    <Link
+                        href="/alerts"
+                        className="text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                        Alerts
                     </Link>
                     <Link
                         href="/settings"
@@ -159,30 +152,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 Stats
                             </Link>
                             <Link
-                                href="http://lunaserver:3000"
-                                className="text-muted-foreground hover:text-foreground"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                Grafana
-                            </Link>
-                            <Link
                                 href="/DAQ"
                                 className="text-muted-foreground hover:text-foreground"
                             >
                                 DAQ
                             </Link>
                             <Link
-                                href="/tuning"
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                Tuning
-                            </Link>
-                            <Link
                                 href="/tuner"
                                 className="text-muted-foreground hover:text-foreground"
                             >
                                 Tuner
+                            </Link>
+                            <Link
+                                href="/alerts"
+                                className="text-muted-foreground hover:text-foreground"
+                            >
+                                Alerts
                             </Link>
                             <Link
                                 href="/settings"
@@ -229,6 +214,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             </CommandGroup>
                         </CommandList>
                     </CommandDialog>
+                    <ServerStatus />
                     <ModeToggle />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

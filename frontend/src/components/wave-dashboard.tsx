@@ -90,15 +90,52 @@ export default function WaveformDashboard() {
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
-  const { settings, updateBoardChannelSelection, clearAllSelections } = useVisualizationStore()
-  const [storeReady, setStoreReady] = useState(false)
+  const { settings, updateBoardChannelSelection, clearAllSelections, hydrateFromServer, hydrated } = useVisualizationStore()
+  const storeReady = hydrated
+  const waveConfigSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const waveConfigLoadedRef = useRef(false)
 
   useEffect(() => {
-    // Wait for store to be hydrated
-    if (settings && settings.selectedBoardsChannelsWaveform !== undefined) {
-      setStoreReady(true)
+    hydrateFromServer()
+  }, [hydrateFromServer])
+
+  // Load per-board waveform 1/2 selection from server (cross-device sync)
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/cache?type=wave-config')
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.success && data.data && data.data.selectedWaveform) {
+          setSelectedWaveform(prev => ({ ...prev, ...data.data.selectedWaveform }))
+        }
+        waveConfigLoadedRef.current = true
+      })
+      .catch(err => {
+        console.error('Failed to load wave-config from server:', err)
+        waveConfigLoadedRef.current = true
+      })
+    return () => { cancelled = true }
+  }, [])
+
+  // Persist selectedWaveform to server whenever it changes (debounced)
+  useEffect(() => {
+    if (!waveConfigLoadedRef.current) return
+    if (waveConfigSaveTimeoutRef.current) clearTimeout(waveConfigSaveTimeoutRef.current)
+    waveConfigSaveTimeoutRef.current = setTimeout(() => {
+      fetch('/api/cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'wave-config',
+          data: { selectedWaveform },
+        }),
+      }).catch(err => console.error('Failed to persist wave-config:', err))
+    }, 400)
+    return () => {
+      if (waveConfigSaveTimeoutRef.current) clearTimeout(waveConfigSaveTimeoutRef.current)
     }
-  }, [settings])
+  }, [selectedWaveform])
 
   useEffect(() => {
     fetchBoardConfiguration()
@@ -145,12 +182,14 @@ export default function WaveformDashboard() {
       const response = await getBoardConfiguration()
       setBoards(response.data)
 
-      // Initialize waveform selection for each board
-      const initialWaveforms: {[boardId: string]: number} = {}
-      response.data.forEach((board: BoardData) => {
-        initialWaveforms[board.id] = 1 // Default to waveform 1
+      // Initialize waveform selection for each board, preserving any loaded values
+      setSelectedWaveform(prev => {
+        const next: {[boardId: string]: number} = { ...prev }
+        response.data.forEach((board: BoardData) => {
+          if (next[board.id] === undefined) next[board.id] = 1
+        })
+        return next
       })
-      setSelectedWaveform(initialWaveforms)
 
       // Fetch board settings for waveform configuration
       await fetchAllBoardSettings(response.data)
@@ -353,45 +392,48 @@ export default function WaveformDashboard() {
   const updateHistograms = useCallback(async () => {
     for (const board of boards) {
       const selectedChannels = getSelectedChannels(board.id)
-      // Only fetch data for explicitly selected channels
       if (selectedChannels.length === 0) continue
 
       for (const channelIndex of selectedChannels) {
         const histoId = `board${board.id}_channel${channelIndex}`
         const histoElement = histogramRefs.current[histoId]
-        if (histoElement && window.JSROOT) {
-          try {
-            const waveformNum = selectedWaveform[board.id] || 1
-            const histogramData = waveformNum === 1
-              ? await getWaveform1(board.id, channelIndex.toString())
-              : await getWaveform2(board.id, channelIndex.toString())
-            const histogram = window.JSROOT.parse(histogramData)
-            await window.JSROOT.redraw(histoElement, histogram, "hist")
-            // Overlay probe1 (trigger, green) and probe2 (peaking, red) on the same canvas
-            try {
-              const p1Data = await getProbe1(board.id, channelIndex.toString())
-              if (p1Data) {
-                const p1 = window.JSROOT.parse(p1Data)
-                p1.fLineColor = 3 // ROOT kGreen
-                await window.JSROOT.draw(histoElement, p1, "hist same")
-              }
-            } catch {}
-            try {
-              const p2Data = await getProbe2(board.id, channelIndex.toString())
-              if (p2Data) {
-                const p2 = window.JSROOT.parse(p2Data)
-                p2.fLineColor = 2 // ROOT kRed
-                await window.JSROOT.draw(histoElement, p2, "hist same")
-              }
-            } catch {}
-          } catch (error) {
-            console.error(`Failed to fetch histogram for ${histoId}:`, error)
-            toast({
-              title: "Error",
-              description: `Failed to update histogram for ${board.name} - Channel ${channelIndex}`,
-              variant: "destructive",
-            })
+        if (!histoElement || !window.JSROOT) continue
+
+        try {
+          const waveformNum = selectedWaveform[board.id] || 1
+          const [waveData, p1Data, p2Data] = await Promise.all([
+            waveformNum === 1
+              ? getWaveform1(board.id, channelIndex.toString())
+              : getWaveform2(board.id, channelIndex.toString()),
+            getProbe1(board.id, channelIndex.toString()).catch(() => null),
+            getProbe2(board.id, channelIndex.toString()).catch(() => null),
+          ])
+
+          const histogram = window.JSROOT.parse(waveData)
+          // Build a fresh TCanvas every tick so probes never stack from previous frames.
+          const canvas = window.JSROOT.create('TCanvas')
+          canvas.fName = `wave_${histoId}`
+          canvas.fPrimitives.Add(histogram, 'hist')
+
+          if (p1Data) {
+            const p1 = window.JSROOT.parse(p1Data)
+            p1.fLineColor = 3 // kGreen
+            canvas.fPrimitives.Add(p1, 'hist same')
           }
+          if (p2Data) {
+            const p2 = window.JSROOT.parse(p2Data)
+            p2.fLineColor = 2 // kRed
+            canvas.fPrimitives.Add(p2, 'hist same')
+          }
+
+          await window.JSROOT.redraw(histoElement, canvas)
+        } catch (error) {
+          console.error(`Failed to fetch histogram for ${histoId}:`, error)
+          toast({
+            title: 'Error',
+            description: `Failed to update histogram for ${board.name} - Channel ${channelIndex}`,
+            variant: 'destructive',
+          })
         }
       }
     }

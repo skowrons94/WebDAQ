@@ -163,9 +163,8 @@ export default function ParamTuner() {
 
   const waveformRef = useRef<HTMLDivElement>(null)
   const histogramRef = useRef<HTMLDivElement>(null)
-  const probe1PainterRef = useRef<any>(null)
-  const probe2PainterRef = useRef<any>(null)
-  const waveformKeyRef = useRef<string>('')
+  // (probe painters and waveform key tracking are no longer needed — we rebuild
+  // a fresh TCanvas every tick which cleanly replaces all primitives.)
   const { toast } = useToast()
 
   // --- Derived values ---
@@ -278,48 +277,31 @@ export default function ParamTuner() {
     if (!el || !window.JSROOT) return
     const fetch = async () => {
       try {
-        const data =
+        const [waveData, p1Data, p2Data] = await Promise.all([
           waveformNum === 1
-            ? await getWaveform1(selectedBoardId, selectedChannel.toString())
-            : await getWaveform2(selectedBoardId, selectedChannel.toString())
-        const parsed = window.JSROOT.parse(data)
+            ? getWaveform1(selectedBoardId, selectedChannel.toString())
+            : getWaveform2(selectedBoardId, selectedChannel.toString()),
+          getProbe1(selectedBoardId, selectedChannel.toString()).catch(() => null),
+          getProbe2(selectedBoardId, selectedChannel.toString()).catch(() => null),
+        ])
 
-        // When board/channel/waveformNum changes, forget the old probe painters so
-        // they get re-created fresh on the new (blank) pad.
-        const currentKey = `${selectedBoardId}-${selectedChannel}-${waveformNum}`
-        if (waveformKeyRef.current !== currentKey) {
-          waveformKeyRef.current = currentKey
-          probe1PainterRef.current = null
-          probe2PainterRef.current = null
+        const parsed = window.JSROOT.parse(waveData)
+        // Build a fresh TCanvas every tick so probe overlays never accumulate from
+        // previous frames (the old draw(... "same") path stacked them).
+        const canvas = window.JSROOT.create('TCanvas')
+        canvas.fName = `tuner_wave_${selectedBoardId}_${selectedChannel}_${waveformNum}`
+        canvas.fPrimitives.Add(parsed, 'hist')
+        if (p1Data) {
+          const p1 = window.JSROOT.parse(p1Data)
+          p1.fLineColor = 3 // kGreen
+          canvas.fPrimitives.Add(p1, 'hist same')
         }
-
-        // Fetch probe data
-        let p1: any = null
-        let p2: any = null
-        try {
-          const p1Data = await getProbe1(selectedBoardId, selectedChannel.toString())
-          if (p1Data) { p1 = window.JSROOT.parse(p1Data); p1.fLineColor = 3 }
-        } catch {}
-        try {
-          const p2Data = await getProbe2(selectedBoardId, selectedChannel.toString())
-          if (p2Data) { p2 = window.JSROOT.parse(p2Data); p2.fLineColor = 2 }
-        } catch {}
-
-        // If probe painters already exist, push new data into them before redraw.
-        // JSROOT.redraw calls redrawPad internally, which repaints all painters on
-        // the pad — so the updated probe objects are picked up without any cleanup.
-        if (p1 && probe1PainterRef.current) probe1PainterRef.current.updateObject(p1)
-        if (p2 && probe2PainterRef.current) probe2PainterRef.current.updateObject(p2)
-
-        // Redraw main waveform in-place (preserves zoom, triggers full pad repaint)
-        await window.JSROOT.redraw(el, parsed, 'hist')
-
-        // First render (or after context change): add probe overlays now that the
-        // main histogram painter owns the pad.
-        if (p1 && !probe1PainterRef.current)
-          probe1PainterRef.current = await window.JSROOT.draw(el, p1, 'hist same')
-        if (p2 && !probe2PainterRef.current)
-          probe2PainterRef.current = await window.JSROOT.draw(el, p2, 'hist same')
+        if (p2Data) {
+          const p2 = window.JSROOT.parse(p2Data)
+          p2.fLineColor = 2 // kRed
+          canvas.fPrimitives.Add(p2, 'hist same')
+        }
+        await window.JSROOT.redraw(el, canvas)
       } catch {}
     }
     fetch()

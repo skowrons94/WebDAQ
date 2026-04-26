@@ -69,6 +69,15 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ showWaveforms: checked })}
                         />
                     </div>
+
+                    <div className="flex items-center justify-between p-2">
+                        <Label htmlFor="showPSD">Show PSD</Label>
+                        <Switch
+                            id="showPSD"
+                            checked={settings.showPSD ?? true}
+                            onCheckedChange={(checked) => updateSettings({ showPSD: checked })}
+                        />
+                    </div>
                     <p className="text-lg font-bold">Show/Hide cards in dashboard</p>
 
                     <div className="flex items-center justify-between p-2">
