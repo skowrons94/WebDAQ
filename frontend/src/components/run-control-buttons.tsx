@@ -526,7 +526,7 @@ export function RunControlButtons({
           </Button>
           <Button onClick={handleConnectTetrAMM} className="w-full" variant="outline">
             <Plug className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Connect TetrAMM</span>
+            <span className="hidden md:inline">Connect Current Module</span>
             <span className="inline md:hidden">Connect</span>
           </Button>
         </div>
@@ -535,11 +535,11 @@ export function RunControlButtons({
         <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
           <Button onClick={handleReset} className="w-full" variant="outline">
             <AlertTriangle className="mr-2 h-4 w-4" />
-            Reset
+            Reset XDAQ
           </Button>
           <Button onClick={handleRefreshBoardConnections} className="w-full" variant="outline" disabled={isRunning}>
             <Wifi className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Refresh Boards</span>
+            <span className="hidden md:inline">Refresh Board Connection</span>
             <span className="inline md:hidden">Refresh</span>
           </Button>
         </div>

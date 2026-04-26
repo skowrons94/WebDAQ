@@ -1,0 +1,8 @@
+{
+  "range": "R0",
+  "filter": "F032",
+  "input_mode": "G0",
+  "bias": "B0",
+  "sample_rate": "I1000",
+  "high_speed": false
+}
