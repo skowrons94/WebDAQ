@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Trash2, Plus, Play, Square, FolderOpen, FileText, FlaskConical } from 'lucide-react'
+import { Trash2, Plus, Play, Square, FolderOpen, FileText, FlaskConical, Loader2, AlertCircle } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Progress } from '@/components/ui/progress'
 
 type WorkingDirectory = {
     id: string
@@ -22,12 +23,17 @@ export function ServerStatus() {
     const [newLabel, setNewLabel] = useState('')
     const [newPath, setNewPath] = useState('')
     const [loading, setLoading] = useState(false)
-    const [busyId, setBusyId] = useState<string | null>(null)
     const [message, setMessage] = useState('')
     const [showLogs, setShowLogs] = useState(false)
     const [logs, setLogs] = useState('')
     const [logsTruncated, setLogsTruncated] = useState(false)
     const [testModeOnLaunch, setTestModeOnLaunch] = useState(false)
+    // Launch feedback: from the moment "Start" is clicked until the server
+    // answers on its HTTP port (detected by the status poll) or errors out.
+    const [launching, setLaunching] = useState(false)
+    const [launchLabel, setLaunchLabel] = useState('')
+    const [launchProgress, setLaunchProgress] = useState(0)
+    const [launchError, setLaunchError] = useState('')
     const popoverRef = useRef<HTMLDivElement>(null)
     const logsRef = useRef<HTMLPreElement>(null)
 
@@ -95,9 +101,47 @@ export function ServerStatus() {
         return () => document.removeEventListener('mousedown', handler)
     }, [open])
 
-    // Poll logs while shown and server is running
+    // Detect when a launch finishes: the status poll flips `connected` true.
     useEffect(() => {
-        if (!showLogs || !connected) return
+        if (launching && connected) {
+            setLaunching(false)
+            setLaunchProgress(100)
+            setLaunchError('')
+            setMessage('')
+        }
+    }, [launching, connected])
+
+    // Ease an indeterminate-style progress bar toward ~90% while launching;
+    // it only reaches 100% once the server actually answers (effect above).
+    useEffect(() => {
+        if (!launching) {
+            setLaunchProgress(0)
+            return
+        }
+        setLaunchProgress(8)
+        const id = setInterval(() => {
+            setLaunchProgress((p) => (p < 90 ? p + Math.max(1, (90 - p) * 0.06) : p))
+        }, 500)
+        return () => clearInterval(id)
+    }, [launching])
+
+    // Give up after a grace period and surface it as a likely error so the user
+    // isn't left staring at a bar forever. Logs are already visible to diagnose.
+    useEffect(() => {
+        if (!launching) return
+        const timeout = setTimeout(() => {
+            setLaunching(false)
+            setLaunchError(
+                'Server did not come online within 90s. Check the logs below for errors.',
+            )
+            setShowLogs(true)
+        }, 90000)
+        return () => clearTimeout(timeout)
+    }, [launching])
+
+    // Poll logs while shown and the server is running or still launching.
+    useEffect(() => {
+        if (!showLogs || (!connected && !launching)) return
         let cancelled = false
         const tick = async () => {
             try {
@@ -122,11 +166,16 @@ export function ServerStatus() {
             cancelled = true
             clearInterval(interval)
         }
-    }, [showLogs, connected])
+    }, [showLogs, connected, launching])
 
     const startInDirectory = async (dir: WorkingDirectory) => {
-        setBusyId(dir.id)
-        setLoading(true)
+        // Flip into the launching view immediately — the start request itself
+        // (db upgrade + user creation, run synchronously server-side) can take a
+        // few seconds before it even returns, so the user needs feedback now.
+        setLaunchLabel(dir.label)
+        setLaunchError('')
+        setLaunching(true)
+        setShowLogs(true)
         setMessage('')
         try {
             const res = await fetch('/api/server-control', {
@@ -139,18 +188,16 @@ export function ServerStatus() {
                 }),
             })
             const data = await res.json()
-            if (data.success) {
-                setMessage(
-                    `Starting in ${dir.label}${testModeOnLaunch ? ' (test mode)' : ''}…`,
-                )
-            } else {
-                setMessage(data.error || 'Failed to start')
+            if (!data.success) {
+                setLaunching(false)
+                setLaunchError(data.error || 'Failed to start the server.')
             }
+            // On success we stay in the launching state; the status poll detects
+            // when the server is actually online and clears it.
         } catch (e: any) {
-            setMessage(e?.message || 'Error communicating with launcher')
+            setLaunching(false)
+            setLaunchError(e?.message || 'Error communicating with launcher')
         }
-        setLoading(false)
-        setBusyId(null)
     }
 
     const handleStop = async () => {
@@ -188,15 +235,17 @@ export function ServerStatus() {
         await persistDirectories(directories.filter((d) => d.id !== id))
     }
 
-    const dotColor =
-        connected === null
+    const dotColor = launching
+        ? 'bg-amber-500 shadow-[0_0_6px_2px_rgba(245,158,11,0.4)] animate-pulse'
+        : connected === null
             ? 'bg-gray-400'
             : connected
                 ? 'bg-green-500 shadow-[0_0_6px_2px_rgba(34,197,94,0.4)]'
                 : 'bg-red-500 shadow-[0_0_6px_2px_rgba(239,68,68,0.4)]'
 
-    const label =
-        connected === null
+    const label = launching
+        ? 'Launching…'
+        : connected === null
             ? 'Checking…'
             : connected
                 ? 'DAQ Server Online'
@@ -225,7 +274,32 @@ export function ServerStatus() {
 
             {open && (
                 <div className="absolute right-0 top-full mt-2 w-[26rem] max-w-[calc(100vw-1rem)] rounded-lg border bg-background shadow-lg p-4 z-50">
-                    {connected ? (
+                    {launching ? (
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                <p className="text-sm font-medium">Launching DAQ server…</p>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                Starting in <span className="font-medium">{launchLabel}</span>
+                                {testModeOnLaunch ? ' (test mode)' : ''}. Initializing the
+                                database, creating the user and booting XDAQ — this can take up to
+                                a minute.
+                            </p>
+                            <Progress value={launchProgress} className="h-2" />
+                            <div className="space-y-1">
+                                <p className="text-[10px] text-muted-foreground">
+                                    Live server log:
+                                </p>
+                                <pre
+                                    ref={logsRef}
+                                    className="text-[10px] leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-72 overflow-auto"
+                                >
+                                    {logs || 'Waiting for output…'}
+                                </pre>
+                            </div>
+                        </div>
+                    ) : connected ? (
                         <div className="space-y-3">
                             <div>
                                 <div className="flex items-center gap-2">
@@ -283,6 +357,19 @@ export function ServerStatus() {
                     ) : (
                         <div className="space-y-3">
                             <p className="text-sm font-medium">Start an Experiment</p>
+                            {launchError && (
+                                <div className="space-y-1.5">
+                                    <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+                                        <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                        <span className="break-words">{launchError}</span>
+                                    </div>
+                                    {logs && (
+                                        <pre className="text-[10px] leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-48 overflow-auto">
+                                            {logs}
+                                        </pre>
+                                    )}
+                                </div>
+                            )}
                             <p className="text-xs text-muted-foreground">
                                 Pick a saved working directory or add a new one. The DAQ server runs
                                 in the chosen directory; conf/, calib/, data/ and the database are
@@ -330,17 +417,11 @@ export function ServerStatus() {
                                             size="sm"
                                             variant="default"
                                             onClick={() => startInDirectory(dir)}
-                                            disabled={loading}
+                                            disabled={loading || launching}
                                             className="h-7 px-2"
                                         >
-                                            {busyId === dir.id ? (
-                                                'Starting…'
-                                            ) : (
-                                                <>
-                                                    <Play className="h-3 w-3 mr-1" />
-                                                    Start
-                                                </>
-                                            )}
+                                            <Play className="h-3 w-3 mr-1" />
+                                            Start
                                         </Button>
                                         <Button
                                             size="icon"

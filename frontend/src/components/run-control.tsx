@@ -72,7 +72,10 @@ export function RunControl() {
       const updateTimer = () => {
         const start = new Date(startTime).getTime()
         const now = new Date().getTime()
-        const elapsed = Math.floor((now - start) / 1000) - 10 // Adjust for potential delays
+        // start_time is a timezone-aware ISO string, so this is correct across
+        // time zones. Clamp at 0 so the timer never shows a negative value from
+        // small clock skew between server and client.
+        const elapsed = Math.max(0, Math.floor((now - start) / 1000))
         setTimer(elapsed)
       }
       updateTimer()

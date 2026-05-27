@@ -773,7 +773,11 @@ class DAQManager:
         
         if running:
             if start_time is None:
-                start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                # Emit a timezone-aware ISO 8601 timestamp (includes the local
+                # UTC offset, e.g. 2026-05-27T14:30:00+02:00). Without the offset
+                # the browser parses the string ambiguously and the run timer can
+                # start with a wrong, sometimes negative, elapsed value.
+                start_time = datetime.now().astimezone().isoformat()
             self.daq_state['start_time'] = start_time
         else:
             self.daq_state['start_time'] = None

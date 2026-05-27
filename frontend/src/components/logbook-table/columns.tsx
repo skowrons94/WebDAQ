@@ -100,7 +100,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="target_name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Target Name</FormLabel>
+                            <FormLabel>Run Name</FormLabel>
                             <FormControl>
                                 <Input {...field} />
                             </FormControl>
@@ -202,7 +202,7 @@ export const COLUMN_LABELS: Record<string, string> = {
     end_time: "End Time",
     duration: "Duration",
     accumulated_charge: "Accumulated Charge",
-    target_name: "Target",
+    target_name: "Run Name",
     terminal_voltage: "Terminal Voltage",
     probe_voltage: "Probe Voltage",
     run_type: "Run Type",

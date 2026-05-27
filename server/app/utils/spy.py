@@ -36,6 +36,12 @@ TEST_FLAG = os.getenv('TEST_FLAG', False)
 try:
     import ROOT
     ROOT_AVAILABLE = True
+    # Silence ROOT's non-fatal chatter (e.g. the "TH1::Rebin: ngroup is not an
+    # exact divider of the number of bins" warnings) so it doesn't flood the
+    # server log. gErrorIgnoreLevel is process-global, so setting it here at the
+    # primary ROOT import point covers every later Rebin call. Errors and fatals
+    # are still shown.
+    ROOT.gErrorIgnoreLevel = ROOT.kError
     logger.info("ROOT framework loaded successfully")
 except ImportError as e:
     ROOT_AVAILABLE = False

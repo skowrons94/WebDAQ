@@ -473,7 +473,7 @@ export function RunControlButtons({
         {/* Metadata Input Fields */}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-8">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="targetName">Target Name</Label>
+            <Label htmlFor="targetName">Run Name</Label>
             <Input
               id="targetName"
               type="text"

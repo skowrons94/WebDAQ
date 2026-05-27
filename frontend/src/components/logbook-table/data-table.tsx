@@ -143,7 +143,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                 "Start Time": startTime ? startTime.toLocaleString() : "",
                 "End Time": endTime ? endTime.toLocaleString() : "",
                 "Duration (s)": durationSeconds,
-                Target: row.original.target_name,
+                "Run Name": row.original.target_name,
                 "Run Type": row.original.run_type,
                 "Terminal Voltage": row.original.terminal_voltage,
                 "Probe Voltage": row.original.probe_voltage,

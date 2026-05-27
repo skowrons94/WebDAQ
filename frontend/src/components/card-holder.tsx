@@ -560,15 +560,17 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
+              <div className="text-2xl font-bold">
+                {runNumber !== null ? `Run ${runNumber} - ` : ""}
+                {isRunning ? "Running" : "Stopped"}
+              </div>
               <p className="text-xs text-muted-foreground">
-                {runNumber !== null && `Run ${runNumber} · `}
                 {isRunning ? `started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `last run: ${lastRunDuration}s` : "stopped")}
               </p>
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <HardDrive className="h-3.5 w-3.5" />
-                  File BW
+                  File Bandwidth
                 </span>
                 <span className="font-semibold">
                   {fileBandwidth < 0.1
@@ -678,7 +680,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <HardDrive className="h-3.5 w-3.5" />
-                      Internal BW
+                      Data Bandwidth
                     </span>
                     <span className="font-semibold">
                       {(xdaqInfo?.input_bandwidth ?? 0).toFixed(2)} MB/s
