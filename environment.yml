@@ -9,6 +9,7 @@ dependencies:
   - python
   - numpy
   - matplotlib
+  - boost
   - jupyter
   - ipykernel
   - ipywidgets
@@ -20,6 +21,7 @@ dependencies:
   - flask-cors
   - root=6.30.4
   - pkgconfig
+  - pyserial
   - nodejs
   - pip
   - pip:
