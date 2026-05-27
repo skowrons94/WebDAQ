@@ -40,9 +40,6 @@ import {
   getDataSizeLimit,
   setDataSizeLimit,
   setRunNumber,
-  getWaveformStatus,
-  activateWaveform,
-  deactivateWaveform,
   setIpPortCurrent,
   getIpCurrent,
   getPortCurrent,
@@ -57,7 +54,6 @@ interface DAQStateProps {
   saveData: boolean
   limitFileSize: boolean
   fileSizeLimit: string
-  waveformsEnabled: boolean
   ipCurrent: string
   portCurrent: string
   isConnectedCurrent: boolean
@@ -66,7 +62,6 @@ interface DAQStateProps {
   onLimitFileSizeChange: (checked: boolean) => void
   onFileSizeLimitChange: (value: string) => void
   onRunNumberChange: (value: number) => void
-  onWaveformsChange: (checked: boolean) => void
   onIpCurrentChange: (value: string) => void
   onPortCurrentChange: (value: string) => void
 }
@@ -84,7 +79,6 @@ export function DAQState({
   saveData,
   limitFileSize,
   fileSizeLimit,
-  waveformsEnabled,
   ipCurrent,
   portCurrent,
   isConnectedCurrent,
@@ -93,7 +87,6 @@ export function DAQState({
   onLimitFileSizeChange,
   onFileSizeLimitChange,
   onRunNumberChange,
-  onWaveformsChange,
   onIpCurrentChange,
   onPortCurrentChange,
 }: DAQStateProps) {
@@ -166,27 +159,6 @@ export function DAQState({
     const numValue = parseInt(value)
     if (!isNaN(numValue)) {
       setDataSizeLimit(numValue)
-    }
-  }
-
-  /**
-   * Handles waveform recording toggle with API call
-   */
-  const handleWaveformsChange = async (checked: boolean) => {
-    try {
-      if (checked) {
-        await activateWaveform()
-      } else {
-        await deactivateWaveform()
-      }
-      onWaveformsChange(checked)
-    } catch (error) {
-      console.error('Failed to change waveform status:', error)
-      toast({
-        title: "Error",
-        description: "Failed to change waveform status. Please try again.",
-        variant: "destructive",
-      })
     }
   }
 
@@ -315,17 +287,6 @@ export function DAQState({
                 </TableCell>
               </TableRow>
               
-              {/* Waveforms Row */}
-              <TableRow>
-                <TableCell className="text-xs sm:text-sm py-2">Waveforms</TableCell>
-                <TableCell className="text-xs sm:text-sm py-2"></TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  <Badge variant="outline" className="text-xs">
-                    {waveformsEnabled ? 'Enabled' : 'Disabled'}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-              
               {/* Current Device Address Row */}
               <TableRow>
                 <TableCell className="text-xs sm:text-sm py-2">{currentModuleName} Address</TableCell>
@@ -423,17 +384,6 @@ export function DAQState({
                 />
               </div>
             )}
-            
-            {/* Waveforms Checkbox */}
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="waveforms"
-                checked={waveformsEnabled}
-                onCheckedChange={handleWaveformsChange}
-                disabled={isRunning}
-              />
-              <Label htmlFor="waveforms">Waveforms</Label>
-            </div>
             
             {/* Current Device Configuration */}
             {currentModuleType === 'tetramm' && (

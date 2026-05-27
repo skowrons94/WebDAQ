@@ -40,8 +40,6 @@ import {
   setRunNumber,
   checkRunDirectoryExists,
   getStartTime,
-  activateWaveform,
-  deactivateWaveform,
   getDataCurrent,
   startAcquisitionCurrent,
   stopAcquisitionCurrent,
@@ -69,7 +67,6 @@ interface RunControlButtonsProps {
   fileSizeLimit: string
   runNumber: number | null
   isRunning: boolean
-  waveformsEnabled: boolean
   ipCurrent: string
   portCurrent: string
   onStartTimeChange: (startTime: string | null) => void
@@ -90,7 +87,6 @@ export function RunControlButtons({
   fileSizeLimit,
   runNumber,
   isRunning,
-  waveformsEnabled,
   ipCurrent,
   portCurrent,
   onStartTimeChange,
@@ -207,12 +203,8 @@ export function RunControlButtons({
         await setDataSizeLimit(parseInt(fileSizeLimit))
       }
 
-      // Configure waveform recording
-      if (waveformsEnabled) {
-        await activateWaveform()
-      } else {
-        await deactivateWaveform()
-      }
+      // Waveform recording is configured per-board ahead of time (see the
+      // board cards), so its persisted register state is used as-is here.
 
       // Start current measurement if data saving is enabled
       if (saveData) {

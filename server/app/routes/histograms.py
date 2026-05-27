@@ -313,9 +313,9 @@ def deactivate_waveforms():
 def get_waveform_status():
     """
     Get current waveform activation status.
-    
+
     Returns:
-        Boolean indicating if waveforms are enabled
+        Boolean indicating if waveforms are enabled for every board
     """
     try:
         boards = daq_mgr.get_boards()
@@ -323,6 +323,72 @@ def get_waveform_status():
         return jsonify(status)
     except Exception as e:
         return jsonify({'error': f'Failed to get waveform status: {str(e)}'}), 500
+
+def _find_board(board_id):
+    """Locate a configured board by id, comparing as strings."""
+    for board in daq_mgr.get_boards():
+        if str(board['id']) == str(board_id):
+            return board
+    return None
+
+@bp.route('/waveforms/status_per_board', methods=['GET'])
+@jwt_required_custom
+def get_waveform_status_per_board():
+    """
+    Get the waveform activation status of each board individually.
+
+    Returns:
+        Mapping of board id to a boolean indicating if its waveforms are enabled
+    """
+    try:
+        boards = daq_mgr.get_boards()
+        return jsonify(spy_mgr.get_waveform_status_per_board(boards))
+    except Exception as e:
+        return jsonify({'error': f'Failed to get per-board waveform status: {str(e)}'}), 500
+
+@bp.route('/waveforms/activate/<board_id>', methods=['POST'])
+@jwt_required_custom
+def activate_waveforms_board(board_id):
+    """
+    Activate waveform recording for a single board.
+
+    Args:
+        board_id: Id of the board to activate waveforms for
+
+    Returns:
+        Success/failure message
+    """
+    try:
+        board = _find_board(board_id)
+        if board is None:
+            return jsonify({'error': f'Board {board_id} not found'}), 404
+        if spy_mgr.set_waveform_for_board(board, True):
+            return jsonify({'message': f'Waveforms activated for board {board_id}!'}), 200
+        return jsonify({'message': f'Failed to activate waveforms for board {board_id}'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Failed to activate waveforms: {str(e)}'}), 500
+
+@bp.route('/waveforms/deactivate/<board_id>', methods=['POST'])
+@jwt_required_custom
+def deactivate_waveforms_board(board_id):
+    """
+    Deactivate waveform recording for a single board.
+
+    Args:
+        board_id: Id of the board to deactivate waveforms for
+
+    Returns:
+        Success/failure message
+    """
+    try:
+        board = _find_board(board_id)
+        if board is None:
+            return jsonify({'error': f'Board {board_id} not found'}), 404
+        if spy_mgr.set_waveform_for_board(board, False):
+            return jsonify({'message': f'Waveforms deactivated for board {board_id}!'}), 200
+        return jsonify({'message': f'Failed to deactivate waveforms for board {board_id}'}), 500
+    except Exception as e:
+        return jsonify({'error': f'Failed to deactivate waveforms: {str(e)}'}), 500
 
 # Monitoring and Status Routes
 @bp.route('/spy/status', methods=['GET'])

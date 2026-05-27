@@ -9,7 +9,6 @@ import {
   getCurrentRunNumber,
   getRunStatus,
   getStartTime,
-  getWaveformStatus,
   getIpCurrent,
   getPortCurrent,
   getConnectedCurrent,
@@ -46,8 +45,7 @@ export function RunControl() {
   const [isRunning, setIsRunning] = useState(false)
   const [timer, setTimer] = useState(0)
   const [startTime, setStartTime] = useState<string | null>(null)
-  const [waveformsEnabled, setWaveformsEnabled] = useState(false)
-  
+
   // TetrAMM connection state
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false)
   const [ipCurrent, setIpCurrent] = useState<string>('')
@@ -104,7 +102,6 @@ export function RunControl() {
         currentRunNumber,
         runStatus,
         startTimeData,
-        waveformStatus,
         ipCurrentData,
         portCurrentData,
         isConnected
@@ -115,7 +112,6 @@ export function RunControl() {
         getCurrentRunNumber(),
         getRunStatus(),
         getStartTime(),
-        getWaveformStatus(),
         getIpCurrent(),
         getPortCurrent(),
         getConnectedCurrent()
@@ -127,7 +123,6 @@ export function RunControl() {
       setRunNumberState(currentRunNumber)
       setIsRunning(runStatus)
       setStartTime(startTimeData)
-      setWaveformsEnabled(waveformStatus)
       setIpCurrent(ipCurrentData)
       setPortCurrent(portCurrentData)
       setIsConnectedCurrent(isConnected)
@@ -177,7 +172,6 @@ export function RunControl() {
             fileSizeLimit={fileSizeLimit}
             runNumber={runNumber}
             isRunning={isRunning}
-            waveformsEnabled={waveformsEnabled}
             ipCurrent={ipCurrent}
             portCurrent={portCurrent}
             onStartTimeChange={setStartTime}
@@ -191,7 +185,6 @@ export function RunControl() {
             saveData={saveData}
             limitFileSize={limitFileSize}
             fileSizeLimit={fileSizeLimit}
-            waveformsEnabled={waveformsEnabled}
             ipCurrent={ipCurrent}
             portCurrent={portCurrent}
             isConnectedCurrent={isConnectedCurrent}
@@ -200,7 +193,6 @@ export function RunControl() {
             onLimitFileSizeChange={setLimitFileSize}
             onFileSizeLimitChange={setFileSizeLimit}
             onRunNumberChange={setRunNumberState}
-            onWaveformsChange={setWaveformsEnabled}
             onIpCurrentChange={setIpCurrent}
             onPortCurrentChange={setPortCurrent}
           />

@@ -25,6 +25,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
+import { useToast } from '@/components/ui/use-toast'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
 import { useStatsStore } from '@/store/stats-store'
@@ -46,7 +48,9 @@ import {
   getCurrentModuleType,
   getRunMetadataAll,
   getSaveData,
-  getWaveformStatus,
+  getWaveformStatusPerBoard,
+  activateWaveformBoard,
+  deactivateWaveformBoard,
 } from '@/lib/api'
 
 type ROI = {
@@ -109,6 +113,7 @@ interface CardHolderProps {
 }
 
 export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
+  const { toast } = useToast()
   const { settings } = useVisualizationStore()
   const { metrics } = useMetricsStore()
   const { paths, currentValues, setPaths, setCurrentValue } = useStatsStore()
@@ -131,7 +136,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [boards, setBoards] = useState<BoardInfo[]>([])
   const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
-  const [waveformsActive, setWaveformsActive] = useState<boolean>(false)
+  const [boardWaveforms, setBoardWaveforms] = useState<{ [boardId: string]: boolean }>({})
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
@@ -427,14 +432,37 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
   const updateDaqStatuses = async () => {
     try {
-      const [save, wave] = await Promise.all([
+      const [save, waves] = await Promise.all([
         getSaveData().catch(() => null),
-        getWaveformStatus().catch(() => null),
+        getWaveformStatusPerBoard().catch(() => null),
       ])
       if (save !== null && save !== undefined) setDataSavingEnabled(Boolean(save))
-      if (wave !== null && wave !== undefined) setWaveformsActive(Boolean(wave))
+      if (waves) setBoardWaveforms(waves)
     } catch (error) {
       console.error('Failed to update DAQ statuses:', error)
+    }
+  }
+
+  /**
+   * Activates or deactivates waveform recording for a single board.
+   * Optimistically updates the toggle and reverts if the request fails.
+   */
+  const handleBoardWaveformToggle = async (boardId: string, enabled: boolean) => {
+    setBoardWaveforms(prev => ({ ...prev, [boardId]: enabled }))
+    try {
+      if (enabled) {
+        await activateWaveformBoard(boardId)
+      } else {
+        await deactivateWaveformBoard(boardId)
+      }
+    } catch (error) {
+      console.error(`Failed to toggle waveforms for board ${boardId}:`, error)
+      setBoardWaveforms(prev => ({ ...prev, [boardId]: !enabled }))
+      toast({
+        title: "Error",
+        description: `Failed to change waveform status for board ${boardId}.`,
+        variant: "destructive",
+      })
     }
   }
 
@@ -524,6 +552,10 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
           const okIcon = <CheckCircle className="h-3.5 w-3.5 text-green-500" />
           const offIcon = <XCircle className="h-3.5 w-3.5 text-red-500" />
 
+          // Waveforms are configured per-board; summarise how many are active.
+          const waveformBoardCount = Object.values(boardWaveforms).filter(Boolean).length
+          const anyWaveforms = waveformBoardCount > 0
+
           return (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -548,8 +580,8 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                       Waveforms
                     </span>
                     <span className="flex items-center gap-1 font-semibold">
-                      {waveformsActive ? 'On' : 'Off'}
-                      {waveformsActive ? okIcon : offIcon}
+                      {boards.length > 0 ? `${waveformBoardCount}/${boards.length}` : 'Off'}
+                      {anyWaveforms ? okIcon : offIcon}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -627,13 +659,16 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
             displayColor = "text-red-600";
           }
           
+          const waveformsOn = boardWaveforms[board.id] ?? false
+
           return (
             <Card key={`board-status-${board.id}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Board {board.id}
-                </CardTitle>
-                <div className="flex items-center gap-2">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                <div className="flex flex-col min-w-0">
+                  <CardTitle className="text-sm font-medium">Board {board.id}</CardTitle>
+                  <p className="text-xs text-muted-foreground truncate">{board.name}</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
                   {isConnected ? (
                     <Wifi className="h-4 w-4 text-green-500" />
                   ) : (
@@ -647,13 +682,30 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                   <Cpu className="h-4 w-4 text-muted-foreground" />
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className={`text-2xl font-bold ${displayColor}`}>
+              <CardContent className="space-y-2">
+                <div className={`text-xl font-bold ${displayColor}`}>
                   {displayText}
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {board.name} • {board.dpp} - {isConnected ? 'Connected' : 'Disconnected'}
+                <p className="text-xs text-muted-foreground truncate">
+                  {[board.dpp, `${board.chan} ch`, board.link_type].filter(Boolean).join(' · ')}
                 </p>
+                <div className="flex items-center justify-between border-t pt-2">
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <AudioWaveform className="h-3.5 w-3.5" />
+                    Waveforms
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium w-6 text-right">
+                      {waveformsOn ? 'On' : 'Off'}
+                    </span>
+                    <Switch
+                      checked={waveformsOn}
+                      onCheckedChange={(checked) => handleBoardWaveformToggle(String(board.id), checked)}
+                      disabled={isRunning}
+                      aria-label={`Toggle waveforms for board ${board.id}`}
+                    />
+                  </div>
+                </div>
               </CardContent>
             </Card>
           )

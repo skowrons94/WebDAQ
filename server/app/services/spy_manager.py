@@ -262,123 +262,146 @@ class SpyManager:
             self.logger.error(f"Error creating ROI histogram: {e}")
             return None
     
+    def _waveform_config_file(self, board: Dict[str, Any]) -> str:
+        """Return the register configuration file path for a single board."""
+        return f"conf/{board['name']}_{board['id']}.json"
+
+    def set_waveform_for_board(self, board: Dict[str, Any], enabled: bool) -> bool:
+        """
+        Enable or disable waveform recording for a single board by toggling
+        bit 16 of register 0x8000 in the board's configuration file.
+
+        Args:
+            board: Board configuration dictionary
+            enabled: True to enable waveforms, False to disable
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            filename = self._waveform_config_file(board)
+
+            if not os.path.exists(filename):
+                self.logger.warning(f"Configuration file not found: {filename}")
+                return False
+
+            with open(filename, 'r') as f:
+                data = json.load(f)
+
+            # Waveform recording is controlled by bit 16 of register 0x8000
+            reg_key = 'reg_8000'
+            if reg_key not in data.get('registers', {}):
+                self.logger.warning(f"Register {reg_key} not found in {filename}")
+                return False
+
+            value = int(data['registers'][reg_key]["value"], 16)
+            if enabled:
+                value |= (1 << 16)   # Set bit 16
+            else:
+                value &= ~(1 << 16)  # Clear bit 16
+            data['registers'][reg_key]["value"] = hex(value)
+
+            with open(filename, 'w') as f:
+                json.dump(data, f, indent=4)
+
+            state = "activated" if enabled else "deactivated"
+            self.logger.info(f"Waveforms {state} for board {board['id']}")
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error setting waveform state for board {board.get('id')}: {e}")
+            return False
+
+    def get_waveform_status_for_board(self, board: Dict[str, Any]) -> bool:
+        """
+        Check whether waveform recording is enabled for a single board.
+
+        Args:
+            board: Board configuration dictionary
+
+        Returns:
+            True if waveforms are enabled for the board, False otherwise
+        """
+        try:
+            filename = self._waveform_config_file(board)
+
+            if not os.path.exists(filename):
+                self.logger.warning(f"Configuration file not found: {filename}")
+                return False
+
+            with open(filename, 'r') as f:
+                data = json.load(f)
+
+            reg_key = 'reg_8000'
+            if reg_key not in data.get('registers', {}):
+                self.logger.warning(f"Register {reg_key} not found in {filename}")
+                return False
+
+            value = int(data['registers'][reg_key]["value"], 16)
+            return (value & (1 << 16)) != 0
+
+        except Exception as e:
+            self.logger.error(f"Error checking waveform status for board {board.get('id')}: {e}")
+            return False
+
     def activate_waveforms(self, boards: List[Dict[str, Any]]) -> bool:
         """
-        Activate waveform recording for all boards.
-        
+        Activate waveform recording for all provided boards.
+
         Args:
             boards: List of board configurations
-            
+
         Returns:
-            True if successful, False otherwise
+            True if all boards succeeded, False otherwise
         """
-        try:
-            for board in boards:
-                filename = f"conf/{board['name']}_{board['id']}.json"
-                
-                if os.path.exists(filename):
-                    with open(filename, 'r') as f:
-                        data = json.load(f)
-                    
-                    # Enable waveform bit in register 0x8000
-                    reg_key = 'reg_8000'
-                    if reg_key in data.get('registers', {}):
-                        string_value = data['registers'][reg_key]["value"]
-                        value = int(string_value, 16)
-                        value |= 1 << 16  # Set bit 16
-                        data['registers'][reg_key]["value"] = hex(value)
-                        
-                        with open(filename, 'w') as f:
-                            json.dump(data, f, indent=4)
-                    else:
-                        self.logger.warning(f"Register {reg_key} not found in {filename}")
-                else:
-                    self.logger.warning(f"Configuration file not found: {filename}")
-            
-            self.logger.info("Waveforms activated for all boards")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error activating waveforms: {e}")
-            return False
-    
+        success = True
+        for board in boards:
+            if not self.set_waveform_for_board(board, True):
+                success = False
+        return success
+
     def deactivate_waveforms(self, boards: List[Dict[str, Any]]) -> bool:
         """
-        Deactivate waveform recording for all boards.
-        
+        Deactivate waveform recording for all provided boards.
+
         Args:
             boards: List of board configurations
-            
+
         Returns:
-            True if successful, False otherwise
+            True if all boards succeeded, False otherwise
         """
-        try:
-            for board in boards:
-                filename = f"conf/{board['name']}_{board['id']}.json"
-                
-                if os.path.exists(filename):
-                    with open(filename, 'r') as f:
-                        data = json.load(f)
-                    
-                    # Disable waveform bit in register 0x8000
-                    reg_key = 'reg_8000'
-                    if reg_key in data.get('registers', {}):
-                        string_value = data['registers'][reg_key]["value"]
-                        value = int(string_value, 16)
-                        value &= ~(1 << 16)  # Clear bit 16
-                        data['registers'][reg_key]["value"] = hex(value)
-                        
-                        with open(filename, 'w') as f:
-                            json.dump(data, f, indent=4)
-                    else:
-                        self.logger.warning(f"Register {reg_key} not found in {filename}")
-                else:
-                    self.logger.warning(f"Configuration file not found: {filename}")
-            
-            self.logger.info("Waveforms deactivated for all boards")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error deactivating waveforms: {e}")
-            return False
-    
+        success = True
+        for board in boards:
+            if not self.set_waveform_for_board(board, False):
+                success = False
+        return success
+
     def get_waveform_status(self, boards: List[Dict[str, Any]]) -> bool:
         """
-        Check if waveforms are currently enabled.
-        
+        Check if waveforms are enabled for every provided board.
+
         Args:
             boards: List of board configurations
-            
+
         Returns:
             True if waveforms are enabled for all boards, False otherwise
         """
-        try:
-            for board in boards:
-                filename = f"conf/{board['name']}_{board['id']}.json"
-                
-                if os.path.exists(filename):
-                    with open(filename, 'r') as f:
-                        data = json.load(f)
-                    
-                    # Check waveform bit in register 0x8000
-                    reg_key = 'reg_8000'
-                    if reg_key in data.get('registers', {}):
-                        string_value = data['registers'][reg_key]["value"]
-                        value = int(string_value, 16)
-                        if (value & (1 << 16)) == 0:
-                            return False
-                    else:
-                        self.logger.warning(f"Register {reg_key} not found in {filename}")
-                        return False
-                else:
-                    self.logger.warning(f"Configuration file not found: {filename}")
-                    return False
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error checking waveform status: {e}")
-            return False
+        for board in boards:
+            if not self.get_waveform_status_for_board(board):
+                return False
+        return True
+
+    def get_waveform_status_per_board(self, boards: List[Dict[str, Any]]) -> Dict[str, bool]:
+        """
+        Report waveform activation status for each board individually.
+
+        Args:
+            boards: List of board configurations
+
+        Returns:
+            Mapping of board id (string) to its waveform enabled status
+        """
+        return {str(board['id']): self.get_waveform_status_for_board(board) for board in boards}
     
     def convert_histogram_to_json(self, histogram) -> Optional[str]:
         """

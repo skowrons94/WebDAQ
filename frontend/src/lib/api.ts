@@ -147,6 +147,13 @@ export const deactivateWaveform = () =>
     api.post('/waveforms/deactivate').then(res => res.data);
 export const getWaveformStatus = () =>
     api.get('/waveforms/status').then(res => res.data);
+// Per-board waveform control
+export const activateWaveformBoard = (boardId: string) =>
+    api.post(`/waveforms/activate/${boardId}`).then(res => res.data);
+export const deactivateWaveformBoard = (boardId: string) =>
+    api.post(`/waveforms/deactivate/${boardId}`).then(res => res.data);
+export const getWaveformStatusPerBoard = (): Promise<{ [boardId: string]: boolean }> =>
+    api.get('/waveforms/status_per_board').then(res => res.data);
 // Get ROI histograms
 export const getRoiHistogram = (boardId: string, channel: string, roiMin: number, roiMax: number) =>
     api.get(`/histograms/${boardId}/${channel}/${roiMin}/${roiMax}`).then(res => res.data);
