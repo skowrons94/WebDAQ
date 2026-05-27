@@ -460,6 +460,11 @@ def get_file_bandwidth():
 def get_output_bandwidth():
     return jsonify(daq_mgr.get_output_bandwidth())
 
+@bp.route('/experiment/xdaq/info', methods=['GET'])
+@jwt_required_custom
+def get_xdaq_info():
+    return jsonify(daq_mgr.get_xdaq_info())
+
 @bp.route('/experiment/xdaq/reset', methods=['POST'])
 @jwt_required_custom
 def reset():

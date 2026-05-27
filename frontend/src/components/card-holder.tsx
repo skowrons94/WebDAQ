@@ -16,6 +16,7 @@ import {
   Save,
   AudioWaveform,
   Server,
+  Boxes,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -51,6 +52,7 @@ import {
   getWaveformStatusPerBoard,
   activateWaveformBoard,
   deactivateWaveformBoard,
+  getXdaqInfo,
 } from '@/lib/api'
 
 type ROI = {
@@ -106,6 +108,16 @@ type BoardInfo = {
   chan: number;
 }
 
+type XdaqInfo = {
+  container_running: boolean;
+  daq_status: string;
+  num_readout_units: number;
+  run_number: number | null;
+  input_bandwidth: number;
+  output_bandwidth: number;
+  file_bandwidth: number;
+}
+
 interface CardHolderProps {
   isRunning: boolean
   timer: number
@@ -115,6 +127,8 @@ interface CardHolderProps {
 export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
+  // Treat a missing flag (older persisted settings) as enabled.
+  const currentEnabled = settings.currentEnabled !== false
   const { metrics } = useMetricsStore()
   const { paths, currentValues, setPaths, setCurrentValue } = useStatsStore()
   const [visibleMetrics, setVisibleMetrics] = useState(() => metrics.filter(metric => metric.isVisible))
@@ -137,6 +151,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
   const [boardWaveforms, setBoardWaveforms] = useState<{ [boardId: string]: boolean }>({})
+  const [xdaqInfo, setXdaqInfo] = useState<XdaqInfo | null>(null)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
@@ -201,6 +216,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     fetchBoardConfiguration()
     updateBoardConnectivity() // Initial connectivity check on page load
     updateDaqStatuses() // Initial DAQ status check
+    updateXdaqInfo() // Initial XDAQ info check
 
     // Call updateStatsValues immediately and then set up interval
     // Small delay to ensure paths are loaded from store
@@ -215,6 +231,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     const boardConnectivityInterval = setInterval(updateBoardConnectivity, 5000) // Check every 5 seconds
     const statsInterval = setInterval(updateStatsValues, 5000) // Refresh stats every 5 seconds
     const daqStatusInterval = setInterval(updateDaqStatuses, 3000)
+    const xdaqInfoInterval = setInterval(updateXdaqInfo, 5000)
 
     return () => {
       clearInterval(beamCurrentInterval)
@@ -226,6 +243,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
       clearInterval(boardConnectivityInterval)
       clearInterval(statsInterval)
       clearInterval(daqStatusInterval)
+      clearInterval(xdaqInfoInterval)
     }
   }, [])
 
@@ -443,6 +461,15 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
     }
   }
 
+  const updateXdaqInfo = async () => {
+    try {
+      const info = await getXdaqInfo()
+      if (info) setXdaqInfo(info)
+    } catch (error) {
+      console.error('Failed to update XDAQ info:', error)
+    }
+  }
+
   /**
    * Activates or deactivates waveform recording for a single board.
    * Optimistically updates the toggle and reverts if the request fails.
@@ -528,27 +555,8 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
           </Card>
         )}
 
-        {/* DAQ Status Card — data saving / waveforms / XDAQ */}
+        {/* DAQ Status Card — data saving / waveforms */}
         {settings.showStatus && (() => {
-          // XDAQ heuristic: when running we expect non-zero file bandwidth and at least
-          // one healthy board; when not running it's just idle.
-          const anyBoardFailed = Object.values(boardStatus).some((s) => s?.failed)
-          let xdaqText: string
-          let xdaqColor: string
-          if (!isRunning) {
-            xdaqText = 'Idle'
-            xdaqColor = 'text-muted-foreground'
-          } else if (anyBoardFailed) {
-            xdaqText = 'Board Error'
-            xdaqColor = 'text-red-600'
-          } else if (fileBandwidth > 0) {
-            xdaqText = 'OK'
-            xdaqColor = 'text-green-600'
-          } else {
-            xdaqText = 'No Data'
-            xdaqColor = 'text-yellow-600'
-          }
-
           const okIcon = <CheckCircle className="h-3.5 w-3.5 text-green-500" />
           const offIcon = <XCircle className="h-3.5 w-3.5 text-red-500" />
 
@@ -584,12 +592,59 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                       {anyWaveforms ? okIcon : offIcon}
                     </span>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })()}
+
+        {/* XDAQ Readout Unit Card */}
+        {settings.showXDAQ && (() => {
+          const okIcon = <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+          const offIcon = <XCircle className="h-3.5 w-3.5 text-red-500" />
+
+          const status = xdaqInfo?.daq_status ?? 'Unknown'
+          let statusColor = 'text-muted-foreground'
+          if (status === 'Running') statusColor = 'text-green-600'
+          else if (status === 'Configured' || status === 'Initialized') statusColor = 'text-yellow-600'
+          else if (status === 'Unknown') statusColor = 'text-red-600'
+
+          const containerRunning = xdaqInfo?.container_running ?? false
+
+          return (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">XDAQ</CardTitle>
+                <Boxes className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${statusColor}`}>{status}</div>
+                <div className="mt-2 space-y-1.5 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Boxes className="h-3.5 w-3.5" />
+                      Container
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold">
+                      {containerRunning ? 'Running' : 'Stopped'}
+                      {containerRunning ? okIcon : offIcon}
+                    </span>
+                  </div>
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <Server className="h-3.5 w-3.5" />
-                      XDAQ
+                      Readout Units
                     </span>
-                    <span className={`font-semibold ${xdaqColor}`}>{xdaqText}</span>
+                    <span className="font-semibold">{xdaqInfo?.num_readout_units ?? 0}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <HardDrive className="h-3.5 w-3.5" />
+                      Output
+                    </span>
+                    <span className="font-semibold">
+                      {(xdaqInfo?.output_bandwidth ?? 0).toFixed(2)} MB/s
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -598,7 +653,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
         })()}
 
         {/* Current Device Connection Status Card */}
-        {settings.showStatus && (
+        {settings.showStatus && currentEnabled && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -712,7 +767,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
         })}
 
         {/* Beam Current Card */}
-        {settings.showCurrent && (
+        {settings.showCurrent && currentEnabled && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -730,7 +785,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
         )}
 
         {/* Accumulated Charge Card */}
-        {settings.showCurrent && (
+        {settings.showCurrent && currentEnabled && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -748,7 +803,7 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
         )}
 
         {/* Total Accumulated Charge Card */}
-        {settings.showCurrent && (
+        {settings.showCurrent && currentEnabled && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">

@@ -15,6 +15,7 @@ export interface VisualizationSettings {
     showPSD: boolean
     showStatus: boolean
     showCurrent: boolean
+    currentEnabled: boolean
     showXDAQ: boolean
     showROIs: boolean
     showMetrics: boolean
@@ -41,6 +42,7 @@ const DEFAULT_SETTINGS: VisualizationSettings = {
     showPSD: true,
     showStatus: true,
     showCurrent: true,
+    currentEnabled: true,
     showXDAQ: true,
     showROIs: true,
     showMetrics: true,

@@ -48,6 +48,7 @@ import {
   getAutoRestart,
   setAutoRestart,
 } from '@/lib/api'
+import { useVisualizationStore } from '@/store/visualization-settings-store'
 
 interface DAQStateProps {
   runNumber: number | null
@@ -91,6 +92,7 @@ export function DAQState({
   onPortCurrentChange,
 }: DAQStateProps) {
   const { toast } = useToast()
+  const currentEnabled = useVisualizationStore((state) => state.settings.currentEnabled !== false)
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
   const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
@@ -288,6 +290,7 @@ export function DAQState({
               </TableRow>
               
               {/* Current Device Address Row */}
+              {currentEnabled && (
               <TableRow>
                 <TableCell className="text-xs sm:text-sm py-2">{currentModuleName} Address</TableCell>
                 <TableCell className="text-xs sm:text-sm py-2">
@@ -305,6 +308,7 @@ export function DAQState({
                   </Badge>
                 </TableCell>
               </TableRow>
+              )}
 
               {/* Auto-Restart Row */}
               <TableRow>
@@ -386,7 +390,7 @@ export function DAQState({
             )}
             
             {/* Current Device Configuration */}
-            {currentModuleType === 'tetramm' && (
+            {currentEnabled && currentModuleType === 'tetramm' && (
               <>
                 {/* TetrAMM IP Input */}
                 <div className="flex flex-col gap-4">
@@ -411,7 +415,7 @@ export function DAQState({
                 </div>
               </>
             )}
-            {currentModuleType === 'rbd9103' && (
+            {currentEnabled && currentModuleType === 'rbd9103' && (
               <div className="flex flex-col gap-4">
                 <Label>Current Device: RBD 9103</Label>
                 <p className="text-sm text-muted-foreground">

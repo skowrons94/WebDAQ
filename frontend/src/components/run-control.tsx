@@ -14,6 +14,7 @@ import {
   getConnectedCurrent,
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
+import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { CardHolder } from '@/components/card-holder'
 import { RunControlButtons } from '@/components/run-control-buttons'
 import { DAQState } from '@/components/daq-state'
@@ -36,6 +37,7 @@ export function RunControl() {
   const { toast } = useToast()
   const setIsRunningStore = useRunControlStore((state) => state.setIsRunning)
   const setStartTimeStore = useRunControlStore((state) => state.setStartTime)
+  const currentEnabled = useVisualizationStore((state) => state.settings.currentEnabled !== false)
 
   // Core DAQ state
   const [saveData, setSaveDataState] = useState(false)
@@ -199,7 +201,7 @@ export function RunControl() {
         </div>
 
         {/* Current Measurement Visualization */}
-        <CurrentPlot />
+        {currentEnabled && <CurrentPlot />}
       </main>
     </div>
   )

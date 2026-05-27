@@ -40,6 +40,7 @@ export function CurrentModuleSettings() {
   const [tetramIp, setTetramIp] = useState('169.254.145.10')
   const [tetramPort, setTetramPort] = useState('10001')
   const [tetramChn, setTetramChn] = useState('4')
+  const [tetramChargeChannel, setTetramChargeChannel] = useState('0')
   const [tetramRange, setTetramRange] = useState('AUTO')
   const [tetramNrSamp, setTetramNrSamp] = useState('10000')
 
@@ -95,6 +96,7 @@ export function CurrentModuleSettings() {
       if (settingsResponse.module_type === 'tetramm') {
         setTetramIp(settingsResponse.ip || '169.254.145.10')
         setTetramPort(String(settingsResponse.port || 10001))
+        setTetramChargeChannel(String(settingsResponse.charge_channel ?? 0))
         if (settingsResponse.settings) {
           setTetramChn(settingsResponse.settings.CHN || '4')
           setTetramRange(settingsResponse.settings.RNG || 'AUTO')
@@ -191,6 +193,7 @@ export function CurrentModuleSettings() {
       const settingsData = {
         ip: tetramIp,
         port: parseInt(tetramPort),
+        charge_channel: parseInt(tetramChargeChannel),
         device_settings: {
           CHN: tetramChn,
           RNG: tetramRange,
@@ -377,6 +380,23 @@ export function CurrentModuleSettings() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="tetram-charge-chn">Charge Channel</Label>
+                <Select value={tetramChargeChannel} onValueChange={setTetramChargeChannel}>
+                  <SelectTrigger id="tetram-charge-chn">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: parseInt(tetramChn) || 4 }, (_, i) => (
+                      <SelectItem key={i} value={String(i)}>Channel {i}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Channel whose current is read out as the beam current and integrated into the accumulated charge
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="tetram-range">Range</Label>
                 <Input
                   id="tetram-range"
@@ -525,6 +545,14 @@ export function CurrentModuleSettings() {
                     <SelectItem value="B1">B1 - Bias On</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Charge Channel</Label>
+                <p className="text-xs text-muted-foreground">
+                  The RBD 9103 is a single-channel picoammeter, so the beam current and accumulated
+                  charge are always taken from its only input.
+                </p>
               </div>
 
               <Button onClick={handleSaveRbdSettings} className="w-full">

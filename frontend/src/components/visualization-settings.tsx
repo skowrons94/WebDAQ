@@ -42,6 +42,19 @@ export function VisualizationSettings() {
                             </SelectContent>
                         </Select>
                     </div>
+                    <div className="flex items-center justify-between p-2">
+                        <div className="flex flex-col">
+                            <Label htmlFor="currentEnabled">Enable Current Acquisition</Label>
+                            <span className="text-xs text-muted-foreground">
+                                When off, the current plot, device card and charge cards are hidden and the picoammeter is not started with a run
+                            </span>
+                        </div>
+                        <Switch
+                            id="currentEnabled"
+                            checked={settings.currentEnabled !== false}
+                            onCheckedChange={(checked) => updateSettings({ currentEnabled: checked })}
+                        />
+                    </div>
                     <p className="text-xl font-bold">Show/Hide tabs</p>
                     <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showStats">Show Stats</Label>

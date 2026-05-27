@@ -33,6 +33,7 @@ else:
         "module_type": "tetramm",  # "tetramm" or "rbd9103"
         "tetramm_ip": "169.254.145.10",
         "tetramm_port": 10001,
+        "tetramm_charge_channel": 0,
         "rbd9103_port": "/dev/tty.usbserial-A50285BI",
         "rbd9103_baudrate": 57600,
         "rbd9103_high_speed": False,
@@ -60,6 +61,7 @@ if module_type == "tetramm":
         graphite_port=settings.get("graphite_port", 2003)
     )
     tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+    tetramm_ctrl.set_charge_channel(settings.get("tetramm_charge_channel", 0))
     # Initialize at startup
     try:
         tetramm_ctrl.initialize()
@@ -201,7 +203,9 @@ def get_data():
         if( data < 1e-9 ): data = 0
         return jsonify(data)
     else:
-        data = controller.get_data()["0"]
+        all_data = controller.get_data()
+        channel = str(controller.get_charge_channel()) if hasattr(controller, "get_charge_channel") else "0"
+        data = all_data.get(channel, all_data["0"])
         if( data < 1e-9 ): data = 0
         return jsonify(data)
 
@@ -317,6 +321,7 @@ def set_module_type():
                     port=settings.get("tetramm_port", 10001)
                 )
             tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+            tetramm_ctrl.set_charge_channel(settings.get("tetramm_charge_channel", 0))
             tetramm_ctrl.initialize()
             controller = tetramm_ctrl
         else:  # rbd9103
@@ -359,6 +364,7 @@ def get_module_settings():
             "module_type": "tetramm",
             "ip": settings.get("tetramm_ip", "169.254.145.10"),
             "port": settings.get("tetramm_port", 10001),
+            "charge_channel": settings.get("tetramm_charge_channel", 0),
             "settings": controller_settings
         })
     else:  # rbd9103
@@ -391,6 +397,13 @@ def update_module_settings():
                 settings["tetramm_port"] = int(data["port"])
                 if controller:
                     controller.set_port(int(data["port"]))
+
+            # Charge channel is a software-side selection (not a device command),
+            # so handle it separately from device_settings.
+            if "charge_channel" in data:
+                settings["tetramm_charge_channel"] = int(data["charge_channel"])
+                if controller and hasattr(controller, "set_charge_channel"):
+                    controller.set_charge_channel(int(data["charge_channel"]))
 
             # Update device-specific settings (CHN, RNG, ASCII, etc.)
             if "device_settings" in data:

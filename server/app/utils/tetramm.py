@@ -93,6 +93,7 @@ class TetrAMMController:
         self.accumulated_charge = 0.0  # Reset to 0 when run starts, only increases when saving data
         self.total_accumulated_charge = 0.0  # Always increases
         self.previous_time = 0.0
+        self.charge_channel = 0  # Channel used for beam current readout and charge integration
         
         # Device settings
         self.settings = {}
@@ -731,7 +732,8 @@ class TetrAMMController:
         Returns:
             float: Current accumulated charge for this run
         """
-        current_data = float(self.values["0"][-1])  # Channel 0 current in microamps
+        channel_buffer = self.values.get(str(self.charge_channel), self.values["0"])
+        current_data = float(channel_buffer[-1])  # Selected channel current in microamps
         current_time = datetime.now().timestamp()
             
         # Handle very small currents as zero
@@ -789,6 +791,32 @@ class TetrAMMController:
             value: Total accumulated charge value
         """
         self.total_accumulated_charge = value
+
+    def set_charge_channel(self, channel: int) -> None:
+        """
+        Select which channel is used for beam current readout and charge integration.
+
+        Args:
+            channel: Channel index (0-3). Invalid values fall back to channel 0.
+        """
+        try:
+            channel = int(channel)
+        except (TypeError, ValueError):
+            channel = 0
+        if str(channel) not in self.values:
+            self.logger.warning(f"Invalid TetrAMM charge channel {channel}, defaulting to 0")
+            channel = 0
+        self.charge_channel = channel
+        self.logger.info(f"TetrAMM charge channel set to {channel}")
+
+    def get_charge_channel(self) -> int:
+        """
+        Get the channel currently used for beam current readout and charge integration.
+
+        Returns:
+            int: Channel index (0-3)
+        """
+        return self.charge_channel
 
     def get_status(self) -> Dict[str, Any]:
         """

@@ -829,6 +829,86 @@ class DAQManager:
             self.logger.error(f"Error getting output bandwidth: {e}")
             return 0.0
     
+    def get_xdaq_info(self) -> Dict[str, Any]:
+        """
+        Collect status information about the XDAQ Readout Unit(s) for display.
+
+        Gathers the docker container state, the overall DAQ status reported by
+        the topology, and the Readout Unit run number and input/output/file
+        bandwidths. Only Readout Unit information is reported, since that is the
+        only actor type normally present in this setup.
+
+        Returns:
+            Dictionary with XDAQ Readout Unit status information.
+        """
+        info = {
+            'container_running': False,
+            'daq_status': 'Unknown',
+            'num_readout_units': 0,
+            'run_number': None,
+            'input_bandwidth': 0.0,
+            'output_bandwidth': 0.0,
+            'file_bandwidth': 0.0,
+        }
+
+        # In test mode there is no real container/topology, so report a
+        # plausible idle/running state derived from the saved DAQ state.
+        if self.test_flag or not self.topology:
+            info['container_running'] = True
+            info['daq_status'] = 'Running' if self.daq_state.get('running') else 'Idle'
+            info['num_readout_units'] = len(self.daq_state.get('boards', []))
+            info['run_number'] = self.daq_state.get('run')
+            return info
+
+        # Docker container status
+        try:
+            container = self.container.client.containers.get('xdaq')
+            info['container_running'] = (container.status == 'running')
+        except Exception as e:
+            self.logger.debug(f"Could not query xdaq container status: {e}")
+            info['container_running'] = False
+
+        # Number of Readout Units (read from the parsed topology, no network calls)
+        try:
+            info['num_readout_units'] = self.topology.how_many_ru()
+        except Exception as e:
+            self.logger.debug(f"Could not read Readout Unit count: {e}")
+
+        # Overall DAQ status (queries the actors over SOAP)
+        try:
+            info['daq_status'] = self.topology.get_daq_status()
+        except Exception as e:
+            self.logger.debug(f"Could not read DAQ status: {e}")
+
+        # Readout Unit run number and bandwidths (queried over SOAP)
+        try:
+            ru_actors = self.topology.get_ru_actors()
+        except Exception as e:
+            self.logger.debug(f"Could not read Readout Unit actors: {e}")
+            ru_actors = []
+
+        if ru_actors:
+            try:
+                info['run_number'] = ru_actors[0].get_run_number()
+            except Exception as e:
+                self.logger.debug(f"Could not read Readout Unit run number: {e}")
+
+            # Bandwidths are only meaningful while running
+            if self.daq_state.get('running'):
+                input_bw = output_bw = file_bw = 0.0
+                for act in ru_actors:
+                    try:
+                        input_bw += float(act.get_input_bandwith())
+                        output_bw += float(act.get_output_bandwith())
+                        file_bw += float(act.get_file_bandwith())
+                    except Exception as e:
+                        self.logger.debug(f"Could not read Readout Unit bandwidth: {e}")
+                info['input_bandwidth'] = input_bw
+                info['output_bandwidth'] = output_bw
+                info['file_bandwidth'] = file_bw
+
+        return info
+
     def reset_xdaq(self) -> bool:
         """
         Reset XDAQ system.

@@ -58,6 +58,7 @@ import {
   stopStatsRun
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
+import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
 import { pauseAlertNonBlocking, unpauseAlertNonBlocking } from '@/lib/grafana-api'
 
@@ -96,6 +97,7 @@ export function RunControlButtons({
   const { toast } = useToast()
   const setIsRunningStore = useRunControlStore((state) => state.setIsRunning)
   const setStartTimeStore = useRunControlStore((state) => state.setStartTime)
+  const currentEnabled = useVisualizationStore((state) => state.settings.currentEnabled !== false)
   const autoManageUids = useGrafanaAlertsStore((state) => state.autoManageUids)
 
   // Dialog states
@@ -206,15 +208,20 @@ export function RunControlButtons({
       // Waveform recording is configured per-board ahead of time (see the
       // board cards), so its persisted register state is used as-is here.
 
-      // Start current measurement if data saving is enabled
+      // Start current measurement if data saving is enabled and current
+      // acquisition has not been disabled in the settings.
       if (saveData) {
-        await startAcquisitionCurrent(String(runNumber))
+        if (currentEnabled) {
+          await startAcquisitionCurrent(String(runNumber))
+        }
         await startStatsRun(runNumber)
       }
 
-      // Store initial beam current for comparison
-      const initialCurrent = await getDataCurrent()
-      localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
+      // Store initial beam current for comparison (only when current is enabled)
+      if (currentEnabled) {
+        const initialCurrent = await getDataCurrent()
+        localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
+      }
 
       // Start the actual DAQ run
       await startRun()
@@ -261,7 +268,9 @@ export function RunControlButtons({
       // Stop DAQ and current measurement
       await stopRun()
       if (saveData) {
-        await stopAcquisitionCurrent()
+        if (currentEnabled) {
+          await stopAcquisitionCurrent()
+        }
         await stopStatsRun()
       }
 

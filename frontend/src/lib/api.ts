@@ -163,6 +163,8 @@ export const getRoiIntegral = (boardId: string, channel: string, roiMin: number,
 // XDAQ functions
 export const getFileBandwidth = () =>
     api.get('/experiment/xdaq/file_bandwidth').then(res => res.data);
+export const getXdaqInfo = () =>
+    api.get('/experiment/xdaq/info').then(res => res.data);
 
 // Reset
 export const reset = () =>
