@@ -311,8 +311,12 @@ def get_run_metadata(run_number):
     if run_metadata:
         return jsonify({
             'run_number': run_metadata.run_number,
-            'start_time': run_metadata.start_time,
-            'end_time': run_metadata.end_time,
+            # Serialize as a timezone-less ISO string. The stored value is local
+            # wall-clock time (datetime.now()); Flask's default encoder would
+            # otherwise tag it as GMT, making the browser shift it by the local
+            # UTC offset. ISO without a zone is parsed as local time client-side.
+            'start_time': run_metadata.start_time.isoformat() if run_metadata.start_time else None,
+            'end_time': run_metadata.end_time.isoformat() if run_metadata.end_time else None,
             'notes': run_metadata.notes,
             'target_name': run_metadata.target_name,
             'terminal_voltage': run_metadata.terminal_voltage,
@@ -335,8 +339,10 @@ def get_all_run_metadata():
         for run in run_metadata:
             metadata.append({
                 'run_number': run.run_number,
-                'start_time': run.start_time,
-                'end_time': run.end_time,
+                # ISO without timezone so the browser reads it as local wall-clock
+                # time (see get_run_metadata above for the rationale).
+                'start_time': run.start_time.isoformat() if run.start_time else None,
+                'end_time': run.end_time.isoformat() if run.end_time else None,
                 'notes': run.notes,
                 'target_name': run.target_name,
                 'terminal_voltage': run.terminal_voltage,
