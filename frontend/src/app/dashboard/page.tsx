@@ -1,7 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/auth-store';
 import { RunControl } from '@/components/run-control';
@@ -24,12 +24,20 @@ export default function DashboardPage() {
   const token = useAuthStore((state) => state.token);
   const { settings } = useVisualizationStore()
   const router = useRouter();
+  const [tab, setTab] = useState('overview')
 
   useEffect(() => {
     if (!token) {
       router.push('/auth/login');
     }
   }, [token, router]);
+
+  // Honor a ?tab= query param (used by the command palette to jump straight to
+  // Histograms / Waveforms). Read on the client to avoid a Suspense boundary.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t) setTab(t)
+  }, []);
 
   if (!token) {
     return null;
@@ -38,7 +46,7 @@ export default function DashboardPage() {
   return (
     <QueryClientProvider client={queryClient}>
       <Layout>
-        <Tabs defaultValue="overview" orientation='vertical'>        
+        <Tabs value={tab} onValueChange={setTab} orientation='vertical'>
             <div className="flex items-center">
             <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>

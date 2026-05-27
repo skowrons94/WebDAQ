@@ -62,6 +62,11 @@ class StatsManager:
         self.current_run_number = None
         self.run_start_time = None
         self.stats_file = None
+        # Column layout frozen at start_run so the data rows always line up with
+        # the header even if paths are added/removed mid-run.
+        self.stats_paths: List[Dict[str, Any]] = []
+        self.stats_columns: List[str] = []
+        self.stats_col_widths: List[int] = []
         self.collection_lock = threading.Lock()
 
     def _load_config(self) -> Dict[str, Any]:
@@ -268,6 +273,23 @@ class StatsManager:
             self.logger.error(f"Error fetching last value for {path}: {e}")
             return (None, None)
 
+    def _format_row(self, fields: List[str]) -> str:
+        """Right-justify each field to its column width for aligned output."""
+        return "".join(
+            field.rjust(width)
+            for field, width in zip(fields, self.stats_col_widths)
+        )
+
+    @staticmethod
+    def _format_value(value: Any) -> str:
+        """Format a metric value; missing/invalid samples become '0'."""
+        if value is None:
+            return "0"
+        try:
+            return f"{float(value):.6g}"
+        except (TypeError, ValueError):
+            return "0"
+
     def start_run(self, run_number: int) -> bool:
         """
         Start statistics collection for a new run.
@@ -294,18 +316,30 @@ class StatsManager:
                 self.current_run_number = run_number
                 self.run_start_time = time.time()
 
-                # Get enabled paths
-                enabled_paths = self.get_enabled_paths()
+                # Freeze the set of columns for the whole run so data rows always
+                # line up with the header.
+                self.stats_paths = self.get_enabled_paths()
+                self.stats_columns = ["Time_s"] + [
+                    p.get('alias') or p['path'] for p in self.stats_paths
+                ]
+                # Each column is right-justified to a fixed width; the +3 keeps a
+                # visible gap between columns.
+                self.stats_col_widths = [max(len(c) + 3, 16) for c in self.stats_columns]
 
-                # Write header
-                header_parts = [f"# Start time: {datetime.fromtimestamp(self.run_start_time).isoformat()}"]
-                header_parts.append("Time_s")  # First column: acquisition time in seconds
-
-                for path_entry in enabled_paths:
-                    header_parts.append(path_entry.get('alias', path_entry['path']))
-
+                # Write a human-readable header: metadata as comments, then an
+                # aligned column-name row matching the data rows below.
+                start_iso = datetime.fromtimestamp(self.run_start_time).isoformat(timespec='seconds')
+                header_lines = [
+                    "# LUNA DAQ statistics",
+                    f"# Run number: {run_number}",
+                    f"# Start time: {start_iso}",
+                    "# Columns: elapsed acquisition time (s) followed by one column per Graphite metric.",
+                    "# Missing samples are recorded as 0.",
+                    "#",
+                    self._format_row(self.stats_columns),
+                ]
                 with open(self.stats_file, 'w') as f:
-                    f.write(" ".join(header_parts) + "\n")
+                    f.write("\n".join(header_lines) + "\n")
 
                 # Start collection thread
                 self.collecting = True
@@ -344,6 +378,9 @@ class StatsManager:
                 self.stats_file = None
                 self.current_run_number = None
                 self.run_start_time = None
+                self.stats_paths = []
+                self.stats_columns = []
+                self.stats_col_widths = []
 
                 self.logger.info("Stats collection stopped")
                 return True
@@ -379,19 +416,17 @@ class StatsManager:
                     # Calculate elapsed time
                     elapsed_time = time.time() - self.run_start_time
 
-                    # Collect data for all enabled paths
-                    enabled_paths = self.get_enabled_paths()
-                    data_line = [str(elapsed_time)]
-
-                    for path_entry in enabled_paths:
-                        path = path_entry['path']
-                        value, timestamp = self.get_last_value(path)
-                        data_line.append(str(value) if value is not None else "0.0")
+                    # Collect data using the columns frozen at start_run so each
+                    # value lands under its header; missing samples become 0.
+                    fields = [f"{elapsed_time:.3f}"]
+                    for path_entry in self.stats_paths:
+                        value, _timestamp = self.get_last_value(path_entry['path'])
+                        fields.append(self._format_value(value))
 
                     # Write to file
                     if self.stats_file and os.path.exists(os.path.dirname(self.stats_file)):
                         with open(self.stats_file, 'a') as f:
-                            f.write(" ".join(data_line) + "\n")
+                            f.write(self._format_row(fields) + "\n")
 
                 # Sleep before next collection
                 time.sleep(collection_interval)

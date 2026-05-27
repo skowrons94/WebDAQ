@@ -119,9 +119,10 @@ export function ServerStatus() {
             return
         }
         setLaunchProgress(8)
+        // Tick every second (was 500ms) so the bar fills about half as fast.
         const id = setInterval(() => {
             setLaunchProgress((p) => (p < 90 ? p + Math.max(1, (90 - p) * 0.06) : p))
-        }, 500)
+        }, 1000)
         return () => clearInterval(id)
     }, [launching])
 

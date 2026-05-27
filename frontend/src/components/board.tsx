@@ -1,18 +1,17 @@
 "use client"
 
-import { useState, useEffect } from 'react'
-import Link from "next/link"
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { getBoardConfiguration, addBoard, removeBoard } from '@/lib/api'
+import { getBoardConfiguration, addBoard, removeBoard, getBoardConnectivity } from '@/lib/api'
 import { useToast } from "@/components/ui/use-toast"
-import { MoonStarIcon } from 'lucide-react'
+import { Cpu, Plus, Trash2 } from 'lucide-react'
 
 const formSchema = z.object({
   id: z.string().min(1, "Board ID is required"),
@@ -24,8 +23,11 @@ const formSchema = z.object({
 
 type BoardData = z.infer<typeof formSchema>
 
+type Connectivity = { connected: boolean; ready: boolean; failed: boolean }
+
 export function Board() {
   const [boards, setBoards] = useState<BoardData[]>([])
+  const [connectivity, setConnectivity] = useState<Record<string, Connectivity>>({})
   const { toast } = useToast()
 
   const form = useForm<BoardData>({
@@ -39,9 +41,24 @@ export function Board() {
     },
   })
 
+  const fetchConnectivity = useCallback(async () => {
+    try {
+      const data = await getBoardConnectivity()
+      if (data && typeof data === 'object' && !data.error) {
+        setConnectivity(data)
+      }
+    } catch (error) {
+      // Server may be offline or boards not yet connected — leave status unknown.
+      console.error('Failed to fetch board connectivity:', error)
+    }
+  }, [])
+
   useEffect(() => {
     fetchBoardConfiguration()
-  }, [])
+    fetchConnectivity()
+    const interval = setInterval(fetchConnectivity, 5000)
+    return () => clearInterval(interval)
+  }, [fetchConnectivity])
 
   async function fetchBoardConfiguration() {
     try {
@@ -61,6 +78,7 @@ export function Board() {
     try {
       await addBoard(values)
       await fetchBoardConfiguration()
+      fetchConnectivity()
       form.reset()
       toast({
         title: "Success",
@@ -80,6 +98,7 @@ export function Board() {
     try {
       await removeBoard(boardId)
       await fetchBoardConfiguration()
+      fetchConnectivity()
       toast({
         title: "Success",
         description: "Board removed successfully.",
@@ -95,7 +114,82 @@ export function Board() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen text-foreground">
+    <div className="flex flex-col text-foreground gap-8">
+        {/* Added boards — shown first, as a grid of status cards */}
+        <Card className="w-full mx-auto">
+          <CardHeader>
+            <CardTitle>Added CAEN Boards</CardTitle>
+            <CardDescription>
+              Configured digitizers and their live connection status.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {boards.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-10 text-center">
+                <Cpu className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  No boards configured yet. Add one below to get started.
+                </p>
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {boards.map((board) => {
+                  const conn = connectivity[String(board.id)]
+                  const status = conn?.failed
+                    ? { label: "Failed", dot: "bg-red-500", text: "text-red-600 dark:text-red-400" }
+                    : conn?.connected
+                      ? { label: "Connected", dot: "bg-green-500", text: "text-green-600 dark:text-green-400" }
+                      : { label: "Disconnected", dot: "bg-gray-400", text: "text-muted-foreground" }
+                  return (
+                    <div
+                      key={board.id}
+                      className="relative rounded-lg border bg-card p-4 shadow-sm transition-colors hover:bg-muted/30"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
+                            <Cpu className="h-5 w-5 text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold leading-tight">Board {board.id}</p>
+                            <p className="text-xs text-muted-foreground">{board.dpp}</p>
+                          </div>
+                        </div>
+                        <span className={`flex items-center gap-1.5 text-xs font-medium ${status.text}`}>
+                          <span className={`inline-block h-2 w-2 rounded-full ${status.dot}`} />
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
+                        <dt className="text-muted-foreground">VME Address</dt>
+                        <dd className="text-right font-mono">{board.vme}</dd>
+                        <dt className="text-muted-foreground">Link Type</dt>
+                        <dd className="text-right">{board.link_type}</dd>
+                        <dt className="text-muted-foreground">
+                          {board.link_type === "A4818" ? "PID" : "Link Number"}
+                        </dt>
+                        <dd className="text-right font-mono">{board.link_num}</dd>
+                      </dl>
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-3 w-full text-destructive hover:text-destructive"
+                        onClick={() => handleRemoveBoard(board.id)}
+                      >
+                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                        Remove
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Add a new board */}
         <Card className="w-full mx-auto">
           <CardHeader>
             <CardTitle>Add CAEN Board</CardTitle>
@@ -209,35 +303,12 @@ export function Board() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit">Add Board</Button>
+                <Button type="submit">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Add Board
+                </Button>
               </form>
             </Form>
-          </CardContent>
-        </Card>
-
-        <Card className="w-full mx-auto mt-8">
-          <CardHeader>
-            <CardTitle>Added CAEN Boards</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-4">
-              {boards.map((board) => (
-                <li key={board.id} className="bg-muted p-4 rounded-md">
-                  <strong>Board ID:</strong> {board.id} <br />
-                  <strong>VME Address:</strong> {board.vme} <br />
-                  <strong>Link Type:</strong> {board.link_type} <br />
-                  <strong>{board.link_type === "A4818" ? "PID" : "Link Number"}:</strong> {board.link_num} <br />
-                  <strong>DPP Software:</strong> {board.dpp} <br />
-                  <Button
-                    variant="destructive"
-                    className="mt-2"
-                    onClick={() => handleRemoveBoard(board.id)}
-                  >
-                    Remove
-                  </Button>
-                </li>
-              ))}
-            </ul>
           </CardContent>
         </Card>
     </div>

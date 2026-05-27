@@ -1,22 +1,26 @@
 import React, { useState } from 'react'
 import {
-    Activity,
     AlertTriangle,
+    AudioWaveform,
     BarChart3,
+    BellRing,
     ChevronDown,
     CircleUser,
     Cog,
+    Cpu,
     Database,
     FlaskConical,
+    Gauge,
+    LineChart,
     Menu,
     PlayCircle,
     Power,
     Search,
     SlidersHorizontal,
     StopCircle,
-    Thermometer,
 } from "lucide-react"
 import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -44,19 +48,38 @@ import { ModeToggle } from '@/components/ui/mode-toggle'
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ServerStatus } from '@/components/server-status'
 
+// Top-level pages, in nav order. Used for both the desktop and mobile menus
+// and to highlight the page the user is currently on.
+const NAV_ITEMS = [
+    { href: "/dashboard", label: "Dashboard" },
+    { href: "/logbook", label: "Logbook" },
+    { href: "/stats", label: "Stats" },
+    { href: "/DAQ", label: "DAQ" },
+    { href: "/tuner", label: "Tuner" },
+    { href: "/alerts", label: "Alerts" },
+    { href: "/settings", label: "Settings" },
+]
+
 export function Layout({ children }: { children: React.ReactNode }) {
     const clearToken = useAuthStore((state) => state.clearToken)
     const router = useRouter()
+    const pathname = usePathname()
     const [open, setOpen] = useState(false)
+
+    // A nav entry is active when the current path matches it exactly or is a
+    // nested route beneath it (e.g. /settings/foo highlights Settings).
+    const isActive = (href: string) =>
+        pathname === href || pathname.startsWith(href + "/")
 
     const handleLogout = () => {
         clearToken()
         router.push('/')
     }
 
-    const handleSearch = (searchTerm: string) => {
-        console.log('Searching for:', searchTerm)
+    // Navigate from the command palette and close it.
+    const go = (href: string) => {
         setOpen(false)
+        router.push(href)
     }
 
     return (
@@ -70,50 +93,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <MoonStarIcon className="w-8 h-8 text-primary" />
                         <span>LUNADAQ</span>
                     </Link>
-                    <Link
-                        href="/dashboard"
-                        className="text-foreground transition-colors hover:text-foreground"
-                    >
-                        Dashboard
-                    </Link>
-                    <Link
-                        href="/logbook"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        
-                        Logbook
-                    </Link>
-                    <Link
-                        href="/stats"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-
-                        Stats
-                    </Link>
-                    <Link
-                        href="/DAQ"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        DAQ
-                    </Link>
-                    <Link
-                        href="/tuner"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        Tuner
-                    </Link>
-                    <Link
-                        href="/alerts"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        Alerts
-                    </Link>
-                    <Link
-                        href="/settings"
-                        className="text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                        Settings
-                    </Link>
+                    {NAV_ITEMS.map((item) => (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={`transition-colors hover:text-foreground ${
+                                isActive(item.href)
+                                    ? "text-foreground font-semibold"
+                                    : "text-muted-foreground"
+                            }`}
+                        >
+                            {item.label}
+                        </Link>
+                    ))}
                 </nav>
                 <Sheet>
                     <SheetTrigger asChild>
@@ -129,52 +121,25 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <SheetContent side="left">
                         <nav className="grid gap-6 text-lg font-medium">
                             <Link
-                                href="#"
+                                href="/dashboard"
                                 className="flex items-center gap-2 text-lg font-semibold"
                             >
                                 <MoonStarIcon className="w-8 h-8 text-primary" />
                                 <span>LUNADAQ</span>
                             </Link>
-                            <Link href="/dashboard" className="hover:text-foreground">
-                                Dashboard
-                            </Link>
-                            <Link
-                                href="/logbook"
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                Logbook
-                            </Link>
-                            <Link
-                                href="/stats"
-                                className="text-muted-foreground transition-colors hover:text-foreground"
-                            >
-
-                                Stats
-                            </Link>
-                            <Link
-                                href="/DAQ"
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                DAQ
-                            </Link>
-                            <Link
-                                href="/tuner"
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                Tuner
-                            </Link>
-                            <Link
-                                href="/alerts"
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                Alerts
-                            </Link>
-                            <Link
-                                href="/settings"
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                Settings
-                            </Link>
+                            {NAV_ITEMS.map((item) => (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    className={`transition-colors hover:text-foreground ${
+                                        isActive(item.href)
+                                            ? "text-foreground font-semibold"
+                                            : "text-muted-foreground"
+                                    }`}
+                                >
+                                    {item.label}
+                                </Link>
+                            ))}
                         </nav>
                     </SheetContent>
                 </Sheet>
@@ -191,23 +156,54 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         <CommandInput placeholder="Type a command or search..." />
                         <CommandList>
                             <CommandEmpty>No results found.</CommandEmpty>
-                            <CommandGroup heading="Suggestions">
-                                <CommandItem onSelect={() => handleSearch('Recent experiments')}>
+                            <CommandGroup heading="Pages">
+                                <CommandItem onSelect={() => go('/dashboard')}>
+                                    <BarChart3 className="mr-2 h-4 w-4" />
+                                    <span>Dashboard</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/logbook')}>
                                     <FlaskConical className="mr-2 h-4 w-4" />
-                                    <span>Recent experiments</span>
+                                    <span>Logbook</span>
                                 </CommandItem>
-                                <CommandItem onSelect={() => handleSearch('Temperature data')}>
-                                    <Thermometer className="mr-2 h-4 w-4" />
-                                    <span>Temperature data</span>
+                                <CommandItem onSelect={() => go('/stats')}>
+                                    <LineChart className="mr-2 h-4 w-4" />
+                                    <span>Stats</span>
                                 </CommandItem>
-                                <CommandItem onSelect={() => handleSearch('Activity logs')}>
-                                    <Activity className="mr-2 h-4 w-4" />
-                                    <span>Activity logs</span>
+                                <CommandItem onSelect={() => go('/alerts')}>
+                                    <AlertTriangle className="mr-2 h-4 w-4" />
+                                    <span>Alerts</span>
+                                </CommandItem>
+                            </CommandGroup>
+                            <CommandSeparator />
+                            <CommandGroup heading="Visualization">
+                                <CommandItem onSelect={() => go('/dashboard?tab=histograms')}>
+                                    <BarChart3 className="mr-2 h-4 w-4" />
+                                    <span>Histograms</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/dashboard?tab=waveforms')}>
+                                    <AudioWaveform className="mr-2 h-4 w-4" />
+                                    <span>Waveforms</span>
                                 </CommandItem>
                             </CommandGroup>
                             <CommandSeparator />
                             <CommandGroup heading="Settings">
-                                <CommandItem onSelect={() => router.push('/settings')}>
+                                <CommandItem onSelect={() => go('/settings?view=boards')}>
+                                    <Cpu className="mr-2 h-4 w-4" />
+                                    <span>Boards</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/settings?view=current')}>
+                                    <Gauge className="mr-2 h-4 w-4" />
+                                    <span>Current Module</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/settings?view=notifications')}>
+                                    <BellRing className="mr-2 h-4 w-4" />
+                                    <span>Notifications</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/settings?view=appearance')}>
+                                    <SlidersHorizontal className="mr-2 h-4 w-4" />
+                                    <span>Appearance</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/settings')}>
                                     <Cog className="mr-2 h-4 w-4" />
                                     <span>Open settings</span>
                                 </CommandItem>

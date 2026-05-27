@@ -23,13 +23,23 @@ export default function SettingsPage() {
     const token = useAuthStore((state) => state.token);
     const clearToken = useAuthStore((state) => state.clearToken);
     const { toast } = useToast()
-    const [activeView, setActiveView] = useState('general');
+    const [activeView, setActiveView] = useState('boards');
 
     useEffect(() => {
         if (!token) {
             router.push('/auth/login');
         }
     }, [token, router]);
+
+    // Allow deep-linking to a section, e.g. /settings?view=current from the
+    // command palette. Read from the URL on the client to avoid needing a
+    // Suspense boundary around useSearchParams.
+    useEffect(() => {
+        const view = new URLSearchParams(window.location.search).get('view');
+        if (view && ['appearance', 'boards', 'current', 'notifications'].includes(view)) {
+            setActiveView(view);
+        }
+    }, []);
 
     const handleLogout = () => {
         clearToken();
@@ -68,13 +78,6 @@ export default function SettingsPage() {
                         <nav className="grid gap-4 text-sm text-muted-foreground">
                             <Link
                                 href="#"
-                                className={`font-semibold ${activeView === 'appearance' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('appearance')}
-                            >
-                                Appearance
-                            </Link>
-                            <Link
-                                href="#"
                                 className={`font-semibold ${activeView === 'boards' ? 'text-primary' : ''}`}
                                 onClick={() => setActiveView('boards')}
                             >
@@ -94,7 +97,13 @@ export default function SettingsPage() {
                             >
                                 Notifications
                             </Link>
-
+                            <Link
+                                href="#"
+                                className={`font-semibold ${activeView === 'appearance' ? 'text-primary' : ''}`}
+                                onClick={() => setActiveView('appearance')}
+                            >
+                                Appearance
+                            </Link>
                         </nav>
                         <div className="grid gap-6">
                             {renderActiveView()}

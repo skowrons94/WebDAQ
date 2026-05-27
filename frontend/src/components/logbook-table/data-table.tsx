@@ -115,6 +115,10 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
         onColumnVisibilityChange: setColumnVisibility,
         onGlobalFilterChange: setGlobalFilterValue,
         globalFilterFn: globalFilter,
+        // Our globalFilter reads row.original directly, so every column is a
+        // valid target. Forcing this on avoids TanStack disabling global search
+        // when the first row's accessor values aren't strings/numbers.
+        getColumnCanGlobalFilter: () => true,
         state: {
             sorting,
             columnFilters,
