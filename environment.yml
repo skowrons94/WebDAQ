@@ -25,7 +25,7 @@ dependencies:
   - pip:
     - docker
     - waitress
-    - pyjwt<2.10
+    - pyjwt>=2.10
     - pycurl
     - pyserial
     - scipy
