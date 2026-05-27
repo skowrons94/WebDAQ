@@ -917,15 +917,18 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               {Object.keys(commonSettings).length === 0 ? (
                 <p className="text-sm text-muted-foreground">No general settings available.</p>
               ) : (
-                <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 items-start">
                   {Object.entries(commonSettings)
                     .filter(([, reg]) =>
                       advancedMode || BASIC_GENERAL_SETTINGS.some(b => reg.name.includes(b))
                     )
                     .map(([regName, reg]) => {
                       const hasDecomp = !binaryMode && getDecomposition(reg.name, boardData.dpp, boardData.name)
+                      // Bit-field and binary editors need the full width; plain
+                      // single-value settings pack two per row to save space.
+                      const isWide = binaryMode || !!hasDecomp
                       return (
-                        <div key={regName}>
+                        <div key={regName} className={isWide ? "md:col-span-2" : ""}>
                           <div className="flex items-center gap-2 mb-2">
                             <Label className="text-sm font-semibold">
                               {reg.name}
@@ -987,11 +990,14 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">
                       {title}
                     </h4>
-                    <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 items-start">
                       {entries.map(([regName, reg]) => {
                         const hasDecomp = !binaryMode && getDecomposition(reg.name, boardData.dpp, boardData.name)
+                        // Wide editors (decomposed/binary) span the row; plain
+                        // single-value settings sit two per row.
+                        const isWide = binaryMode || !!hasDecomp
                         return (
-                          <div key={regName}>
+                          <div key={regName} className={isWide ? "md:col-span-2" : ""}>
                             <div className="flex items-center gap-2 mb-2">
                               <Label className="text-sm font-semibold">
                                 {reg.name}
