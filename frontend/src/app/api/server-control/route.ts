@@ -117,6 +117,16 @@ function initMeasurementDirectory(
             fsSync.mkdirSync(path.join(absDir, sub), { recursive: true })
         }
 
+        // XDAQ needs conf/topology.xml relative to the server's working directory
+        // (this measurement directory). It is not generated at runtime, so seed it
+        // from the canonical copy in server/conf/ when the directory doesn't have
+        // one yet. Without it the XDAQ container — and the Reset XDAQ action — fail.
+        const topologySrc = path.join(SERVER_DIR, 'conf', 'topology.xml')
+        const topologyDst = path.join(absDir, 'conf', 'topology.xml')
+        if (!fsSync.existsSync(topologyDst) && fsSync.existsSync(topologySrc)) {
+            fsSync.copyFileSync(topologySrc, topologyDst)
+        }
+
         const dbPath = path.join(absDir, 'app.db')
         const dbUrl = `sqlite:///${dbPath}`
         const env: NodeJS.ProcessEnv = {

@@ -53,6 +53,8 @@ import {
   activateWaveformBoard,
   deactivateWaveformBoard,
   getXdaqInfo,
+  getCurrentStatus,
+  getStatsRunStatus,
 } from '@/lib/api'
 
 type ROI = {
@@ -122,9 +124,10 @@ interface CardHolderProps {
   isRunning: boolean
   timer: number
   startTime: string | null
+  runNumber: number | null
 }
 
-export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
+export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolderProps) {
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
   // Treat a missing flag (older persisted settings) as enabled.
@@ -152,6 +155,9 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
   const [boardWaveforms, setBoardWaveforms] = useState<{ [boardId: string]: boolean }>({})
   const [xdaqInfo, setXdaqInfo] = useState<XdaqInfo | null>(null)
+  const [currentAcquiring, setCurrentAcquiring] = useState<boolean>(false)
+  const [statsCollecting, setStatsCollecting] = useState<boolean>(false)
+  const [statsCount, setStatsCount] = useState<number>(0)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
@@ -450,12 +456,19 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
 
   const updateDaqStatuses = async () => {
     try {
-      const [save, waves] = await Promise.all([
+      const [save, waves, currentStatus, statsStatus] = await Promise.all([
         getSaveData().catch(() => null),
         getWaveformStatusPerBoard().catch(() => null),
+        getCurrentStatus().catch(() => null),
+        getStatsRunStatus().catch(() => null),
       ])
       if (save !== null && save !== undefined) setDataSavingEnabled(Boolean(save))
       if (waves) setBoardWaveforms(waves)
+      if (currentStatus) setCurrentAcquiring(Boolean(currentStatus.running))
+      if (statsStatus) {
+        setStatsCollecting(Boolean(statsStatus.collecting))
+        setStatsCount(Number(statsStatus.enabled_paths_count ?? 0))
+      }
     } catch (error) {
       console.error('Failed to update DAQ statuses:', error)
     }
@@ -549,8 +562,20 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
             <CardContent>
               <div className="text-2xl font-bold">{isRunning ? "Running" : "Stopped"}</div>
               <p className="text-xs text-muted-foreground">
-                {isRunning ? `Started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `Last run: ${lastRunDuration}s` : "Stopped")}
+                {runNumber !== null && `Run ${runNumber} · `}
+                {isRunning ? `started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `last run: ${lastRunDuration}s` : "stopped")}
               </p>
+              <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <HardDrive className="h-3.5 w-3.5" />
+                  File BW
+                </span>
+                <span className="font-semibold">
+                  {fileBandwidth < 0.1
+                    ? `${(fileBandwidth * 1024).toFixed(2)} KB/s`
+                    : `${fileBandwidth.toFixed(2)} MB/s`}
+                </span>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -590,6 +615,26 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                     <span className="flex items-center gap-1 font-semibold">
                       {boards.length > 0 ? `${waveformBoardCount}/${boards.length}` : 'Off'}
                       {anyWaveforms ? okIcon : offIcon}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <BatteryCharging className="h-3.5 w-3.5" />
+                      Current
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold">
+                      {!currentEnabled ? 'Disabled' : currentAcquiring ? 'On' : 'Off'}
+                      {currentEnabled && (currentAcquiring ? okIcon : offIcon)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Activity className="h-3.5 w-3.5" />
+                      Stats
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold">
+                      {statsCollecting ? `${statsCount} acquiring` : 'Off'}
+                      {statsCollecting ? okIcon : offIcon}
                     </span>
                   </div>
                 </div>
@@ -632,18 +677,11 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <Server className="h-3.5 w-3.5" />
-                      Readout Units
-                    </span>
-                    <span className="font-semibold">{xdaqInfo?.num_readout_units ?? 0}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
                       <HardDrive className="h-3.5 w-3.5" />
-                      Output
+                      Internal BW
                     </span>
                     <span className="font-semibold">
-                      {(xdaqInfo?.output_bandwidth ?? 0).toFixed(2)} MB/s
+                      {(xdaqInfo?.input_bandwidth ?? 0).toFixed(2)} MB/s
                     </span>
                   </div>
                 </div>
@@ -819,28 +857,6 @@ export function CardHolder({ isRunning, timer, startTime }: CardHolderProps) {
               </div>
               <p className="text-xs text-muted-foreground">
                 Total Charge Accumulated since Last Reset
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* File Bandwidth Card */}
-        {settings.showXDAQ && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                File Bandwidth
-              </CardTitle>
-              <HardDrive className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {fileBandwidth < 0.1 ? (
-                <div className="text-2xl font-bold">{(fileBandwidth*1024).toFixed(2)} KB/s</div>
-              ) : (
-                <div className="text-2xl font-bold">{fileBandwidth.toFixed(2)} MB/s</div>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Data Writing Speed
               </p>
             </CardContent>
           </Card>

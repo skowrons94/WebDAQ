@@ -159,10 +159,11 @@ export function RunControl() {
     <div className="flex flex-col bg-background text-foreground">
       <main className="flex flex-1 flex-col gap-4 p-4 md:gap-8 md:p-2">
         {/* Status Cards Section */}
-        <CardHolder 
+        <CardHolder
           isRunning={isRunning}
           timer={timer}
           startTime={startTime}
+          runNumber={runNumber}
         />
 
         {/* Control and Configuration Section */}

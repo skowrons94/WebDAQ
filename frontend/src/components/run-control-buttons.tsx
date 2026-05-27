@@ -306,8 +306,26 @@ export function RunControlButtons({
    */
   const handleReset = async () => {
     try {
-      await resetDeviceCurrent()
-      await reset()
+      toast({
+        title: 'Resetting XDAQ...',
+        description: 'Please wait while the XDAQ components are restarted.',
+      })
+
+      if (currentEnabled) {
+        await resetDeviceCurrent()
+      }
+      // reset() resolves to 0 on success and -1 if the backend failed to
+      // reinitialise the topology/container.
+      const result = await reset()
+      if (result === -1) {
+        toast({
+          title: 'Error',
+          description: 'XDAQ failed to restart. Check that conf/topology.xml exists and the container is available.',
+          variant: 'destructive',
+        })
+        return
+      }
+
       toast({
         title: 'XDAQ Reset',
         description: 'All the XDAQ components restarted.',

@@ -918,7 +918,14 @@ class DAQManager:
         """
         if self.test_flag:
             return True
-        
+
+        # The topology description must be present in the working directory's
+        # conf/ (it is seeded there from server/conf/ when the measurement
+        # directory is initialised). Without it the reset cannot proceed.
+        if not os.path.exists("conf/topology.xml"):
+            self.logger.error("Cannot reset XDAQ: conf/topology.xml not found")
+            return False
+
         try:
             # Reinitialize topology
             self.topology = xdaq.topology("conf/topology.xml")
