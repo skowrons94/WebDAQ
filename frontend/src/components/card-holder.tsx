@@ -565,7 +565,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
                 {isRunning ? "Running" : "Stopped"}
               </div>
               <p className="text-xs text-muted-foreground">
-                {isRunning ? `started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `last run: ${lastRunDuration}s` : "stopped")}
+                {isRunning ? `started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `Last Run: ${lastRunDuration}s` : "Stopped")}
               </p>
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">

@@ -240,6 +240,8 @@ export default function StatsPage() {
         </Card>
       )}
 
+      {/* Configuration row: Graphite server + Add new path side by side */}
+      <div className="grid gap-6 lg:grid-cols-2 items-start">
       {/* Graphite Server Configuration */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0">
@@ -325,6 +327,7 @@ export default function StatsPage() {
           </Button>
         </CardContent>
       </Card>
+      </div>
 
       {/* Configured Paths */}
       <Card>
