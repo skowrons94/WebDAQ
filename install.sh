@@ -247,18 +247,40 @@ configure_and_build_frontend() {
 
 # ── 6. LunaDAQ alias ────────────────────────────────────────────────────────────
 add_alias() {
-    step "Adding the 'LunaDAQ' alias to ~/.bashrc"
+    step "Adding the 'LunaDAQ' launcher to ~/.bashrc"
     local bashrc="$HOME/.bashrc"
-    if grep -q "alias LunaDAQ=" "$bashrc" 2>/dev/null; then
-        ok "Alias already present — leaving it untouched"
+    if grep -qE '^(alias LunaDAQ=|LunaDAQ\(\))' "$bashrc" 2>/dev/null; then
+        ok "Launcher already present — leaving it untouched"
         return
     fi
-    {
-        echo ""
-        echo "# Launch the LunaDAQ frontend (added by WebDAQ install.sh)"
-        echo "alias LunaDAQ='conda activate luna && cd \"$FRONTEND_DIR\" && npm run start'"
-    } >> "$bashrc"
-    ok "Alias added — run 'LunaDAQ' in a new terminal to start the web app"
+    cat >> "$bashrc" <<EOF
+
+# Launch the LunaDAQ frontend (added by WebDAQ install.sh)
+# Stops any previous instance still listening on the dev server port
+# before starting a new one.
+LunaDAQ() {
+    local port=3000
+    local pids=""
+    if command -v lsof >/dev/null 2>&1; then
+        pids="\$(lsof -ti:\$port 2>/dev/null)"
+    elif command -v fuser >/dev/null 2>&1; then
+        pids="\$(fuser -n tcp \$port 2>/dev/null | tr -s ' ')"
+    fi
+    if [ -n "\$pids" ]; then
+        echo "LunaDAQ already running on port \$port (PIDs:\$pids) — stopping it…"
+        kill \$pids 2>/dev/null
+        sleep 1
+        if command -v lsof >/dev/null 2>&1; then
+            pids="\$(lsof -ti:\$port 2>/dev/null)"
+        elif command -v fuser >/dev/null 2>&1; then
+            pids="\$(fuser -n tcp \$port 2>/dev/null | tr -s ' ')"
+        fi
+        [ -n "\$pids" ] && kill -9 \$pids 2>/dev/null
+    fi
+    conda activate luna && cd "$FRONTEND_DIR" && npm run start
+}
+EOF
+    ok "Launcher added — run 'LunaDAQ' in a new terminal to start the web app"
 }
 
 # ── Run ──────────────────────────────────────────────────────────────────────
