@@ -18,6 +18,7 @@ const DEFAULT_PASSWORD = process.env.LUNA_DEFAULT_PASSWORD || 'assergi'
 const SERVER_DIR = path.resolve(process.cwd(), '..', 'server')
 const MAIN_PY = path.join(SERVER_DIR, 'main.py')
 const MIGRATIONS_DIR = path.join(SERVER_DIR, 'migrations')
+const CHECK_DB_SCRIPT = path.join(SERVER_DIR, 'scripts', 'check_db.sh')
 
 const STATE_FILE = path.join(process.cwd(), 'cache', 'server-control-state.json')
 const LOG_FILENAME = 'server.log'
@@ -138,9 +139,28 @@ function initMeasurementDirectory(
         }
         if (testMode) env.TEST_FLAG = 'True'
 
-        // Run flask db upgrade from server/ so Flask finds the migrations folder
-        // and the app package; DATABASE_URL points the schema at the measurement
-        // directory's app.db.
+        // Each measurement directory carries its own self-contained migration
+        // history next to its app.db so its alembic revisions stay valid even
+        // when the repo's migrations evolve independently. Seed it from the
+        // repo's copy on first init; afterwards leave it alone.
+        const projectMigrationsDir = path.join(absDir, 'migrations')
+        if (!fsSync.existsSync(projectMigrationsDir)) {
+            fsSync.cpSync(MIGRATIONS_DIR, projectMigrationsDir, {
+                recursive: true,
+                filter: (src) => !src.includes('__pycache__'),
+            })
+        }
+
+        // Run check_db.sh against this measurement directory's app.db AND its
+        // own migrations folder. The script handles fresh DBs, in-flight
+        // migrations, legacy db.create_all DBs, and DBs stamped at revisions
+        // that no longer exist in the migration history — all of which a bare
+        // 'flask db upgrade' would crash on.
+        const checkEnv: NodeJS.ProcessEnv = {
+            ...env,
+            DB_FILE: dbPath,
+            MIGRATIONS_DIR: projectMigrationsDir,
+        }
         const upgrade = spawnSync(
             CONDA_BIN,
             [
@@ -148,15 +168,10 @@ function initMeasurementDirectory(
                 '--no-capture-output',
                 '-n',
                 CONDA_ENV,
-                'flask',
-                '--app',
-                MAIN_PY,
-                'db',
-                'upgrade',
-                '-d',
-                MIGRATIONS_DIR,
+                'bash',
+                CHECK_DB_SCRIPT,
             ],
-            { cwd: SERVER_DIR, env, encoding: 'utf-8' },
+            { cwd: SERVER_DIR, env: checkEnv, encoding: 'utf-8' },
         )
         if (upgrade.status !== 0) {
             return {
@@ -165,7 +180,10 @@ function initMeasurementDirectory(
             }
         }
 
-        // Create the default user if one with that username doesn't already exist.
+        // Ensure the default user always exists and always has the expected
+        // password. If the row already exists from a previous install we still
+        // reset the password hash, so the configured DEFAULT_USER /
+        // DEFAULT_PASSWORD are authoritative and login can't drift.
         const createUserScript = `
 import sys
 sys.path.insert(0, ${JSON.stringify(SERVER_DIR)})
@@ -173,14 +191,16 @@ from app import create_app, db
 from app.models.user import User
 app = create_app()
 with app.app_context():
-    if not User.query.filter_by(username=${JSON.stringify(DEFAULT_USER)}).first():
-        u = User(username=${JSON.stringify(DEFAULT_USER)}, email=${JSON.stringify(DEFAULT_USER + '@local')})
-        u.set_password(${JSON.stringify(DEFAULT_PASSWORD)})
-        db.session.add(u)
-        db.session.commit()
-        print('user-created')
+    user = User.query.filter_by(username=${JSON.stringify(DEFAULT_USER)}).first()
+    if user is None:
+        user = User(username=${JSON.stringify(DEFAULT_USER)}, email=${JSON.stringify(DEFAULT_USER + '@local')})
+        db.session.add(user)
+        action = 'user-created'
     else:
-        print('user-exists')
+        action = 'user-password-reset'
+    user.set_password(${JSON.stringify(DEFAULT_PASSWORD)})
+    db.session.commit()
+    print(action)
 `
         const createUser = spawnSync(
             CONDA_BIN,
