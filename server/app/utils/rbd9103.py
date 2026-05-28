@@ -78,6 +78,13 @@ class RBD9103Controller:
         self.is_acquiring = False
         self.acquisition_interval = 0.1 if high_speed else 0.5  # seconds between measurements
 
+        # Health tracking: a real connection is one where samples actually
+        # arrive AND parse correctly. Opening /dev/ttyUSB* succeeds even when
+        # no device is on the other end, so 'serial_port.is_open' alone is not
+        # enough to call ourselves connected.
+        self.last_sample_time = 0.0
+        self.data_timeout = max(3.0, 6 * self.acquisition_interval)
+
         # Data logging
         self.save_data = False
         self.save_folder = ''
@@ -112,6 +119,9 @@ class RBD9103Controller:
         """
         old_port = self.port_name
         self.port_name = port
+        # Wipe the heartbeat so stale samples from the previous port can't keep
+        # is_connected() reporting True after a port switch.
+        self.last_sample_time = 0.0
         self.logger.info(f"RBD 9103 port changed from {old_port} to {port}")
 
     def set_baudrate(self, baudrate: int) -> None:
@@ -123,6 +133,7 @@ class RBD9103Controller:
         """
         old_baudrate = self.baudrate
         self.baudrate = baudrate
+        self.last_sample_time = 0.0
         self.logger.info(f"RBD 9103 baudrate changed from {old_baudrate} to {baudrate}")
 
     def set_high_speed(self, enable: bool) -> None:
@@ -135,23 +146,38 @@ class RBD9103Controller:
         self.high_speed = enable
         self.baudrate = 230400 if enable else 57600
         self.acquisition_interval = 0.1 if enable else 0.5
+        self.data_timeout = max(3.0, 6 * self.acquisition_interval)
+        self.last_sample_time = 0.0
         self.logger.info(f"RBD 9103 high-speed mode {'enabled' if enable else 'disabled'}")
 
     def is_connected(self) -> bool:
         """
-        Check if the RBD 9103 is connected and acquiring data.
+        Check if the RBD 9103 is connected AND actively producing valid samples.
+
+        A bare 'serial_port.is_open' is not enough: opening /dev/ttyUSB* on
+        Linux succeeds whenever the device file exists, even with no real
+        device attached, the wrong device attached, or a silent/garbled line.
+        We additionally require that a parseable sample has arrived within the
+        data timeout window, so wrong-port and dead-device situations report
+        as disconnected.
 
         Returns:
-            bool: True if serial port is open and acquiring data, False otherwise
+            bool: True if the port is open, acquisition is running, and a
+                  recent valid sample has been received.
         """
         if not self.serial_port or not self.is_acquiring:
             return False
 
         try:
-            return self.serial_port.is_open
+            if not self.serial_port.is_open:
+                return False
         except Exception as e:
             self.logger.warning(f"Error checking connection status: {e}")
             return False
+
+        if self.last_sample_time <= 0:
+            return False
+        return (time.time() - self.last_sample_time) < self.data_timeout
 
     def load_settings(self) -> None:
         """
@@ -261,6 +287,7 @@ class RBD9103Controller:
             if self.serial_port and self.serial_port.is_open:
                 self.serial_port.close()
                 self.serial_port = None
+                self.last_sample_time = 0.0
                 self.logger.info("Disconnected from RBD 9103 device")
 
         except Exception as e:
@@ -588,6 +615,10 @@ class RBD9103Controller:
         try:
             timestamp = datetime.now().timestamp()
             current_ua = value_amps * 1e6  # Convert to microamps
+
+            # Heartbeat for is_connected(): only valid parsed samples count, so
+            # a stream of garbage on the line still reports as disconnected.
+            self.last_sample_time = time.time()
 
             # Update data buffers with thread safety
             with self.buffer_lock:

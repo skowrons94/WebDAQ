@@ -433,18 +433,35 @@ def update_module_settings():
                             print(f"Failed to save settings to file: {e}")
 
         else:  # rbd9103
-            # Update RBD 9103 settings
+            # Update RBD 9103 settings. Port / baudrate / high_speed all require
+            # closing the existing serial connection and reopening with the new
+            # parameters, so collect the fact that we changed any of them and
+            # call reset() once at the end.
+            needs_reconnect = False
+
             if "port" in data:
                 settings["rbd9103_port"] = data["port"]
-                # Requires reconnection
+                if controller:
+                    controller.set_port(data["port"])
+                    needs_reconnect = True
 
             if "baudrate" in data:
                 settings["rbd9103_baudrate"] = int(data["baudrate"])
-                # Requires reconnection
+                if controller:
+                    controller.set_baudrate(int(data["baudrate"]))
+                    needs_reconnect = True
 
             if "high_speed" in data:
                 settings["rbd9103_high_speed"] = bool(data["high_speed"])
-                # Requires reconnection
+                if controller:
+                    controller.set_high_speed(bool(data["high_speed"]))
+                    needs_reconnect = True
+
+            if needs_reconnect and controller:
+                try:
+                    controller.reset()
+                except Exception as e:
+                    print(f"Failed to reset RBD 9103 after settings change: {e}")
 
             # Update device-specific settings (range, filter, bias, etc.)
             if "device_settings" in data:
@@ -548,11 +565,13 @@ def get_status():
             
         # Try to get connection status with timeout protection
         try:
-            # Only check connection if we have a valid socket/port
+            # For RBD 9103, defer to is_connected() which also checks that the
+            # device is producing valid samples — a bare open serial port can
+            # mean nothing (wrong /dev/ttyUSB, silent device, etc).
             if module_type == "tetramm" and hasattr(controller, 'socket') and controller.socket:
                 basic_status["connected"] = True  # Socket exists, assume connected
-            elif module_type == "rbd9103" and hasattr(controller, 'serial_port') and controller.serial_port:
-                basic_status["connected"] = controller.serial_port.is_open if controller.serial_port else False
+            elif module_type == "rbd9103":
+                basic_status["connected"] = controller.is_connected()
         except:
             basic_status["connected"] = False
 
