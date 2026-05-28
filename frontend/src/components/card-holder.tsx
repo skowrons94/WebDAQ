@@ -176,7 +176,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
           for (const path of data.filter((p: any) => p.enabled)) {
             try {
               const valueData = await getStatsMetricLastValue(path.path)
-              if (valueData && valueData.value !== undefined) {
+              if (valueData && valueData.value !== undefined && valueData.value !== null) {
                 setCurrentValue(path.path, valueData.value, valueData.timestamp)
               }
             } catch (error) {
@@ -513,7 +513,10 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
       for (const path of currentPaths.filter(p => p.enabled)) {
         try {
           const data = await getStatsMetricLastValue(path.path)
-          if (data && data.value !== undefined) {
+          // Graphite sometimes returns null briefly (ingestion lag, transient
+          // render errors). Don't overwrite a previously good value with null —
+          // keep showing the last reading instead of flipping the card to N/A.
+          if (data && data.value !== undefined && data.value !== null) {
             setCurrentValue(path.path, data.value, data.timestamp)
           }
         } catch (error) {

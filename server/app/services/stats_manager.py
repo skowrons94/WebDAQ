@@ -259,19 +259,34 @@ class StatsManager:
         Returns:
             Tuple of (value, timestamp) or (None, None) if no data found
         """
-        try:
-            data = self.graphite_client.get_data(path, from_time, 'now')
+        # Graphite occasionally returns empty/null tails (ingestion lag, brief
+        # render hiccups). Walk through progressively wider windows so a
+        # transient gap doesn't leave the caller with no value.
+        windows = [from_time]
+        for fallback in ('-1min', '-5min', '-30min'):
+            if fallback not in windows:
+                windows.append(fallback)
 
-            # Find last non-null value
-            for timestamp, value in reversed(data):
-                if value is not None:
-                    return (value, timestamp)
+        for window in windows:
+            for attempt in range(2):
+                try:
+                    data = self.graphite_client.get_data(path, window, 'now')
+                    for timestamp, value in reversed(data):
+                        if value is not None:
+                            return (value, timestamp)
+                    break  # got a response, just no non-null points — widen window
+                except Exception as e:
+                    if attempt == 0:
+                        self.logger.debug(
+                            f"Graphite query failed for {path} (window {window}), retrying: {e}"
+                        )
+                        continue
+                    self.logger.warning(
+                        f"Graphite query failed for {path} (window {window}): {e}"
+                    )
+                    break  # try next window
 
-            return (None, None)
-
-        except Exception as e:
-            self.logger.error(f"Error fetching last value for {path}: {e}")
-            return (None, None)
+        return (None, None)
 
     def _format_row(self, fields: List[str]) -> str:
         """Right-justify each field to its column width for aligned output."""
