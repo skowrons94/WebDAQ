@@ -38,3 +38,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Runtime UI state (dashboard layout, histogram configs, ROI cache, the
+# working directory the server was last started in). Written by the app on
+# demand; a committed copy would overwrite the DAQ machine.
+/cache/
