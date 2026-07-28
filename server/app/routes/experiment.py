@@ -9,23 +9,25 @@ from app import db
 
 from ..models.run_metadata import RunMetadata
 from ..utils.jwt_utils import jwt_required_custom, get_current_user
-from ..services.daq_manager import get_daq_manager
+from ..services.daq_manager import get_daq_manager, BoardConfigError
 from ..services.spy_manager import get_spy_manager
+from ..services.caen_acquisition import get_caen_acquisition
+# Module-level helpers that read synchronisation straight from the board configs.
+from ..services import caen_acquisition
 
 logger = logging.getLogger(__name__)
 
 TEST_FLAG = os.getenv('TEST_FLAG', False)
 
+# The Graphite/Carbon target for the independent rate publisher is read from
+# conf/stats.json by caen_acquisition (see _graphite_from_stats).
+
 bp = Blueprint('experiment', __name__)
 
-if not TEST_FLAG:
-    # Clean up just in case
-    os.system("killall RUSpy >/dev/null 2>&1")
-    os.system("docker stop xdaq >/dev/null 2>&1")
-
-# Initialize managers
+# Initialize managers (acquisition runs in-process via caendaq)
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 spy_mgr = get_spy_manager(test_flag=TEST_FLAG)
+caen_acq = get_caen_acquisition(test_flag=TEST_FLAG)
 
 
 def set_flask_app(app):
@@ -56,11 +58,11 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
             current_run_number = daq_mgr.get_run_number()
             save_data = daq_mgr.get_save_data()
 
-            # Stop spy server first
+            # Stop monitoring, spy and acquisition
+            daq_mgr.stop_board_monitoring()
             spy_mgr.stop_spy()
-
-            # Stop XDAQ
-            daq_mgr.stop_xdaq()
+            caen_acq.stop()
+            daq_mgr.reacquire_digitizers()
 
             # Update run metadata with note about auto-stop
             if save_data:
@@ -115,31 +117,28 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
             # Start new run
             new_run_number = daq_mgr.get_run_number()
 
-            # Prepare for run start
+            # Prepare and start the new run via caendaq
             if not daq_mgr.prepare_run_start():
                 logger.error("Failed to prepare run start during auto-restart")
                 return
 
-            # Configure and start XDAQ
-            if not daq_mgr.configure_xdaq_for_run():
-                logger.error("Failed to configure XDAQ during auto-restart")
+            boards = daq_mgr.get_boards()
+            save = daq_mgr.get_save_data()
+            out_dir = f"data/run{new_run_number}"
+            max_bytes = daq_mgr.get_data_size_limit() if daq_mgr.get_limit_data_size() else 0
+
+            daq_mgr.release_digitizers()
+            if not caen_acq.configure(boards, new_run_number, out_dir,
+                                      max_file_bytes=max_bytes, write=save) \
+               or not caen_acq.start():
+                logger.error("Failed to start acquisition during auto-restart")
+                daq_mgr.reacquire_digitizers()
                 return
 
-            if not daq_mgr.start_xdaq():
-                logger.error("Failed to start XDAQ during auto-restart")
-                return
-
-            # Set running state
+            # Set running state, enable the spy + board monitoring
             daq_mgr.set_running_state(True)
-
-            # Start board monitoring thread
+            spy_mgr.start_spy(daq_mgr.get_state())
             daq_mgr.start_board_monitoring()
-
-            # Start spy server
-            daq_state = daq_mgr.get_state()
-            if not spy_mgr.start_spy(daq_state):
-                logger.error("Failed to start spy server during auto-restart")
-                return
 
             # Add new run to database
             if save_data:
@@ -177,64 +176,78 @@ def start_run():
     if len(boards) == 0:
         return jsonify({'message': 'No CAEN boards found!'}), 404
 
-    # Prepare for run start
+    # Prepare for run start (creates the run directory when saving)
     if not daq_mgr.prepare_run_start():
         return jsonify({'message': 'Failed to prepare run start'}), 500
 
-    # Configure and start XDAQ
-    if not daq_mgr.configure_xdaq_for_run():
-        return jsonify({'message': 'Failed to configure XDAQ'}), 500
-    
-    if not daq_mgr.start_xdaq():
-        return jsonify({'message': 'Failed to start XDAQ'}), 500
+    run = daq_mgr.get_run_number()
+    save = daq_mgr.get_save_data()
+    out_dir = f"data/run{run}"
+    max_bytes = daq_mgr.get_data_size_limit() if daq_mgr.get_limit_data_size() else 0
 
-    # Set running state
+    # Hand the boards over to caendaq (release the daq_manager's probe
+    # connections so caendaq can open the digitizers), then configure + start.
+    daq_mgr.release_digitizers()
+    if not caen_acq.configure(boards, run, out_dir, max_file_bytes=max_bytes, write=save):
+        daq_mgr.reacquire_digitizers()
+        return jsonify({'message': 'Failed to configure acquisition'}), 500
+    if not caen_acq.start():
+        daq_mgr.reacquire_digitizers()
+        return jsonify({'message': 'Failed to start acquisition'}), 500
+
+    # Set running state and enable the on-demand spy.
     daq_mgr.set_running_state(True)
-
-    # Start board monitoring thread
+    spy_mgr.start_spy(daq_mgr.get_state())
+    # Watch caendaq's board-FAIL signal (drives Telegram alerts + auto-restart).
     daq_mgr.start_board_monitoring()
 
-    # Start spy server
-    daq_state = daq_mgr.get_state()
-    if not spy_mgr.start_spy(daq_state):
-        return jsonify({'message': 'Failed to start spy server'}), 500
-    
     # Add run to database if saving data
     if daq_mgr.get_save_data():
         run_number = daq_mgr.get_run_number()
+        # Hardware + software provenance, captured now that the boards are open
+        # and configured, so the record describes the run as it actually ran.
+        try:
+            boards_snapshot = caen_acq.board_info_all()
+            versions_snapshot = caen_acq.software_versions()
+        except Exception as e:
+            logger.error(f"Could not capture acquisition provenance: {e}", exc_info=True)
+            boards_snapshot, versions_snapshot = [], {}
+        sync_mode = caen_acq.sync_mode(boards)
+
         try:
             run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
             if not run_metadata:
                 run_metadata = RunMetadata(
-                    run_number=run_number, 
-                    start_time=datetime.now(), 
+                    run_number=run_number,
+                    start_time=datetime.now(),
                     user_id=get_current_user()
                 )
                 db.session.add(run_metadata)
-                db.session.commit()
             else:
                 run_metadata.start_time = datetime.now()
                 run_metadata.end_time = None
-                db.session.commit()
-        except Exception:
-            pass  # Non-critical error
+            run_metadata.set_board_info(boards_snapshot)
+            run_metadata.set_software_versions(versions_snapshot)
+            run_metadata.sync_mode = sync_mode
+            db.session.commit()
+        except Exception as e:
+            # Non-fatal: the run itself is fine, but say why the record is thin.
+            logger.error(f"Could not record run {run_number} metadata: {e}", exc_info=True)
 
     return jsonify({'message': 'Run started successfully!'}), 200
 
 @bp.route("/experiment/stop_run", methods=['POST'])
 @jwt_required_custom
 def stop_run():
-    if not daq_mgr.is_running():
+    if not caen_acq.is_running() and not daq_mgr.is_running():
         return jsonify({'message': 'Run stopped successfully!'}), 200
 
-    # Stop spy server first
-    spy_mgr.stop_spy()
-    
-    # Stop board monitoring thread
+    # Stop monitoring + spy, then the acquisition, then return the boards to the
+    # daq_manager's probe connections.
     daq_mgr.stop_board_monitoring()
-    
-    # Stop XDAQ
-    daq_mgr.stop_xdaq()
+    spy_mgr.stop_spy()
+    caen_acq.stop()
+    daq_mgr.reacquire_digitizers()
 
     # Update run metadata in database
     if daq_mgr.get_save_data():
@@ -243,23 +256,61 @@ def stop_run():
             run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
             if run_metadata:
                 run_metadata.end_time = datetime.now()
-                
+
+                run_dir = f'data/run{run_number}'
+                duration = None
+                if run_metadata.start_time:
+                    duration = round(
+                        (run_metadata.end_time - run_metadata.start_time).total_seconds(), 3)
+
+                # Everything in the run directory, split by role, so the record
+                # describes its own dataset: which files hold the data and which
+                # hold the board configuration they were taken with.
+                try:
+                    entries = sorted(os.listdir(run_dir))
+                except OSError:
+                    entries = []
+
                 metadata = {
+                    "Run Number": run_metadata.run_number,
                     "Start Time": run_metadata.start_time.isoformat(),
                     "Stop Time": run_metadata.end_time.isoformat(),
+                    "Duration (s)": duration,
                     "Terminal Voltage": run_metadata.terminal_voltage,
                     "Probe Voltage": run_metadata.probe_voltage,
                     "Run Type": run_metadata.run_type,
                     "Target Name": run_metadata.target_name,
-                    "Accumulated Charge": run_metadata.accumulated_charge
+                    "Accumulated Charge": run_metadata.accumulated_charge,
+                    "Notes": run_metadata.notes,
+                    "Flag": run_metadata.flag,
+                    # Provenance: the data file alone is not self-describing, so
+                    # ship the hardware identity, its acquisition registers and
+                    # the software that produced it next to it.
+                    "Acquisition": {
+                        "Synchronisation": run_metadata.sync_mode or 'independent',
+                        "Software": run_metadata.get_software_versions(),
+                        "Boards": run_metadata.get_board_info(),
+                    },
+                    "Files": {
+                        "Data": [f for f in entries if f.endswith('.caendat')],
+                        # Full per-board register dumps, copied here at run start
+                        # — the complete configuration, beyond the key registers
+                        # summarised under Acquisition/Boards.
+                        "Board Configuration": [
+                            f for f in entries
+                            if f.endswith('.json') and f != 'metadata.json'
+                        ],
+                    },
                 }
-                
-                with open(f'data/run{run_number}/metadata.json', 'w') as f:
+
+                with open(f'{run_dir}/metadata.json', 'w') as f:
                     json.dump(metadata, f, indent=4)
 
                 db.session.commit()
-        except Exception:
-            pass
+        except Exception as e:
+            # Never fail the stop over metadata, but do not lose the reason
+            # either — a silent pass here once hid a missing DB migration.
+            logger.error(f"Failed to write run {run_number} metadata: {e}", exc_info=True)
 
     # Increment run number if we saved data
     if daq_mgr.get_save_data():
@@ -324,7 +375,11 @@ def get_run_metadata(run_number):
             'run_type': run_metadata.run_type,
             'accumulated_charge': run_metadata.accumulated_charge,
             'user_id': run_metadata.user_id,
-            'flag': run_metadata.flag
+            'flag': run_metadata.flag,
+            # Acquisition provenance captured at run start (empty for older runs).
+            'board_info': run_metadata.get_board_info(),
+            'software_versions': run_metadata.get_software_versions(),
+            'sync_mode': run_metadata.sync_mode
         }), 200
     return jsonify({'message': 'Run not found'}), 404
 
@@ -334,37 +389,43 @@ def get_all_run_metadata():
     run_metadata = RunMetadata.query.all()
     # order by run number reversed
     run_metadata = sorted(run_metadata, key=lambda x: x.run_number, reverse=True)
-    if run_metadata:
-        metadata = []
-        for run in run_metadata:
-            metadata.append({
-                'run_number': run.run_number,
-                # ISO without timezone so the browser reads it as local wall-clock
-                # time (see get_run_metadata above for the rationale).
-                'start_time': run.start_time.isoformat() if run.start_time else None,
-                'end_time': run.end_time.isoformat() if run.end_time else None,
-                'notes': run.notes,
-                'target_name': run.target_name,
-                'terminal_voltage': run.terminal_voltage,
-                'probe_voltage': run.probe_voltage,
-                'run_type': run.run_type,
-                'accumulated_charge': run.accumulated_charge,
-                'user_id': run.user_id,
-                'flag': run.flag
-            })
-        return jsonify(metadata), 200
-    return jsonify({'message': 'No runs found'}), 404
+    # An empty database (no runs yet) is a valid state, not an error: return an
+    # empty list with 200 so the client can just show "no previous runs".
+    metadata = []
+    for run in run_metadata:
+        metadata.append({
+            'run_number': run.run_number,
+            # ISO without timezone so the browser reads it as local wall-clock
+            # time (see get_run_metadata above for the rationale).
+            'start_time': run.start_time.isoformat() if run.start_time else None,
+            'end_time': run.end_time.isoformat() if run.end_time else None,
+            'notes': run.notes,
+            'target_name': run.target_name,
+            'terminal_voltage': run.terminal_voltage,
+            'probe_voltage': run.probe_voltage,
+            'run_type': run.run_type,
+            'accumulated_charge': run.accumulated_charge,
+            'user_id': run.user_id,
+            'flag': run.flag
+        })
+    return jsonify(metadata), 200
 
 # Route for adding CAEN boards
 @bp.route("/experiment/add_board", methods=['POST'])
 @jwt_required_custom
 def add_caen():
     board_config = request.get_json()
-    
-    if daq_mgr.add_board(board_config):
+
+    try:
+        added = daq_mgr.add_board(board_config)
+    except BoardConfigError as e:
+        # The configuration is wrong (e.g. a duplicate board ID) — tell the
+        # operator exactly what to fix rather than reporting a connection error.
+        return jsonify({'message': str(e)}), 409
+
+    if added:
         return jsonify(daq_mgr.get_boards()), 200
-    else:
-        return jsonify({'message': 'Failed to connect to the board!'}), 404
+    return jsonify({'message': 'Failed to connect to the board!'}), 404
 
 # Route for removing a CAEN board
 @bp.route("/experiment/remove_board", methods=['POST'])
@@ -419,6 +480,103 @@ def get_limit_size():
 def get_file_size_limit():
     return jsonify(daq_mgr.get_data_size_limit())
 
+# ── Multi-board synchronisation ──────────────────────────────────────────────
+# The boards can be started as a daisy chain so they share one time origin: the
+# first board (lowest id) is the master and is started LAST by software, after
+# every other board has been armed to wait for its RUN signal on S-IN/GPI.
+
+@bp.route("/experiment/get_sync_settings", methods=['GET'])
+@jwt_required_custom
+def get_sync_settings():
+    boards = daq_mgr.get_boards()
+
+    chain = []
+    synced = []
+    for board in boards:
+        acq = caen_acquisition.acquisition_control_of(board)
+        fpio = caen_acquisition.front_panel_io_of(board)
+        trg_out = caen_acquisition.trg_out_mask_of(board)
+        mode = acq & 0x3
+        entry = {
+            'board_id': board['id'],
+            'name': board['name'],
+            'start_mode': mode,
+            'start_mode_name': caen_acquisition.START_MODE_NAMES.get(mode, 'unknown'),
+            'synchronised': mode != caen_acquisition.START_MODE_SW,
+            # PLL reference clock (0x8100 bit[6]): 0 = internal 50 MHz oscillator,
+            # 1 = external CLK-IN. Boards sharing a clock stay phase-aligned for
+            # the whole run, which synchronising the START alone does not give.
+            'clock_source': (acq >> 6) & 0x1,
+            'acquisition_control': acq,
+            # ── What actually reaches the cable ──
+            # 0x811C[17:16]: 0 = Trigger (per 0x8110), 1 = motherboard probe,
+            # 2 = channel probe, 3 = S-IN/GPI propagation. Must be 0 to chain.
+            'trg_out_mode': (fpio >> 16) & 0x3,
+            'front_panel_io_control': fpio,
+            # 0x8110[31] software trigger -> TRG-OUT (the master needs this, or
+            # its SendSWTrigger never leaves the board).
+            'sw_trigger_to_trg_out': (trg_out >> 31) & 0x1,
+            # 0x8110[30] external TRG-IN -> TRG-OUT (a board needs this to pass
+            # the start on to the next one in the chain).
+            'ext_trigger_to_trg_out': (trg_out >> 30) & 0x1,
+            'trg_out_mask': trg_out,
+            'role': 'independent',   # replaced below for the chained boards
+        }
+        chain.append(entry)
+        if entry['synchronised']:
+            synced.append(entry)
+
+    # The master fires the software trigger that starts the chain: board register
+    # id 0 by CAEN convention, else the first synchronised board. Mirrors
+    # Daq::masterIndex() on the caendaq side.
+    if synced:
+        master = next((e for e in synced if str(e['board_id']) == '0'), synced[0])
+        for entry in synced:
+            entry['role'] = 'master' if entry is master else 'slave'
+
+    # A chain can be perfectly armed and still never start, because the start
+    # pulse never reaches the cable. Check the propagation path explicitly
+    # rather than leaving the operator to discover it from an empty run.
+    for i, entry in enumerate(synced):
+        problems = []
+        if entry['trg_out_mode'] != 0:
+            problems.append(
+                "TRG-OUT is not set to carry the trigger, so nothing reaches the next board")
+        if entry['role'] == 'master' and not entry['sw_trigger_to_trg_out']:
+            problems.append(
+                "the software trigger is not routed to TRG-OUT, so the chain will never start")
+        # Every board except the last one has to pass the start along.
+        if i < len(synced) - 1 and not entry['ext_trigger_to_trg_out']:
+            problems.append(
+                "TRG-IN is not routed to TRG-OUT, so boards after this one will not start")
+        entry['problems'] = problems
+
+    return jsonify({
+        'mode': 'daisy-chain' if synced else 'independent',
+        'chain': chain,
+        'synchronised_count': len(synced),
+        # A single board has nothing to chain to.
+        'applicable': len(boards) > 1,
+        # The register the dashboard edits to change any of this.
+        'register': 'reg_8100',
+    })
+
+
+@bp.route("/experiment/board_info", methods=['GET'])
+@jwt_required_custom
+def get_live_board_info():
+    """Full CAEN board identity + acquisition registers for the current run.
+
+    Only populated while a run is configured (that is when the digitizers are
+    open); otherwise `boards` is empty and only the software versions are known."""
+    return jsonify({
+        'boards': caen_acq.board_info_all(),
+        'software': caen_acq.software_versions(),
+        'sync_mode': caen_acq.sync_mode(daq_mgr.get_boards()),
+        'running': caen_acq.is_running(),
+    })
+
+
 # Route for sending CAEN board
 @bp.route("/experiment/get_board_configuration", methods=['GET'])
 @jwt_required_custom
@@ -456,30 +614,27 @@ def get_run_status():
 def get_start_time():
     return jsonify(daq_mgr.get_start_time())
 
-@bp.route('/experiment/xdaq/file_bandwidth', methods=['GET'])
+@bp.route('/experiment/file_bandwidth', methods=['GET'])
 @jwt_required_custom
 def get_file_bandwidth():
     return jsonify(daq_mgr.get_file_bandwidth())
 
-@bp.route('/experiment/xdaq/output_bandwidth', methods=['GET'])
+@bp.route('/experiment/stats', methods=['GET'])
 @jwt_required_custom
-def get_output_bandwidth():
-    return jsonify(daq_mgr.get_output_bandwidth())
+def get_stats():
+    """Live per-board / per-channel rates (event/pileup/lost/satu per second and
+    file write rate) from the caendaq statistics collector."""
+    return jsonify(caen_acq.stats()), 200
 
-@bp.route('/experiment/xdaq/info', methods=['GET'])
-@jwt_required_custom
-def get_xdaq_info():
-    return jsonify(daq_mgr.get_xdaq_info())
-
-@bp.route('/experiment/xdaq/reset', methods=['POST'])
+@bp.route('/experiment/reset', methods=['POST'])
 @jwt_required_custom
 def reset():
     try:
         spy_mgr.stop_spy()
     except Exception:
         pass
-    
-    if daq_mgr.reset_xdaq():
+
+    if daq_mgr.reset_acquisition():
         return jsonify(0)
     else:
         return jsonify(-1)

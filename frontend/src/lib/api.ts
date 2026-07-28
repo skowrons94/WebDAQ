@@ -15,6 +15,35 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
+// A token is good for one day, so it usually expires in the middle of a shift.
+// Every polling component then starts getting 401s, and because most of them
+// swallow their errors to survive a brief server hiccup, the page just stops
+// updating — it looks like the DAQ has died. Catch it centrally: drop the dead
+// token and send the browser to the login page, saying why.
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        const status = error?.response?.status;
+        const url: string = error?.config?.url ?? '';
+        // /login answers 401 for wrong credentials; that is the login form's
+        // business, not an expired session.
+        const isCredentialsCall = url.includes('/login') || url.includes('/register');
+        // flask-jwt-extended: 401 for missing/expired, 422 for a malformed token.
+        const isSessionGone = status === 401 || status === 422;
+
+        if (isSessionGone && !isCredentialsCall && typeof window !== 'undefined') {
+            const alreadyLeaving = window.location.pathname.startsWith('/auth/login');
+            if (!alreadyLeaving) {
+                useAuthStore.getState().clearToken();
+                const here = window.location.pathname + window.location.search;
+                window.location.href =
+                    `/auth/login?expired=1&next=${encodeURIComponent(here)}`;
+            }
+        }
+        return Promise.reject(error);
+    },
+);
+
 export const login = (username: string, password: string) =>
     api.post('/login', { username, password });
 
@@ -61,7 +90,227 @@ export const addBoard = (boardData: any) =>
 export const removeBoard = (boardId: string) =>
     api.post('/experiment/remove_board', { id: boardId });
 
-// Functions for XDAQ configuration
+// ── Multi-board synchronisation ──────────────────────────────────────────────
+// There is no separate sync setting: whether a board joins the chain is decided
+// by its own Acquisition Control register (0x8100), edited in the CAEN
+// dashboard. This endpoint reads those registers back and reports the resulting
+// chain. To CHANGE it, write reg_8100 with setSetting().
+
+/** Acquisition Control (0x8100) bits[1:0] — Start/Stop Mode Selection. */
+export const START_MODE_SW = 0
+export const START_MODE_SIN_GPI = 1
+export const START_MODE_FIRST_TRIGGER = 2
+export const START_MODE_LVDS = 3
+
+export interface SyncChainEntry {
+    board_id: string | number
+    name: string
+    /** 0x8100[1:0] as configured. */
+    start_mode: number
+    start_mode_name: string
+    /** True when the board waits for an external start (i.e. is in the chain). */
+    synchronised: boolean
+    /** 0x8100[6]: 0 = internal 50 MHz oscillator, 1 = external CLK-IN. */
+    clock_source: number
+    /** The whole 0x8100 register, so edits are read-modify-write. */
+    acquisition_control: number
+    /** 0x811C[17:16]: 0 = Trigger (per 0x8110), 3 = S-IN propagation, ... */
+    trg_out_mode: number
+    front_panel_io_control: number
+    /** 0x8110[31]: software trigger reaches TRG-OUT (the master needs this). */
+    sw_trigger_to_trg_out: number
+    /** 0x8110[30]: TRG-IN reaches TRG-OUT (needed to forward down the chain). */
+    ext_trigger_to_trg_out: number
+    trg_out_mask: number
+    role: 'master' | 'slave' | 'independent'
+    /** Reasons this board's start signal would not propagate; empty when fine. */
+    problems: string[]
+}
+
+export interface SyncSettings {
+    mode: 'daisy-chain' | 'independent'
+    chain: SyncChainEntry[]
+    synchronised_count: number
+    /** False when there is only one board — nothing to chain. */
+    applicable: boolean
+    /** The register the dashboard edits to change any of this. */
+    register: string
+}
+
+export const getSyncSettings = (): Promise<SyncSettings> =>
+    api.get('/experiment/get_sync_settings').then(res => res.data);
+
+// ── Board identity / provenance ──────────────────────────────────────────────
+
+export interface CaenBoardInfo {
+    board_id: string
+    board_index: number
+    model_name: string
+    model: number
+    family_code: number
+    form_factor: number
+    channels: number
+    adc_bits: number
+    serial_number: number
+    pcb_revision: number
+    board_reg_id: number
+    dpp_type: string
+    dpp_code: number
+    ns_per_sample: number
+    ns_per_timetag: number
+    roc_firmware: string
+    amc_firmware: string
+    license: string
+    channel_enable_mask: number
+    acquisition_control: number
+    board_configuration: number
+    front_panel_io_control: number
+    global_trigger_mask: number
+    trg_out_enable_mask: number
+    run_delay: number
+    /** Acquisition Control (0x8100) bits[1:0], as read back from the board. */
+    start_mode: number
+    start_mode_name: string
+    sync_role: 'master' | 'slave' | 'independent'
+    conn_type: number
+    link_num: number
+    node: number
+    vme_base: number
+    configured_name?: string
+    configured_dpp?: string
+    link_type?: string
+}
+
+export interface SoftwareVersions {
+    webdaq: string
+    python: string
+    platform: string
+    caendaq: string | null
+    caendaq_has_caen: boolean | null
+    acquisition_mode: string
+}
+
+export interface BoardInfoResponse {
+    boards: CaenBoardInfo[]
+    software: SoftwareVersions
+    sync_mode: string
+    running: boolean
+}
+
+/** Live board identity + acquisition registers. `boards` is only populated
+ *  while a run is configured (that is when the digitizers are open). */
+export const getBoardInfo = (): Promise<BoardInfoResponse> =>
+    api.get('/experiment/board_info').then(res => res.data);
+
+// ── Data dashboard: completed runs ───────────────────────────────────────────
+// Read-side access to what a finished run left behind — its record, the beam
+// current it was taken with, the boards' configuration, and the ROOT conversion.
+
+export interface RunSummary {
+    run_number: number
+    start_time: string | null
+    end_time: string | null
+    duration_s: number | null
+    run_type: string | null
+    target_name: string | null
+    terminal_voltage: number | null
+    accumulated_charge: number | null
+    flag: string
+    notes: string | null
+    sync_mode: string | null
+    has_data: boolean
+    has_current: boolean
+    converted: boolean
+    n_data_files: number
+    total_bytes: number
+    /** False while a run is still in progress (no end time yet). */
+    complete: boolean
+}
+
+export interface RunFileEntry { name: string; bytes: number }
+
+export interface RunFiles {
+    data: RunFileEntry[]
+    board_config: RunFileEntry[]
+    root: RunFileEntry[]
+    current: RunFileEntry | null
+    metadata: RunFileEntry | null
+    total_bytes: number
+}
+
+export interface BoardConfigDump {
+    file: string
+    board: Record<string, string>
+    n_registers: number
+    registers: Record<string, {
+        name: string; channel: number; address: string; value: string
+    }>
+}
+
+export interface RunDetail extends RunSummary {
+    probe_voltage: number | null
+    user_id: number | null
+    board_info: CaenBoardInfo[]
+    software_versions: Partial<SoftwareVersions>
+    files: RunFiles
+    directory: string
+    board_configs: BoardConfigDump[]
+}
+
+export interface ChargeChannel {
+    name: string
+    charge_uC: number
+    charge_nC: number
+    charge_mC: number
+    mean_current_uA: number
+}
+
+export interface CurrentData {
+    available: boolean
+    start_time: string | null
+    columns: string[]
+    /** [time, ch0, ch1, ...] per row, downsampled for plotting. */
+    samples: number[][]
+    n_samples: number
+    downsampled: boolean
+    integration: {
+        channels: ChargeChannel[]
+        duration_s: number
+        method?: string
+        note?: string
+    } | null
+}
+
+export interface ConversionStatus {
+    state: 'idle' | 'running' | 'done' | 'failed'
+    outputs: string[]
+    converted: boolean
+    binary: string | null
+    capabilities: { ts_unit: boolean; compression: boolean; ignore_fail: boolean; header_boards: boolean }
+    returncode?: number | null
+    log?: string[]
+    message?: string
+    started_at?: number
+    finished_at?: number
+}
+
+export const getRuns = (): Promise<{ runs: RunSummary[]; rureader_available: boolean }> =>
+    api.get('/data/runs').then(res => res.data);
+
+export const getRunDetail = (runNumber: number): Promise<RunDetail> =>
+    api.get(`/data/runs/${runNumber}`).then(res => res.data);
+
+export const getRunCurrent = (runNumber: number, maxPoints = 2000): Promise<CurrentData> =>
+    api.get(`/data/runs/${runNumber}/current`, { params: { max_points: maxPoints } })
+        .then(res => res.data);
+
+export const getConversionStatus = (runNumber: number): Promise<ConversionStatus> =>
+    api.get(`/data/runs/${runNumber}/convert`).then(res => res.data);
+
+export const startConversion = (runNumber: number, options: { ts_unit?: string } = {}) =>
+    api.post(`/data/runs/${runNumber}/convert`, options).then(res => res.data);
+
+// Acquisition status / control
 
 export const getSaveData = () => 
     api.get('/experiment/get_save_data').then(res => res.data);
@@ -160,15 +409,17 @@ export const getRoiHistogram = (boardId: string, channel: string, roiMin: number
 // Get ROI histograms
 export const getRoiIntegral = (boardId: string, channel: string, roiMin: number, roiMax: number) =>
     api.get(`/roi/${boardId}/${channel}/${roiMin}/${roiMax}`).then(res => res.data);
-// XDAQ functions
+// Acquisition file write bandwidth (MB/s), from caendaq statistics
 export const getFileBandwidth = () =>
-    api.get('/experiment/xdaq/file_bandwidth').then(res => res.data);
-export const getXdaqInfo = () =>
-    api.get('/experiment/xdaq/info').then(res => res.data);
+    api.get('/experiment/file_bandwidth').then(res => res.data);
 
-// Reset
+// Live per-board / per-channel run statistics (rates) from caendaq
+export const getExperimentStats = () =>
+    api.get('/experiment/stats').then(res => res.data);
+
+// Reset the acquisition
 export const reset = () =>
-    api.post('/experiment/xdaq/reset').then(res => res.data);
+    api.post('/experiment/reset').then(res => res.data);
 // Calibration
 export const getCalib = (boardName: string, boardId: string, channel: string) =>
     api.get(`/calib/get/${boardName}/${boardId}/${channel}`);
@@ -224,12 +475,41 @@ export const updateCurrentModuleSettings = (settings: any) =>
 export const getCurrentStatus = () =>
     api.get('/current/status').then(res => res.data);
 
+// List serial ports detected on the DAQ host (for the RBD 9103 port picker)
+export const getSerialPorts = () =>
+    api.get('/current/serial_ports').then(res => res.data);
+
 // Get boards JSON
 export const getSetting = (id: string, setting: string) =>
     api.get(`/digitizer/${id}/${setting}`).then(res => res.data);
 
 export const setSetting = (id: string, setting: string, value: string) =>
     api.get(`/digitizer/${id}/${setting}/${value}`);
+
+// ── Online tuning ───────────────────────────────────────────────────────────
+// Saves the register to the board's configuration and, with `online`, writes it
+// to the board as well so the change takes effect immediately. The save always
+// happens; `written` says whether the board itself took it, and `reason`
+// explains a refusal (a register that is not safe to move mid-acquisition, a
+// disconnected board).
+export type ApplySettingResult = {
+    saved: boolean;
+    written: boolean;
+    reason: string;
+    via: 'run' | 'probe' | '';
+    address: string;
+    value: string;
+};
+
+export const applySetting = (id: string, setting: string, value: number, online: boolean) =>
+    api.post(`/digitizer/${id}/setting/${setting}`, { value, online })
+        .then(res => res.data as ApplySettingResult);
+
+// Registers this board allows to be changed while it is acquiring, as
+// {"0x106C": "Trigger Threshold"}. Used to mark the fields before anything is sent.
+export const getOnlineRegisters = (id: string) =>
+    api.get(`/digitizer/${id}/online_registers`)
+        .then(res => res.data as { dpp: string; registers: Record<string, string> });
 
 export const updateJSON = () =>
     api.get(`/digitizer/update`);
@@ -251,6 +531,54 @@ export const getBoardSettings = (id: string) =>
 
 export const getBoardConnectivity = () =>
     api.get('/digitizer/connectivity').then(res => res.data);
+
+// ── Board discovery ─────────────────────────────────────────────────────────
+// The server probes the links (as CoMPASS does) and reports what is plugged in.
+// Scanning runs in the background because a full sweep is hundreds of probes:
+// start it, then poll the status until it is no longer 'running'.
+export type ScanOptions = {
+    usb: { enabled: boolean; links: number };
+    optical: { enabled: boolean; links: number; nodes: number };
+    a4818: { enabled: boolean; pids: string[]; nodes: number };
+    vme: { enabled: boolean; link_type: string; link_num: string; start: string; end: string; step: string };
+};
+
+export type DiscoveredBoard = {
+    model: string;
+    serial: string;
+    channels: number;
+    adc_bits: number;
+    roc_firmware: string;
+    amc_firmware: string;
+    dpp: string | null;
+    link_type: string;
+    link_num: string;
+    id: number;
+    vme: string;
+    already_configured: boolean;
+};
+
+export type ScanStatus = {
+    status: 'idle' | 'running' | 'done' | 'cancelled' | 'error';
+    message: string;
+    progress: { done: number; total: number };
+    elapsed: number;
+    eta: number | null;
+    found: DiscoveredBoard[];
+    errors: string[];
+};
+
+export const startBoardScan = (options: ScanOptions) =>
+    api.post('/digitizer/scan', options).then(res => res.data as ScanStatus);
+
+export const getBoardScanStatus = () =>
+    api.get('/digitizer/scan').then(res => res.data as ScanStatus);
+
+export const cancelBoardScan = () =>
+    api.post('/digitizer/scan/cancel').then(res => res.data as ScanStatus);
+
+export const getA4818Pids = () =>
+    api.get('/digitizer/scan/a4818').then(res => res.data as { pids: string[] });
 
 // Generic metric data fetching function
 export const getMetricData = (entityName: string, from: string = '-10s', until: string = 'now') =>
@@ -295,17 +623,39 @@ export const testTelegram = () =>
 export const getStatsPaths = () =>
     api.get('/stats/paths').then(res => res.data);
 
-export const addStatsPath = (path: string, alias?: string) =>
-    api.post('/stats/paths', { path, alias }).then(res => res.data);
+export const addStatsPath = (path: string, alias?: string, unit?: string) =>
+    api.post('/stats/paths', { path, alias, unit }).then(res => res.data);
+
+// Whether the Graphite server is answering, for the status light on the page.
+export const getStatsConnection = () =>
+    api.get('/stats/connection').then(res => res.data as {
+        reachable: boolean; host: string; port: number; error: string;
+    });
 
 export const removeStatsPath = (path: string) =>
     api.delete(`/stats/paths/${path}`).then(res => res.data);
 
-export const updateStatsPath = (path: string, alias?: string, enabled?: boolean) =>
-    api.put(`/stats/paths/${path}`, { alias, enabled }).then(res => res.data);
+export const updateStatsPath = (path: string, alias?: string, enabled?: boolean, unit?: string) =>
+    api.put(`/stats/paths/${path}`, { alias, enabled, unit }).then(res => res.data);
 
 export const getStatsMetricLastValue = (metric: string, from: string = '-10s') =>
     api.get(`/stats/metric/${metric}/last`, { params: { from } }).then(res => res.data);
+
+// Recent history of one metric, as [[timestamp, value], …] — used for the
+// trend line on a metric card.
+// `from`/`until` are Graphite offsets: seconds are "s", minutes are "min"
+// (plain "m" is not a unit and the server answers 400).
+export const getStatsMetricSeries = (metric: string, from: string = '-30min', until: string = 'now') =>
+    api.get(`/stats/metric/${metric}`, { params: { from, until } })
+        .then(res => res.data as [string, number | null][]);
+
+// One level of the Graphite metric tree, so metrics can be picked instead of
+// typed. `prefix` opens a branch; `search` matches anywhere in the tree.
+export type MetricNode = { path: string; is_leaf: boolean };
+
+export const browseMetrics = (prefix = '', search = '') =>
+    api.get('/stats/browse', { params: { prefix, search } })
+        .then(res => res.data as { nodes: MetricNode[]; prefix: string });
 
 export const startStatsRun = (runNumber: number) =>
     api.post(`/stats/run/${runNumber}/start`).then(res => res.data);
@@ -329,106 +679,87 @@ export const getStatsGraphiteConfig = () =>
 export const setStatsGraphiteConfig = (graphite_host: string, graphite_port: number) =>
     api.post('/stats/graphite_config', { graphite_host, graphite_port }).then(res => res.data);
 
-// Resolution Tuning APIs
-export interface TuningConfig {
-    board_id: string;
-    channel: number;
-    parameter_name: string;
-    param_min: number;
-    param_max: number;
-    num_steps: number;
-    run_duration: number;
-    fit_range_min: number;
-    fit_range_max: number;
-}
+// ── PSI ELOG ────────────────────────────────────────────────────────────────
+// The server talks to ELOG with a shared service account; entries are signed
+// with the WebDAQ user's name through the Author attribute.
+export type ElogEntry = {
+    id: number;
+    text: string;
+    attributes: Record<string, string>;
+    attachments: string[];
+    author: string;
+    subject: string;
+    type: string;
+    date: string;
+    when: string;
+    encoding: string;
+    in_reply_to: string;
+    reply_to: string;
+};
 
-export interface TuningPoint {
-    parameter_value: number;
-    sigma: number;
-    sigma_error: number;
-    mean: number;
-    relative_resolution: number;
-    amplitude: number;
-    baseline: number;
-    chi_squared: number;
-    integral: number;
-    timestamp: number;
-    fit_success: boolean;
-    error?: string;
-}
+export type ElogEntryList = {
+    entries: ElogEntry[];
+    total: number;
+    offset: number;
+    limit: number;
+    has_more: boolean;
+};
 
-export interface TuningSession {
-    session_id: string;
-    board_id: string;
-    channel: number;
-    parameter_name: string;
-    param_min: number;
-    param_max: number;
-    num_steps: number;
-    run_duration: number;
-    fit_range_min: number;
-    fit_range_max: number;
-    points: TuningPoint[];
-    best_point: TuningPoint | null;
-    status: 'running' | 'completed' | 'stopped' | 'error';
-    start_time: number;
-    end_time: number | null;
-    error_message: string | null;
-    current_step: number;
-    total_steps: number;
-    config_backup_path: string | null;
-}
+export type ElogSettings = {
+    enabled: boolean;
+    url: string;
+    user: string;
+    password: string;          // masked by the server, never the real one
+    default_attributes: Record<string, string>;
+    configured: boolean;
+    available: boolean;        // whether py_elog is installed on the server
+    default_author?: string;
+};
 
-export const startTuning = (config: TuningConfig) =>
-    api.post('/tuning/start', config);
+export const getElogSettings = () =>
+    api.get('/elog/settings').then(res => res.data as ElogSettings);
 
-export const stopTuning = () =>
-    api.post('/tuning/stop');
+export const setElogSettings = (settings: {
+    enabled?: boolean; url?: string; user?: string; password?: string;
+    default_attributes?: Record<string, string>;
+}) => api.post('/elog/settings', settings).then(res => res.data);
 
-export const getTuningStatus = () =>
-    api.get('/tuning/status').then(res => res.data);
+export const testElogConnection = () =>
+    api.post('/elog/test').then(res => res.data as { success: boolean; message: string });
 
-export const getTuningData = () =>
-    api.get('/tuning/data').then(res => res.data);
+export const getElogEntries = (params: { limit?: number; offset?: number; search?: string } = {}) =>
+    api.get('/elog/entries', { params }).then(res => res.data as ElogEntryList);
 
-export const getTuningHistory = (params?: { board_id?: string; limit?: number }) =>
-    api.get('/tuning/history', { params }).then(res => res.data);
+export const getElogEntry = (id: number) =>
+    api.get(`/elog/entries/${id}`).then(res => res.data as ElogEntry);
 
-export const getTunableParameters = () =>
-    api.get('/tuning/parameters').then(res => res.data);
-
-export const getTuningHistogram = (boardId: string, channel: number) =>
-    api.get(`/tuning/histogram/${boardId}/${channel}`).then(res => res.data);
-
-export const resetTuningHistory = () =>
-    api.post('/tuning/reset_history');
-
-export const getTuningSession = (sessionId: string) =>
-    api.get(`/tuning/session/${sessionId}`).then(res => res.data);
-
-export const getPhaBoards = () =>
-    api.get('/tuning/boards').then(res => res.data);
-
-export const getParameterValue = (boardId: string, channel: number, parameterName: string) =>
-    api.get(`/tuning/parameter_value/${boardId}/${channel}/${encodeURIComponent(parameterName)}`).then(res => res.data);
-
-export const setParameterValue = (boardId: string, channel: number, parameterName: string, value: number) =>
-    api.post('/tuning/parameter_value', {
-        board_id: boardId,
-        channel,
-        parameter_name: parameterName,
-        value
+export const getElogAttributes = () =>
+    api.get('/elog/attributes').then(res => res.data as {
+        names: string[]; defaults: Record<string, string>; author: string;
     });
 
-export const getTuningHistogramWithFit = (boardId: string, channel: number, fitParams?: {
-    amplitude?: number;
-    mean?: number;
-    sigma?: number;
-    baseline?: number;
-}) =>
-    api.get(`/tuning/histogram_with_fit/${boardId}/${channel}`, { params: fitParams }).then(res => res.data);
+export const postElogEntry = (entry: {
+    text: string;
+    attributes: Record<string, string>;
+    reply_to?: number | null;
+    encoding?: string;
+}, files: File[] = []) => {
+    if (files.length === 0) {
+        return api.post('/elog/entries', entry).then(res => res.data as { id: number; message: string });
+    }
+    // With attachments the attributes travel as a JSON field beside the files.
+    const form = new FormData();
+    form.append('text', entry.text);
+    form.append('attributes', JSON.stringify(entry.attributes));
+    if (entry.reply_to) form.append('reply_to', String(entry.reply_to));
+    if (entry.encoding) form.append('encoding', entry.encoding);
+    files.forEach(file => form.append('attachments', file));
+    return api.post('/elog/entries', form).then(res => res.data as { id: number; message: string });
+};
 
-export const getLastTuningSession = (boardId?: string, channel?: number) =>
-    api.get('/tuning/last_session', { params: { board_id: boardId, channel } }).then(res => res.data);
+// Attachments are proxied: the browser holds a WebDAQ token, not an ELOG session.
+export const getElogAttachment = (url: string) =>
+    api.get('/elog/attachment', { params: { url }, responseType: 'blob' })
+        .then(res => res.data as Blob);
 
 export default api;

@@ -5,7 +5,7 @@ import numpy as np
 from datetime import datetime
 from flask import Blueprint, jsonify, request
 from ..utils.tetramm import tetram_controller, TetrAMMController
-from ..utils.rbd9103 import rbd9103_controller, RBD9103Controller
+from ..utils.rbd9103 import rbd9103_controller, RBD9103Controller, list_serial_ports
 from ..services.daq_manager import get_daq_manager
 
 from app import db
@@ -23,6 +23,12 @@ daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 # Default settings
 current_accumulating_run_number = 0
 running = False
+
+# The lifetime charge is persisted when it moves by at least this much (µC),
+# rather than on every poll. At a typical 10 µA that is a write every few
+# seconds; with no beam, none at all.
+_TOTAL_SAVE_THRESHOLD_UC = 50.0
+_last_saved_total = 0.0
 
 # Open conf/current.json if exists, create default if not
 if os.path.exists("conf/current.json"):
@@ -53,7 +59,18 @@ controller = None  # Active controller
 # Initialize the selected module
 module_type = settings.get("module_type", "tetramm")
 
-if module_type == "tetramm":
+if TEST_FLAG:
+    # No picoammeter in test mode. Substitute a simulated one so the current
+    # readout, the accumulated charge and the per-run current.txt all behave —
+    # otherwise a test-mode run produces no current data at all and the plots
+    # and charge integration cannot be exercised.
+    from ..utils.mock_current import MockCurrentController
+    controller = MockCurrentController(single_channel=(module_type == "rbd9103"))
+    controller.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+    controller.set_charge_channel(settings.get("tetramm_charge_channel", 0))
+    controller.initialize()
+    tetramm_ctrl = rbd9103_ctrl = controller   # module_type switching reuses these
+elif module_type == "tetramm":
     tetramm_ctrl = tetram_controller(
         ip=settings["tetramm_ip"],
         port=settings["tetramm_port"],
@@ -80,6 +97,57 @@ elif module_type == "rbd9103":
     except Exception as e:
         print(f"Warning: Could not initialize RBD 9103 at startup: {e}")
     controller = rbd9103_ctrl
+
+
+def _on_run_state_changed(running: bool) -> None:
+    """
+    Follow the run with the charge integration.
+
+    The per-run charge is what the online analysis normalises to, so it must
+    cover the run and nothing else. Hanging it off the DAQ's own run state —
+    rather than off the client remembering to call /current/start and
+    /current/stop — means a closed browser, a run stopped by the auto-restart,
+    or a run that saves no data all leave the figure correct. The lifetime total
+    is untouched: it keeps counting so it can show how much beam the target has
+    seen, run or no run.
+    """
+    if controller is None:
+        return
+    try:
+        if running:
+            controller.reset_accumulated_charge()
+            controller.set_accumulating(True)
+        else:
+            controller.set_accumulating(False)
+            # Record the run's charge here rather than only in /current/stop:
+            # the analysis needs it even when the browser that started the run
+            # is gone by the time it ends.
+            _persist_run_charge(current_accumulating_run_number,
+                                controller.get_accumulated_charge())
+    except Exception as e:
+        print(f"Warning: could not update charge accumulation for run state {running}: {e}")
+
+
+def _persist_run_charge(run_number: int, charge: float) -> None:
+    """Store the run's accumulated charge in its metadata row, if it has one."""
+    app = daq_mgr.flask_app
+    if not run_number or app is None:
+        return
+    try:
+        with app.app_context():
+            run_metadata = RunMetadata.query.filter_by(run_number=int(run_number)).first()
+            if run_metadata:
+                run_metadata.accumulated_charge = charge
+                db.session.commit()
+    except Exception as e:
+        print(f"Warning: could not store accumulated charge for run {run_number}: {e}")
+
+
+daq_mgr.add_run_state_listener(_on_run_state_changed)
+# A server restarted mid-run must not sit there with the integration switched off.
+if controller is not None and daq_mgr.is_running():
+    controller.set_accumulating(True)
+
 
 # Set ip and port
 @bp.route('/current/set_ip_port/<ip>/<port>', methods=['GET'])
@@ -133,7 +201,9 @@ def start_acquisition(run_number):
     if( not controller.is_connected() ):
         return jsonify({"message": "TetrAMM not connected"}), 200
     
-    # Reset accumulated charge for this new run
+    # Reset accumulated charge for this new run. Whether it *integrates* is not
+    # decided here — that follows the DAQ run state (see _on_run_state_changed),
+    # so charge is never counted before the run actually starts.
     controller.reset_accumulated_charge()
     current_accumulating_run_number = int(run_number)
     run = int(run_number)
@@ -253,20 +323,47 @@ def get_accumulated():
 @bp.route('/current/total_accumulated', methods=['GET'])
 @jwt_required_custom
 def get_total_accumulated():
-    global settings
-    # Update settings with current total from controller
+    global settings, _last_saved_total
     settings["total_accumulated"] = controller.get_total_accumulated_charge()
-    with open("conf/current.json", "w") as f:
-        json.dump(settings, f)
+
+    # In test mode the charge is simulated. Writing it to conf/current.json
+    # would leave a real setup carrying a lifetime total that no beam ever
+    # produced, so the value is reported but not persisted.
+    if not TEST_FLAG:
+        # The dashboard polls this once a second per client. Rewriting the
+        # configuration file that often wears the disk for nothing and risks a
+        # truncated file if the server dies mid-write, so only write when the
+        # number has actually moved by something worth recording.
+        total = settings["total_accumulated"]
+        if abs(total - _last_saved_total) >= _TOTAL_SAVE_THRESHOLD_UC:
+            try:
+                with open("conf/current.json", "w") as f:
+                    json.dump(settings, f)
+                _last_saved_total = total
+            except Exception as e:
+                print(f"Warning: could not save the accumulated charge: {e}")
+
     return jsonify(settings["total_accumulated"])
 
 # Reset total accumulated
 @bp.route('/current/reset_total_accumulated', methods=['POST'])
 @jwt_required_custom
 def reset_total_accumulated():
-    global settings
+    global settings, _last_saved_total
     settings["total_accumulated"] = 0
     controller.set_total_accumulated_charge(0)
+
+    # Persist immediately. This used to depend on the next poll writing the
+    # file, so a reset followed by a restart brought the old total back — and
+    # now that polls only write when the value has moved, nothing would have
+    # written it at all.
+    _last_saved_total = 0.0
+    try:
+        with open("conf/current.json", "w") as f:
+            json.dump(settings, f)
+    except Exception as e:
+        print(f"Warning: could not save the reset accumulated charge: {e}")
+
     return jsonify({"message": "Total accumulated reset"}), 200
 
 # Get current module type
@@ -314,6 +411,20 @@ def set_module_type():
 
     # Initialize new controller
     try:
+        if TEST_FLAG:
+            # Rebuild the simulated module in the shape of the chosen device:
+            # the RBD 9103 reports a single current, the TetrAMM four channels.
+            from ..utils.mock_current import MockCurrentController
+            if controller:
+                controller.disconnect()
+            controller = MockCurrentController(single_channel=(new_module_type == "rbd9103"))
+            controller.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+            controller.set_charge_channel(settings.get("tetramm_charge_channel", 0))
+            controller.initialize()
+            tetramm_ctrl = rbd9103_ctrl = controller
+            controller.set_accumulating(daq_mgr.is_running())
+            return jsonify({"message": f"Switched to simulated {new_module_type}"}), 200
+
         if new_module_type == "tetramm":
             if not tetramm_ctrl:
                 tetramm_ctrl = TetrAMMController(
@@ -335,6 +446,9 @@ def set_module_type():
             rbd9103_ctrl.initialize()
             controller = rbd9103_ctrl
 
+        # The new module takes over mid-run as the old one left off.
+        controller.set_accumulating(daq_mgr.is_running())
+
         return jsonify({"message": f"Switched to {new_module_type}"}), 200
 
     except Exception as e:
@@ -347,17 +461,30 @@ def get_module_settings():
     global settings
 
     module_type = settings.get("module_type", "tetramm")
-    
-    # Safely get controller settings
+
+    # Device parameters, from the file first and the live controller on top.
+    # The file is what the device was configured with and is always there; the
+    # controller only has them once it has initialised (and the simulated module
+    # has none at all), so reading the controller alone reports "nothing
+    # configured" for a device that is perfectly well configured.
+    settings_file = 'conf/tetram.json' if module_type == "tetramm" else 'conf/rbd9103.json'
     controller_settings = {}
+    try:
+        if os.path.exists(settings_file):
+            with open(settings_file) as f:
+                stored = json.load(f)
+            if isinstance(stored, dict):
+                controller_settings.update(stored)
+    except Exception as e:
+        print(f"Error reading {settings_file}: {e}")
+
     if controller:
         try:
-            controller_settings = getattr(controller, 'settings', {})
-            if controller_settings is None:
-                controller_settings = {}
+            live = getattr(controller, 'settings', None)
+            if isinstance(live, dict):
+                controller_settings.update(live)
         except Exception as e:
             print(f"Error accessing controller settings: {e}")
-            controller_settings = {}
 
     if module_type == "tetramm":
         return jsonify({
@@ -528,6 +655,13 @@ def set_graphite_config():
         return jsonify({"error": str(e)}), 500
 
 # Get comprehensive status including module type
+@bp.route('/current/serial_ports', methods=['GET'])
+@jwt_required_custom
+def get_serial_ports():
+    """List serial ports detected on the host so the UI can offer a pick-list."""
+    return jsonify({"ports": list_serial_ports()})
+
+
 @bp.route('/current/status', methods=['GET'])
 @jwt_required_custom
 def get_status():
@@ -568,10 +702,24 @@ def get_status():
             # For RBD 9103, defer to is_connected() which also checks that the
             # device is producing valid samples — a bare open serial port can
             # mean nothing (wrong /dev/ttyUSB, silent device, etc).
-            if module_type == "tetramm" and hasattr(controller, 'socket') and controller.socket:
-                basic_status["connected"] = True  # Socket exists, assume connected
+            if module_type == "tetramm":
+                # A live socket is the quick answer, but a controller without a
+                # 'socket' attribute is not therefore disconnected — asking it
+                # directly is what /current/is_connected does, and the two
+                # endpoints disagreeing about the same device is worse than
+                # either answer.
+                if getattr(controller, 'socket', None):
+                    basic_status["connected"] = True
+                else:
+                    basic_status["connected"] = bool(controller.is_connected())
             elif module_type == "rbd9103":
                 basic_status["connected"] = controller.is_connected()
+                # Report whether the configured serial device file exists at all,
+                # so the UI can distinguish "unplugged/missing port" from
+                # "present but not yet producing samples".
+                if hasattr(controller, 'port_exists'):
+                    basic_status["port_exists"] = controller.port_exists()
+                    basic_status["port"] = getattr(controller, 'port_name', None)
         except:
             basic_status["connected"] = False
 

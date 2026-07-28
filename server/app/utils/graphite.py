@@ -63,7 +63,7 @@ class GraphiteClient:
         for a specified metric over a given time range.
         
         Args:
-            target: Metric name or Graphite function (e.g., 'tetram.ch0', 'xdaq.*.rate')
+            target: Metric name or Graphite function (e.g., 'tetram.ch0', 'ancillary.rates.*')
             from_time: Start time for query (e.g., '-1h', '-1d', '20240101')
             until_time: End time for query (default: 'now')
             format: Response format (default: 'json')
@@ -218,24 +218,30 @@ class GraphiteClient:
         """
         try:
             # Try a simple query to test connectivity
-            url = f"{self.base_url}/render"
-            params = {
-                'target': 'test.connection',
-                'from': '-1min',
-                'format': 'json'
-            }
-            
-            response = requests.get(url, params=params, timeout=5)
-            
-            # Accept any response that's not a connection error
-            # Even a 404 or empty response means the server is reachable
-            is_connected = response.status_code < 500
-            
+            # Ask for the top of the metric tree rather than just knocking on the
+            # door: a status code below 500 only proves *something* is listening,
+            # and a wrong port pointing at some other web service would then show
+            # up as "connected" while every metric stayed empty. A JSON list back
+            # from /metrics/find means this really is Graphite.
+            response = requests.get(f"{self.base_url}/metrics/find",
+                                    params={'query': '*', 'format': 'json'},
+                                    timeout=5)
+
+            if response.status_code >= 400:
+                self.logger.warning(f"Graphite server returned status {response.status_code}")
+                return False
+
+            try:
+                is_connected = isinstance(response.json(), list)
+            except ValueError:
+                is_connected = False
+
             if is_connected:
                 self.logger.debug("Graphite server connection test successful")
             else:
-                self.logger.warning(f"Graphite server returned status {response.status_code}")
-            
+                self.logger.warning(
+                    f"{self.base_url} answered, but not like a Graphite server")
+
             return is_connected
             
         except requests.exceptions.ConnectionError:
@@ -250,6 +256,55 @@ class GraphiteClient:
             self.logger.warning(f"Graphite connection test failed: {e}")
             return False
     
+    def find_metrics(self, query: str = '*') -> List[Dict[str, Any]]:
+        """
+        One level of the metric tree, as [{'path': ..., 'is_leaf': bool}].
+
+        Graphite's /metrics/find answers in two different shapes depending on
+        version and format: the treejson style ({'id', 'text', 'leaf'}) and the
+        plain style ({'path', 'is_leaf'}). Both are normalised here, because a
+        server answering in the other shape looks like an empty tree otherwise.
+
+        Args:
+            query: a pattern for ONE level, e.g. '*' or 'accelerator.*'
+
+        Returns:
+            Nodes sorted by path. Empty on any error — the browser shows
+            "nothing here" rather than failing.
+        """
+        try:
+            response = requests.get(f"{self.base_url}/metrics/find",
+                                    params={'query': query, 'format': 'json'},
+                                    timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+        except Exception as e:
+            self.logger.error(f"Error finding metrics for '{query}': {e}")
+            return []
+
+        if not isinstance(data, list):
+            return []
+
+        nodes = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            path = item.get('path') or item.get('id') or item.get('text')
+            if not path:
+                continue
+            if 'is_leaf' in item:
+                is_leaf = bool(item['is_leaf'])
+            elif 'leaf' in item:
+                is_leaf = bool(item['leaf'])
+            else:
+                # Neither flag: a node that cannot be expanded is a metric.
+                is_leaf = not bool(item.get('expandable', 0))
+            nodes.append({'path': str(path), 'is_leaf': is_leaf})
+
+        nodes.sort(key=lambda n: n['path'])
+        self.logger.debug(f"Found {len(nodes)} nodes for query '{query}'")
+        return nodes
+
     def get_metrics_list(self, query: str = '*') -> List[str]:
         """
         Get list of available metrics matching a pattern.

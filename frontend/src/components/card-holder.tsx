@@ -16,7 +16,7 @@ import {
   Save,
   AudioWaveform,
   Server,
-  Boxes,
+  Zap,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -47,12 +47,12 @@ import {
   getStatsPaths,
   getStatsMetricLastValue,
   getCurrentModuleType,
+  getCurrentModuleSettings,
   getRunMetadataAll,
   getSaveData,
   getWaveformStatusPerBoard,
   activateWaveformBoard,
   deactivateWaveformBoard,
-  getXdaqInfo,
   getCurrentStatus,
   getStatsRunStatus,
 } from '@/lib/api'
@@ -110,14 +110,16 @@ type BoardInfo = {
   chan: number;
 }
 
-type XdaqInfo = {
-  container_running: boolean;
-  daq_status: string;
-  num_readout_units: number;
-  run_number: number | null;
-  input_bandwidth: number;
-  output_bandwidth: number;
-  file_bandwidth: number;
+
+/**
+ * Charge in µC, in whichever unit keeps it readable — a long run reaches
+ * millicoulombs and a target's lifetime total reaches coulombs.
+ */
+const formatCharge = (microCoulombs: number): string => {
+  const value = Number.isFinite(microCoulombs) ? microCoulombs : 0
+  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} C`
+  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(2)} mC`
+  return `${value.toFixed(2)} uC`
 }
 
 interface CardHolderProps {
@@ -147,6 +149,14 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   const [portCurrent, setPortCurrent] = useState<string>('')
   const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
   const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
+  // Device settings as the server reports them. The address differs by module:
+  // the TetrAMM has ip + port, the RBD 9103 has a serial port and no ip at all.
+  const [currentModuleInfo, setCurrentModuleInfo] = useState<{
+    module_type?: string
+    ip?: string
+    port?: string | number
+    settings?: Record<string, string>
+  } | null>(null)
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
@@ -154,10 +164,13 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
   const [boardWaveforms, setBoardWaveforms] = useState<{ [boardId: string]: boolean }>({})
-  const [xdaqInfo, setXdaqInfo] = useState<XdaqInfo | null>(null)
   const [currentAcquiring, setCurrentAcquiring] = useState<boolean>(false)
+  // The device is sampling (independent of whether a run is logging it).
+  const [currentSampling, setCurrentSampling] = useState<boolean>(false)
   const [statsCollecting, setStatsCollecting] = useState<boolean>(false)
   const [statsCount, setStatsCount] = useState<number>(0)
+  // First beam current reading of the current run; null between runs.
+  const runStartCurrentRef = useRef<number | null>(null)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
 
@@ -202,17 +215,21 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [ip, port, isConnected, moduleType] = await Promise.all([
+        const [ip, port, isConnected, moduleType, moduleSettings] = await Promise.all([
           getIpCurrent(),
           getPortCurrent(),
           getConnectedCurrent(),
-          getCurrentModuleType()
+          getCurrentModuleType(),
+          // Range, averaging and the charge channel decide how the reading
+          // behaves; without them the card says only "Connected".
+          getCurrentModuleSettings().catch(() => null),
         ])
         setIpCurrent(ip)
         setPortCurrent(port)
         setIsConnectedCurrent(isConnected)
         setCurrentModuleType(moduleType.module_type)
         setCurrentModuleName(moduleType.module_type === 'rbd9103' ? 'RBD 9103' : 'TetrAMM')
+        if (moduleSettings) setCurrentModuleInfo(moduleSettings)
       } catch (error) {
         console.error('Failed to fetch initial current device data:', error)
       }
@@ -222,7 +239,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     fetchBoardConfiguration()
     updateBoardConnectivity() // Initial connectivity check on page load
     updateDaqStatuses() // Initial DAQ status check
-    updateXdaqInfo() // Initial XDAQ info check
 
     // Call updateStatsValues immediately and then set up interval
     // Small delay to ensure paths are loaded from store
@@ -237,7 +253,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     const boardConnectivityInterval = setInterval(updateBoardConnectivity, 5000) // Check every 5 seconds
     const statsInterval = setInterval(updateStatsValues, 5000) // Refresh stats every 5 seconds
     const daqStatusInterval = setInterval(updateDaqStatuses, 3000)
-    const xdaqInfoInterval = setInterval(updateXdaqInfo, 5000)
 
     return () => {
       clearInterval(beamCurrentInterval)
@@ -249,7 +264,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
       clearInterval(boardConnectivityInterval)
       clearInterval(statsInterval)
       clearInterval(daqStatusInterval)
-      clearInterval(xdaqInfoInterval)
     }
   }, [])
 
@@ -400,9 +414,20 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     try {
       const currentData = await getDataCurrent()
       setBeamCurrent(currentData)
-      if (isRunning && startTime) {
-        const initialCurrent = parseFloat(localStorage.getItem('initialBeamCurrent') || '0')
-        setBeamCurrentChange(Math.abs(currentData - initialCurrent))
+
+      // Reference for "since run start". It used to come from localStorage,
+      // written by whichever browser pressed Start — so a page opened later, or
+      // a run started from the Tuner or another PC, compared against 0 or
+      // against a stale value from a previous run. Take the first reading of
+      // this run instead, in this component, and drop the reference when the
+      // run ends rather than leaving a number nobody can interpret.
+      if (isRunning) {
+        const reference = runStartCurrentRef.current ?? currentData
+        runStartCurrentRef.current = reference
+        setBeamCurrentChange(currentData - reference)
+      } else {
+        runStartCurrentRef.current = null
+        setBeamCurrentChange(0)
       }
     } catch (error) {
       console.error('Failed to update beam current:', error)
@@ -464,7 +489,16 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
       ])
       if (save !== null && save !== undefined) setDataSavingEnabled(Boolean(save))
       if (waves) setBoardWaveforms(waves)
-      if (currentStatus) setCurrentAcquiring(Boolean(currentStatus.running))
+      if (currentStatus) {
+        // Two different things, and they were being confused:
+        //   running   — per-run current logging, which only starts with a run
+        //               that saves data. This is what the DAQ status row means.
+        //   acquiring — the picoammeter itself is producing samples, which it
+        //               does continuously once initialised. This is what the
+        //               device card means by "reading".
+        setCurrentAcquiring(Boolean(currentStatus.running))
+        setCurrentSampling(Boolean(currentStatus.acquiring ?? currentStatus.thread_alive))
+      }
       if (statsStatus) {
         setStatsCollecting(Boolean(statsStatus.collecting))
         setStatsCount(Number(statsStatus.enabled_paths_count ?? 0))
@@ -474,14 +508,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     }
   }
 
-  const updateXdaqInfo = async () => {
-    try {
-      const info = await getXdaqInfo()
-      if (info) setXdaqInfo(info)
-    } catch (error) {
-      console.error('Failed to update XDAQ info:', error)
-    }
-  }
 
   /**
    * Activates or deactivates waveform recording for a single board.
@@ -648,70 +674,63 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
           )
         })()}
 
-        {/* XDAQ Readout Unit Card */}
-        {settings.showXDAQ && (() => {
-          const okIcon = <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-          const offIcon = <XCircle className="h-3.5 w-3.5 text-red-500" />
 
-          const status = xdaqInfo?.daq_status ?? 'Unknown'
-          let statusColor = 'text-muted-foreground'
-          if (status === 'Running') statusColor = 'text-green-600'
-          else if (status === 'Configured' || status === 'Initialized') statusColor = 'text-yellow-600'
-          else if (status === 'Unknown') statusColor = 'text-red-600'
-
-          const containerRunning = xdaqInfo?.container_running ?? false
+        {/* Picoammeter card — the settings that change how the reading behaves,
+            so a number that looks wrong can be explained without opening
+            Settings: which input is integrated, the range, and how much
+            averaging sits between the beam and the value on screen. */}
+        {settings.showStatus && currentEnabled && (() => {
+          const deviceSettings = currentModuleInfo?.settings ?? {}
+          const isTetramm = currentModuleType === 'tetramm'
+          // Two rows only — where the device is, and the setting that decides
+          // how the reading behaves. Everything else is one click away in
+          // Settings, and a card taller than its neighbours breaks the grid.
+          const rows: [string, string][] = isTetramm
+            ? [
+                ['Address', `${currentModuleInfo?.ip ?? ipCurrent}:${currentModuleInfo?.port ?? portCurrent}`],
+                ['Range', deviceSettings.RNG || 'AUTO'],
+              ]
+            : [
+                // The RBD is on a serial port; it has no IP.
+                ['Port', String(currentModuleInfo?.port ?? 'not set')],
+                // R0 is the RBD's autorange code; R1…R7 are fixed ranges.
+                ['Range', deviceSettings.range === 'R0'
+                  ? 'AUTO'
+                  : (deviceSettings.range || 'AUTO')],
+              ]
 
           return (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">XDAQ</CardTitle>
-                <Boxes className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">{currentModuleName}</CardTitle>
+                <BatteryCharging className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${statusColor}`}>{status}</div>
-                <div className="mt-2 space-y-1.5 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <Boxes className="h-3.5 w-3.5" />
-                      Container
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-bold ${
+                    isConnectedCurrent ? '' : 'text-red-600 dark:text-red-400'}`}>
+                    {isConnectedCurrent ? 'Connected' : 'Disconnected'}
+                  </span>
+                  {isConnectedCurrent && (
+                    <span className={`text-xs ${
+                      currentSampling ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {currentSampling ? 'reading' : 'not sampling'}
                     </span>
-                    <span className="flex items-center gap-1 font-semibold">
-                      {containerRunning ? 'Running' : 'Stopped'}
-                      {containerRunning ? okIcon : offIcon}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <HardDrive className="h-3.5 w-3.5" />
-                      Data Bandwidth
-                    </span>
-                    <span className="font-semibold">
-                      {(xdaqInfo?.input_bandwidth ?? 0).toFixed(2)} MB/s
-                    </span>
-                  </div>
+                  )}
                 </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t pt-2 text-xs">
+                  {rows.map(([label, value]) => (
+                    <div key={label} className="contents">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="truncate text-right font-medium" title={value}>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </CardContent>
             </Card>
           )
         })()}
-
-        {/* Current Device Connection Status Card */}
-        {settings.showStatus && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {currentModuleName}
-              </CardTitle>
-              <BatteryCharging className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{isConnectedCurrent ? "Connected" : "Disconnected"}</div>
-              <p className="text-xs text-muted-foreground">
-                {currentModuleType === 'tetramm' ? `IP: ${ipCurrent} Port: ${portCurrent}` : 'Serial Port'}
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Board Status Cards */}
         {settings.showStatus && boards.map((board) => {
@@ -809,60 +828,54 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
           )
         })}
 
-        {/* Beam Current Card */}
+        {/* Beam & Charge Card — the live current and both charge figures in one
+            place, because they are read together: the current says what the beam
+            is doing now, the run charge is what the analysis normalises to, and
+            the total says how much beam this target has seen. */}
         {settings.showCurrent && currentEnabled && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                Beam Current
+                Beam &amp; Charge
               </CardTitle>
               <Thermometer className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
               <p className="text-xs text-muted-foreground">
-                {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from Start
+                {/* Only claim a drift when there is a run to measure it against.
+                    Between runs the line said "0.00 uA from Start", which was
+                    not a measurement of anything. */}
+                {isRunning
+                  ? `${beamCurrentChange >= 0 ? '+' : ''}${beamCurrentChange.toFixed(2)} uA since run start`
+                  : 'No run in progress'}
               </p>
-            </CardContent>
-          </Card>
-        )}
 
-        {/* Accumulated Charge Card */}
-        {settings.showCurrent && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Accumulated Charge
-              </CardTitle>
-              <Thermometer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{accumulatedCharge.toFixed(2)} uC</div>
-              <p className="text-xs text-muted-foreground">
-                Total Charge Accumulated
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Total Accumulated Charge Card */}
-        {settings.showCurrent && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Accumulated Charge
-              </CardTitle>
-              <Database className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {totalAccumulatedCharge > 1000000 ? 
-                  `${(totalAccumulatedCharge/1000000).toFixed(2)} C` : 
-                  `${totalAccumulatedCharge.toFixed(2)} uC`}
+              <div className="mt-3 space-y-1.5 border-t pt-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Zap className="h-3.5 w-3.5" />
+                    This run
+                  </span>
+                  <span className="flex items-center gap-1.5 font-semibold">
+                    {formatCharge(accumulatedCharge)}
+                    {/* Integrating only while the run is on — a still number
+                        between runs is the point, not a stalled readout. */}
+                    <span
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${
+                        isRunning ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
+                      title={isRunning ? 'Integrating' : 'Paused until the next run'}
+                    />
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="flex items-center gap-1.5 text-muted-foreground">
+                    <Database className="h-3.5 w-3.5" />
+                    Total
+                  </span>
+                  <span className="font-semibold">{formatCharge(totalAccumulatedCharge)}</span>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Total Charge Accumulated since Last Reset
-              </p>
             </CardContent>
           </Card>
         )}

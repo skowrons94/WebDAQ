@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import {
   getBoardConfiguration,
   getBoardSettings,
-  setSetting,
+  applySetting,
+  getOnlineRegisters,
   getHistogram,
   getWaveform1,
   getWaveform2,
@@ -25,6 +26,7 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/components/ui/use-toast'
+import { Zap } from 'lucide-react'
 import { loadJSROOT } from '@/lib/load-jsroot'
 
 type BoardData = {
@@ -160,6 +162,12 @@ export default function ParamTuner() {
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
+  // Online mode: write each change to the board as well as to its configuration,
+  // so the effect shows up in the trace and the spectrum straight away. Off by
+  // default — a session that only edits the configuration must stay possible.
+  const [online, setOnline] = useState(false)
+  // Registers this board accepts while acquiring, keyed by address ("0x106C").
+  const [onlineRegisters, setOnlineRegisters] = useState<Record<string, string>>({})
 
   const waveformRef = useRef<HTMLDivElement>(null)
   const histogramRef = useRef<HTMLDivElement>(null)
@@ -168,8 +176,10 @@ export default function ParamTuner() {
   const { toast } = useToast()
 
   // --- Derived values ---
-  const selectedBoard = boards.find(b => b.id === selectedBoardId)
-  const channelCount = selectedBoard ? parseInt(selectedBoard.chan) : 0
+  // Compare as strings: the id is a number in the server's JSON and a string
+  // everywhere in the UI.
+  const selectedBoard = boards.find(b => String(b.id) === String(selectedBoardId))
+  const channelCount = selectedBoard ? Number(selectedBoard.chan) || 0 : 0
   const isPSD = selectedBoard ? selectedBoard.dpp.toUpperCase().includes('PSD') : false
   const nsPerSample = selectedBoard ? getNsPerSample(selectedBoard.name) : 1
 
@@ -215,7 +225,15 @@ export default function ParamTuner() {
     const init = async () => {
       try {
         const res = await getBoardConfiguration()
-        const boardList: BoardData[] = res.data
+        // The server sends the id as a number, and board 0 is the usual case.
+        // Left as a number it is falsy, so every "no board selected yet" guard
+        // below treats a perfectly good board as no board and the page stays
+        // empty; it also never matches the string the Select hands back. Make
+        // every id a string at the boundary and the rest can stop caring.
+        const boardList: BoardData[] = (res.data ?? []).map((board: BoardData) => ({
+          ...board,
+          id: String(board.id),
+        }))
         setBoards(boardList)
         if (boardList.length > 0) setSelectedBoardId(boardList[0].id)
       } catch {
@@ -234,8 +252,24 @@ export default function ParamTuner() {
       try {
         const data = await getBoardSettings(selectedBoardId)
         setSettings(data)
+      } catch (error) {
+        // A board with no register file (config deleted, never read from the
+        // hardware) is the usual cause, and "failed to load" hides that.
+        const serverMessage =
+          (error as { response?: { data?: { message?: string } } })?.response?.data?.message
+        setSettings({})
+        toast({
+          title: 'No settings for this board',
+          description: serverMessage
+            ? `${serverMessage} Restart the server to re-read the board, or remove and re-add it.`
+            : 'Failed to load board settings',
+          variant: 'destructive',
+        })
+      }
+      try {
+        setOnlineRegisters((await getOnlineRegisters(selectedBoardId)).registers)
       } catch {
-        toast({ title: 'Error', description: 'Failed to load board settings', variant: 'destructive' })
+        setOnlineRegisters({})
       }
     }
     load()
@@ -348,60 +382,83 @@ export default function ParamTuner() {
     }
   }
 
+  // Whether a register can be written to a live board — the allowlist is keyed
+  // by the channel-0 form of the address (0x1A6C -> 0x106C).
+  const isOnlineTunable = (regKey: string): boolean => {
+    const reg = settings[regKey]
+    if (!reg) return false
+    const address = parseInt(reg.address, 16)
+    const base = address >= 0x1000 && address <= 0x1FFF ? address & 0xF0FF : address
+    return `0x${base.toString(16).toUpperCase().padStart(4, '0')}` in onlineRegisters
+  }
+
+  /**
+   * Write one register: always to the configuration, and in Online mode to the
+   * board too. Returns true when the value was stored, so callers can update
+   * their local copy; a refused *board* write still counts as stored, and says
+   * why in a toast.
+   */
+  const applyRegister = async (regKey: string, rawValue: number, label: string): Promise<boolean> => {
+    try {
+      const result = await applySetting(selectedBoardId, regKey, rawValue, online)
+      if (online && !result.written && result.reason) {
+        toast({ title: `${label}: saved, not sent to the board`, description: result.reason })
+      }
+      return true
+    } catch (error) {
+      const serverMessage =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message
+      toast({
+        title: `Failed to update ${label}`,
+        description: serverMessage ?? 'The server did not accept the change.',
+        variant: 'destructive',
+      })
+      return false
+    }
+  }
+
   const handleDualTraceToggle = async (enabled: boolean) => {
     const cfg = boardConfigReg
     const cfgKey = boardConfigKey
     if (!cfg || !cfgKey) return
-    try {
-      const newValue = enabled
-        ? cfg.value_dec | (1 << 11)
-        : cfg.value_dec & ~(1 << 11)
-      await setSetting(selectedBoardId, cfgKey, newValue.toString())
-      setSettings(prev => ({
-        ...prev,
-        [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-      }))
-      if (!enabled) setWaveformNum(1)
-    } catch {
-      toast({ title: 'Error', description: 'Failed to update Dual Trace', variant: 'destructive' })
-    }
+    const newValue = enabled
+      ? cfg.value_dec | (1 << 11)
+      : cfg.value_dec & ~(1 << 11)
+    if (!(await applyRegister(cfgKey, newValue, 'Dual Trace'))) return
+    setSettings(prev => ({
+      ...prev,
+      [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
+    }))
+    if (!enabled) setWaveformNum(1)
   }
 
   const handleTraceTypeChange = async (traceNumber: 1 | 2, newTraceVal: number) => {
     const cfg = boardConfigReg
     const cfgKey = boardConfigKey
     if (!cfg || !cfgKey) return
-    try {
-      let newValue = cfg.value_dec
-      if (traceNumber === 1) {
-        newValue = (newValue & ~(0x3 << 12)) | (newTraceVal << 12)
-      } else {
-        newValue = (newValue & ~(0x3 << 14)) | (newTraceVal << 14)
-      }
-      await setSetting(selectedBoardId, cfgKey, newValue.toString())
-      setSettings(prev => ({
-        ...prev,
-        [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-      }))
-    } catch {
-      toast({ title: 'Error', description: `Failed to update Trace ${traceNumber}`, variant: 'destructive' })
+    let newValue = cfg.value_dec
+    if (traceNumber === 1) {
+      newValue = (newValue & ~(0x3 << 12)) | (newTraceVal << 12)
+    } else {
+      newValue = (newValue & ~(0x3 << 14)) | (newTraceVal << 14)
     }
+    if (!(await applyRegister(cfgKey, newValue, `Trace ${traceNumber}`))) return
+    setSettings(prev => ({
+      ...prev,
+      [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
+    }))
   }
 
   const handleDigitalProbeChange = async (newVal: number) => {
     const cfg = boardConfigReg
     const cfgKey = boardConfigKey
     if (!cfg || !cfgKey) return
-    try {
-      const newValue = (cfg.value_dec & ~(0xF << 20)) | (newVal << 20)
-      await setSetting(selectedBoardId, cfgKey, newValue.toString())
-      setSettings(prev => ({
-        ...prev,
-        [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-      }))
-    } catch {
-      toast({ title: 'Error', description: 'Failed to update Digital Probe', variant: 'destructive' })
-    }
+    const newValue = (cfg.value_dec & ~(0xF << 20)) | (newVal << 20)
+    if (!(await applyRegister(cfgKey, newValue, 'Digital Probe'))) return
+    setSettings(prev => ({
+      ...prev,
+      [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
+    }))
   }
 
   const handleSettingChange = (regKey: string, value: string) => {
@@ -412,40 +469,43 @@ export default function ParamTuner() {
     const entries = Object.entries(pendingValues)
     if (entries.length === 0) return
     let savedCount = 0
+    let writtenCount = 0
     for (const [regKey, value] of entries) {
-      try {
-        const reg = settings[regKey]
-        // Convert display value back to raw register value
-        let rawVal: number
-        if (reg && isDcOffsetReg(reg.name)) {
-          rawVal = Math.round((parseFloat(value) / 100) * 65535)
-        } else if (reg && isTimeReg(reg.name) && nsPerSample > 1) {
-          rawVal = Math.round(parseFloat(value) / nsPerSample)
-        } else {
-          rawVal = parseInt(value, 10)
-        }
-        if (isNaN(rawVal)) continue
-        await setSetting(selectedBoardId, regKey, rawVal.toString())
-        setSettings(prev => {
-          const r = prev[regKey]
-          if (!r) return prev
-          return {
-            ...prev,
-            [regKey]: {
-              ...r,
-              value_dec: rawVal,
-              value_hex: `0x${rawVal.toString(16).toUpperCase()}`,
-            },
-          }
-        })
-        savedCount++
-      } catch {
-        toast({ title: 'Error', description: `Failed to save setting ${regKey}`, variant: 'destructive' })
+      const reg = settings[regKey]
+      // Convert display value back to raw register value
+      let rawVal: number
+      if (reg && isDcOffsetReg(reg.name)) {
+        rawVal = Math.round((parseFloat(value) / 100) * 65535)
+      } else if (reg && isTimeReg(reg.name) && nsPerSample > 1) {
+        rawVal = Math.round(parseFloat(value) / nsPerSample)
+      } else {
+        rawVal = parseInt(value, 10)
       }
+      if (isNaN(rawVal)) continue
+      if (!(await applyRegister(regKey, rawVal, reg?.name ?? regKey))) continue
+      if (online && isOnlineTunable(regKey)) writtenCount++
+      setSettings(prev => {
+        const r = prev[regKey]
+        if (!r) return prev
+        return {
+          ...prev,
+          [regKey]: {
+            ...r,
+            value_dec: rawVal,
+            value_hex: `0x${rawVal.toString(16).toUpperCase()}`,
+          },
+        }
+      })
+      savedCount++
     }
     setPendingValues({})
     if (savedCount > 0) {
-      toast({ title: 'Saved', description: `${savedCount} setting(s) saved` })
+      toast({
+        title: 'Saved',
+        description: online
+          ? `${savedCount} setting(s) saved, ${writtenCount} written to the board`
+          : `${savedCount} setting(s) saved`,
+      })
     }
   }
 
@@ -453,16 +513,12 @@ export default function ParamTuner() {
     const ctrl = dppCtrlReg
     const ctrlKey = dppCtrlKey
     if (!ctrl || !ctrlKey) return
-    try {
-      const newValue = setFieldInRegister(ctrl.value_dec, 16, 16, enabled ? 1 : 0)
-      await setSetting(selectedBoardId, ctrlKey, newValue.toString())
-      setSettings(prev => ({
-        ...prev,
-        [ctrlKey]: { ...ctrl, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-      }))
-    } catch {
-      toast({ title: 'Error', description: 'Failed to update Invert Input', variant: 'destructive' })
-    }
+    const newValue = setFieldInRegister(ctrl.value_dec, 16, 16, enabled ? 1 : 0)
+    if (!(await applyRegister(ctrlKey, newValue, 'Invert Input'))) return
+    setSettings(prev => ({
+      ...prev,
+      [ctrlKey]: { ...ctrl, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
+    }))
   }
 
   const getRegValue = (regKey: string): string => {
@@ -479,6 +535,7 @@ export default function ParamTuner() {
   const renderSettingRow = (regKey: string, reg: RegisterData) => {
     const unit = isDcOffsetReg(reg.name) ? '%' : (isTimeReg(reg.name) && nsPerSample > 1 ? 'ns' : '')
     const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
+    const tunable = isOnlineTunable(regKey)
     return (
       <div key={regKey} className="flex items-center gap-3">
         <Label className="text-sm w-44 shrink-0">{reg.name}</Label>
@@ -490,6 +547,26 @@ export default function ParamTuner() {
           onChange={e => handleSettingChange(regKey, e.target.value)}
         />
         {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+        {/* In Online mode, say up front which parameters reach the board and
+            which only reach the configuration — better than finding out per save. */}
+        {online && (
+          tunable ? (
+            <span
+              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400"
+              title="Written to the board as soon as you save"
+            >
+              <Zap className="h-3 w-3" />
+              live
+            </span>
+          ) : (
+            <span
+              className="text-xs text-muted-foreground"
+              title="Not safe to change while the board is acquiring — saved to the configuration, applied at the next run"
+            >
+              next run
+            </span>
+          )
+        )}
         {pendingValues[regKey] !== undefined && (
           <Badge variant="outline" className="text-xs text-orange-500 border-orange-500">
             unsaved
@@ -566,6 +643,22 @@ export default function ParamTuner() {
             Tuner active · saving disabled
           </Badge>
         )}
+
+        {/* Online mode: changes go to the board as well as to its configuration.
+            Only the parameters that are safe to move during acquisition are sent;
+            the rest are saved and applied at the next run. */}
+        <div className="ml-auto flex items-center gap-2 rounded-md border px-3 py-1.5">
+          <Zap className={`h-4 w-4 ${online ? 'text-green-500' : 'text-muted-foreground'}`} />
+          <Label htmlFor="tuner-online" className="text-sm font-medium">Online</Label>
+          <Switch id="tuner-online" checked={online} onCheckedChange={setOnline} />
+          <span className="text-xs text-muted-foreground max-w-[16rem]">
+            {online
+              ? isRunning
+                ? 'Safe parameters go straight to the board'
+                : 'Written to the board; the run applies the whole configuration anyway'
+              : 'Changes are saved to the configuration only'}
+          </span>
+        </div>
       </div>
 
       {/* Main content: waveform (left) + settings (right) */}
@@ -595,6 +688,17 @@ export default function ParamTuner() {
               </div>
             </CardTitle>
             <div className="flex flex-col gap-3 mt-1">
+              {/* Dual Trace, the trace types and the digital probe all live in
+                  Board Configuration (0x8000), which describes the shape of the
+                  readout for the whole board. It cannot be rewritten under a
+                  running acquisition, so these are saved and applied at the next
+                  run even in Online mode. Say so here rather than after the fact. */}
+              {online && (
+                <p className="text-xs text-muted-foreground">
+                  These select what the board digitises into the trace — they belong to
+                  Board Configuration and take effect at the next run, not live.
+                </p>
+              )}
               <div className="flex items-center gap-2">
                 <Switch
                   id="dual-trace-switch"

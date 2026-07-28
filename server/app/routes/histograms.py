@@ -507,7 +507,8 @@ def get_psd_histogram(board_id, channel):
     try:
         boards = daq_mgr.get_boards()
         histo = spy_mgr.get_histogram(board_id, channel, boards, histogram_type='psd')
-        histo.RebinX(100)
+        # caendaq PSD is 2048 x-bins; rebin to a compact 128 x 256 for the browser.
+        histo.RebinX(16)
         json_data = spy_mgr.convert_histogram_to_json(histo)
         return json_data if json_data else ""
     except Exception as e:

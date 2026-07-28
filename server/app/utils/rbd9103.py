@@ -36,6 +36,36 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def list_serial_ports() -> list:
+    """
+    Enumerate serial ports currently present on the system.
+
+    Uses pyserial's cross-platform port scanner so the UI can offer a pick-list
+    of real devices (e.g. /dev/ttyUSB0 on Linux, /dev/tty.usbserial-* on macOS,
+    COMx on Windows) instead of asking the user to type a path by hand.
+
+    Returns:
+        list[dict]: one entry per port with keys 'device', 'description', 'hwid'.
+                    Empty list if scanning fails.
+    """
+    try:
+        from serial.tools import list_ports
+
+        ports = []
+        for p in list_ports.comports():
+            ports.append({
+                'device': p.device,
+                'description': (p.description or '').strip(),
+                'hwid': (p.hwid or '').strip(),
+            })
+        # Stable, predictable ordering for the dropdown.
+        ports.sort(key=lambda x: x['device'])
+        return ports
+    except Exception as e:
+        logger.warning(f"Failed to list serial ports: {e}")
+        return []
+
+
 class RBD9103Controller:
     """
     Controller class for RBD 9103 picoammeter devices.
@@ -100,9 +130,10 @@ class RBD9103Controller:
         self.current_stability = "S"
 
         # Charge accumulation tracking
-        self.accumulated_charge = 0.0
-        self.total_accumulated_charge = 0.0
+        self.accumulated_charge = 0.0        # this run only; reset when a run starts
+        self.total_accumulated_charge = 0.0  # lifetime; always integrates
         self.previous_time = 0.0
+        self.accumulating = False            # True while a run is in progress
 
         # Device settings
         self.settings = {}
@@ -149,6 +180,24 @@ class RBD9103Controller:
         self.data_timeout = max(3.0, 6 * self.acquisition_interval)
         self.last_sample_time = 0.0
         self.logger.info(f"RBD 9103 high-speed mode {'enabled' if enable else 'disabled'}")
+
+    def port_exists(self) -> bool:
+        """
+        Check whether the configured serial device file actually exists.
+
+        This is independent of whether we have opened it: it answers the
+        question "is /dev/ttyUSBn present at all?" so the UI can distinguish a
+        missing/unplugged device from one that is present but not yet producing
+        valid samples (see is_connected()).
+
+        Returns:
+            bool: True if the configured port path exists on the filesystem.
+        """
+        try:
+            return os.path.exists(self.port_name)
+        except Exception as e:
+            self.logger.warning(f"Error checking if RBD 9103 port exists: {e}")
+            return False
 
     def is_connected(self) -> bool:
         """
@@ -750,6 +799,7 @@ class RBD9103Controller:
 
         return {
             'port': self.port_name,
+            'port_exists': self.port_exists(),
             'baudrate': self.baudrate,
             'high_speed': self.high_speed,
             'connected': self.is_connected(),
@@ -821,11 +871,15 @@ class RBD9103Controller:
         time_diff = current_time - self.previous_time
         charge_increment = current_data * time_diff
 
-        # Always update total accumulated charge
+        # The lifetime total always integrates: it says how much charge the
+        # target has taken, in or out of a run.
         self.total_accumulated_charge += charge_increment
 
-        # Only update accumulated charge if data is being saved
-        if self.save_data:
+        # The run figure integrates only while a run is in progress — it is what
+        # the online analysis normalises to, so beam delivered between runs must
+        # not appear in it. Note this follows the run, not data saving: a run
+        # that writes no data still delivers charge.
+        if self.accumulating:
             self.accumulated_charge += charge_increment
 
         self.previous_time = current_time
@@ -847,6 +901,20 @@ class RBD9103Controller:
             float: Accumulated charge in microamp-seconds
         """
         return self.accumulated_charge
+
+    def set_accumulating(self, accumulating: bool) -> None:
+        """
+        Start or stop integrating charge into the per-run figure.
+
+        Driven by the DAQ run state, so the run charge cannot keep growing after
+        a run ends (or fail to grow during one).
+        """
+        with self.buffer_lock:
+            self.accumulating = bool(accumulating)
+
+    def is_accumulating(self) -> bool:
+        """Whether charge is currently being integrated into the run figure."""
+        return self.accumulating
 
     def get_total_accumulated_charge(self) -> float:
         """

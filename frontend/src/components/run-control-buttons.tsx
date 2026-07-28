@@ -40,7 +40,6 @@ import {
   setRunNumber,
   checkRunDirectoryExists,
   getStartTime,
-  getDataCurrent,
   startAcquisitionCurrent,
   stopAcquisitionCurrent,
   addRunMetadata,
@@ -102,14 +101,12 @@ export function RunControlButtons({
 
   // Dialog states
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
-  const [showVoltagesDialog, setShowVoltagesDialog] = useState(false)
 
   // Run metadata states
   const [targetName, setTargetName] = useState<string>('')
   const [runType, setRunType] = useState<string>('')
   const [tv, setTv] = useState<string>("0")
   const [pv, setPv] = useState<string>("0")
-  const [voltagesModified, setVoltagesModified] = useState<boolean>(false)
 
   // Fetch last run metadata on component mount
   useEffect(() => {
@@ -128,15 +125,11 @@ export function RunControlButtons({
         setRunType(lastRun.run_type || '');
         setTv(lastRun.terminal_voltage || '0');
         setPv(lastRun.probe_voltage || '0');
-        setVoltagesModified(false);
       }
     } catch (error) {
+      // No previous runs (empty database) is a normal state, not an error:
+      // just leave the form fields at their defaults without alerting the user.
       console.error('Failed to fetch last run metadata:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch last run metadata.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -158,13 +151,9 @@ export function RunControlButtons({
       const directoryExists = await checkRunDirectoryExists()
       await setSaveData(saveData)
       
+      // Only confirm when the run directory already exists (would be overwritten).
       if (directoryExists) {
         setShowOverrideDialog(true)
-        return
-      }
-      
-      if (!voltagesModified) {
-        setShowVoltagesDialog(true)
         return
       }
 
@@ -217,11 +206,10 @@ export function RunControlButtons({
         await startStatsRun(runNumber)
       }
 
-      // Store initial beam current for comparison (only when current is enabled)
-      if (currentEnabled) {
-        const initialCurrent = await getDataCurrent()
-        localStorage.setItem('initialBeamCurrent', initialCurrent.toString())
-      }
+      // (The dashboard takes its own reference for "since run start" from the
+      // first reading of the run, so nothing needs to be stashed here: a value
+      // in this browser's localStorage was useless to every other browser, and
+      // wrong for a run started from the Tuner.)
 
       // Start the actual DAQ run
       await startRun()
@@ -286,7 +274,6 @@ export function RunControlButtons({
       onIsRunningChange(false)
       setIsRunningStore(false)
       setStartTimeStore(null)
-      setVoltagesModified(false)
 
       // Update run number for next run
       const newRunNumber = await getCurrentRunNumber()
@@ -302,39 +289,38 @@ export function RunControlButtons({
   }
 
   /**
-   * Resets XDAQ components and current measurement device
+   * Stops any running acquisition and resets the current measurement device.
    */
   const handleReset = async () => {
     try {
       toast({
-        title: 'Resetting XDAQ...',
-        description: 'Please wait while the XDAQ components are restarted.',
+        title: 'Resetting acquisition…',
+        description: 'Please wait while the acquisition is reset.',
       })
 
       if (currentEnabled) {
         await resetDeviceCurrent()
       }
-      // reset() resolves to 0 on success and -1 if the backend failed to
-      // reinitialise the topology/container.
+      // reset() resolves to 0 on success and -1 on failure.
       const result = await reset()
       if (result === -1) {
         toast({
           title: 'Error',
-          description: 'XDAQ failed to restart. Check that conf/topology.xml exists and the container is available.',
+          description: 'Failed to reset the acquisition.',
           variant: 'destructive',
         })
         return
       }
 
       toast({
-        title: 'XDAQ Reset',
-        description: 'All the XDAQ components restarted.',
+        title: 'Acquisition reset',
+        description: 'The acquisition has been reset.',
       })
     } catch (error) {
       console.error('Failed to reset parameters:', error)
       toast({
         title: 'Error',
-        description: 'Failed to restart XDAQ. Please try again.',
+        description: 'Failed to reset the acquisition. Please try again.',
         variant: 'destructive',
       })
     }
@@ -502,10 +488,7 @@ export function RunControlButtons({
               id="tv"
               type="text"
               value={tv}
-              onChange={(e) => {
-                setTv(e.target.value)
-                setVoltagesModified(true)
-              }}
+              onChange={(e) => setTv(e.target.value)}
               disabled={isRunning}
             />
           </div>
@@ -515,10 +498,7 @@ export function RunControlButtons({
               id="pv"
               type="text"
               value={pv}
-              onChange={(e) => {
-                setPv(e.target.value)
-                setVoltagesModified(true)
-              }}
+              onChange={(e) => setPv(e.target.value)}
               disabled={isRunning}
             />
           </div>
@@ -554,7 +534,7 @@ export function RunControlButtons({
         <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
           <Button onClick={handleReset} className="w-full" variant="outline">
             <AlertTriangle className="mr-2 h-4 w-4" />
-            Reset XDAQ
+            Reset acquisition
           </Button>
           <Button onClick={handleRefreshBoardConnections} className="w-full" variant="outline" disabled={isRunning}>
             <Wifi className="mr-2 h-4 w-4" />
@@ -589,27 +569,6 @@ export function RunControlButtons({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={startRunProcess}>Override</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Voltage Confirmation Dialog */}
-      <AlertDialog open={showVoltagesDialog} onOpenChange={setShowVoltagesDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Keep same accelerator voltages?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The voltages for the current run are the same as the last run. Do you want to keep them?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Discard</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { 
-              startRunProcess(); 
-              setVoltagesModified(false); 
-            }}>
-              Keep
-            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

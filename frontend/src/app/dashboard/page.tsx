@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/auth-store';
 import { RunControl } from '@/components/run-control';
+import RunStats from '@/components/run-stats';
 import { Stats } from '@/components/stats';
 import HistogramDashboard from '@/components/histo-dashboard';
 import WaveformDashboard from '@/components/wave-dashboard';
@@ -50,6 +51,10 @@ export default function DashboardPage() {
             <div className="flex items-center">
             <TabsList>
                 <TabsTrigger value="overview">Overview</TabsTrigger>
+                {/* Rates come right after the overview: during a run they are
+                    what tells you the detectors are alive, so they are looked at
+                    far more often than the spectra. */}
+                <TabsTrigger value="runstats">Data Rates</TabsTrigger>
                 {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
                 {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
                 {(settings.showPSD ?? true) && <TabsTrigger value="psd">PSD</TabsTrigger>}
@@ -73,6 +78,9 @@ export default function DashboardPage() {
               <PSDDashboard />
             </TabsContent>
           )}
+          <TabsContent value="runstats">
+            <RunStats />
+          </TabsContent>
         </Tabs>
       </Layout>
     </QueryClientProvider>

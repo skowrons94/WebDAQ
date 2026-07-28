@@ -51,6 +51,10 @@ class SpyManager:
         # Rebin factor
         self.rebin_factor = 1
 
+        # Calibration cache: path -> (mtime, ndarray). Re-parsed only when the
+        # .cal file changes (e.g. edited from the frontend), not on every poll.
+        self._calib_cache: Dict[str, Any] = {}
+
     def set_rebin_factor(self, factor: int):
         """
         Set the rebin factor for histograms.
@@ -97,36 +101,6 @@ class SpyManager:
             self.logger.error(f"Error stopping spy server: {e}")
             return False
     
-    def get_histogram_index(self, board_id: str, channel: int, boards: List[Dict[str, Any]]) -> Tuple[int, str]:
-        """
-        Calculate histogram index and get DPP type for a specific board/channel.
-        
-        Args:
-            board_id: Board ID string
-            channel: Channel number
-            boards: List of board configurations
-            
-        Returns:
-            Tuple of (histogram_index, dpp_type)
-        """
-        idx = 0
-        dpp = "DPP-PHA"  # default
-        
-        try:
-            for board in boards:
-                if int(board['id']) < int(board_id):
-                    idx += board['chan']
-                elif int(board['id']) == int(board_id):
-                    dpp = board['dpp']
-                    break
-            
-            idx += int(channel)
-            
-        except Exception as e:
-            self.logger.warning(f"Error calculating histogram index: {e}")
-        
-        return idx, dpp
-    
     def get_histogram(self, board_id: str, channel: int, boards: List[Dict[str, Any]], 
                      histogram_type: Optional[str] = None, rebin: int = 16) -> Any:
         """
@@ -143,26 +117,68 @@ class SpyManager:
             ROOT histogram object or None
         """
         try:
-            idx, dpp = self.get_histogram_index(board_id, channel, boards)
-            
-            # Determine histogram type based on DPP if not specified
+            from ..services.caen_acquisition import get_caen_acquisition
+            board_index = get_caen_acquisition().board_index(board_id)
+
+            # Determine histogram type from the board's DPP if not specified.
             if histogram_type is None:
-                if dpp == "DPP-PHA":
-                    histogram_type = "energy"
-                else:
-                    histogram_type = "qlong"
-            
-            # Get histogram from spy server
-            histo = self.ru_spy.get_object(histogram_type, idx)
-            
-            if histo and self.rebin_factor > 1:
-                histo.Rebin(self.rebin_factor)
-            
+                dpp = "DPP-PHA"
+                for board in boards:
+                    if str(board['id']) == str(board_id):
+                        dpp = board.get('dpp', 'DPP-PHA')
+                        break
+                histogram_type = "energy" if dpp == "DPP-PHA" else "qlong"
+
+            histo = self.ru_spy.histogram(board_index, int(channel), histogram_type)
+
+            if histo:
+                # Apply the linear energy calibration (energy = offset + slope*bin)
+                # to the x-axis. Uses the raw bin count before rebinning; the
+                # energy range is fixed regardless of binning, and Rebin preserves
+                # the axis limits.
+                board_name = next((str(b['name']) for b in boards
+                                   if str(b['id']) == str(board_id)), None)
+                if board_name:
+                    offset, slope = self._read_calibration(board_name, str(board_id), int(channel))
+                    if (offset, slope) != (0.0, 1.0):
+                        n = histo.GetNbinsX()
+                        histo.GetXaxis().SetLimits(offset, offset + slope * n)
+
+                # Rebin only applies to 1D spectra (TH2 PSD is rebinned by the route).
+                if self.rebin_factor > 1 and histo.GetDimension() == 1:
+                    histo.Rebin(self.rebin_factor)
+
             return histo
-            
+
         except Exception as e:
             self.logger.error(f"Error getting histogram for board {board_id}, channel {channel}: {e}")
             return None
+
+    def _read_calibration(self, board_name: str, board_id: str, channel: int) -> Tuple[float, float]:
+        """Return (offset, slope) for a channel from calib/<name>_<id>.cal, else (0,1).
+
+        Cached in memory and only re-parsed when the file's mtime changes, so a
+        histogram poll costs one stat() rather than a full file parse."""
+        try:
+            import numpy as np
+            path = f"calib/{board_name}_{board_id}.cal"
+            if not os.path.exists(path):
+                self._calib_cache.pop(path, None)
+                return (0.0, 1.0)
+            mtime = os.path.getmtime(path)
+            cached = self._calib_cache.get(path)
+            if cached is None or cached[0] != mtime:
+                data = np.loadtxt(path, dtype=float)
+                if data.ndim == 1:
+                    data = data.reshape(1, -1)
+                self._calib_cache[path] = (mtime, data)
+            else:
+                data = cached[1]
+            if 0 <= channel < len(data) and len(data[channel]) >= 2:
+                return float(data[channel][0]), float(data[channel][1])
+        except Exception as e:
+            self.logger.debug(f"calibration read failed for {board_name}_{board_id} ch{channel}: {e}")
+        return (0.0, 1.0)
     
     def get_waveform(self, board_id: str, channel: int, boards: List[Dict[str, Any]], 
                     waveform_type: str = "wave1") -> Any:
@@ -179,10 +195,10 @@ class SpyManager:
             ROOT waveform object or None
         """
         try:
-            idx, _ = self.get_histogram_index(board_id, channel, boards)
-            waveform = self.ru_spy.get_object(waveform_type, idx)
-            return waveform
-            
+            from ..services.caen_acquisition import get_caen_acquisition
+            board_index = get_caen_acquisition().board_index(board_id)
+            return self.ru_spy.histogram(board_index, int(channel), waveform_type)
+
         except Exception as e:
             self.logger.error(f"Error getting waveform {waveform_type} for board {board_id}, channel {channel}: {e}")
             return None

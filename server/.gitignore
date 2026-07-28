@@ -40,3 +40,13 @@ next-env.d.ts
 
 # database
 app.db
+# runtime / per-setup state (not committed)
+/conf/settings.json
+# credentials for external services — never committed
+/conf/elog_settings.json
+/conf/telegram_settings.json
+/conf/*_[0-9]*.json
+/calib/*.cal
+/data/
+/cache/
+*.log

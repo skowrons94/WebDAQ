@@ -1,6 +1,13 @@
 # User Guide
 
-This guide provides comprehensive instructions for operating the LunaDAQ system. It covers all major features from starting acquisitions to analyzing data.
+Screen-by-screen reference for the LunaDAQ interface. For a run followed from
+start to finish, read [A complete session](example-session.md) first; for the
+settings behind a screen, see:
+
+* [CAEN digitizers](caen-settings.md) — boards, trigger and energy filters, synchronisation, online tuning
+* [Beam current and charge](current-and-charge.md) — TetrAMM and RBD 9103
+* [Monitoring and alerts](monitoring-and-alerts.md) — Graphite, Grafana, Telegram
+* [ELOG](elog.md) — the collaboration logbook
 
 ---
 

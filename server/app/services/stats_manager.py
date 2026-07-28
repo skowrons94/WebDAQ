@@ -9,7 +9,7 @@ Key Features:
 - Single Graphite client for efficient connection management
 - Configurable metric paths saved to conf/stats.json
 - Background data collection thread similar to current.py
-- Real-time data streaming to stats.txt files
+- Real-time data streaming to a per-run stats.csv
 - Last non-null value fetching from Graphite
 - Thread-safe operations
 
@@ -66,7 +66,6 @@ class StatsManager:
         # the header even if paths are added/removed mid-run.
         self.stats_paths: List[Dict[str, Any]] = []
         self.stats_columns: List[str] = []
-        self.stats_col_widths: List[int] = []
         self.collection_lock = threading.Lock()
 
     def _load_config(self) -> Dict[str, Any]:
@@ -126,13 +125,15 @@ class StatsManager:
             self.logger.error(f"Error saving stats config: {e}")
             return False
 
-    def add_path(self, path: str, alias: Optional[str] = None) -> bool:
+    def add_path(self, path: str, alias: Optional[str] = None, unit: Optional[str] = None) -> bool:
         """
         Add a new metric path to the configuration.
 
         Args:
             path: Graphite metric path (e.g., 'accelerator.terminal_voltage')
             alias: Optional friendly name for the metric
+            unit: Optional unit ('kV', 'uA', 'counts/s'), recorded in the run's
+                stats file so a column can be read without guessing its scale
 
         Returns:
             True if added successfully, False otherwise
@@ -148,6 +149,7 @@ class StatsManager:
             new_path_entry = {
                 "path": path,
                 "alias": alias or path,
+                "unit": unit or "",
                 "enabled": True
             }
 
@@ -196,7 +198,8 @@ class StatsManager:
             self.logger.error(f"Error removing path: {e}")
             return False
 
-    def update_path(self, path: str, alias: Optional[str] = None, enabled: Optional[bool] = None) -> bool:
+    def update_path(self, path: str, alias: Optional[str] = None, enabled: Optional[bool] = None,
+                    unit: Optional[str] = None) -> bool:
         """
         Update a metric path configuration.
 
@@ -204,6 +207,7 @@ class StatsManager:
             path: Graphite metric path to update
             alias: New alias (if provided)
             enabled: Enable/disable the path (if provided)
+            unit: New unit (if provided; pass '' to clear it)
 
         Returns:
             True if updated successfully, False otherwise
@@ -218,6 +222,8 @@ class StatsManager:
                         path_entry['alias'] = alias
                     if enabled is not None:
                         path_entry['enabled'] = enabled
+                    if unit is not None:
+                        path_entry['unit'] = unit
 
                     self._save_config(self.stats_config)
                     self.logger.info(f"Updated path: {path}")
@@ -288,12 +294,23 @@ class StatsManager:
 
         return (None, None)
 
-    def _format_row(self, fields: List[str]) -> str:
-        """Right-justify each field to its column width for aligned output."""
-        return "".join(
-            field.rjust(width)
-            for field, width in zip(fields, self.stats_col_widths)
-        )
+    @staticmethod
+    def _format_row(fields: List[str]) -> str:
+        """One CSV record. Fields that contain a comma or a quote are quoted."""
+        cells = []
+        for field in fields:
+            if any(ch in field for ch in ',"\n'):
+                cells.append('"' + field.replace('"', '""') + '"')
+            else:
+                cells.append(field)
+        return ",".join(cells)
+
+    @staticmethod
+    def _column_title(path_entry: Dict[str, Any]) -> str:
+        """A column heading: the metric's name, with its unit when it has one."""
+        name = path_entry.get('alias') or path_entry['path']
+        unit = (path_entry.get('unit') or '').strip()
+        return f"{name} [{unit}]" if unit else name
 
     @staticmethod
     def _format_value(value: Any) -> str:
@@ -309,7 +326,7 @@ class StatsManager:
         """
         Start statistics collection for a new run.
 
-        Creates stats.txt file with headers and starts background collection thread.
+        Creates stats.csv with its header and starts background collection thread.
 
         Args:
             run_number: Run number for data organization
@@ -327,32 +344,39 @@ class StatsManager:
                 run_dir = f"./data/run{run_number}"
                 os.makedirs(run_dir, exist_ok=True)
 
-                self.stats_file = os.path.join(run_dir, "stats.txt")
+                self.stats_file = os.path.join(run_dir, "stats.csv")
                 self.current_run_number = run_number
                 self.run_start_time = time.time()
 
                 # Freeze the set of columns for the whole run so data rows always
                 # line up with the header.
                 self.stats_paths = self.get_enabled_paths()
-                self.stats_columns = ["Time_s"] + [
-                    p.get('alias') or p['path'] for p in self.stats_paths
+                self.stats_columns = ["Time [s]"] + [
+                    self._column_title(p) for p in self.stats_paths
                 ]
-                # Each column is right-justified to a fixed width; the +3 keeps a
-                # visible gap between columns.
-                self.stats_col_widths = [max(len(c) + 3, 16) for c in self.stats_columns]
 
-                # Write a human-readable header: metadata as comments, then an
-                # aligned column-name row matching the data rows below.
+                # CSV, because this file is read by analysis code far more often
+                # than by eye: the metadata stays in '#' comment lines that every
+                # CSV reader can skip (pandas: read_csv(..., comment='#')), and
+                # the column row carries the operator's own name and unit for
+                # each metric, with its Graphite path recorded above so a column
+                # can always be traced back to its source.
                 start_iso = datetime.fromtimestamp(self.run_start_time).isoformat(timespec='seconds')
                 header_lines = [
                     "# LUNA DAQ statistics",
                     f"# Run number: {run_number}",
                     f"# Start time: {start_iso}",
-                    "# Columns: elapsed acquisition time (s) followed by one column per Graphite metric.",
-                    "# Missing samples are recorded as 0.",
+                    "# Format: CSV. The first column is the elapsed acquisition time in seconds;",
+                    "# the rest are the metrics below, in this order. Missing samples are 0.",
                     "#",
-                    self._format_row(self.stats_columns),
                 ]
+                for entry in self.stats_paths:
+                    unit = (entry.get('unit') or '').strip() or '-'
+                    header_lines.append(
+                        f"# Metric: {entry.get('alias') or entry['path']} | unit: {unit} "
+                        f"| source: {entry['path']}")
+                header_lines.append("#")
+                header_lines.append(self._format_row(self.stats_columns))
                 with open(self.stats_file, 'w') as f:
                     f.write("\n".join(header_lines) + "\n")
 
@@ -378,14 +402,17 @@ class StatsManager:
         Returns:
             True if stop successful, False otherwise
         """
+        # Signal the loop BEFORE taking the lock. Stopping a run must not wait
+        # for a Graphite query that is still in flight: an unreachable server
+        # can hold one for a long time, and the operator pressing Stop cannot be
+        # made to wait for it.
+        if not self.collecting:
+            self.logger.warning("Not currently collecting stats")
+            return False
+        self.collecting = False
+
         with self.collection_lock:
             try:
-                if not self.collecting:
-                    self.logger.warning("Not currently collecting stats")
-                    return False
-
-                self.collecting = False
-
                 # Wait for thread to finish (with timeout)
                 if self.collection_thread and self.collection_thread.is_alive():
                     self.collection_thread.join(timeout=5)
@@ -395,7 +422,6 @@ class StatsManager:
                 self.run_start_time = None
                 self.stats_paths = []
                 self.stats_columns = []
-                self.stats_col_widths = []
 
                 self.logger.info("Stats collection stopped")
                 return True
@@ -417,30 +443,39 @@ class StatsManager:
         """
         Background thread loop for collecting statistics.
 
-        Periodically fetches latest values from Graphite and writes to stats.txt.
+        Periodically fetches latest values from Graphite and writes to stats.csv.
         Similar pattern to current.py's acquisition thread.
         """
         collection_interval = 1.0  # seconds
 
         while self.collecting:
             try:
+                # Read the run's frozen state under the lock, then let it go: the
+                # Graphite queries below can take seconds against a sick server,
+                # and holding the lock across them would block stop_run().
                 with self.collection_lock:
-                    if not self.collecting or not self.stats_file or not self.run_start_time:
-                        break
+                    stats_file = self.stats_file
+                    run_start_time = self.run_start_time
+                    path_entries = list(self.stats_paths)
 
-                    # Calculate elapsed time
-                    elapsed_time = time.time() - self.run_start_time
+                if not self.collecting or not stats_file or not run_start_time:
+                    break
 
-                    # Collect data using the columns frozen at start_run so each
-                    # value lands under its header; missing samples become 0.
-                    fields = [f"{elapsed_time:.3f}"]
-                    for path_entry in self.stats_paths:
-                        value, _timestamp = self.get_last_value(path_entry['path'])
-                        fields.append(self._format_value(value))
+                elapsed_time = time.time() - run_start_time
 
-                    # Write to file
-                    if self.stats_file and os.path.exists(os.path.dirname(self.stats_file)):
-                        with open(self.stats_file, 'a') as f:
+                # One value per column, in the order frozen at start_run so each
+                # lands under its header; missing samples become 0.
+                fields = [f"{elapsed_time:.3f}"]
+                for path_entry in path_entries:
+                    if not self.collecting:
+                        break          # Stop was pressed mid-sample: drop this row
+                    value, _timestamp = self.get_last_value(path_entry['path'])
+                    fields.append(self._format_value(value))
+
+                # A short row would put values under the wrong headings.
+                if self.collecting and len(fields) == len(path_entries) + 1:
+                    if os.path.exists(os.path.dirname(stats_file)):
+                        with open(stats_file, 'a') as f:
                             f.write(self._format_row(fields) + "\n")
 
                 # Sleep before next collection

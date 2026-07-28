@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { getBoardConfiguration, addBoard, removeBoard, getBoardConnectivity } from '@/lib/api'
+import { getBoardConfiguration, addBoard, removeBoard, getBoardConnectivity, type DiscoveredBoard } from '@/lib/api'
 import { useToast } from "@/components/ui/use-toast"
 import { Cpu, Plus, Trash2 } from 'lucide-react'
+import { BoardScan } from '@/components/board-scan'
 
 const formSchema = z.object({
   id: z.string().min(1, "Board ID is required"),
@@ -29,6 +30,7 @@ export function Board() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [connectivity, setConnectivity] = useState<Record<string, Connectivity>>({})
   const { toast } = useToast()
+  const addFormRef = useRef<HTMLDivElement>(null)
 
   const form = useForm<BoardData>({
     resolver: zodResolver(formSchema),
@@ -86,12 +88,36 @@ export function Board() {
       })
     } catch (error) {
       console.error('Failed to add board:', error)
+      // The server explains configuration problems (a duplicate board ID, say)
+      // in terms the operator can act on — show that instead of a generic error.
+      const serverMessage =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast({
-        title: "Error",
-        description: "Failed to add board. Please try again.",
+        title: serverMessage ? "Cannot add this board" : "Error",
+        description: serverMessage ?? "Failed to add board. Please try again.",
         variant: "destructive",
       })
     }
+  }
+
+  // A scan result fills the form rather than adding the board outright: the ID
+  // and the DPP firmware are the operator's call (the DPP is only inferred from
+  // the firmware code), and this way the settings are visible before committing.
+  function handleUseDiscovered(board: DiscoveredBoard, suggestedId: string) {
+    form.reset({
+      id: suggestedId,
+      vme: board.vme,
+      link_type: board.link_type as BoardData["link_type"],
+      link_num: board.link_num,
+      dpp: (board.dpp ?? "DPP-PHA") as BoardData["dpp"],
+    })
+    addFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    toast({
+      title: `${board.model} ready to add`,
+      description: board.dpp
+        ? `Firmware ${board.amc_firmware} looks like ${board.dpp}. Check the ID and firmware, then add it.`
+        : "The DPP firmware could not be read from the board — pick it before adding.",
+    })
   }
 
   async function handleRemoveBoard(boardId: string) {
@@ -189,8 +215,11 @@ export function Board() {
           </CardContent>
         </Card>
 
+        {/* Discover what is actually connected */}
+        <BoardScan boards={boards} onUse={handleUseDiscovered} />
+
         {/* Add a new board */}
-        <Card className="w-full mx-auto">
+        <Card className="w-full mx-auto" ref={addFormRef}>
           <CardHeader>
             <CardTitle>Add CAEN Board</CardTitle>
             <CardDescription>Enter the details of the CAEN board you want to add.</CardDescription>

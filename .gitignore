@@ -45,3 +45,10 @@ next-env.d.ts
 server/data/**
 *.pyc
 server/logbook.csv
+
+# Working notes, not part of the project
+PROBLEMS.md
+RELEASE_NOTES_*.md
+
+# Vendor manuals kept locally (large PDFs)
+manuals/

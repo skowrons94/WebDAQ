@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import useAuthStore from '@/store/auth-store';
 import CalibrationDashboard from '@/components/calib-dashboard';
 import CAENDashboard from '@/components/caen-dashboard';
+import BoardInfoPanel from '@/components/board-info';
 import { Layout } from '@/components/dashboard-layout'; import {
   Tabs,
   TabsContent,
@@ -40,6 +41,7 @@ export default function DashboardPage() {
             <TabsList>
                 <TabsTrigger value="caen">Configuration</TabsTrigger>
                 <TabsTrigger value="calibration">Calibration</TabsTrigger>
+                <TabsTrigger value="hardware">Hardware Info</TabsTrigger>
               </TabsList>
             </div>
           <TabsContent value="caen">
@@ -47,6 +49,11 @@ export default function DashboardPage() {
           </TabsContent>
           <TabsContent value="calibration">
             <CalibrationDashboard />
+          </TabsContent>
+          <TabsContent value="hardware">
+            <div className="container mx-auto p-4">
+              <BoardInfoPanel />
+            </div>
           </TabsContent>
         </Tabs>
       </Layout>

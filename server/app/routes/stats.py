@@ -56,6 +56,14 @@ def set_graphite_config():
         stats_manager.stats_config['graphite_port'] = int(graphite_port)
         stats_manager._save_config(stats_manager.stats_config)
 
+        # Push the new server to a running acquisition so caendaq's rate
+        # publisher retargets immediately (Carbon port from stats.json).
+        try:
+            from ..services.caen_acquisition import get_caen_acquisition
+            get_caen_acquisition(TEST_FLAG).set_graphite(graphite_host)
+        except Exception:
+            pass
+
         return jsonify({'message': 'Graphite configuration updated'}), 200
 
     except Exception as e:
@@ -81,11 +89,12 @@ def add_path():
         data = request.get_json()
         path = data.get('path')
         alias = data.get('alias')
+        unit = data.get('unit')
 
         if not path:
             return jsonify({'error': 'Missing required field: path'}), 400
 
-        if stats_manager.add_path(path, alias):
+        if stats_manager.add_path(path, alias, unit):
             return jsonify({'message': 'Path added successfully', 'path': path}), 201
         else:
             return jsonify({'error': 'Failed to add path or path already exists'}), 400
@@ -114,8 +123,9 @@ def update_path(path):
         data = request.get_json()
         alias = data.get('alias')
         enabled = data.get('enabled')
+        unit = data.get('unit')
 
-        if stats_manager.update_path(path, alias, enabled):
+        if stats_manager.update_path(path, alias, enabled, unit):
             return jsonify({'message': 'Path updated successfully'}), 200
         else:
             return jsonify({'error': 'Path not found'}), 404
@@ -170,6 +180,75 @@ def get_stats_run_status():
 
 
 # Data Retrieval Endpoints
+
+@bp.route('/stats/connection', methods=['GET'])
+@jwt_required_custom
+def get_connection_status():
+    """
+    Is the Graphite server answering?
+
+    The metrics page shows this as a light: without it, a server that is down
+    looks exactly like a set of metrics that happen to have no data.
+    """
+    config = stats_manager.get_config_info()
+    try:
+        reachable = stats_manager.graphite_client.check_connection()
+    except Exception as e:
+        return jsonify({
+            'reachable': False,
+            'host': config.get('graphite_host'),
+            'port': config.get('graphite_port'),
+            'error': str(e),
+        }), 200
+
+    return jsonify({
+        'reachable': bool(reachable),
+        'host': config.get('graphite_host'),
+        'port': config.get('graphite_port'),
+        'error': '' if reachable else 'No answer from the Graphite server.',
+    }), 200
+
+
+@bp.route('/stats/browse', methods=['GET'])
+@jwt_required_custom
+def browse_metrics():
+    """
+    One level of the Graphite metric tree, for picking metrics instead of
+    typing their paths.
+
+    Query parameters:
+    - prefix: the branch to open ('' for the root, 'accelerator' for its children)
+    - search: match anywhere in the tree instead of walking it level by level
+
+    Returns {'nodes': [{'path', 'is_leaf'}], 'prefix': str}.
+    """
+    prefix = (request.args.get('prefix') or '').strip('.')
+    search = (request.args.get('search') or '').strip()
+
+    try:
+        if search:
+            # Graphite matches one level at a time, so a free-text search has to
+            # be asked for at each depth. Three levels covers the trees in use
+            # here and keeps this to a few quick queries.
+            nodes = []
+            seen = set()
+            for depth in range(3):
+                pattern = '.'.join(['*'] * depth + [f'*{search}*']) if depth else f'*{search}*'
+                for node in stats_manager.graphite_client.find_metrics(pattern):
+                    if node['path'] not in seen:
+                        seen.add(node['path'])
+                        nodes.append(node)
+            nodes.sort(key=lambda n: n['path'])
+            return jsonify({'nodes': nodes, 'prefix': ''}), 200
+
+        query = f'{prefix}.*' if prefix else '*'
+        return jsonify({
+            'nodes': stats_manager.graphite_client.find_metrics(query),
+            'prefix': prefix,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @bp.route('/stats/metric/<path:metric>', methods=['GET'])
 @jwt_required_custom

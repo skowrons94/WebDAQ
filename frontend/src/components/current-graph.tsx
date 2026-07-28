@@ -1,13 +1,23 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { getArrayDataCurrent } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
+import {
+  currentUnit, maxMagnitude, formatTick, formatValue,
+  CHART_MARGIN, yAxisLabel, xAxisLabel,
+} from '@/lib/chart-format'
+
+/** One plotted sample: wall-clock label plus the reading in µA. */
+interface CurrentPoint {
+  time: string
+  value: number
+}
 
 // Converts raw data to chart format based on run state
-const convertToChartData = (data, startTime) => {
+const convertToChartData = (data: number[], startTime: Date | null): CurrentPoint[] => {
   const now = new Date()
 
   return data.map((value, index) => {
@@ -25,7 +35,7 @@ const convertToChartData = (data, startTime) => {
 }
 
 export default function CurrentGraph() {
-  const [data, setData] = useState([])
+  const [data, setData] = useState<CurrentPoint[]>([])
   const [startTime, setStartTime] = useState<Date | null>(null)
   const isRunning = useRunControlStore((state) => state.isRunning)
 
@@ -96,45 +106,68 @@ export default function CurrentGraph() {
     return () => observer.disconnect()
   }, [])
 
+  // The log is in µA, but the beam may be nanoamps or milliamps. Pick the unit
+  // from the data so the axis shows short numbers instead of "0.0004" or
+  // "12000" — long tick labels are what makes them collide.
+  const { scale, unit } = useMemo(
+    () => currentUnit(maxMagnitude(data.map(d => d.value))),
+    [data],
+  )
+  const scaled = useMemo(
+    () => data.map(d => ({ ...d, value: d.value * scale })),
+    [data, scale],
+  )
+
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle>Current on Target</CardTitle>
+        <CardTitle className="flex items-baseline gap-2">
+          Current on Target
+          <span className="text-sm font-normal text-muted-foreground">({unit})</span>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data}>
+            <LineChart data={scaled} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke={themeColors.gridLines} />
               <XAxis
                 dataKey="time"
                 stroke={themeColors.text}
-                tick={{ fill: themeColors.text }}
+                tick={{ fill: themeColors.text, fontSize: 11 }}
+                // Timestamps are wide; thin them out rather than letting recharts
+                // stack every label along the axis.
+                minTickGap={48}
+                interval="preserveStartEnd"
+                label={xAxisLabel("Time")}
               />
               <YAxis
                 stroke={themeColors.text}
-                tick={{ fill: themeColors.text }}
-                label={{
-                  value: "Current (uA)",
-                  angle: -90,
-                  position: "insideLeft",
-                  style: { textAnchor: "middle", fill: themeColors.text }
-                }}
+                tick={{ fill: themeColors.text, fontSize: 11 }}
+                tickFormatter={formatTick}
+                // Reserve a fixed gutter so the rotated title never lands on the
+                // tick labels, however wide those get.
+                width={64}
+                label={yAxisLabel(`Current (${unit})`)}
               />
               <Tooltip
                 contentStyle={{
                   backgroundColor: themeColors.tooltipBg,
-                  border: `1px solid ${themeColors.tooltipBorder}`
+                  border: `1px solid ${themeColors.tooltipBorder}`,
+                  fontSize: 12,
                 }}
                 labelStyle={{ color: themeColors.text }}
                 itemStyle={{ color: themeColors.text }}
+                formatter={(v: number) => [formatValue(v, unit), "Current"]}
               />
               <Line
                 type="monotone"
                 dataKey="value"
+                name="Current"
                 stroke={themeColors.lineColor}
                 strokeWidth={2}
                 dot={false}
+                isAnimationActive={false}
               />
             </LineChart>
           </ResponsiveContainer>

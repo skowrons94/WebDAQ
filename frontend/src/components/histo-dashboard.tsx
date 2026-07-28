@@ -450,8 +450,8 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
               type="number"
               min="0"
               max={
-                boards.find((b) => b.id === boardId)?.chan
-                  ? Number.parseInt(boards.find((b) => b.id === boardId)!.chan) - 1
+                boards.find((b) => String(b.id) === String(boardId))?.chan
+                  ? Number(boards.find((b) => String(b.id) === String(boardId))!.chan) - 1
                   : 0
               }
               value={channel}
@@ -1171,8 +1171,14 @@ export default function EnhancedHistogramDashboard() {
   const fetchBoardConfiguration = async () => {
     try {
       const response = await getBoardConfiguration()
-      setBoards(response.data)
-      return response.data
+      // Ids arrive as numbers and are compared against the strings the Select
+      // and the saved histogram configurations use. Normalise once here.
+      const boardList = (response.data ?? []).map((board: BoardData) => ({
+        ...board,
+        id: String(board.id),
+      }))
+      setBoards(boardList)
+      return boardList
     } catch (error) {
       console.error("Failed to fetch board configuration:", error)
       toast({
@@ -1381,13 +1387,13 @@ export default function EnhancedHistogramDashboard() {
   const getHistogramSize = (size: "small" | "medium" | "large") => {
     switch (size) {
       case "small":
-        return "h-60"
+        return "h-72"
       case "medium":
-        return "h-80"
-      case "large":
         return "h-96"
+      case "large":
+        return "h-[32rem]"
       default:
-        return "h-80"
+        return "h-96"
     }
   }
 
@@ -1401,7 +1407,7 @@ export default function EnhancedHistogramDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <main className="flex-1 container mx-auto p-4">
+      <main className="flex-1 w-full px-4 py-4">
         {/* Header Controls */}
         <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
           <div className="flex items-center gap-2">

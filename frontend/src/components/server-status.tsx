@@ -27,6 +27,9 @@ export function ServerStatus() {
     const [showLogs, setShowLogs] = useState(false)
     const [logs, setLogs] = useState('')
     const [logsTruncated, setLogsTruncated] = useState(false)
+    // Whether the log view is pinned to the newest lines. False once the reader
+    // scrolls up, which stops the poll from dragging them back to the bottom.
+    const [followingTail, setFollowingTail] = useState(true)
     const [testModeOnLaunch, setTestModeOnLaunch] = useState(false)
     // Launch feedback: from the moment "Start" is clicked until the server
     // answers on its HTTP port (detected by the status poll) or errors out.
@@ -149,14 +152,27 @@ export function ServerStatus() {
                 const res = await fetch('/api/server-control?logs=1')
                 const data = await res.json()
                 if (cancelled) return
+
+                // Follow the tail only while the reader is already at the
+                // bottom. Scrolling up means they are reading something, and
+                // yanking them back down on the next poll (every 1.5 s) makes
+                // the log impossible to read.
+                const el = logsRef.current
+                const STICK_TOLERANCE_PX = 40
+                const wasAtBottom = !el ||
+                    el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_TOLERANCE_PX
+
                 setLogs(data.log || '')
                 setLogsTruncated(Boolean(data.truncated))
-                // Autoscroll to bottom
-                requestAnimationFrame(() => {
-                    if (logsRef.current) {
-                        logsRef.current.scrollTop = logsRef.current.scrollHeight
-                    }
-                })
+                setFollowingTail(wasAtBottom)
+
+                if (wasAtBottom) {
+                    requestAnimationFrame(() => {
+                        if (logsRef.current) {
+                            logsRef.current.scrollTop = logsRef.current.scrollHeight
+                        }
+                    })
+                }
             } catch {
                 /* ignore */
             }
@@ -168,6 +184,38 @@ export function ServerStatus() {
             clearInterval(interval)
         }
     }, [showLogs, connected, launching])
+
+    // Track whether the reader is at the tail, so the poll knows whether to
+    // follow it. Updated on scroll so the "jump to latest" hint appears at once
+    // rather than on the next refresh.
+    const STICK_TOLERANCE_PX = 40
+    const handleLogScroll = () => {
+        const el = logsRef.current
+        if (!el) return
+        setFollowingTail(el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_TOLERANCE_PX)
+    }
+    const jumpToLatest = () => {
+        const el = logsRef.current
+        if (!el) return
+        el.scrollTop = el.scrollHeight
+        setFollowingTail(true)
+    }
+
+    /** Label row above a log pane, with the follow state and a way back. */
+    const logHeader = (label: string) => (
+        <div className="flex items-center justify-between gap-2">
+            <p className="text-[10px] text-muted-foreground">{label}</p>
+            {!followingTail && (
+                <button
+                    type="button"
+                    onClick={jumpToLatest}
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                >
+                    paused — jump to latest
+                </button>
+            )}
+        </div>
+    )
 
     const startInDirectory = async (dir: WorkingDirectory) => {
         // Flip into the launching view immediately — the start request itself
@@ -284,16 +332,15 @@ export function ServerStatus() {
                             <p className="text-xs text-muted-foreground">
                                 Starting in <span className="font-medium">{launchLabel}</span>
                                 {testModeOnLaunch ? ' (test mode)' : ''}. Initializing the
-                                database, creating the user and booting XDAQ — this can take up to
+                                database and creating the user — this can take up to
                                 a minute.
                             </p>
                             <Progress value={launchProgress} className="h-2" />
                             <div className="space-y-1">
-                                <p className="text-[10px] text-muted-foreground">
-                                    Live server log:
-                                </p>
+                                {logHeader('Live server log:')}
                                 <pre
                                     ref={logsRef}
+                                    onScroll={handleLogScroll}
                                     className="text-[10px] leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-72 overflow-auto"
                                 >
                                     {logs || 'Waiting for output…'}
@@ -341,13 +388,12 @@ export function ServerStatus() {
                             </div>
                             {showLogs && (
                                 <div className="space-y-1">
-                                    {logsTruncated && (
-                                        <p className="text-[10px] text-muted-foreground">
-                                            Showing the latest 200 KB of server.log
-                                        </p>
-                                    )}
+                                    {logHeader(logsTruncated
+                                        ? 'Showing the latest 200 KB of server.log'
+                                        : 'Server log:')}
                                     <pre
                                         ref={logsRef}
+                                        onScroll={handleLogScroll}
                                         className="text-[10px] leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-72 overflow-auto"
                                     >
                                         {logs || 'No output yet…'}
@@ -386,7 +432,7 @@ export function ServerStatus() {
                                 <div className="flex flex-col">
                                     <span className="text-xs font-medium">Test Mode</span>
                                     <span className="text-[10px] text-muted-foreground">
-                                        Skip XDAQ / CAEN components — for debugging without hardware.
+                                        Use mock boards — for debugging without hardware.
                                     </span>
                                 </div>
                             </label>

@@ -22,6 +22,56 @@ This guide helps diagnose and resolve common issues with the LunaDAQ system. Iss
 
 ## Server Issues
 
+### The server runs in the wrong conda environment
+
+**Symptoms** — the server starts and serves pages, but something it needs is
+"not installed", and it is installed:
+
+- `The py_elog package is not installed on the server`, yet `conda list -n luna`
+  shows `elog`
+- `Error configuring acquisition: add_board(): incompatible function arguments`
+- `caendaq` reported as missing when the tuner tries an online write
+
+**Cause.** The backend must run in the `luna` environment, which is where
+`caendaq`, `elog` and the CAEN libraries live. Two ways it ends up elsewhere:
+
+1. `conda run -n luna python` does not always pick that environment's
+   interpreter — on some conda versions it resolves `python` from the PATH it
+   inherited, so the server runs in whatever environment the person who started
+   the web app was in.
+2. Starting the server by hand without activating first: `python main.py` uses
+   whatever `python` means in that terminal.
+
+**Check which interpreter is actually serving:**
+
+```bash
+lsof -ti tcp:5001 -sTCP:LISTEN | xargs ps -o command=
+```
+
+The path must be `<conda>/envs/luna/bin/python`. `Start an Experiment` also
+reports it — the response carries `"python": "…/envs/luna/bin/python"`, and
+warns when that interpreter cannot import what the backend needs.
+
+**Fix:**
+
+```bash
+LunaDAQ stop
+conda activate luna
+LunaDAQ backend           # refuses to start if caendaq is not importable
+```
+
+or start it again from the web interface, which now resolves the environment's
+interpreter by path.
+
+**If the environment really is missing a package:**
+
+```bash
+conda env update -f environment.yml          # picks up anything added to the file
+conda install -n luna -c paulscherrerinstitute elog   # elog is not on PyPI
+```
+
+Re-running `install.sh` does both and then verifies every package imports.
+
 ### Server Won't Start
 
 **Symptoms:**

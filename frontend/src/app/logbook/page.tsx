@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/use-toast';
 import { Layout } from '@/components/dashboard-layout';
 import {Logbook} from '@/components/logbook-table/logbook-page';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ElogPanel } from '@/components/elog/elog-panel';
 
 const queryClient = new QueryClient()
 
@@ -30,7 +32,20 @@ export default  function LogbookPage() {
     return (
         <QueryClientProvider client={queryClient}>
             <Layout>
-                <Logbook />
+                {/* Two logbooks live here: the run metadata WebDAQ records itself,
+                    and the collaboration's ELOG. */}
+                <Tabs defaultValue="runs" className="space-y-4">
+                    <TabsList>
+                        <TabsTrigger value="runs">Runs</TabsTrigger>
+                        <TabsTrigger value="elog">ELOG</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="runs">
+                        <Logbook />
+                    </TabsContent>
+                    <TabsContent value="elog">
+                        <ElogPanel />
+                    </TabsContent>
+                </Tabs>
             </Layout>
         </QueryClientProvider>
     )

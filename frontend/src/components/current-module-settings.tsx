@@ -15,9 +15,17 @@ import {
   getCurrentModuleSettings,
   updateCurrentModuleSettings,
   getCurrentStatus,
+  getSerialPorts,
   getCurrentGraphiteConfig,
   setCurrentGraphiteConfig
 } from '@/lib/api'
+import { RefreshCw } from 'lucide-react'
+
+interface SerialPort {
+  device: string
+  description?: string
+  hwid?: string
+}
 
 interface ModuleSettings {
   module_type: string
@@ -46,6 +54,8 @@ export function CurrentModuleSettings() {
 
   // RBD 9103 settings
   const [rbdPort, setRbdPort] = useState('/dev/tty.usbserial-A50285BI')
+  const [serialPorts, setSerialPorts] = useState<SerialPort[]>([])
+  const [manualPort, setManualPort] = useState(false)
   const [rbdBaudrate, setRbdBaudrate] = useState('57600')
   const [rbdHighSpeed, setRbdHighSpeed] = useState(false)
   const [rbdRange, setRbdRange] = useState('R0')
@@ -59,11 +69,22 @@ export function CurrentModuleSettings() {
 
   useEffect(() => {
     loadSettings()
+    loadSerialPorts()
     const interval = setInterval(() => {
       loadStatus()
     }, 2000)
     return () => clearInterval(interval)
   }, [])
+
+  const loadSerialPorts = async () => {
+    try {
+      const res = await getSerialPorts()
+      setSerialPorts(res?.ports || [])
+    } catch (error) {
+      console.warn('Failed to list serial ports:', error)
+      setSerialPorts([])
+    }
+  }
 
   const loadGraphiteConfig = async () => {
     try {
@@ -441,15 +462,75 @@ export function CurrentModuleSettings() {
               {/* Connection Settings */}
               <div className="space-y-2">
                 <Label htmlFor="rbd-port">Serial Port</Label>
-                <Input
-                  id="rbd-port"
-                  value={rbdPort}
-                  onChange={(e) => setRbdPort(e.target.value)}
-                  placeholder="/dev/ttyUSB0"
-                />
+                <div className="flex items-center gap-2">
+                  {!manualPort ? (
+                    <Select
+                      value={rbdPort}
+                      onValueChange={(v) => {
+                        if (v === '__manual__') {
+                          setManualPort(true)
+                        } else {
+                          setRbdPort(v)
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="rbd-port" className="flex-1">
+                        <SelectValue placeholder="Select a serial port" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {serialPorts.length === 0 && (
+                          <SelectItem value="__none__" disabled>
+                            No serial ports detected
+                          </SelectItem>
+                        )}
+                        {/* Keep the configured port selectable even if it isn't
+                            currently present (e.g. device unplugged). */}
+                        {rbdPort && !serialPorts.some((p) => p.device === rbdPort) && (
+                          <SelectItem value={rbdPort}>{rbdPort} (configured)</SelectItem>
+                        )}
+                        {serialPorts.map((p) => (
+                          <SelectItem key={p.device} value={p.device}>
+                            {p.device}
+                            {p.description ? ` — ${p.description}` : ''}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__manual__">Enter manually…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id="rbd-port"
+                      className="flex-1"
+                      value={rbdPort}
+                      onChange={(e) => setRbdPort(e.target.value)}
+                      placeholder="/dev/ttyUSB0"
+                    />
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={loadSerialPorts}
+                    title="Rescan serial ports"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  {manualPort && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setManualPort(false)}>
+                      Pick from list
+                    </Button>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  USB serial port device path (e.g., /dev/ttyUSB0 on Linux, COM3 on Windows)
+                  Pick a detected device, or choose “Enter manually…” to type a path
+                  (e.g. /dev/ttyUSB0 on Linux, COM3 on Windows). Use the refresh button to rescan.
                 </p>
+                {moduleType === 'rbd9103' && status && status.port_exists === false && (
+                  <p className="text-xs text-red-500">
+                    Device {status.port || rbdPort} not found — the serial port does not exist.
+                    Check that the RBD 9103 is plugged in and the path is correct.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">

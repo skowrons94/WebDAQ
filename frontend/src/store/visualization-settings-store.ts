@@ -16,7 +16,6 @@ export interface VisualizationSettings {
     showStatus: boolean
     showCurrent: boolean
     currentEnabled: boolean
-    showXDAQ: boolean
     showROIs: boolean
     showMetrics: boolean
     selectedBoardsChannelsPSD: BoardChannelSelection[]
@@ -43,7 +42,6 @@ const DEFAULT_SETTINGS: VisualizationSettings = {
     showStatus: true,
     showCurrent: true,
     currentEnabled: true,
-    showXDAQ: true,
     showROIs: true,
     showMetrics: true,
     selectedBoardsChannelsPSD: [],
