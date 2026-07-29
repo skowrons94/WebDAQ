@@ -53,7 +53,6 @@ import { ServerStatus } from '@/components/server-status'
 const NAV_ITEMS = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/logbook", label: "Logbook" },
-    { href: "/data", label: "Data" },
     { href: "/stats", label: "Stats" },
     { href: "/DAQ", label: "DAQ" },
     { href: "/tuner", label: "Tuner" },

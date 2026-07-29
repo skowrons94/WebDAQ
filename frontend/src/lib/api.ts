@@ -202,7 +202,7 @@ export interface BoardInfoResponse {
 export const getBoardInfo = (): Promise<BoardInfoResponse> =>
     api.get('/experiment/board_info').then(res => res.data);
 
-// ── Data dashboard: completed runs ───────────────────────────────────────────
+// ── Logbook run details ──────────────────────────────────────────────────────
 // Read-side access to what a finished run left behind — its record, the beam
 // current it was taken with, the boards' configuration, and the ROOT conversion.
 

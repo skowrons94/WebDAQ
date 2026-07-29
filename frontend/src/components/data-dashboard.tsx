@@ -28,7 +28,7 @@ import {
 } from "@/lib/chart-format"
 
 /**
- * The Data dashboard — everything a finished run left behind, in one place.
+ * Run details — everything a finished run left behind, in one place.
  *
  * Pick a run and you get its record, the beam current it was taken with (with
  * the charge integrated from the full series), the exact board configuration it
@@ -866,9 +866,8 @@ function RunDetailTabs({
 }
 
 /**
- * Standalone detail view used by a logbook entry route. Keeping this loader
- * here means the Data dashboard and the Logbook always render a run with the
- * same fields, plots and provenance controls.
+ * Detail view used by a logbook entry route, with the run's fields, plots and
+ * provenance controls.
  */
 export function RunDetailView({ runNumber }: { runNumber: number }) {
   const [detail, setDetail] = useState<RunDetail | null>(null)
