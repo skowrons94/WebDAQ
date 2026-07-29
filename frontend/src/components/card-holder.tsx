@@ -12,9 +12,7 @@ import {
   Activity,
   BarChart,
   BatteryCharging,
-  Database,
   HardDrive,
-  Thermometer,
   CheckCircle,
   XCircle,
   Cpu,
@@ -23,7 +21,6 @@ import {
   Save,
   AudioWaveform,
   Server,
-  Zap,
   GripHorizontal,
 } from "lucide-react"
 
@@ -42,9 +39,6 @@ import { useStatsStore } from '@/store/stats-store'
 import {
   getRoiIntegral,
   getFileBandwidth,
-  getDataCurrent,
-  getAccumulatedCharge,
-  getTotalAccumulatedCharge,
   getConnectedCurrent,
   getIpCurrent,
   getPortCurrent,
@@ -119,32 +113,28 @@ type BoardInfo = {
 }
 
 
-/**
- * Charge in µC, in whichever unit keeps it readable — a long run reaches
- * millicoulombs and a target's lifetime total reaches coulombs.
- */
-const formatCharge = (microCoulombs: number): string => {
-  const value = Number.isFinite(microCoulombs) ? microCoulombs : 0
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} C`
-  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(2)} mC`
-  return `${value.toFixed(2)} uC`
-}
-
 interface CardHolderProps {
   isRunning: boolean
   timer: number
   startTime: string | null
   runNumber: number | null
+  expandForBeam?: boolean
 }
 
-// The overview starts at two rows, as before, and can be snapped one complete
-// card row smaller or larger.  Keeping discrete row heights avoids leaving the
-// final row awkwardly clipped after a free-form drag.
-const STATUS_PANEL_HEIGHTS = [220, 440, 660] as const
-const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[1]
-const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height'
+// Each card row is 11.5rem with a 1.5rem gap. These viewport heights end after
+// the row padding, before the following row begins, so no clipped preview of
+// the next row appears beneath the pull handle.
+const STATUS_PANEL_HEIGHTS = [220, 428, 636] as const
+const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[0]
+const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height-v3'
 
-export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolderProps) {
+export function CardHolder({
+  isRunning,
+  timer,
+  startTime,
+  runNumber,
+  expandForBeam = false,
+}: CardHolderProps) {
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
   // Treat a missing flag (older persisted settings) as enabled.
@@ -155,10 +145,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
 
   const [roiCards, setRoiCards] = useState<ROICardData[]>([])
   const [fileBandwidth, setFileBandwidth] = useState<number>(0)
-  const [beamCurrent, setBeamCurrent] = useState<number>(0)
-  const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
-  const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
-  const [totalAccumulatedCharge, setTotalAccumulatedCharge] = useState<number>(0)
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false)
   const [ipCurrent, setIpCurrent] = useState<string>('')
   const [portCurrent, setPortCurrent] = useState<string>('')
@@ -184,11 +170,16 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   const [currentSampling, setCurrentSampling] = useState<boolean>(false)
   const [statsCollecting, setStatsCollecting] = useState<boolean>(false)
   const [statsCount, setStatsCount] = useState<number>(0)
-  // First beam current reading of the current run; null between runs.
-  const runStartCurrentRef = useRef<number | null>(null)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
   const [statusPanelHeight, setStatusPanelHeight] = useState<number>(DEFAULT_STATUS_PANEL_HEIGHT)
+  const minimumStatusPanelHeight = expandForBeam
+    ? STATUS_PANEL_HEIGHTS[1]
+    : STATUS_PANEL_HEIGHTS[0]
+  const displayedStatusPanelHeight = Math.max(statusPanelHeight, minimumStatusPanelHeight)
+  const availableStatusPanelHeights = STATUS_PANEL_HEIGHTS.filter(
+    height => height >= minimumStatusPanelHeight,
+  )
   const [isResizingStatusPanel, setIsResizingStatusPanel] = useState(false)
   const statusPanelDragRef = useRef<{
     pointerId: number
@@ -204,11 +195,11 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   }, [])
 
   const snapStatusPanelHeight = useCallback((height: number) => {
-    const snapped = STATUS_PANEL_HEIGHTS.reduce((closest, candidate) =>
+    const snapped = availableStatusPanelHeights.reduce((closest, candidate) =>
       Math.abs(candidate - height) < Math.abs(closest - height) ? candidate : closest)
     setStatusPanelHeight(snapped)
     window.localStorage.setItem(STATUS_PANEL_STORAGE_KEY, String(snapped))
-  }, [])
+  }, [availableStatusPanelHeights])
 
   const handleStatusResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
     event.preventDefault()
@@ -216,7 +207,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     statusPanelDragRef.current = {
       pointerId: event.pointerId,
       startY: event.clientY,
-      startHeight: statusPanelHeight,
+      startHeight: displayedStatusPanelHeight,
     }
     setIsResizingStatusPanel(true)
   }
@@ -226,7 +217,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     if (!drag || drag.pointerId !== event.pointerId) return
     const nextHeight = Math.min(
       STATUS_PANEL_HEIGHTS[STATUS_PANEL_HEIGHTS.length - 1],
-      Math.max(STATUS_PANEL_HEIGHTS[0], drag.startHeight + event.clientY - drag.startY),
+      Math.max(minimumStatusPanelHeight, drag.startHeight + event.clientY - drag.startY),
     )
     setStatusPanelHeight(nextHeight)
   }
@@ -236,7 +227,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     if (!drag || drag.pointerId !== event.pointerId) return
     const finalHeight = Math.min(
       STATUS_PANEL_HEIGHTS[STATUS_PANEL_HEIGHTS.length - 1],
-      Math.max(STATUS_PANEL_HEIGHTS[0], drag.startHeight + event.clientY - drag.startY),
+      Math.max(minimumStatusPanelHeight, drag.startHeight + event.clientY - drag.startY),
     )
     statusPanelDragRef.current = null
     setIsResizingStatusPanel(false)
@@ -244,19 +235,19 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   }
 
   const handleStatusResizeKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
-    const currentIndex = STATUS_PANEL_HEIGHTS.reduce((closestIndex, height, index) =>
-      Math.abs(height - statusPanelHeight) <
-      Math.abs(STATUS_PANEL_HEIGHTS[closestIndex] - statusPanelHeight)
+    const currentIndex = availableStatusPanelHeights.reduce((closestIndex, height, index) =>
+      Math.abs(height - displayedStatusPanelHeight) <
+      Math.abs(availableStatusPanelHeights[closestIndex] - displayedStatusPanelHeight)
         ? index
         : closestIndex, 0)
     const direction = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
     if (!direction) return
     event.preventDefault()
     const nextIndex = Math.min(
-      STATUS_PANEL_HEIGHTS.length - 1,
+      availableStatusPanelHeights.length - 1,
       Math.max(0, currentIndex + direction),
     )
-    snapStatusPanelHeight(STATUS_PANEL_HEIGHTS[nextIndex])
+    snapStatusPanelHeight(availableStatusPanelHeights[nextIndex])
   }
 
   useEffect(() => {
@@ -329,22 +320,16 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     // Small delay to ensure paths are loaded from store
     setTimeout(updateStatsValues, 500)
 
-    const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
     const bandwidthInterval = setInterval(updateBandwidthData, 1000)
-    const accumulatedChargeInterval = setInterval(updateAccumulatedCharge, 1000)
-    const totalAccumulatedChargeInterval = setInterval(updateTotalAccumulatedCharge, 1000)
     const boardStatusInterval = setInterval(updateBoardStatus, 2000)
     const boardConnectivityInterval = setInterval(updateBoardConnectivity, 5000) // Check every 5 seconds
     const statsInterval = setInterval(updateStatsValues, 5000) // Refresh stats every 5 seconds
     const daqStatusInterval = setInterval(updateDaqStatuses, 3000)
 
     return () => {
-      clearInterval(beamCurrentInterval)
       clearInterval(roiInterval)
       clearInterval(bandwidthInterval)
-      clearInterval(accumulatedChargeInterval)
-      clearInterval(totalAccumulatedChargeInterval)
       clearInterval(boardStatusInterval)
       clearInterval(boardConnectivityInterval)
       clearInterval(statsInterval)
@@ -495,48 +480,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     }
   }
 
-  const updateBeamCurrent = async () => {
-    try {
-      const currentData = await getDataCurrent()
-      setBeamCurrent(currentData)
-
-      // Reference for "since run start". It used to come from localStorage,
-      // written by whichever browser pressed Start — so a page opened later, or
-      // a run started from the Tuner or another PC, compared against 0 or
-      // against a stale value from a previous run. Take the first reading of
-      // this run instead, in this component, and drop the reference when the
-      // run ends rather than leaving a number nobody can interpret.
-      if (isRunning) {
-        const reference = runStartCurrentRef.current ?? currentData
-        runStartCurrentRef.current = reference
-        setBeamCurrentChange(currentData - reference)
-      } else {
-        runStartCurrentRef.current = null
-        setBeamCurrentChange(0)
-      }
-    } catch (error) {
-      console.error('Failed to update beam current:', error)
-    }
-  }
-
-  const updateAccumulatedCharge = async () => {
-    try {
-      const charge = await getAccumulatedCharge()
-      setAccumulatedCharge(charge)
-    } catch (error) {
-      console.error('Failed to update accumulated charge:', error)
-    }
-  }
-
-  const updateTotalAccumulatedCharge = async () => {
-    try {
-      const totalCharge = await getTotalAccumulatedCharge()
-      setTotalAccumulatedCharge(totalCharge)
-    } catch (error) {
-      console.error('Failed to update total accumulated charge:', error)
-    }
-  }
-
   const fetchBoardConfiguration = async () => {
     try {
       const response = await getBoardConfiguration()
@@ -566,14 +509,16 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
 
   const updateDaqStatuses = async () => {
     try {
-      const [save, waves, currentStatus, statsStatus] = await Promise.all([
+      const [save, waves, currentStatus, currentConnected, statsStatus] = await Promise.all([
         getSaveData().catch(() => null),
         getWaveformStatusPerBoard().catch(() => null),
         getCurrentStatus().catch(() => null),
+        getConnectedCurrent().catch(() => null),
         getStatsRunStatus().catch(() => null),
       ])
       if (save !== null && save !== undefined) setDataSavingEnabled(Boolean(save))
       if (waves) setBoardWaveforms(waves)
+      if (currentConnected !== null) setIsConnectedCurrent(Boolean(currentConnected))
       if (currentStatus) {
         // Two different things, and they were being confused:
         //   running   — per-run current logging, which only starts with a run
@@ -661,16 +606,29 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     return `${seconds} seconds`
   }
 
+  const enabledStatsPaths = paths.filter((path: any) => path.enabled)
+  const hasMonitoringCards =
+    (settings.showROIs && roiCards.length > 0) ||
+    (settings.showMetrics && visibleMetrics.length > 0) ||
+    (settings.showStats && enabledStatsPaths.length > 0)
+
   return (
-    <div className="relative mb-2">
-      <ScrollArea
-        className={`rounded-md border ${
-          isResizingStatusPanel ? '' : 'transition-[height] duration-150 ease-out'
-        }`}
-        viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
-        style={{ height: statusPanelHeight }}
-      >
-        <div className="grid gap-4 p-4 pb-5 sm:grid-cols-2 2xl:grid-cols-6 md:gap-8 lg:grid-cols-4 [&>*]:snap-start">
+    <div className="h-full">
+      {(settings.showStatus || hasMonitoringCards) && (
+        <section className="h-full">
+          <div className="relative mb-2">
+            <div className="rounded-md border">
+              <div className="p-4 pb-0">
+                <h2 className="text-sm font-semibold">System status</h2>
+              </div>
+              <ScrollArea
+                className={isResizingStatusPanel
+                  ? ''
+                  : 'transition-[height] duration-150 ease-out'}
+                viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
+                style={{ height: displayedStatusPanelHeight }}
+              >
+                <div className="grid auto-rows-[11.5rem] grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-6 p-4 pb-5 [&>*]:h-full [&>*]:overflow-hidden [&>*]:snap-start">
         {/* Run Status Card */}
         {settings.showStatus && (
           <Card>
@@ -920,58 +878,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
           )
         })}
 
-        {/* Beam & Charge Card — the live current and both charge figures in one
-            place, because they are read together: the current says what the beam
-            is doing now, the run charge is what the analysis normalises to, and
-            the total says how much beam this target has seen. */}
-        {settings.showCurrent && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Beam &amp; Charge
-              </CardTitle>
-              <Thermometer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
-              <p className="text-xs text-muted-foreground">
-                {/* Only claim a drift when there is a run to measure it against.
-                    Between runs the line said "0.00 uA from Start", which was
-                    not a measurement of anything. */}
-                {isRunning
-                  ? `${beamCurrentChange >= 0 ? '+' : ''}${beamCurrentChange.toFixed(2)} uA since run start`
-                  : 'No run in progress'}
-              </p>
-
-              <div className="mt-3 space-y-1.5 border-t pt-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <Zap className="h-3.5 w-3.5" />
-                    This run
-                  </span>
-                  <span className="flex items-center gap-1.5 font-semibold">
-                    {formatCharge(accumulatedCharge)}
-                    {/* Integrating only while the run is on — a still number
-                        between runs is the point, not a stalled readout. */}
-                    <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${
-                        isRunning ? 'bg-green-500' : 'bg-muted-foreground/40'}`}
-                      title={isRunning ? 'Integrating' : 'Paused until the next run'}
-                    />
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="flex items-center gap-1.5 text-muted-foreground">
-                    <Database className="h-3.5 w-3.5" />
-                    Total
-                  </span>
-                  <span className="font-semibold">{formatCharge(totalAccumulatedCharge)}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* ROI Cards */}
         {settings.showROIs &&
           roiCards.map((cardData) => (
@@ -1008,7 +914,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
         }
 
         {/* Custom Metrics Cards */}
-        {visibleMetrics.map(metric => (
+        {settings.showMetrics && visibleMetrics.map(metric => (
           <Card key={metric.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -1033,7 +939,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
 
         {/* Stats/Graphite Metric Cards */}
         {settings.showStats &&
-          paths.filter((p: any) => p.enabled).map((path: any) => (
+          enabledStatsPaths.map((path: any) => (
             <Card key={path.path}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -1059,32 +965,36 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
             </Card>
           ))
         }
-        </div>
-      </ScrollArea>
-      <button
-        type="button"
-        role="separator"
-        aria-label="Resize overview status cards"
-        aria-orientation="horizontal"
-        aria-valuemin={1}
-        aria-valuemax={3}
-        aria-valuenow={STATUS_PANEL_HEIGHTS.reduce((closestIndex, height, index) =>
-          Math.abs(height - statusPanelHeight) <
-          Math.abs(STATUS_PANEL_HEIGHTS[closestIndex] - statusPanelHeight)
-            ? index
-            : closestIndex, 0) + 1}
-        title="Drag to show one row less or more. Use ↑ and ↓ with the keyboard."
-        onPointerDown={handleStatusResizeStart}
-        onPointerMove={handleStatusResizeMove}
-        onPointerUp={handleStatusResizeEnd}
-        onPointerCancel={handleStatusResizeEnd}
-        onKeyDown={handleStatusResizeKey}
-        className={`absolute -bottom-3 left-1/2 z-10 flex h-6 w-16 -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-          isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
-        }`}
-      >
-        <GripHorizontal className="h-4 w-4 text-muted-foreground" />
-      </button>
+                </div>
+              </ScrollArea>
+            </div>
+            <button
+              type="button"
+              role="separator"
+              aria-label="Resize overview status cards"
+              aria-orientation="horizontal"
+              aria-valuemin={expandForBeam ? 2 : 1}
+              aria-valuemax={3}
+              aria-valuenow={STATUS_PANEL_HEIGHTS.reduce((closestIndex, height, index) =>
+                Math.abs(height - displayedStatusPanelHeight) <
+                Math.abs(STATUS_PANEL_HEIGHTS[closestIndex] - displayedStatusPanelHeight)
+                  ? index
+                  : closestIndex, 0) + 1}
+              title="Drag to show one card row less or more. Use ↑ and ↓ with the keyboard."
+              onPointerDown={handleStatusResizeStart}
+              onPointerMove={handleStatusResizeMove}
+              onPointerUp={handleStatusResizeEnd}
+              onPointerCancel={handleStatusResizeEnd}
+              onKeyDown={handleStatusResizeKey}
+              className={`absolute -bottom-3 left-1/2 z-10 flex h-6 w-16 -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
+              }`}
+            >
+              <GripHorizontal className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </section>
+      )}
     </div>
   )
 }

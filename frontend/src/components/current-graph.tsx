@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, type ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { getCurrentHistory } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
+import { cn } from '@/lib/utils'
 import {
   currentUnit, maxMagnitude, formatTick, formatValue,
   CHART_MARGIN, yAxisLabel, xAxisLabel,
@@ -54,7 +55,25 @@ const mergeSamples = (
   )
 }
 
-export default function CurrentGraph() {
+interface CurrentGraphProps {
+  title?: string
+  description?: string | null
+  summary?: ReactNode
+  headerActions?: ReactNode
+  compact?: boolean
+  className?: string
+  fillHeight?: boolean
+}
+
+export default function CurrentGraph({
+  title = "Current on Target",
+  description,
+  summary,
+  headerActions,
+  compact = false,
+  className,
+  fillHeight = false,
+}: CurrentGraphProps = {}) {
   const [data, setData] = useState<CurrentPoint[]>([])
   const [stoppedWindow, setStoppedWindow] = useState(30)
   const latestRunSampleRef = useRef<number | null>(null)
@@ -155,50 +174,72 @@ export default function CurrentGraph() {
     [data, scale],
   )
 
+  const historyControl = isRunning ? (
+    <Badge variant="outline" className="w-fit gap-1.5">
+      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+      Since run start
+    </Badge>
+  ) : (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">Past</span>
+      <ToggleGroup
+        type="single"
+        value={String(stoppedWindow)}
+        onValueChange={(value) => value && setStoppedWindow(Number(value))}
+        variant="outline"
+        size="sm"
+        aria-label="Current history time range"
+      >
+        {STOPPED_WINDOWS.map(option => (
+          <ToggleGroupItem
+            key={option.seconds}
+            value={String(option.seconds)}
+            aria-label={`Show the past ${option.label}`}
+            className="h-7 px-2 text-xs"
+          >
+            {option.label}
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    </div>
+  )
+
   return (
-    <Card>
-      <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <CardTitle className="flex items-baseline gap-2">
-            Current on Target
-            <span className="text-sm font-normal text-muted-foreground">({unit})</span>
-          </CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isRunning ? "Live history from the start of this run" : "Live rolling history"}
-          </p>
+    <Card className={cn(fillHeight && 'flex min-h-0 flex-col overflow-hidden', className)}>
+      <CardHeader className="space-y-4 pb-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-baseline gap-2">
+              {title}
+              {!summary && (
+                <span className="text-sm font-normal text-muted-foreground">({unit})</span>
+              )}
+            </CardTitle>
+            {description !== null && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {description ?? (
+                  isRunning ? "Live history from the start of this run" : "Live rolling history"
+                )}
+              </p>
+            )}
+          </div>
+          {headerActions ?? (!summary ? historyControl : null)}
         </div>
-        {isRunning ? (
-          <Badge variant="outline" className="w-fit gap-1.5">
-            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            Since run start
-          </Badge>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Past</span>
-            <ToggleGroup
-              type="single"
-              value={String(stoppedWindow)}
-              onValueChange={(value) => value && setStoppedWindow(Number(value))}
-              variant="outline"
-              size="sm"
-              aria-label="Current history time range"
-            >
-              {STOPPED_WINDOWS.map(option => (
-                <ToggleGroupItem
-                  key={option.seconds}
-                  value={String(option.seconds)}
-                  aria-label={`Show the past ${option.label}`}
-                  className="h-7 px-2 text-xs"
-                >
-                  {option.label}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+        {summary}
+        {summary && (
+          <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm font-medium">Current on Target</span>
+              <span className="text-xs text-muted-foreground">({unit})</span>
+            </div>
+            {historyControl}
           </div>
         )}
       </CardHeader>
-      <CardContent>
-        <div className="h-64">
+      <CardContent className={cn(fillHeight && 'flex min-h-0 flex-1 flex-col overflow-hidden')}>
+        <div className={fillHeight
+          ? "min-h-0 flex-1"
+          : compact ? "h-52 sm:h-56" : "h-64"}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={scaled} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke={themeColors.gridLines} />

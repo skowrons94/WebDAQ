@@ -17,17 +17,8 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -57,7 +48,6 @@ interface DAQStateProps {
   fileSizeLimit: string
   ipCurrent: string
   portCurrent: string
-  isConnectedCurrent: boolean
   isRunning: boolean
   onSaveDataChange: (checked: boolean) => void
   onLimitFileSizeChange: (checked: boolean) => void
@@ -65,6 +55,7 @@ interface DAQStateProps {
   onRunNumberChange: (value: number) => void
   onIpCurrentChange: (value: string) => void
   onPortCurrentChange: (value: string) => void
+  stretch?: boolean
 }
 
 /**
@@ -82,7 +73,6 @@ export function DAQState({
   fileSizeLimit,
   ipCurrent,
   portCurrent,
-  isConnectedCurrent,
   isRunning,
   onSaveDataChange,
   onLimitFileSizeChange,
@@ -90,12 +80,12 @@ export function DAQState({
   onRunNumberChange,
   onIpCurrentChange,
   onPortCurrentChange,
+  stretch = false,
 }: DAQStateProps) {
   const { toast } = useToast()
   const currentEnabled = useVisualizationStore((state) => state.settings.currentEnabled !== false)
   const [showParametersDialog, setShowParametersDialog] = useState(false)
   const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
-  const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
   const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)
   const [autoRestartDelay, setAutoRestartDelay] = useState(30)
 
@@ -104,7 +94,6 @@ export function DAQState({
       try {
         const response = await getCurrentModuleType()
         setCurrentModuleType(response.module_type)
-        setCurrentModuleName(response.module_type === 'rbd9103' ? 'RBD 9103' : 'TetrAMM')
       } catch (error) {
         console.error('Failed to fetch module type:', error)
       }
@@ -225,110 +214,34 @@ export function DAQState({
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center flex-wrap gap-2">
-        <div className="grid gap-1">
-          <CardTitle className="text-lg sm:text-xl">Acquisition Parameters</CardTitle>
-          <CardDescription className="text-xs sm:text-sm">
-            Current settings for the DAQ
-          </CardDescription>
-        </div>
-        <Button 
-          onClick={() => setShowParametersDialog(true)} 
-          className="ml-auto" 
-          size="sm"
-        >
-          <Cog className="mr-2 h-4 w-4" />
-          <span className="hidden sm:inline">Adjust</span>
-        </Button>
-      </CardHeader>
-      
-      <CardContent className="px-2 sm:px-6 overflow-auto">
-        <div className="min-w-full overflow-x-auto">
-          <Table className="w-full">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="whitespace-nowrap text-xs sm:text-sm w-1/3">Parameter</TableHead>
-                <TableHead className="whitespace-nowrap text-xs sm:text-sm w-1/3">Value</TableHead>
-                <TableHead className="whitespace-nowrap text-xs sm:text-sm w-1/3">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {/* Run Number Row */}
-              <TableRow>
-                <TableCell className="text-xs sm:text-sm py-2">Run Number</TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  {runNumber !== null ? runNumber : ''}
-                </TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  <Badge variant="outline" className="text-xs">Autoincrement</Badge>
-                </TableCell>
-              </TableRow>
-              
-              {/* Save Data Row */}
-              <TableRow>
-                <TableCell className="text-xs sm:text-sm py-2">Save Data</TableCell>
-                <TableCell className="text-xs sm:text-sm py-2"></TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  <Badge variant="outline" className="text-xs">
-                    {saveData ? 'Enabled' : 'Disabled'}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-              
-              {/* File Size Limit Row */}
-              <TableRow>
-                <TableCell className="text-xs sm:text-sm py-2">Max File Size</TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  {limitFileSize ? `${fileSizeLimit} MB` : 'None'}
-                </TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  <Badge variant="outline" className="text-xs">
-                    {limitFileSize ? 'Set' : 'Unset'}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-              
-              {/* Current Device Address Row */}
-              {currentEnabled && (
-              <TableRow>
-                <TableCell className="text-xs sm:text-sm py-2">{currentModuleName} Address</TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  <div className="block sm:hidden">...</div>
-                  <div className="hidden sm:block">
-                    {currentModuleType === 'tetramm' ? `${ipCurrent}:${portCurrent}` : 'Serial Port'}
-                  </div>
-                </TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  <Badge
-                    variant={isConnectedCurrent ? "outline" : "destructive"}
-                    className="text-xs"
-                  >
-                    {isConnectedCurrent ? 'Connected' : 'Disconnected'}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-              )}
-
-              {/* Auto-Restart Row */}
-              <TableRow>
-                <TableCell className="text-xs sm:text-sm py-2">Auto-Restart</TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  {autoRestartEnabled ? `${autoRestartDelay}s delay` : ''}
-                </TableCell>
-                <TableCell className="text-xs sm:text-sm py-2">
-                  <Badge
-                    variant={autoRestartEnabled ? "outline" : "secondary"}
-                    className="text-xs"
-                  >
-                    {autoRestartEnabled ? 'Enabled' : 'Disabled'}
-                  </Badge>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
+    <>
+      <Card className={stretch ? 'h-full' : undefined}>
+        <CardHeader className="flex flex-row flex-wrap items-center gap-3 pb-3">
+          <div className="grid gap-1">
+            <CardTitle className="text-base">Acquisition setup</CardTitle>
+          </div>
+          <Button
+            onClick={() => setShowParametersDialog(true)}
+            className="ml-auto"
+            variant="outline"
+            size="sm"
+          >
+            <Cog className="mr-2 h-4 w-4" />
+            Adjust
+          </Button>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2 pt-0">
+          <Badge variant={saveData ? 'default' : 'secondary'}>
+            Saving {saveData ? 'enabled' : 'disabled'}
+          </Badge>
+          <Badge variant="outline">
+            {limitFileSize ? `${fileSizeLimit} MB limit` : 'No size limit'}
+          </Badge>
+          <Badge variant={autoRestartEnabled ? 'default' : 'secondary'}>
+            Auto-restart {autoRestartEnabled ? `${autoRestartDelay}s` : 'off'}
+          </Badge>
+        </CardContent>
+      </Card>
 
       {/* Parameters Adjustment Dialog */}
       <Dialog open={showParametersDialog} onOpenChange={setShowParametersDialog}>
@@ -464,6 +377,6 @@ export function DAQState({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
+    </>
   )
 }

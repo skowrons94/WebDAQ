@@ -10,7 +10,8 @@ import { Stats } from '@/components/stats';
 import HistogramDashboard from '@/components/histo-dashboard';
 import WaveformDashboard from '@/components/wave-dashboard';
 import PSDDashboard from '@/components/psd-dashboard';
-import { Layout } from '@/components/dashboard-layout'; import {
+import { Layout } from '@/components/dashboard-layout';
+import {
   Tabs,
   TabsContent,
   TabsList,
@@ -26,12 +27,17 @@ export default function DashboardPage() {
   const { settings } = useVisualizationStore()
   const router = useRouter();
   const [tab, setTab] = useState('overview')
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    if (!token) {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (mounted && !token) {
       router.push('/auth/login');
     }
-  }, [token, router]);
+  }, [mounted, token, router]);
 
   // Honor a ?tab= query param (used by the command palette to jump straight to
   // Histograms / Waveforms). Read on the client to avoid a Suspense boundary.
@@ -40,7 +46,7 @@ export default function DashboardPage() {
     if (t) setTab(t)
   }, []);
 
-  if (!token) {
+  if (!mounted || !token) {
     return null;
   }
 
@@ -48,8 +54,8 @@ export default function DashboardPage() {
     <QueryClientProvider client={queryClient}>
       <Layout>
         <Tabs value={tab} onValueChange={setTab} orientation='vertical'>
-            <div className="flex items-center">
-            <TabsList>
+          <div className="flex max-w-full items-center overflow-x-auto pb-1">
+            <TabsList className="min-w-max">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                 {/* Rates come right after the overview: during a run they are
                     what tells you the detectors are alive, so they are looked at

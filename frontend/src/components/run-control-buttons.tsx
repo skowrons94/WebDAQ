@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react'
 import {
   AlertTriangle,
+  ChevronDown,
   PlayCircle,
   Plug,
   RefreshCw,
   StopCircle,
   Wifi,
+  Wrench,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -32,6 +34,11 @@ import {
 } from "@/components/ui/card"
 import { useToast } from '@/components/ui/use-toast'
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import {
   startRun,
   stopRun,
   setSaveData,
@@ -48,11 +55,10 @@ import {
   resetTotalAccumulatedCharge,
   setIpPortCurrent,
   connectCurrent,
+  getCurrentModuleType,
   getCurrentRunNumber,
   getRunMetadataAll,
   refreshBoardConnections,
-  openFaraday,
-  closeFaraday,
   startStatsRun,
   stopStatsRun
 } from '@/lib/api'
@@ -101,6 +107,7 @@ export function RunControlButtons({
 
   // Dialog states
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
+  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
 
   // Run metadata states
   const [targetName, setTargetName] = useState<string>('')
@@ -326,125 +333,56 @@ export function RunControlButtons({
     }
   }
 
-  /**
-   * Resets the total accumulated charge counter
-   */
   const handleResetTotalAccumulatedCharge = async () => {
     try {
       await resetTotalAccumulatedCharge()
       toast({
-        title: 'Success',
-        description: 'Total accumulated charge has been reset.',
+        title: 'Total charge reset',
+        description: 'The lifetime accumulated charge has been reset.',
       })
     } catch (error) {
       console.error('Failed to reset total accumulated charge:', error)
       toast({
         title: 'Error',
-        description: 'Failed to reset total accumulated charge. Please try again.',
+        description: 'Failed to reset total accumulated charge.',
         variant: 'destructive',
       })
     }
   }
 
-  /**
-   * Connects to TetrAMM current measurement device
-   */
-  const handleConnectTetrAMM = async () => {
+  const handleConnectCurrentModule = async () => {
     try {
-      await setIpPortCurrent(ipCurrent, portCurrent)
+      const moduleType = await getCurrentModuleType()
+      if (moduleType.module_type === 'tetramm') {
+        await setIpPortCurrent(ipCurrent, portCurrent)
+      }
       await connectCurrent()
       toast({
-        title: 'Success',
-        description: 'Connected to TetrAMM successfully.',
+        title: 'Current module connected',
+        description: 'The current module is ready for beam monitoring.',
       })
     } catch (error) {
-      console.error('Failed to connect to TetrAMM:', error)
+      console.error('Failed to connect current module:', error)
       toast({
-        title: 'Error',
-        description: 'Failed to connect to TetrAMM. Please try again.',
+        title: 'Connection failed',
+        description: 'Could not connect the current module.',
         variant: 'destructive',
       })
     }
   }
 
-  /**
-   * Refreshes all persistent board connections
-   */
   const handleRefreshBoardConnections = async () => {
     try {
-      toast({
-        title: 'Refreshing Connections...',
-        description: 'Please wait while board connections are being refreshed.',
-      })
-
       const response = await refreshBoardConnections()
-      
       toast({
-        title: 'Success',
+        title: 'Board connections refreshed',
         description: response.data.message,
       })
     } catch (error: any) {
       console.error('Failed to refresh board connections:', error)
-      
-      // Handle different response statuses
-      if (error.response?.status === 400) {
-        toast({
-          title: 'Error',
-          description: error.response.data.message,
-          variant: 'destructive',
-        })
-      } else if (error.response?.status === 207) {
-        // Partial success
-        toast({
-          title: 'Warning',
-          description: error.response.data.message,
-          variant: 'destructive',
-        })
-      } else {
-        toast({
-          title: 'Error',
-          description: error.response?.data?.message || 'Failed to refresh board connections. Please try again.',
-          variant: 'destructive',
-        })
-      }
-    }
-  }
-
-  /**
-   * Opens the Faraday cup
-   */
-  const handleOpenFaraday = async () => {
-    try {
-      await openFaraday()
       toast({
-        title: 'Success',
-        description: 'Faraday cup opened',
-      })
-    } catch (error: any) {
-      console.error('Failed to open Faraday cup:', error)
-      toast({
-        title: 'Error',
-        description: error.response?.data?.error || 'Failed to open Faraday cup',
-        variant: 'destructive',
-      })
-    }
-  }
-
-  /**
-   * Closes the Faraday cup
-   */
-  const handleCloseFaraday = async () => {
-    try {
-      await closeFaraday()
-      toast({
-        title: 'Success',
-        description: 'Faraday cup closed',
-      })
-    } catch (error: any) {
-      console.error('Failed to close Faraday cup:', error)
-      toast({
-        title: 'Error',
-        description: error.response?.data?.error || 'Failed to close Faraday cup',
+        title: 'Refresh failed',
+        description: error.response?.data?.message || 'Could not refresh board connections.',
         variant: 'destructive',
       })
     }
@@ -452,12 +390,12 @@ export function RunControlButtons({
 
   return (
     <Card>
-      <CardHeader className="space-y-1 sm:space-y-0">
-        <CardTitle className="text-lg sm:text-xl">Experiment Controls</CardTitle>
+      <CardHeader className="pb-4">
+        <CardTitle className="text-lg sm:text-xl">Run Setup &amp; Control</CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3">
+      <CardContent className="grid gap-4">
         {/* Metadata Input Fields */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 mb-8">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label htmlFor="targetName">Run Name</Label>
             <Input
@@ -505,56 +443,86 @@ export function RunControlButtons({
         </div>
 
         {/* Primary Control Buttons */}
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
-          <Button onClick={handleStartRun} className="w-full" disabled={isRunning}>
+        <div className="grid grid-cols-2 gap-3 border-t pt-4">
+          <Button
+            onClick={handleStartRun}
+            className="w-full"
+            variant={isRunning ? 'outline' : 'default'}
+            disabled={isRunning}
+          >
             <PlayCircle className="mr-2 h-4 w-4" />
             Start Run
           </Button>
-          <Button onClick={handleStopRun} variant="outline" className="w-full" disabled={!isRunning}>
+          <Button
+            onClick={handleStopRun}
+            variant={isRunning ? 'destructive' : 'outline'}
+            className="w-full"
+            disabled={!isRunning}
+          >
             <StopCircle className="mr-2 h-4 w-4" />
             Stop Run
           </Button>
         </div>
 
-        {/* Secondary Control Buttons */}
-        <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:gap-4">
-          <Button onClick={handleResetTotalAccumulatedCharge} className="w-full" variant="outline">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Reset Total Charge</span>
-            <span className="inline md:hidden">Reset Charge</span>
-          </Button>
-          <Button onClick={handleConnectTetrAMM} className="w-full" variant="outline">
-            <Plug className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Connect Current Module</span>
-            <span className="inline md:hidden">Connect</span>
-          </Button>
-        </div>
-
-        {/* System Reset Buttons */}
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
-          <Button onClick={handleReset} className="w-full" variant="outline">
-            <AlertTriangle className="mr-2 h-4 w-4" />
-            Reset acquisition
-          </Button>
-          <Button onClick={handleRefreshBoardConnections} className="w-full" variant="outline" disabled={isRunning}>
-            <Wifi className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Refresh Board Connection</span>
-            <span className="inline md:hidden">Refresh</span>
-          </Button>
-        </div>
-        {/* Faraday Cup Controls 
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-4">
-          <Button onClick={handleOpenFaraday} className="w-full" variant="outline">
-            <Plug className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Open Faraday</span>
-            <span className="inline md:hidden">Open FC</span>
-          </Button>
-          <Button onClick={handleCloseFaraday} className="w-full" variant="outline">
-            <StopCircle className="mr-2 h-4 w-4" />
-            <span className="hidden md:inline">Close Faraday</span>
-            <span className="inline md:hidden">Close FC</span>
-          </Button>
-        </div>*/}
+        <Collapsible open={maintenanceOpen} onOpenChange={setMaintenanceOpen}>
+          <div className="grid items-start gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" className="w-full justify-between px-2">
+                <span className="flex items-center">
+                  <Wrench className="mr-2 h-4 w-4" />
+                  Maintenance
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${
+                  maintenanceOpen ? 'rotate-180' : ''
+                }`} />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-2 sm:col-span-2">
+              <div className="grid gap-2 rounded-md border bg-muted/20 p-3 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  onClick={handleConnectCurrentModule}
+                  variant="outline"
+                >
+                  <Plug className="mr-2 h-4 w-4" />
+                  Connect current module
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleRefreshBoardConnections}
+                  variant="outline"
+                  disabled={isRunning}
+                >
+                  <Wifi className="mr-2 h-4 w-4" />
+                  Refresh board connections
+                </Button>
+                <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 sm:col-span-2">
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    Reset the acquisition only when recovery is required.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={handleReset}
+                    className="w-full"
+                    variant="destructive"
+                  >
+                    <AlertTriangle className="mr-2 h-4 w-4" />
+                    Reset acquisition
+                  </Button>
+                </div>
+              </div>
+            </CollapsibleContent>
+            <Button
+              type="button"
+              onClick={handleResetTotalAccumulatedCharge}
+              variant="outline"
+              className="w-full sm:col-start-2 sm:row-start-1 sm:w-auto"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Reset total charge
+            </Button>
+          </div>
+        </Collapsible>
       </CardContent>
 
       {/* Directory Override Confirmation Dialog */}
