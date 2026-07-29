@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 from ..utils.tetramm import tetram_controller, TetrAMMController
 from ..utils.rbd9103 import rbd9103_controller, RBD9103Controller, list_serial_ports
 from ..services.daq_manager import get_daq_manager
+from ..services.run_metadata_snapshot import sync_run_metadata_file
 
 from app import db
 from ..models.run_metadata import RunMetadata
@@ -139,6 +140,7 @@ def _persist_run_charge(run_number: int, charge: float) -> None:
             if run_metadata:
                 run_metadata.accumulated_charge = charge
                 db.session.commit()
+                sync_run_metadata_file(run_metadata)
     except Exception as e:
         print(f"Warning: could not store accumulated charge for run {run_number}: {e}")
 
@@ -234,6 +236,7 @@ def stop_acquisition():
     if run_metadata:
         run_metadata.accumulated_charge = controller.get_accumulated_charge()
         db.session.commit()
+        sync_run_metadata_file(run_metadata)
     return jsonify({"message": "Acquisition stopped"}), 200
 
 @bp.route('/current/set/<settings>/<value>', methods=['GET'])

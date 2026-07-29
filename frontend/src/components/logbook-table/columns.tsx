@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, ArrowUpDown } from "lucide-react"
+import { MoreHorizontal, ArrowUpDown, ArrowUpRight } from "lucide-react"
+import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -217,7 +218,20 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
         meta: { label: COLUMN_LABELS.run_number },
         header: sortableHeader("Run #"),
         cell: ({ row }) => (
-            <div className="text-center font-mono">{row.original.run_number}</div>
+            <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="h-8 w-full justify-center gap-1.5 px-2 font-mono"
+            >
+                <Link
+                    href={`/logbook/${row.original.run_number}`}
+                    aria-label={`Open logbook entry for run ${row.original.run_number}`}
+                >
+                    {row.original.run_number}
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+            </Button>
         ),
         size: 80,
     },
@@ -484,6 +498,11 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuItem asChild>
+                                <Link href={`/logbook/${data.run_number}`}>
+                                    Open run page
+                                </Link>
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                                 onClick={() =>
                                     navigator.clipboard.writeText(

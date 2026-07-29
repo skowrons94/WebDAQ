@@ -14,8 +14,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReloadIcon } from "@radix-ui/react-icons"
+import { Boxes, CalendarClock, Database, FileText, Gauge, HardDrive, Zap } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
+import { MarkdownPreview, RunNotesEditor } from "@/components/run-notes-editor"
 import {
   getRuns, getRunDetail, getRunCurrent, getConversionStatus, startConversion,
   type RunSummary, type RunDetail, type CurrentData, type ConversionStatus,
@@ -536,6 +538,7 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
           <Field label="Duration" value={formatDuration(detail.duration_s)} />
           <Field label="Terminal voltage" value={detail.terminal_voltage} />
           <Field label="Probe voltage" value={detail.probe_voltage} />
+          <Field label="User ID" value={detail.user_id} />
           <Field
             label="Accumulated charge"
             value={detail.accumulated_charge !== null ? `${detail.accumulated_charge} µC` : undefined}
@@ -571,15 +574,367 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
         </CardContent>
       </Card>
 
-      {detail.notes && (
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3"><CardTitle className="text-base">Notes</CardTitle></CardHeader>
-          <CardContent>
+      <Card className="lg:col-span-2">
+        <CardHeader className="pb-3"><CardTitle className="text-base">Notes</CardTitle></CardHeader>
+        <CardContent>
+          {detail.notes ? (
             <p className="text-sm whitespace-pre-wrap">{detail.notes}</p>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <p className="text-sm text-muted-foreground">No notes recorded for this run.</p>
+          )}
+        </CardContent>
+      </Card>
     </div>
+  )
+}
+
+function SummaryMetric({
+  icon: Icon,
+  label,
+  value,
+  detail,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  value: React.ReactNode
+  detail?: string
+}) {
+  return (
+    <div className="min-w-0 rounded-xl border border-border/60 bg-background/70 p-3.5 shadow-sm">
+      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+        <Icon className="h-3.5 w-3.5 text-primary" />
+        {label}
+      </div>
+      <div className="mt-1.5 truncate text-lg font-semibold tabular-nums">{value}</div>
+      {detail && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{detail}</div>}
+    </div>
+  )
+}
+
+function LogbookRunHeader({
+  detail,
+  action,
+}: {
+  detail: RunDetail
+  action?: React.ReactNode
+}) {
+  const runTypeLabels: Record<string, string> = {
+    longrun: "Long Run",
+    background: "Background",
+    calibration: "Calibration",
+    scan: "Scan",
+  }
+  const runType = detail.run_type
+    ? runTypeLabels[detail.run_type.toLowerCase()]
+      ?? detail.run_type.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
+    : "Unspecified run type"
+
+  return (
+    <section className="overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card to-muted/40 shadow-sm">
+      <div className="p-5 sm:p-6">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div className="min-w-0">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Logbook entry
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-3xl font-bold tracking-tight">Run {detail.run_number}</h1>
+              <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
+              {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
+              {!detail.complete && <Badge variant="destructive">in progress</Badge>}
+            </div>
+            <p className="mt-2 text-base font-medium">
+              {detail.target_name || "Untitled run"}
+            </p>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {runType} · started {formatTime(detail.start_time)}
+            </p>
+          </div>
+          {action}
+        </div>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <SummaryMetric
+            icon={CalendarClock}
+            label="Duration"
+            value={formatDuration(detail.duration_s)}
+            detail={detail.complete ? "completed run" : "still in progress"}
+          />
+          <SummaryMetric
+            icon={Zap}
+            label="Accumulated charge"
+            value={
+              detail.accumulated_charge === null
+                ? "—"
+                : formatCharge(detail.accumulated_charge)
+            }
+            detail="recorded at run stop"
+          />
+          <SummaryMetric
+            icon={HardDrive}
+            label="Run footprint"
+            value={formatBytes(detail.files.total_bytes)}
+            detail="all saved run artifacts"
+          />
+          <SummaryMetric
+            icon={Boxes}
+            label="Digitizers"
+            value={detail.board_info.length || "—"}
+            detail={detail.board_info.map((board) => board.configured_name ?? board.model_name).join(", ") || "no board snapshot"}
+          />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
+  const sw = detail.software_versions ?? {}
+  const files = detail.files
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <Card className="lg:col-span-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <FileText className="h-4 w-4 text-primary" />
+            Notes
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MarkdownPreview value={detail.notes ?? ""} compact />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <CalendarClock className="h-4 w-4 text-primary" />
+            Timeline
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Field label="Started" value={formatTime(detail.start_time)} />
+          <Field label="Stopped" value={formatTime(detail.end_time)} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Gauge className="h-4 w-4 text-primary" />
+            Run conditions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Field label="Terminal voltage" value={detail.terminal_voltage} />
+          <Field label="Probe voltage" value={detail.probe_voltage} />
+          <Field label="Recorded by user" value={detail.user_id} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Database className="h-4 w-4 text-primary" />
+            Data products
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Field label="Data files" value={`${files.data.length} (${formatBytes(files.data.reduce((sum, file) => sum + file.bytes, 0))})`} />
+          <Field label="Current log" value={files.current ? formatBytes(files.current.bytes) : undefined} />
+          <Field label="Board snapshots" value={files.board_config.length || undefined} />
+          <Field label="ROOT output" value={files.root.length ? files.root.map((file) => file.name).join(", ") : undefined} />
+          <Field label="Directory" value={<span className="font-mono">{detail.directory}</span>} />
+        </CardContent>
+      </Card>
+
+      <Card className="lg:col-span-3">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <Boxes className="h-4 w-4 text-primary" />
+            Acquisition provenance
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2 xl:grid-cols-5">
+            <Field
+              label="Mode"
+              value={sw.acquisition_mode}
+              hint="'mock' means the data was generated in test mode, not read from real boards."
+            />
+            <Field label="WebDAQ" value={sw.webdaq} />
+            <Field label="CaenDAQ" value={sw.caendaq ?? undefined} />
+            <Field label="Python" value={sw.python} />
+            <Field label="Platform" value={sw.platform} />
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+// ── Shared run detail ────────────────────────────────────────────────────────
+
+function RunDetailTabs({
+  detail,
+  onConverted,
+  variant = "data",
+  onNotesSaved,
+  headerAction,
+}: {
+  detail: RunDetail
+  onConverted: () => void
+  variant?: "data" | "logbook"
+  onNotesSaved?: (notes: string) => void
+  headerAction?: React.ReactNode
+}) {
+  if (variant === "logbook") {
+    return (
+      <div className="space-y-5">
+        <LogbookRunHeader detail={detail} action={headerAction} />
+
+        <Tabs defaultValue="overview">
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1 sm:grid-cols-5">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="notes">Notes</TabsTrigger>
+            <TabsTrigger value="current">Beam Current</TabsTrigger>
+            <TabsTrigger value="boards">Boards</TabsTrigger>
+            <TabsTrigger value="convert">Convert</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="mt-4">
+            <LogbookOverviewTab detail={detail} />
+          </TabsContent>
+          <TabsContent
+            value="notes"
+            forceMount
+            className="mt-4 data-[state=inactive]:hidden"
+          >
+            <RunNotesEditor
+              runNumber={detail.run_number}
+              notes={detail.notes}
+              onSaved={onNotesSaved ?? (() => undefined)}
+            />
+          </TabsContent>
+          <TabsContent value="current" className="mt-4">
+            <CurrentTab runNumber={detail.run_number} />
+          </TabsContent>
+          <TabsContent value="boards" className="mt-4">
+            <BoardsTab detail={detail} />
+          </TabsContent>
+          <TabsContent value="convert" className="mt-4">
+            <ConvertTab detail={detail} onConverted={onConverted} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <h2 className="text-lg font-semibold">Run {detail.run_number}</h2>
+        <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
+        {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
+        {!detail.complete && <Badge variant="destructive">in progress</Badge>}
+      </div>
+
+      <Tabs defaultValue="overview">
+        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="current">Beam Current</TabsTrigger>
+          <TabsTrigger value="boards">Boards</TabsTrigger>
+          <TabsTrigger value="convert">Convert</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="mt-4">
+          <OverviewTab detail={detail} />
+        </TabsContent>
+        <TabsContent value="current" className="mt-4">
+          <CurrentTab runNumber={detail.run_number} />
+        </TabsContent>
+        <TabsContent value="boards" className="mt-4">
+          <BoardsTab detail={detail} />
+        </TabsContent>
+        <TabsContent value="convert" className="mt-4">
+          <ConvertTab detail={detail} onConverted={onConverted} />
+        </TabsContent>
+      </Tabs>
+    </>
+  )
+}
+
+/**
+ * Standalone detail view used by a logbook entry route. Keeping this loader
+ * here means the Data dashboard and the Logbook always render a run with the
+ * same fields, plots and provenance controls.
+ */
+export function RunDetailView({ runNumber }: { runNumber: number }) {
+  const [detail, setDetail] = useState<RunDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadDetail = useCallback(async () => {
+    setLoading(true)
+    try {
+      setDetail(await getRunDetail(runNumber))
+      setError(null)
+    } catch (requestError) {
+      const status = (requestError as { response?: { status?: number } })?.response?.status
+      setDetail(null)
+      setError(
+        status === 404
+          ? `Run ${runNumber} was not found in the logbook.`
+          : `Could not load run ${runNumber}.`,
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [runNumber])
+
+  useEffect(() => { loadDetail() }, [loadDetail])
+
+  if (loading && !detail) {
+    return (
+      <div className="flex items-center justify-center py-16 text-muted-foreground">
+        <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Loading run…
+      </div>
+    )
+  }
+
+  if (error || !detail) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Run unavailable</AlertTitle>
+        <AlertDescription>{error ?? `Could not load run ${runNumber}.`}</AlertDescription>
+      </Alert>
+    )
+  }
+
+  const handleNotesSaved = (notes: string) => {
+    setDetail((current) => current ? { ...current, notes } : current)
+  }
+
+  return (
+    <RunDetailTabs
+      detail={detail}
+      onConverted={loadDetail}
+      variant="logbook"
+      onNotesSaved={handleNotesSaved}
+      headerAction={
+        <Button
+          variant="outline"
+          size="sm"
+          className="self-start"
+          onClick={loadDetail}
+          disabled={loading}
+        >
+          {loading && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
+          Refresh
+        </Button>
+      }
+    />
   )
 }
 
@@ -723,36 +1078,7 @@ export default function DataDashboard() {
               <AlertDescription>Pick a run on the left to explore it.</AlertDescription>
             </Alert>
           ) : (
-            <>
-              <div className="flex items-center gap-2 mb-4 flex-wrap">
-                <h2 className="text-lg font-semibold">Run {detail.run_number}</h2>
-                <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
-                {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
-                {!detail.complete && <Badge variant="destructive">in progress</Badge>}
-              </div>
-
-              <Tabs defaultValue="overview">
-                <TabsList className="grid w-full max-w-2xl grid-cols-4">
-                  <TabsTrigger value="overview">Overview</TabsTrigger>
-                  <TabsTrigger value="current">Beam Current</TabsTrigger>
-                  <TabsTrigger value="boards">Boards</TabsTrigger>
-                  <TabsTrigger value="convert">Convert</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview" className="mt-4">
-                  <OverviewTab detail={detail} />
-                </TabsContent>
-                <TabsContent value="current" className="mt-4">
-                  <CurrentTab runNumber={detail.run_number} />
-                </TabsContent>
-                <TabsContent value="boards" className="mt-4">
-                  <BoardsTab detail={detail} />
-                </TabsContent>
-                <TabsContent value="convert" className="mt-4">
-                  <ConvertTab detail={detail} onConverted={loadRuns} />
-                </TabsContent>
-              </Tabs>
-            </>
+            <RunDetailTabs detail={detail} onConverted={loadRuns} />
           )}
         </div>
       </div>

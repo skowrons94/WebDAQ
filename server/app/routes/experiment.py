@@ -1,6 +1,5 @@
 # app/routes/experiment.py
 import os
-import json
 import logging
 from datetime import datetime
 
@@ -12,6 +11,7 @@ from ..utils.jwt_utils import jwt_required_custom, get_current_user
 from ..services.daq_manager import get_daq_manager, BoardConfigError
 from ..services.spy_manager import get_spy_manager
 from ..services.caen_acquisition import get_caen_acquisition
+from ..services.run_metadata_snapshot import sync_run_metadata_file
 # Module-level helpers that read synchronisation straight from the board configs.
 from ..services import caen_acquisition
 
@@ -79,24 +79,8 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
                         # Mark run as potentially bad
                         run_metadata.flag = 'bad'
 
-                        # Write metadata.json
-                        metadata = {
-                            "Start Time": run_metadata.start_time.isoformat() if run_metadata.start_time else None,
-                            "Stop Time": run_metadata.end_time.isoformat(),
-                            "Terminal Voltage": run_metadata.terminal_voltage,
-                            "Probe Voltage": run_metadata.probe_voltage,
-                            "Run Type": run_metadata.run_type,
-                            "Target Name": run_metadata.target_name,
-                            "Accumulated Charge": run_metadata.accumulated_charge,
-                            "Auto Restart Note": auto_note
-                        }
-
-                        run_dir = f'data/run{current_run_number}/metadata.json'
-                        if os.path.exists(os.path.dirname(run_dir)):
-                            with open(run_dir, 'w') as f:
-                                json.dump(metadata, f, indent=4)
-
                         db.session.commit()
+                        sync_run_metadata_file(run_metadata)
                         logger.info(f"Updated metadata for run {current_run_number} with auto-restart note")
                 except Exception as e:
                     logger.error(f"Error updating run metadata: {e}")
@@ -151,7 +135,8 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
                             notes=f"[AUTO-RESTART] Automatically started after {failure_type} on board {board_id} in run {current_run_number}"
                         )
                         db.session.add(run_metadata)
-                        db.session.commit()
+                    db.session.commit()
+                    sync_run_metadata_file(run_metadata)
                 except Exception as e:
                     logger.error(f"Error creating new run metadata: {e}")
 
@@ -230,6 +215,7 @@ def start_run():
             run_metadata.set_software_versions(versions_snapshot)
             run_metadata.sync_mode = sync_mode
             db.session.commit()
+            sync_run_metadata_file(run_metadata)
         except Exception as e:
             # Non-fatal: the run itself is fine, but say why the record is thin.
             logger.error(f"Could not record run {run_number} metadata: {e}", exc_info=True)
@@ -256,57 +242,8 @@ def stop_run():
             run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
             if run_metadata:
                 run_metadata.end_time = datetime.now()
-
-                run_dir = f'data/run{run_number}'
-                duration = None
-                if run_metadata.start_time:
-                    duration = round(
-                        (run_metadata.end_time - run_metadata.start_time).total_seconds(), 3)
-
-                # Everything in the run directory, split by role, so the record
-                # describes its own dataset: which files hold the data and which
-                # hold the board configuration they were taken with.
-                try:
-                    entries = sorted(os.listdir(run_dir))
-                except OSError:
-                    entries = []
-
-                metadata = {
-                    "Run Number": run_metadata.run_number,
-                    "Start Time": run_metadata.start_time.isoformat(),
-                    "Stop Time": run_metadata.end_time.isoformat(),
-                    "Duration (s)": duration,
-                    "Terminal Voltage": run_metadata.terminal_voltage,
-                    "Probe Voltage": run_metadata.probe_voltage,
-                    "Run Type": run_metadata.run_type,
-                    "Target Name": run_metadata.target_name,
-                    "Accumulated Charge": run_metadata.accumulated_charge,
-                    "Notes": run_metadata.notes,
-                    "Flag": run_metadata.flag,
-                    # Provenance: the data file alone is not self-describing, so
-                    # ship the hardware identity, its acquisition registers and
-                    # the software that produced it next to it.
-                    "Acquisition": {
-                        "Synchronisation": run_metadata.sync_mode or 'independent',
-                        "Software": run_metadata.get_software_versions(),
-                        "Boards": run_metadata.get_board_info(),
-                    },
-                    "Files": {
-                        "Data": [f for f in entries if f.endswith('.caendat')],
-                        # Full per-board register dumps, copied here at run start
-                        # — the complete configuration, beyond the key registers
-                        # summarised under Acquisition/Boards.
-                        "Board Configuration": [
-                            f for f in entries
-                            if f.endswith('.json') and f != 'metadata.json'
-                        ],
-                    },
-                }
-
-                with open(f'{run_dir}/metadata.json', 'w') as f:
-                    json.dump(metadata, f, indent=4)
-
                 db.session.commit()
+                sync_run_metadata_file(run_metadata)
         except Exception as e:
             # Never fail the stop over metadata, but do not lose the reason
             # either — a silent pass here once hid a missing DB migration.
@@ -332,6 +269,7 @@ def add_note():
     if run_metadata:
         run_metadata.notes = note
         db.session.commit()
+        sync_run_metadata_file(run_metadata)
         return jsonify({'message': 'Note added successfully'}), 200
     return jsonify({'message': 'Run not found'}), 404
 
@@ -352,6 +290,7 @@ def add_run_metadata():
         run_metadata.probe_voltage = probe_voltage
         run_metadata.run_type = run_type
         db.session.commit()
+        sync_run_metadata_file(run_metadata)
         return jsonify({'message': 'Run metadata added successfully'}), 200
     return jsonify({'message': 'Run not found'}), 404
 
@@ -659,6 +598,7 @@ def update_run_flag():
     
     run.flag = flag
     db.session.commit()
+    sync_run_metadata_file(run)
 
     print(f"Run {run_number} flag updated to {flag}")
     print(db)
@@ -682,6 +622,7 @@ def update_run_notes():
     
     run.notes = notes
     db.session.commit()
+    sync_run_metadata_file(run)
     
     return jsonify({'message': 'Notes updated successfully', 'notes': notes}), 200
 
