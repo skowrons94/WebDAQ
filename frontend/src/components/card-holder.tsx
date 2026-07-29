@@ -140,7 +140,7 @@ interface CardHolderProps {
 // The overview starts at two rows, as before, and can be snapped one complete
 // card row smaller or larger.  Keeping discrete row heights avoids leaving the
 // final row awkwardly clipped after a free-form drag.
-const STATUS_PANEL_HEIGHTS = [220, 420, 620] as const
+const STATUS_PANEL_HEIGHTS = [220, 440, 660] as const
 const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[1]
 const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height'
 
