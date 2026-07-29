@@ -147,12 +147,17 @@ export function RunControl() {
 
   const fetchRunStatus = async () => {
     try {
-      const [statusResponse, runNumberResponse] = await Promise.all([
+      const [statusResponse, runNumberResponse, startTimeResponse] = await Promise.all([
         getRunStatus(),
-        getCurrentRunNumber()
+        getCurrentRunNumber(),
+        getStartTime(),
       ])
       setIsRunning(statusResponse)
       setRunNumberState(runNumberResponse)
+      // A run can be started from another browser or from the Tuner. Keep the
+      // shared start time current so every consumer can reconstruct the run
+      // history instead of starting its own clock when it notices the change.
+      setStartTime(statusResponse ? startTimeResponse : null)
     } catch (error) {
       console.error('Failed to fetch run status:', error)
     }

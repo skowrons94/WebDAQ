@@ -73,6 +73,14 @@ class ChargeGatingTests(unittest.TestCase):
         self.controller.set_accumulating(True)
         self.assertTrue(self.controller.is_accumulating())
 
+    def test_timestamped_history_can_be_filtered(self):
+        cutoff = time.time() - 0.25
+        history = self.controller.get_history(since=cutoff, max_points=100)
+
+        self.assertTrue(history)
+        self.assertTrue(all(timestamp >= cutoff for timestamp, _ in history))
+        self.assertTrue(all(isinstance(value, float) for _, value in history))
+
 
 class ControllerInterfaceTests(unittest.TestCase):
     """The three controllers are used interchangeably by the routes."""
@@ -84,7 +92,8 @@ class ControllerInterfaceTests(unittest.TestCase):
         for cls in (RBD9103Controller, TetrAMMController, MockCurrentController):
             for method in ('set_accumulating', 'is_accumulating',
                            'reset_accumulated_charge', 'get_accumulated_charge',
-                           'get_total_accumulated_charge', 'set_total_accumulated_charge'):
+                           'get_total_accumulated_charge', 'set_total_accumulated_charge',
+                           'get_history'):
                 self.assertTrue(hasattr(cls, method),
                                 f"{cls.__name__} is missing {method}()")
 

@@ -19,6 +19,7 @@ import os
 import random
 import threading
 import time
+from collections import deque
 from datetime import datetime
 from typing import Any, Dict, Optional, Union
 
@@ -28,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 BUFFER_SAMPLES = 100      # what get_data_array() returns, as the real modules do
 SAMPLE_INTERVAL_S = 0.1   # 10 Hz, comparable to the hardware's logging rate
+HISTORY_SAMPLES = 100000  # timestamped history for rolling/run-start charts
 
 
 class MockCurrentController:
@@ -53,6 +55,11 @@ class MockCurrentController:
 
         self._buffers = [[0.0] * BUFFER_SAMPLES for _ in range(self.channels)]
         self._latest = [0.0] * self.channels
+        self._history_times = deque(maxlen=HISTORY_SAMPLES)
+        self._history_values = [
+            deque(maxlen=HISTORY_SAMPLES) for _ in range(self.channels)
+        ]
+        self.acquisition_interval = SAMPLE_INTERVAL_S
 
         self.save_data = False
         self.save_folder = ""
@@ -109,10 +116,12 @@ class MockCurrentController:
 
             with self._lock:
                 self._latest = values
+                self._history_times.append(now)
                 for c in range(self.channels):
                     self._buffers[c].append(values[c])
                     if len(self._buffers[c]) > BUFFER_SAMPLES:
                         self._buffers[c].pop(0)
+                    self._history_values[c].append(values[c])
 
                 # µA × s = µC, on the channel selected for charge. The lifetime
                 # total always integrates; the run figure only during a run,
@@ -193,6 +202,22 @@ class MockCurrentController:
             if self.single_channel:
                 return np.array(self._buffers[0])
             return {str(c): np.array(self._buffers[c]) for c in range(self.channels)}
+
+    def get_history(self, since: float = 0.0, max_points: int = 20000) -> list:
+        """Timestamped samples for the configured beam-current channel."""
+        with self._lock:
+            channel = min(self._charge_channel, self.channels - 1)
+            points = [
+                [float(timestamp), float(value)]
+                for timestamp, value in zip(
+                    self._history_times, self._history_values[channel])
+                if timestamp >= float(since)
+            ]
+
+        if len(points) > max_points:
+            indices = np.linspace(0, len(points) - 1, max_points, dtype=int)
+            points = [points[int(index)] for index in indices]
+        return points
 
     # ───────────────────────────────────────────────────────────────── charge
 

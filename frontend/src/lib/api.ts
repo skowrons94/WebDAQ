@@ -446,6 +446,26 @@ export const getDataCollimator2 = () =>
     api.get('/current/collimator/2').then(res => res.data);
 export const getArrayDataCurrent = () =>
     api.get('/current/data_array').then(res => res.data);
+export interface LiveCurrentHistory {
+    /** [Unix timestamp in seconds, current in µA]. */
+    samples: [number, number][]
+    sampled_at: number
+    sample_interval_s: number | null
+    channel: number
+    source: "controller-buffer" | "run-log"
+}
+export const getCurrentHistory = (params: {
+    seconds?: number
+    since?: number
+    maxPoints?: number
+}): Promise<LiveCurrentHistory> =>
+    api.get('/current/history', {
+        params: {
+            seconds: params.seconds,
+            since: params.since,
+            max_points: params.maxPoints,
+        },
+    }).then(res => res.data);
 export const getAccumulatedCharge = () =>
     api.get('/current/accumulated').then(res => res.data);
 export const getTotalAccumulatedCharge = () =>

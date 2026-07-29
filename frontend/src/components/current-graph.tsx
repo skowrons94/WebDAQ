@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
-import { getArrayDataCurrent } from '@/lib/api'
+import { getCurrentHistory } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
 import {
   currentUnit, maxMagnitude, formatTick, formatValue,
@@ -12,54 +14,86 @@ import {
 
 /** One plotted sample: wall-clock label plus the reading in µA. */
 interface CurrentPoint {
-  time: string
+  timestamp: number
   value: number
 }
 
-// Converts raw data to chart format based on run state
-const convertToChartData = (data: number[], startTime: Date | null): CurrentPoint[] => {
-  const now = new Date()
+const STOPPED_WINDOWS = [
+  { seconds: 30, label: "30s" },
+  { seconds: 60, label: "1m" },
+  { seconds: 120, label: "2m" },
+  { seconds: 300, label: "5m" },
+] as const
+const MAX_CHART_POINTS = 20000
 
-  return data.map((value, index) => {
-    // If running (with startTime), calculate time since start
-    // Otherwise, calculate time from now going back
-    const timePoint = startTime
-      ? new Date(startTime.valueOf() + index * 1000)
-      : new Date(now.valueOf() - (data.length - index) * 1000)
-
-    return {
-      time: timePoint.toISOString().substr(11, 8),
-      value: value
-    }
+const clockLabel = (timestamp: number) =>
+  new Date(timestamp).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
   })
+
+const downsample = (points: CurrentPoint[]): CurrentPoint[] => {
+  if (points.length <= MAX_CHART_POINTS) return points
+  const lastIndex = points.length - 1
+  return Array.from({ length: MAX_CHART_POINTS }, (_, index) =>
+    points[Math.round((index * lastIndex) / (MAX_CHART_POINTS - 1))])
+}
+
+const mergeSamples = (
+  previous: CurrentPoint[],
+  samples: [number, number][],
+): CurrentPoint[] => {
+  const byTimestamp = new Map(previous.map(point => [point.timestamp, point]))
+  samples.forEach(([timestampSeconds, value]) => {
+    const timestamp = timestampSeconds * 1000
+    byTimestamp.set(timestamp, { timestamp, value })
+  })
+  return downsample(
+    Array.from(byTimestamp.values()).sort((a, b) => a.timestamp - b.timestamp),
+  )
 }
 
 export default function CurrentGraph() {
   const [data, setData] = useState<CurrentPoint[]>([])
-  const [startTime, setStartTime] = useState<Date | null>(null)
+  const [stoppedWindow, setStoppedWindow] = useState(30)
+  const latestRunSampleRef = useRef<number | null>(null)
   const isRunning = useRunControlStore((state) => state.isRunning)
-
-  // Effect to set/clear start time when run state changes
-  useEffect(() => {
-    if (isRunning) {
-      setStartTime(new Date())
-    } else {
-      setStartTime(null)
-    }
-  }, [isRunning])
+  const startTime = useRunControlStore((state) => state.startTime)
 
   useEffect(() => {
+    let cancelled = false
+    latestRunSampleRef.current = null
+    setData([])
+
     const fetchData = async () => {
       try {
-        let newData = await getArrayDataCurrent()
-
-        // If not running, only show last 2 minutes (120 seconds) of data
-        if (!isRunning && newData.length > 120) {
-          newData = newData.slice(-120)
+        if (isRunning) {
+          if (!startTime) return
+          const runStartSeconds = new Date(startTime).getTime() / 1000
+          const history = await getCurrentHistory({
+            // On first load this reconstructs the run from the controller's
+            // timestamped buffer. Later polls ask only for new samples.
+            since: latestRunSampleRef.current ?? runStartSeconds,
+            maxPoints: MAX_CHART_POINTS,
+          })
+          if (cancelled) return
+          setData(previous => mergeSamples(previous, history.samples))
+          const newest = history.samples.at(-1)?.[0]
+          if (newest !== undefined) {
+            latestRunSampleRef.current = newest + 1e-6
+          }
+        } else {
+          const history = await getCurrentHistory({
+            seconds: stoppedWindow,
+            maxPoints: MAX_CHART_POINTS,
+          })
+          if (cancelled) return
+          setData(history.samples.map(([timestamp, value]) => ({
+            timestamp: timestamp * 1000,
+            value,
+          })))
         }
-
-        const chartData = convertToChartData(newData, startTime)
-        setData(chartData)
       } catch (error) {
         console.error("Error fetching current data:", error)
       }
@@ -69,8 +103,11 @@ export default function CurrentGraph() {
 
     const intervalId = setInterval(fetchData, 1000) // Update every second
 
-    return () => clearInterval(intervalId) // Clean up on unmount
-  }, [isRunning, startTime]) // Add isRunning to the dependency array
+    return () => {
+      cancelled = true
+      clearInterval(intervalId)
+    }
+  }, [isRunning, startTime, stoppedWindow])
 
   // Get theme colors from CSS variables for dark mode compatibility
   const getThemeColors = () => {
@@ -120,11 +157,45 @@ export default function CurrentGraph() {
 
   return (
     <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-baseline gap-2">
-          Current on Target
-          <span className="text-sm font-normal text-muted-foreground">({unit})</span>
-        </CardTitle>
+      <CardHeader className="flex flex-col gap-3 pb-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <CardTitle className="flex items-baseline gap-2">
+            Current on Target
+            <span className="text-sm font-normal text-muted-foreground">({unit})</span>
+          </CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {isRunning ? "Live history from the start of this run" : "Live rolling history"}
+          </p>
+        </div>
+        {isRunning ? (
+          <Badge variant="outline" className="w-fit gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+            Since run start
+          </Badge>
+        ) : (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Past</span>
+            <ToggleGroup
+              type="single"
+              value={String(stoppedWindow)}
+              onValueChange={(value) => value && setStoppedWindow(Number(value))}
+              variant="outline"
+              size="sm"
+              aria-label="Current history time range"
+            >
+              {STOPPED_WINDOWS.map(option => (
+                <ToggleGroupItem
+                  key={option.seconds}
+                  value={String(option.seconds)}
+                  aria-label={`Show the past ${option.label}`}
+                  className="h-7 px-2 text-xs"
+                >
+                  {option.label}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="h-64">
@@ -132,9 +203,13 @@ export default function CurrentGraph() {
             <LineChart data={scaled} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke={themeColors.gridLines} />
               <XAxis
-                dataKey="time"
+                dataKey="timestamp"
+                type="number"
+                scale="time"
+                domain={["dataMin", "dataMax"]}
                 stroke={themeColors.text}
                 tick={{ fill: themeColors.text, fontSize: 11 }}
+                tickFormatter={clockLabel}
                 // Timestamps are wide; thin them out rather than letting recharts
                 // stack every label along the axis.
                 minTickGap={48}
@@ -158,6 +233,7 @@ export default function CurrentGraph() {
                 }}
                 labelStyle={{ color: themeColors.text }}
                 itemStyle={{ color: themeColors.text }}
+                labelFormatter={(label) => clockLabel(Number(label))}
                 formatter={(v: number) => [formatValue(v, unit), "Current"]}
               />
               <Line

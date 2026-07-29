@@ -1,6 +1,13 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import {
   Activity,
   BarChart,
@@ -17,6 +24,7 @@ import {
   AudioWaveform,
   Server,
   Zap,
+  GripHorizontal,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -129,6 +137,13 @@ interface CardHolderProps {
   runNumber: number | null
 }
 
+// The overview starts at two rows, as before, and can be snapped one complete
+// card row smaller or larger.  Keeping discrete row heights avoids leaving the
+// final row awkwardly clipped after a free-form drag.
+const STATUS_PANEL_HEIGHTS = [220, 420, 620] as const
+const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[1]
+const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height'
+
 export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolderProps) {
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
@@ -173,6 +188,76 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   const runStartCurrentRef = useRef<number | null>(null)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
   const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
+  const [statusPanelHeight, setStatusPanelHeight] = useState<number>(DEFAULT_STATUS_PANEL_HEIGHT)
+  const [isResizingStatusPanel, setIsResizingStatusPanel] = useState(false)
+  const statusPanelDragRef = useRef<{
+    pointerId: number
+    startY: number
+    startHeight: number
+  } | null>(null)
+
+  useEffect(() => {
+    const stored = Number(window.localStorage.getItem(STATUS_PANEL_STORAGE_KEY))
+    if (STATUS_PANEL_HEIGHTS.includes(stored as typeof STATUS_PANEL_HEIGHTS[number])) {
+      setStatusPanelHeight(stored)
+    }
+  }, [])
+
+  const snapStatusPanelHeight = useCallback((height: number) => {
+    const snapped = STATUS_PANEL_HEIGHTS.reduce((closest, candidate) =>
+      Math.abs(candidate - height) < Math.abs(closest - height) ? candidate : closest)
+    setStatusPanelHeight(snapped)
+    window.localStorage.setItem(STATUS_PANEL_STORAGE_KEY, String(snapped))
+  }, [])
+
+  const handleStatusResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    statusPanelDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startHeight: statusPanelHeight,
+    }
+    setIsResizingStatusPanel(true)
+  }
+
+  const handleStatusResizeMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = statusPanelDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const nextHeight = Math.min(
+      STATUS_PANEL_HEIGHTS[STATUS_PANEL_HEIGHTS.length - 1],
+      Math.max(STATUS_PANEL_HEIGHTS[0], drag.startHeight + event.clientY - drag.startY),
+    )
+    setStatusPanelHeight(nextHeight)
+  }
+
+  const handleStatusResizeEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = statusPanelDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const finalHeight = Math.min(
+      STATUS_PANEL_HEIGHTS[STATUS_PANEL_HEIGHTS.length - 1],
+      Math.max(STATUS_PANEL_HEIGHTS[0], drag.startHeight + event.clientY - drag.startY),
+    )
+    statusPanelDragRef.current = null
+    setIsResizingStatusPanel(false)
+    snapStatusPanelHeight(finalHeight)
+  }
+
+  const handleStatusResizeKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const currentIndex = STATUS_PANEL_HEIGHTS.reduce((closestIndex, height, index) =>
+      Math.abs(height - statusPanelHeight) <
+      Math.abs(STATUS_PANEL_HEIGHTS[closestIndex] - statusPanelHeight)
+        ? index
+        : closestIndex, 0)
+    const direction = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+    if (!direction) return
+    event.preventDefault()
+    const nextIndex = Math.min(
+      STATUS_PANEL_HEIGHTS.length - 1,
+      Math.max(0, currentIndex + direction),
+    )
+    snapStatusPanelHeight(STATUS_PANEL_HEIGHTS[nextIndex])
+  }
 
   useEffect(() => {
     setVisibleMetrics(metrics.filter(metric => metric.isVisible))
@@ -577,8 +662,15 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   }
 
   return (
-    <ScrollArea className="h-[420px] rounded-md border p-4">
-      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-6 md:gap-8 lg:grid-cols-4">
+    <div className="relative mb-2">
+      <ScrollArea
+        className={`rounded-md border ${
+          isResizingStatusPanel ? '' : 'transition-[height] duration-150 ease-out'
+        }`}
+        viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
+        style={{ height: statusPanelHeight }}
+      >
+        <div className="grid gap-4 p-4 pb-5 sm:grid-cols-2 2xl:grid-cols-6 md:gap-8 lg:grid-cols-4 [&>*]:snap-start">
         {/* Run Status Card */}
         {settings.showStatus && (
           <Card>
@@ -967,7 +1059,32 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
             </Card>
           ))
         }
-      </div>
-    </ScrollArea>
+        </div>
+      </ScrollArea>
+      <button
+        type="button"
+        role="separator"
+        aria-label="Resize overview status cards"
+        aria-orientation="horizontal"
+        aria-valuemin={1}
+        aria-valuemax={3}
+        aria-valuenow={STATUS_PANEL_HEIGHTS.reduce((closestIndex, height, index) =>
+          Math.abs(height - statusPanelHeight) <
+          Math.abs(STATUS_PANEL_HEIGHTS[closestIndex] - statusPanelHeight)
+            ? index
+            : closestIndex, 0) + 1}
+        title="Drag to show one row less or more. Use ↑ and ↓ with the keyboard."
+        onPointerDown={handleStatusResizeStart}
+        onPointerMove={handleStatusResizeMove}
+        onPointerUp={handleStatusResizeEnd}
+        onPointerCancel={handleStatusResizeEnd}
+        onKeyDown={handleStatusResizeKey}
+        className={`absolute -bottom-3 left-1/2 z-10 flex h-6 w-16 -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+          isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
+        }`}
+      >
+        <GripHorizontal className="h-4 w-4 text-muted-foreground" />
+      </button>
+    </div>
   )
 }

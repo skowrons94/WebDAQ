@@ -40,6 +40,26 @@ class AuthenticationTests(RouteTestCase):
             self.assertEqual(response.status_code, 401, f'{url} is unauthenticated')
 
 
+class CurrentHistoryRouteTests(RouteTestCase):
+    def test_recent_history_has_real_timestamps_and_values(self):
+        import time
+
+        time.sleep(0.2)
+        response = self.get('/current/history?seconds=30')
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertIn('sample_interval_s', body)
+        self.assertIn('channel', body)
+        self.assertTrue(body['samples'])
+        timestamp, value = body['samples'][-1]
+        self.assertLess(abs(time.time() - timestamp), 2.0)
+        self.assertIsInstance(value, float)
+
+    def test_history_rejects_an_invalid_range(self):
+        response = self.get('/current/history?seconds=not-a-number')
+        self.assertEqual(response.status_code, 400)
+
+
 class BoardScanRouteTests(RouteTestCase):
     def wait_for_idle(self, timeout=15.0):
         import time

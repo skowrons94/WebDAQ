@@ -1,6 +1,7 @@
 import os
 import json
 import numpy as np
+import time
 
 from datetime import datetime
 from flask import Blueprint, jsonify, request
@@ -8,6 +9,7 @@ from ..utils.tetramm import tetram_controller, TetrAMMController
 from ..utils.rbd9103 import rbd9103_controller, RBD9103Controller, list_serial_ports
 from ..services.daq_manager import get_daq_manager
 from ..services.run_metadata_snapshot import sync_run_metadata_file
+from ..services import run_data
 
 from app import db
 from ..models.run_metadata import RunMetadata
@@ -308,6 +310,83 @@ def get_data_array():
     #data = np.random.normal(100, 10, 100)
     #data = data.tolist()
     return jsonify(data)
+
+
+@bp.route('/current/history', methods=['GET'])
+@jwt_required_custom
+def get_current_history():
+    """Timestamped beam-current history for rolling and run-start plots."""
+    try:
+        max_points = max(100, min(20000, int(request.args.get('max_points', 20000))))
+        since_arg = request.args.get('since')
+        if since_arg is not None:
+            since = float(since_arg)
+        else:
+            seconds = max(5.0, min(3600.0, float(request.args.get('seconds', 30))))
+            since = time.time() - seconds
+    except (TypeError, ValueError):
+        return jsonify({"message": "Invalid history range"}), 400
+
+    if controller is None:
+        return jsonify({
+            "samples": [],
+            "sampled_at": time.time(),
+            "sample_interval_s": None,
+            "channel": 0,
+        })
+
+    try:
+        channel = int(controller.get_charge_channel())
+    except (AttributeError, TypeError, ValueError):
+        channel = 0
+
+    try:
+        samples = controller.get_history(since=since, max_points=max_points)
+    except Exception as e:
+        print(f"Warning: could not read timestamped current history: {e}")
+        return jsonify({"message": "Could not read current history"}), 500
+
+    source = "controller-buffer"
+    interval = getattr(controller, 'acquisition_interval', None)
+
+    # A controller buffer is large but finite. If a dashboard is reopened deep
+    # into a long run, reconstruct the missing prefix from current.txt once;
+    # subsequent incremental polls start at the newest returned timestamp and
+    # stay on the cheap in-memory path.
+    buffer_misses_start = (
+        since_arg is not None
+        and daq_mgr.is_running()
+        and (not samples or samples[0][0] - since > max(5.0, 3.0 * (interval or 1.0)))
+    )
+    if buffer_misses_start:
+        recorded = run_data.read_current(
+            daq_mgr.get_run_number(), max_points=max_points)
+        if recorded.get("available") and recorded.get("start_time"):
+            try:
+                recorded_start = datetime.fromisoformat(
+                    recorded["start_time"]).timestamp()
+                from_file = []
+                for row in recorded.get("samples", []):
+                    if len(row) < 2:
+                        continue
+                    timestamp = recorded_start + float(row[0])
+                    if timestamp < since:
+                        continue
+                    value_index = min(channel + 1, len(row) - 1)
+                    from_file.append([timestamp, float(row[value_index])])
+                if from_file:
+                    samples = from_file
+                    source = "run-log"
+            except (TypeError, ValueError):
+                pass
+
+    return jsonify({
+        "samples": samples,
+        "sampled_at": time.time(),
+        "sample_interval_s": interval,
+        "channel": channel,
+        "source": source,
+    })
 
 @bp.route('/current/accumulated', methods=['GET'])
 @jwt_required_custom

@@ -777,6 +777,22 @@ class RBD9103Controller:
         with self.buffer_lock:
             return self.values[-101:-1].copy()
 
+    def get_history(self, since: float = 0.0, max_points: int = 20000) -> list:
+        """Timestamped current samples retained by the circular buffer."""
+        with self.buffer_lock:
+            valid = (self.times > 0) & (self.times >= float(since))
+            times = self.times[valid].copy()
+            values = self.values[valid].copy()
+
+        if len(times) > max_points:
+            indices = np.linspace(0, len(times) - 1, max_points, dtype=int)
+            times = times[indices]
+            values = values[indices]
+        return [
+            [float(timestamp), float(value)]
+            for timestamp, value in zip(times, values)
+        ]
+
     def get_data(self) -> float:
         """
         Get the most recent current measurement.

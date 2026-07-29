@@ -675,6 +675,24 @@ class TetrAMMController:
                 "2": self.values["2"][-101:-1].copy(),
                 "3": self.values["3"][-101:-1].copy()
             }
+
+    def get_history(self, since: float = 0.0, max_points: int = 20000) -> list:
+        """Timestamped beam-current samples retained by the circular buffer."""
+        with self.buffer_lock:
+            channel = str(self.charge_channel)
+            values = self.values.get(channel, self.values["0"])
+            valid = (self.times > 0) & (self.times >= float(since))
+            times = self.times[valid].copy()
+            selected_values = values[valid].copy()
+
+        if len(times) > max_points:
+            indices = np.linspace(0, len(times) - 1, max_points, dtype=int)
+            times = times[indices]
+            selected_values = selected_values[indices]
+        return [
+            [float(timestamp), float(value)]
+            for timestamp, value in zip(times, selected_values)
+        ]
     
     def get_data(self) -> Dict[str, float]:
         """
