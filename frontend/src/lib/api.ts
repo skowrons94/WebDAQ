@@ -15,7 +15,7 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// A token is good for one day, so it usually expires in the middle of a shift.
+// A token is good for seven days, so an unusually long session can still expire.
 // Every polling component then starts getting 401s, and because most of them
 // swallow their errors to survive a brief server hiccup, the page just stops
 // updating — it looks like the DAQ has died. Catch it centrally: drop the dead
