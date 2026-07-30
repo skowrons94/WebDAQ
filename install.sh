@@ -251,19 +251,32 @@ build_caendaq() {
     info "Source: $dir"
 
     # Install into the active env with pip (scikit-build-core drives CMake).
-    # Try real CAEN hardware support first; fall back to a mock-only module
-    # (still fully usable with TEST_FLAG=True) if libCAENDigitizer / jsoncpp
-    # are absent.
-    if pip install "$dir" --config-settings=cmake.define.CAENDAQ_WITH_CAEN=ON; then
-        ok "Installed caendaq with CAEN hardware support"
-    else
-        warn "CAEN build failed (libCAENDigitizer / jsoncpp missing?) — installing mock-only module"
-        pip install "$dir" || die "caendaq install failed"
-        warn "Installed mock-only caendaq (TEST_FLAG=True works; no real hardware)"
+    # CaenDAQ's CMake defaults to CAENDAQ_WITH_CAEN=AUTO: it links the real
+    # backend when libCAENDigitizer + jsoncpp are present and silently falls
+    # back to the mock (fully usable with TEST_FLAG=True) when they are not.
+    # One install either way — no probing or retrying needed here.
+    #
+    # If CAEN is installed somewhere find_path does not reach, pass the root:
+    #   CAEN_DGTZ_ROOT=/opt/CAEN ./install.sh
+    local pip_args=()
+    if [[ -n "${CAEN_DGTZ_ROOT:-}" ]]; then
+        info "Using CAEN_DGTZ_ROOT=$CAEN_DGTZ_ROOT"
+        pip_args+=(--config-settings=cmake.define.CAEN_DGTZ_ROOT="$CAEN_DGTZ_ROOT")
     fi
+    pip install "$dir" "${pip_args[@]}" || die "caendaq install failed"
+
     python -c "import caendaq; print('    caendaq', caendaq.__file__)" \
         || die "caendaq did not import after install (wrong env?)"
-    ok "caendaq importable in the luna env"
+
+    # Report which backend actually got built, so a missing libCAENDigitizer is
+    # visible at install time rather than at the first attempt to arm a board.
+    if python -c "import caendaq, sys; sys.exit(0 if caendaq.HAS_CAEN else 1)"; then
+        ok "caendaq installed WITH CAEN hardware support"
+    else
+        warn "caendaq installed MOCK-ONLY (no libCAENDigitizer/jsoncpp found)"
+        warn "TEST_FLAG=True works; real hardware does not. Install the CAEN"
+        warn "libraries (and libjsoncpp-dev), then re-run this script."
+    fi
 }
 
 # ── 6. Frontend ────────────────────────────────────────────────────────────────
