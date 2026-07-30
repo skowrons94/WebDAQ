@@ -1104,12 +1104,33 @@ class DAQManager:
             board_id, failure_type, run_number,
             self.auto_restart_enabled, self.auto_restart_delay)
 
+    def _board_held_by_acquisition(self, board_id: str) -> bool:
+        """Whether caendaq currently holds this board open for the running acquisition.
+
+        Says nothing about the link being healthy — that is what the 'failed' flag
+        from board monitoring is for. It answers only "who owns this board", which
+        is what connectivity needs while the probe layer has let go of it.
+        """
+        try:
+            from .caen_acquisition import get_caen_acquisition
+            acq = get_caen_acquisition(self.test_flag)
+            return acq.is_running() and acq.board_index(str(board_id)) is not None
+        except Exception as e:
+            self.logger.debug(f"connectivity: no caendaq state for board {board_id}: {e}")
+            return False
+
     def check_board_connectivity(self) -> Dict[str, Dict[str, Any]]:
         """
-        Check connectivity status of all configured boards using persistent connections.
-        
+        Check connectivity status of all configured boards.
+
+        Which layer to ask depends on who owns the boards. Outside a run that is
+        the persistent probe connections. During a run it is caendaq: start_run
+        calls release_digitizers() to hand the boards over, so the probe layer has
+        no connections left and asking it would report every board as
+        disconnected mid-run while the acquisition is reading them perfectly well.
+
         Returns:
-            Dictionary mapping board_id to connectivity status: 
+            Dictionary mapping board_id to connectivity status:
             {'connected': bool, 'ready': bool, 'failed': bool}
         """
         board_connectivity = {}
@@ -1126,6 +1147,10 @@ class DAQManager:
                 # In test mode, simulate connectivity
                 connectivity_status['connected'] = True
                 connectivity_status['ready'] = not self.is_running()
+            elif self.is_running():
+                # caendaq owns the boards for the duration of the run.
+                connectivity_status['connected'] = self._board_held_by_acquisition(board_id)
+                connectivity_status['ready'] = False
             else:
                 # Use persistent digitizer connection
                 connectivity_status['connected'] = self.digitizer_container.is_connected(board_id)
