@@ -286,7 +286,18 @@ export interface ConversionStatus {
     outputs: string[]
     converted: boolean
     binary: string | null
-    capabilities: { ts_unit: boolean; compression: boolean; ignore_fail: boolean; header_boards: boolean }
+    capabilities: {
+        ts_unit: boolean
+        compression: boolean
+        ignore_fail: boolean
+        header_boards: boolean
+        algo: boolean
+        buffer: boolean
+        wave: boolean
+        force_dual_trace: boolean
+        ignore_psd_boards: boolean
+        verbose: boolean
+    }
     returncode?: number | null
     log?: string[]
     message?: string
@@ -307,7 +318,20 @@ export const getRunCurrent = (runNumber: number, maxPoints = 2000): Promise<Curr
 export const getConversionStatus = (runNumber: number): Promise<ConversionStatus> =>
     api.get(`/data/runs/${runNumber}/convert`).then(res => res.data);
 
-export const startConversion = (runNumber: number, options: { ts_unit?: string } = {}) =>
+// Mirrors the RUReader command line; the server drops anything the installed
+// binary does not advertise, and says so in the conversion log.
+export interface ConversionOptions {
+    ts_unit?: string                        // -t: ps | ns | us | ms | s | raw
+    algo?: string                           // -a: zlib | lzma | lz4 | zstd
+    compression?: number                    // -c: 0-9
+    buffer_mb?: number                      // -b: 1-1024
+    wave_select?: Record<string, number>    // -w: board id -> wave 1 or 2
+    force_dual_trace?: boolean              // --force-dual-trace
+    ignore_psd_boards?: boolean             // --ignore-psd-boards
+    verbose?: boolean                       // -v
+}
+
+export const startConversion = (runNumber: number, options: ConversionOptions = {}) =>
     api.post(`/data/runs/${runNumber}/convert`, options).then(res => res.data);
 
 // Acquisition status / control

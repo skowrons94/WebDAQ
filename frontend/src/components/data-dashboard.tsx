@@ -21,7 +21,9 @@ import { MarkdownPreview, RunNotesEditor } from "@/components/run-notes-editor"
 import {
   getRuns, getRunDetail, getRunCurrent, getConversionStatus, startConversion,
   type RunSummary, type RunDetail, type CurrentData, type ConversionStatus,
+  type ConversionOptions,
 } from "@/lib/api"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   currentUnit, maxMagnitude, formatTick, formatValue,
   CHART_MARGIN, LEGEND_PROPS, yAxisLabel, xAxisLabel,
@@ -377,7 +379,20 @@ function ConvertTab({ detail, onConverted }: { detail: RunDetail; onConverted: (
   const [status, setStatus] = useState<ConversionStatus | null>(null)
   const [starting, setStarting] = useState(false)
   const [tsUnit, setTsUnit] = useState("ps")
+  const [algo, setAlgo] = useState("zlib")
+  // "" means "leave RUReader's own default alone" for both of these.
+  const [compression, setCompression] = useState("")
+  const [bufferMb, setBufferMb] = useState("")
+  const [forceDualTrace, setForceDualTrace] = useState(false)
+  const [ignorePsdBoards, setIgnorePsdBoards] = useState(false)
+  const [verbose, setVerbose] = useState(false)
+  const [waveSelect, setWaveSelect] = useState<Record<string, number>>({})
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const { toast } = useToast()
+
+  // Boards of this run, for the per-board trace choice. RUReader addresses them
+  // by the id in the aggregate header, which is board_reg_id.
+  const boards = detail.board_info ?? []
 
   const refresh = useCallback(async () => {
     try { setStatus(await getConversionStatus(detail.run_number)) } catch { /* transient */ }
@@ -399,11 +414,29 @@ function ConvertTab({ detail, onConverted }: { detail: RunDetail; onConverted: (
     if (status?.state === "done") onConverted()
   }, [status?.state, onConverted])
 
+  // Only send what this build accepts. The server drops the rest anyway and
+  // says so in the log, but not asking for it keeps that note for real
+  // mismatches rather than for options the UI volunteered.
+  const buildOptions = (): ConversionOptions => {
+    const caps = status?.capabilities
+    const options: ConversionOptions = {}
+    if (caps?.ts_unit) options.ts_unit = tsUnit
+    if (caps?.algo) options.algo = algo
+    if (caps?.compression && compression !== "") options.compression = Number(compression)
+    if (caps?.buffer && bufferMb !== "") options.buffer_mb = Number(bufferMb)
+    if (caps?.force_dual_trace && forceDualTrace) options.force_dual_trace = true
+    if (caps?.wave && !forceDualTrace && Object.keys(waveSelect).length > 0) {
+      options.wave_select = waveSelect
+    }
+    if (caps?.ignore_psd_boards && ignorePsdBoards) options.ignore_psd_boards = true
+    if (caps?.verbose && verbose) options.verbose = true
+    return options
+  }
+
   const launch = async () => {
     setStarting(true)
     try {
-      const result = await startConversion(detail.run_number,
-        status?.capabilities?.ts_unit ? { ts_unit: tsUnit } : {})
+      const result = await startConversion(detail.run_number, buildOptions())
       setStatus(result as ConversionStatus)
       toast({ title: "Conversion started", description: result?.message })
     } catch (error) {
@@ -472,6 +505,38 @@ function ConvertTab({ detail, onConverted }: { detail: RunDetail; onConverted: (
           </div>
         )}
 
+        {status?.capabilities?.algo && (
+          <div className="space-y-1.5">
+            <Label className="text-xs flex items-center gap-1.5">
+              Compression
+              <InfoTooltip text="ROOT compression algorithm. zstd and lz4 are much faster to read back; lzma is the smallest but slow to write." />
+            </Label>
+            <Select value={algo} onValueChange={setAlgo} disabled={running}>
+              <SelectTrigger className="h-9 w-36"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {["zlib", "lzma", "lz4", "zstd"].map(a => (
+                  <SelectItem key={a} value={a}>{a}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {status?.capabilities?.compression && (
+          <div className="space-y-1.5">
+            <Label className="text-xs flex items-center gap-1.5">
+              Level
+              <InfoTooltip text="Compression level, 0 (none) to 9 (smallest). Left empty, ROOT's own default is used." />
+            </Label>
+            <Input
+              type="number" min={0} max={9} placeholder="default"
+              className="h-9 w-28" disabled={running}
+              value={compression}
+              onChange={e => setCompression(e.target.value)}
+            />
+          </div>
+        )}
+
         <Button onClick={launch} disabled={starting || running || !detail.has_data || !!noConverter}>
           {(starting || running) && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
           {running ? "Converting…" : detail.converted ? "Convert again" : "Convert to ROOT"}
@@ -489,6 +554,122 @@ function ConvertTab({ detail, onConverted }: { detail: RunDetail; onConverted: (
           </Badge>
         )}
       </div>
+
+      {status?.capabilities && (
+        status.capabilities.buffer || status.capabilities.wave ||
+        status.capabilities.force_dual_trace || status.capabilities.ignore_psd_boards ||
+        status.capabilities.verbose
+      ) && (
+        <div className="rounded-md border">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(v => !v)}
+            className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+          >
+            More options
+            <span className="text-sm">{showAdvanced ? "−" : "+"}</span>
+          </button>
+
+          {showAdvanced && (
+            <div className="space-y-4 border-t px-3 py-3">
+              {status.capabilities.force_dual_trace && (
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={forceDualTrace} disabled={running}
+                    onCheckedChange={c => setForceDualTrace(Boolean(c))}
+                  />
+                  <span>
+                    Keep both traces
+                    <span className="block text-xs text-muted-foreground">
+                      Always create two trace branches. Without it a board that records
+                      two analog traces keeps only the one selected below.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              {status.capabilities.wave && boards.length > 0 && !forceDualTrace && (
+                <div className="space-y-2">
+                  <Label className="text-xs flex items-center gap-1.5">
+                    Trace to keep, per board
+                    <InfoTooltip text="Only matters for a board that records two analog traces while both are not being kept. Default is trace 1." />
+                  </Label>
+                  <div className="flex flex-wrap gap-3">
+                    {boards.map(board => {
+                      const id = String(board.board_reg_id)
+                      return (
+                        <div key={id} className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {board.model_name} (id {id})
+                          </span>
+                          <Select
+                            value={String(waveSelect[id] ?? 1)}
+                            disabled={running}
+                            onValueChange={v => setWaveSelect(prev => ({ ...prev, [id]: Number(v) }))}
+                          >
+                            <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">trace 1</SelectItem>
+                              <SelectItem value="2">trace 2</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {status.capabilities.ignore_psd_boards && (
+                <label className="flex items-start gap-2 text-sm">
+                  <Checkbox
+                    checked={ignorePsdBoards} disabled={running}
+                    onCheckedChange={c => setIgnorePsdBoards(Boolean(c))}
+                  />
+                  <span>
+                    Skip DPP-PSD boards
+                    <span className="block text-xs text-muted-foreground">
+                      Leaves the events of PSD firmware boards out of the tree.
+                    </span>
+                  </span>
+                </label>
+              )}
+
+              <div className="flex flex-wrap items-end gap-4">
+                {status.capabilities.buffer && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs flex items-center gap-1.5">
+                      Read buffer (MB)
+                      <InfoTooltip text="How much of the .caendat file RUReader holds at a time, 1 to 1024. Default 64." />
+                    </Label>
+                    <Input
+                      type="number" min={1} max={1024} placeholder="64"
+                      className="h-9 w-28" disabled={running}
+                      value={bufferMb}
+                      onChange={e => setBufferMb(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {status.capabilities.verbose && (
+                  <label className="flex items-center gap-2 pb-2 text-sm">
+                    <Checkbox
+                      checked={verbose} disabled={running}
+                      onCheckedChange={c => setVerbose(Boolean(c))}
+                    />
+                    <span>
+                      Verbose log
+                      <span className="block text-xs text-muted-foreground">
+                        More detail in the converter output below.
+                      </span>
+                    </span>
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {status?.outputs && status.outputs.length > 0 && (
         <div>

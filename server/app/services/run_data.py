@@ -210,6 +210,46 @@ def integrate_current(
 
 # ─────────────────────────────────────────────────────── RUReader conversion
 
+# The ROOT compression algorithms RUReader accepts after -a.
+COMPRESSION_ALGOS = ("zlib", "lzma", "lz4", "zstd")
+# Units the Timestamp branch can be written in, after -t.
+TIME_UNITS = ("ps", "ns", "us", "ms", "s", "raw")
+# The board id in a CAEN board aggregate header is five bits wide, matching
+# RUReader::kMaxBoards.
+MAX_BOARD_ID = 31
+
+
+def _clamp_int(value: Any, low: int, high: int) -> int:
+    """Coerce an option to an int inside [low, high]. Never raises."""
+    try:
+        return max(low, min(high, int(value)))
+    except (TypeError, ValueError):
+        return low
+
+
+def _wave_selection(options: Dict[str, Any]) -> Dict[int, int]:
+    """
+    Parse the per-board trace choice for -w, dropping anything unusable.
+
+    Accepts ``{"wave_select": {"<board id>": 1|2}}``. RUReader only knows waves
+    1 and 2 and board ids 0..31, and a bad pair makes it exit rather than
+    convert, so anything else is silently left out instead of being passed on.
+    """
+    raw = options.get("wave_select") or {}
+    if not isinstance(raw, dict):
+        return {}
+
+    selection: Dict[int, int] = {}
+    for board_id, wave in raw.items():
+        try:
+            board_id, wave = int(board_id), int(wave)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= board_id <= MAX_BOARD_ID and wave in (1, 2):
+            selection[board_id] = wave
+    return selection
+
+
 def _converter_env() -> Optional[Dict[str, str]]:
     """Environment for the converter, or None to inherit the server's.
 
@@ -290,7 +330,9 @@ class ConversionManager:
             return self._capabilities
 
         caps = {"ts_unit": False, "compression": False, "ignore_fail": False,
-                "header_boards": False}
+                "header_boards": False, "algo": False, "buffer": False,
+                "wave": False, "force_dual_trace": False,
+                "ignore_psd_boards": False, "verbose": False}
         binary = self.available()
         if binary:
             help_text = ""
@@ -306,6 +348,12 @@ class ConversionManager:
             caps["ts_unit"] = "--ts-unit" in help_text
             caps["compression"] = "--compression" in help_text
             caps["ignore_fail"] = "--ignore-fail" in help_text
+            caps["algo"] = "--algo" in help_text
+            caps["buffer"] = "--buffer" in help_text
+            caps["wave"] = "--wave" in help_text
+            caps["force_dual_trace"] = "--force-dual-trace" in help_text
+            caps["ignore_psd_boards"] = "--ignore-psd-boards" in help_text
+            caps["verbose"] = "--verbose" in help_text
             # Newer builds read the board list from the .caendat header and only
             # accept -d as an override; older ones REQUIRE it and abort with
             # "No digitizer specified" without it.
@@ -375,17 +423,64 @@ class ConversionManager:
         skipped = []
 
         ts_unit = options.get("ts_unit")
-        if ts_unit in ("ps", "ns", "us", "ms", "s", "raw"):
+        if ts_unit in TIME_UNITS:
             if caps["ts_unit"]:
                 cmd += ["-t", str(ts_unit)]
             else:
                 skipped.append(f"timestamp unit '{ts_unit}'")
 
-        if options.get("compression") is not None:
+        level = options.get("compression")
+        if level is not None:
             if caps["compression"]:
-                cmd += ["-c", str(int(options["compression"]))]
+                cmd += ["-c", str(_clamp_int(level, 0, 9))]
             else:
                 skipped.append("ROOT compression level")
+
+        algo = options.get("algo")
+        if algo in COMPRESSION_ALGOS:
+            if caps["algo"]:
+                cmd += ["-a", str(algo)]
+            else:
+                skipped.append(f"compression algorithm '{algo}'")
+
+        buffer_mb = options.get("buffer_mb")
+        if buffer_mb is not None:
+            if caps["buffer"]:
+                cmd += ["-b", str(_clamp_int(buffer_mb, 1, 1024))]
+            else:
+                skipped.append("read buffer size")
+
+        # Traces. --force-dual-trace keeps both analog traces; without it a board
+        # that records two of them keeps one, and --wave says which. The two are
+        # mutually exclusive in effect, so sending the selection alongside the
+        # force flag would only be noise.
+        if options.get("force_dual_trace"):
+            if caps["force_dual_trace"]:
+                cmd.append("--force-dual-trace")
+            else:
+                skipped.append("dual trace")
+        else:
+            for board_id, wave in sorted(_wave_selection(options).items()):
+                if caps["wave"]:
+                    cmd += ["-w", str(wave), str(board_id)]
+                else:
+                    skipped.append("trace selection")
+                    break
+
+        if options.get("ignore_psd_boards"):
+            if caps["ignore_psd_boards"]:
+                cmd.append("--ignore-psd-boards")
+            else:
+                skipped.append("skipping PSD boards")
+
+        # One -v prints more about the run, two prints a line per event, which
+        # on a real run is millions of lines. The tail we keep is 60 lines, so
+        # the second level would bury everything useful: cap it at one.
+        if options.get("verbose"):
+            if caps["verbose"]:
+                cmd.append("-v")
+            else:
+                skipped.append("verbose output")
 
         # An older RUReader cannot read the board list from the file header and
         # aborts with "No digitizer specified" unless told explicitly. We know
