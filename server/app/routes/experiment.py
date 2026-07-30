@@ -233,7 +233,16 @@ def stop_run():
     daq_mgr.stop_board_monitoring()
     spy_mgr.stop_spy()
     caen_acq.stop()
-    daq_mgr.reacquire_digitizers()
+    # Retries inside: the boards were closed by caendaq a moment ago and a CAEN
+    # link is not always ready to be reopened that fast. Say which ones stayed
+    # shut — they are the boards that will read "Disconnected" on the dashboard,
+    # and "Reset acquisition" is what reopens them.
+    reacquired = daq_mgr.reacquire_digitizers()
+    still_closed = [bid for bid, ok in reacquired.items() if not ok]
+    if still_closed:
+        logger.warning(
+            f"Run stopped, but board(s) {', '.join(still_closed)} did not reopen. "
+            "They will show as disconnected until 'Reset acquisition' is used.")
 
     # Update run metadata in database
     if daq_mgr.get_save_data():

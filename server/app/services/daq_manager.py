@@ -750,22 +750,69 @@ class DAQManager:
             except Exception as e:
                 self.logger.warning(f"release_digitizers: board {board_id}: {e}")
 
-    def reacquire_digitizers(self) -> None:
-        """Reopen the persistent probe connections after a run (best-effort)."""
+    def reacquire_digitizers(self, attempts: int = 3, delay: float = 1.0) -> Dict[str, bool]:
+        """Reopen the persistent probe connections after a run.
+
+        Retries, because the first attempt right after a run routinely fails: the
+        boards are closed by caendaq microseconds earlier and a CAEN link — an
+        optical chain especially — is not always ready to be reopened that fast.
+        Without the retry a single transient CommError left every board reading
+        "Disconnected" on the dashboard for the rest of the session, since nothing
+        else reopens them until the next run.
+
+        Best-effort: a board that stays shut is logged, not raised. Returns
+        {board_id: connected} so callers can say which ones came back.
+        """
+        results: Dict[str, bool] = {}
         for board_id in self.digitizer_container.get_all_board_ids():
             dgtz = self.digitizer_container.get_digitizer(board_id)
             lock = self.digitizer_container.get_connection_lock(board_id)
             if dgtz is None:
                 continue
-            try:
-                if lock:
-                    with lock:
+
+            tries = max(1, attempts)
+            last_error: Optional[Exception] = None
+            connected = False
+            for attempt in range(tries):
+                try:
+                    if lock:
+                        with lock:
+                            if not dgtz.get_connected():
+                                dgtz.open()
+                            connected = dgtz.get_connected()
+                    else:
                         if not dgtz.get_connected():
                             dgtz.open()
-                elif not dgtz.get_connected():
-                    dgtz.open()
-            except Exception as e:
-                self.logger.warning(f"reacquire_digitizers: board {board_id}: {e}")
+                        connected = dgtz.get_connected()
+                    last_error = None
+                except Exception as e:
+                    last_error = e
+                    connected = False
+
+                # The retry hangs off the connection actually being back, not off
+                # open() having raised: a board that comes back closed without an
+                # error deserves the same second chance.
+                if connected:
+                    if attempt:
+                        self.logger.info(
+                            f"reacquire_digitizers: board {board_id} reopened on "
+                            f"attempt {attempt + 1}")
+                    break
+                self.logger.debug(
+                    f"reacquire_digitizers: board {board_id} attempt {attempt + 1}"
+                    f"/{tries}: {last_error or 'still closed'}")
+                if attempt < tries - 1:
+                    time.sleep(delay)
+
+            results[board_id] = connected
+            if not connected:
+                self.logger.warning(
+                    f"reacquire_digitizers: board {board_id} did not reopen after "
+                    f"{tries} attempts"
+                    + (f": {last_error}" if last_error else "")
+                    + " — it will show as disconnected until it is refreshed or a "
+                      "new run is started.")
+        return results
 
     def reset_acquisition(self) -> bool:
         """
