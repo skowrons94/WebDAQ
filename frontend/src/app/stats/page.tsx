@@ -73,6 +73,9 @@ export default function StatsPage() {
   // Graphite configuration — needed rarely, so it stays folded away.
   const [graphiteHost, setGraphiteHost] = useState('localhost')
   const [graphitePort, setGraphitePort] = useState('80')
+  // Root of the metric tree the DAQ writes rates into. It names the experiment,
+  // not a board — each campaign gets its own subtree so their series never mix.
+  const [graphitePrefix, setGraphitePrefix] = useState('ancillary.rates')
   const [showGraphiteConfig, setShowGraphiteConfig] = useState(false)
 
   useEffect(() => {
@@ -81,6 +84,7 @@ export default function StatsPage() {
         const config = await getStatsGraphiteConfig()
         setGraphiteHost(config.graphite_host || 'localhost')
         setGraphitePort(String(config.graphite_port || 80))
+        setGraphitePrefix(config.graphite_prefix || 'ancillary.rates')
       } catch (error) {
         console.error('Failed to load graphite config:', error)
       }
@@ -242,8 +246,15 @@ export default function StatsPage() {
 
   const handleSaveGraphiteConfig = async () => {
     try {
-      await setStatsGraphiteConfig(graphiteHost, parseInt(graphitePort))
-      toast({ title: 'Saved', description: 'Graphite server updated' })
+      const saved = await setStatsGraphiteConfig(
+        graphiteHost, parseInt(graphitePort), graphitePrefix)
+      // The server normalises the prefix (dots kept, everything Graphite would
+      // choke on becomes '_'), so show what will actually be written.
+      if (saved?.graphite_prefix) setGraphitePrefix(saved.graphite_prefix)
+      toast({
+        title: 'Saved',
+        description: `Graphite server updated — rates go to ${saved?.graphite_prefix ?? graphitePrefix}.bo_<board>`,
+      })
     } catch (error: any) {
       toast({
         title: 'Error',
@@ -448,6 +459,23 @@ export default function StatsPage() {
                     placeholder="80"
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stats-graphite-prefix">Metric prefix (experiment)</Label>
+                <Input
+                  id="stats-graphite-prefix"
+                  value={graphitePrefix}
+                  onChange={(e) => setGraphitePrefix(e.target.value)}
+                  placeholder="ancillary.rates.12c12c"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Where the DAQ writes its rates. Give each experiment its own subtree so
+                  campaigns never share a series — rates land under{' '}
+                  <code className="font-mono">
+                    {(graphitePrefix || 'ancillary.rates')}.bo_&lt;board&gt;.ch_&lt;channel&gt;.totalRate
+                  </code>
+                  . A live run picks up a change on its next stats interval.
+                </p>
               </div>
               <Button onClick={handleSaveGraphiteConfig}>Save</Button>
             </CardContent>

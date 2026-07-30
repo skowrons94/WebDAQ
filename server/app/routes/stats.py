@@ -27,7 +27,8 @@ def get_graphite_config():
         config = stats_manager.get_config_info()
         return jsonify({
             'graphite_host': config['graphite_host'],
-            'graphite_port': config['graphite_port']
+            'graphite_port': config['graphite_port'],
+            'graphite_prefix': config['graphite_prefix']
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -36,35 +37,53 @@ def get_graphite_config():
 @bp.route('/stats/graphite_config', methods=['POST'])
 @jwt_required_custom
 def set_graphite_config():
-    """Update Graphite server configuration."""
+    """Update Graphite server configuration.
+
+    'graphite_prefix' is optional and independent of host/port: it is the root
+    of the metric tree caendaq publishes rates under, and it names the
+    experiment ('ancillary.rates.12c12c'), not a board. Sending it alone is
+    allowed, so switching campaign does not mean re-entering the server.
+    """
     try:
         data = request.get_json()
         graphite_host = data.get('graphite_host')
         graphite_port = data.get('graphite_port')
+        graphite_prefix = data.get('graphite_prefix')
 
-        if not graphite_host or not graphite_port:
+        if graphite_prefix is None and (not graphite_host or not graphite_port):
             return jsonify({'error': 'Missing graphite_host or graphite_port'}), 400
 
-        # Update the stats_manager's graphite client
-        stats_manager.graphite_client.host = graphite_host
-        stats_manager.graphite_client.port = int(graphite_port)
-        # IMPORTANT: Update base_url as well since it's cached
-        stats_manager.graphite_client.base_url = f"http://{graphite_host}:{int(graphite_port)}"
+        if graphite_host and graphite_port:
+            # Update the stats_manager's graphite client
+            stats_manager.graphite_client.host = graphite_host
+            stats_manager.graphite_client.port = int(graphite_port)
+            # IMPORTANT: Update base_url as well since it's cached
+            stats_manager.graphite_client.base_url = f"http://{graphite_host}:{int(graphite_port)}"
 
-        # Update the config file
-        stats_manager.stats_config['graphite_host'] = graphite_host
-        stats_manager.stats_config['graphite_port'] = int(graphite_port)
-        stats_manager._save_config(stats_manager.stats_config)
+            # Update the config file
+            stats_manager.stats_config['graphite_host'] = graphite_host
+            stats_manager.stats_config['graphite_port'] = int(graphite_port)
+            stats_manager._save_config(stats_manager.stats_config)
 
-        # Push the new server to a running acquisition so caendaq's rate
-        # publisher retargets immediately (Carbon port from stats.json).
+        if graphite_prefix is not None:
+            try:
+                graphite_prefix = stats_manager.set_graphite_prefix(graphite_prefix)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+
+        # Push the new settings to a running acquisition so caendaq's rate
+        # publisher retargets immediately (Carbon port from stats.json). Read
+        # host back from the config so a prefix-only change keeps the server.
         try:
             from ..services.caen_acquisition import get_caen_acquisition
-            get_caen_acquisition(TEST_FLAG).set_graphite(graphite_host)
+            get_caen_acquisition(TEST_FLAG).set_graphite(
+                stats_manager.stats_config.get('graphite_host', ''),
+                prefix=stats_manager.get_graphite_prefix())
         except Exception:
             pass
 
-        return jsonify({'message': 'Graphite configuration updated'}), 200
+        return jsonify({'message': 'Graphite configuration updated',
+                        'graphite_prefix': stats_manager.get_graphite_prefix()}), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500

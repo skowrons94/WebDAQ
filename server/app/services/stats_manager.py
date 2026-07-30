@@ -29,6 +29,12 @@ from ..utils.graphite import GraphiteClient
 
 logger = logging.getLogger(__name__)
 
+# Root of the metric tree caendaq publishes rates under. It names the
+# EXPERIMENT, not a board — set it to 'ancillary.rates.12c12c' and that campaign
+# owns the subtree, with boards below it as bo_<VME board id>. Kept here (and in
+# conf/stats.json) so switching experiment is a settings change, not a rebuild.
+DEFAULT_GRAPHITE_PREFIX = "ancillary.rates"
+
 
 class StatsManager:
     """
@@ -99,6 +105,7 @@ class StatsManager:
         default_config = {
             "graphite_host": self.graphite_client.host,
             "graphite_port": self.graphite_client.port,
+            "graphite_prefix": DEFAULT_GRAPHITE_PREFIX,
             "paths": []
         }
 
@@ -253,6 +260,39 @@ class StatsManager:
             List of enabled path configuration dictionaries
         """
         return [p for p in self.stats_config.get('paths', []) if p.get('enabled', True)]
+
+    def get_graphite_prefix(self) -> str:
+        """The experiment's metric subtree, e.g. 'ancillary.rates.12c12c'."""
+        return str(self.stats_config.get('graphite_prefix') or '') or DEFAULT_GRAPHITE_PREFIX
+
+    def set_graphite_prefix(self, prefix: str) -> str:
+        """Set the experiment's metric subtree and persist it.
+
+        Returns the prefix actually stored — the same normalisation caendaq
+        applies, so what the operator sees back is what the paths will use.
+        Raises ValueError if nothing usable is left after normalising.
+        """
+        cleaned = self.normalize_prefix(prefix)
+        self.stats_config['graphite_prefix'] = cleaned
+        self._save_config(self.stats_config)
+        self.logger.info(f"Graphite metric prefix set to '{cleaned}'")
+        return cleaned
+
+    @staticmethod
+    def normalize_prefix(prefix: str) -> str:
+        """Normalise a metric prefix the way caendaq's StatsCollector does.
+
+        A prefix is a dotted path, so dots survive; anything else Graphite would
+        choke on becomes '_', and leading/trailing dots are trimmed because they
+        would produce empty path segments.
+        """
+        raw = str(prefix or '').strip()
+        cleaned = ''.join(
+            c if (c.isalnum() and c.isascii()) or c in '.-' else '_' for c in raw
+        ).strip('.')
+        if not cleaned:
+            raise ValueError("The metric prefix must contain at least one usable character.")
+        return cleaned
 
     def get_last_value(self, path: str, from_time: str = '-10s') -> Tuple[Optional[float], Optional[datetime]]:
         """
@@ -495,6 +535,7 @@ class StatsManager:
         return {
             "graphite_host": self.graphite_client.host,
             "graphite_port": self.graphite_client.port,
+            "graphite_prefix": self.get_graphite_prefix(),
             "paths_count": len(self.stats_config.get('paths', [])),
             "enabled_paths_count": len(self.get_enabled_paths()),
             "collecting": self.collecting,

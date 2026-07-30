@@ -696,8 +696,16 @@ export const setCurrentGraphiteConfig = (graphite_host: string, graphite_port: n
 export const getStatsGraphiteConfig = () =>
     api.get('/stats/graphite_config').then(res => res.data);
 
-export const setStatsGraphiteConfig = (graphite_host: string, graphite_port: number) =>
-    api.post('/stats/graphite_config', { graphite_host, graphite_port }).then(res => res.data);
+// graphite_prefix is the root of the metric tree caendaq publishes rates under
+// and names the EXPERIMENT, not a board ('ancillary.rates.12c12c'). It is sent
+// with the server so one Save covers both, and the server normalises it — use
+// the graphite_prefix in the response rather than what was typed.
+export const setStatsGraphiteConfig = (
+    graphite_host: string, graphite_port: number, graphite_prefix?: string) =>
+    api.post('/stats/graphite_config',
+             { graphite_host, graphite_port,
+               ...(graphite_prefix !== undefined ? { graphite_prefix } : {}) })
+       .then(res => res.data);
 
 // ── PSI ELOG ────────────────────────────────────────────────────────────────
 // The server talks to ELOG with a shared service account; entries are signed

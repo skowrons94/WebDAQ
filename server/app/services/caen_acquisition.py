@@ -23,21 +23,30 @@ _CONN_TYPE = {"USB": 0, "Optical": 1, "A4818": 5}
 
 _STATS_FILE = "conf/stats.json"
 _DEFAULT_CARBON_PORT = 2003   # Graphite/Carbon plaintext ingestion port
+_DEFAULT_GRAPHITE_PREFIX = "ancillary.rates"
 
 
-def _graphite_from_stats() -> Tuple[str, int]:
-    """Read the Graphite server from conf/stats.json. Returns (host, carbon_port).
-    Host '' or 'localhost' with nothing listening just means best-effort/no push.
-    The 'graphite_port' there is the HTTP render port; Carbon uses 'carbon_port'
-    (default 2003)."""
+def _graphite_from_stats() -> Tuple[str, int, str]:
+    """Read the Graphite target from conf/stats.json.
+
+    Returns (host, carbon_port, prefix). Host '' or 'localhost' with nothing
+    listening just means best-effort/no push. The 'graphite_port' there is the
+    HTTP render port; Carbon uses 'carbon_port' (default 2003).
+
+    'graphite_prefix' is the root of the metric tree and belongs to the
+    EXPERIMENT, not to a board: set it to e.g. 'ancillary.rates.12c12c' and that
+    campaign owns the subtree, with boards below it as bo_<VME board id>. Each
+    experiment gets its own, so two campaigns never write into one series.
+    """
     try:
         with open(_STATS_FILE) as f:
             cfg = json.load(f)
         host = str(cfg.get("graphite_host", "") or "")
         port = int(cfg.get("carbon_port", _DEFAULT_CARBON_PORT))
-        return host, port
+        prefix = str(cfg.get("graphite_prefix", "") or "") or _DEFAULT_GRAPHITE_PREFIX
+        return host, port, prefix
     except Exception:
-        return "", _DEFAULT_CARBON_PORT
+        return "", _DEFAULT_CARBON_PORT, _DEFAULT_GRAPHITE_PREFIX
 
 
 def _webdaq_version() -> str:
@@ -208,12 +217,13 @@ class CaenAcquisition:
                 "(cmake -DCAENDAQ_BUILD_PYTHON=ON ...; see server/native/README.md).")
             return False
         try:
-            graphite_host, graphite_port = _graphite_from_stats()
+            graphite_host, graphite_port, graphite_prefix = _graphite_from_stats()
             self.daq = self._caendaq.DAQ(out_dir, run=int(run),
                                          max_file_bytes=int(max_file_bytes),
                                          write_header=bool(write_header),
                                          graphite_host=graphite_host,
-                                         graphite_port=graphite_port)
+                                         graphite_port=graphite_port,
+                                         graphite_prefix=graphite_prefix)
             self._boards = []
             # daq_state keeps boards sorted by id, so add order == board index.
             for board in boards:
@@ -331,16 +341,22 @@ class CaenAcquisition:
             self.logger.debug(f"stats() failed: {e}")
             return []
 
-    def set_graphite(self, host: str = "", port: Optional[int] = None) -> None:
-        """Update the running DAQ's Graphite/Carbon target (call when the stats
-        config changes). Reads conf/stats.json when host is not given."""
-        if host == "" and port is None:
-            host, port = _graphite_from_stats()
-        elif port is None:
-            port = _DEFAULT_CARBON_PORT
+    def set_graphite(self, host: str = "", port: Optional[int] = None,
+                     prefix: Optional[str] = None) -> None:
+        """Update the running DAQ's Graphite/Carbon target and metric prefix (call
+        when the stats config changes). Reads conf/stats.json for anything not
+        given. A live run picks the new prefix up on its next stats interval —
+        the series simply continues under the new path."""
+        if host == "" and port is None and prefix is None:
+            host, port, prefix = _graphite_from_stats()
+        else:
+            if port is None:
+                port = _DEFAULT_CARBON_PORT
+            if prefix is None:
+                prefix = ""      # empty = leave the collector's prefix alone
         if self.daq is not None:
             try:
-                self.daq.set_graphite(str(host), int(port))
+                self.daq.set_graphite(str(host), int(port), str(prefix))
             except Exception as e:
                 self.logger.warning(f"set_graphite failed: {e}")
 
