@@ -221,6 +221,8 @@ export function RunControl() {
                 startTime={startTime}
                 runNumber={runNumber}
                 expandForBeam={beamPlacement === 'status'}
+                onRunNumberChange={setRunNumberState}
+                onSaveDataChange={setSaveDataState}
               />
             </div>
             {beamSlot(

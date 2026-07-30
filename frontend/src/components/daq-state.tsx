@@ -88,6 +88,14 @@ export function DAQState({
   const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
   const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)
   const [autoRestartDelay, setAutoRestartDelay] = useState(30)
+  // What is in the box while it is being typed in, kept apart from the run
+  // number the DAQ actually holds. See commitRunNumber.
+  const [runNumberDraft, setRunNumberDraft] = useState<string>(
+    runNumber !== null ? String(runNumber) : '')
+
+  useEffect(() => {
+    setRunNumberDraft(runNumber !== null ? String(runNumber) : '')
+  }, [runNumber])
 
   useEffect(() => {
     const fetchModuleType = async () => {
@@ -117,12 +125,24 @@ export function DAQState({
   /**
    * Handles run number input changes with validation
    */
+  // Typing is local; only a finished edit reaches the server. Committing on
+  // every keystroke meant that typing "846" walked the run number through 8 and
+  // 84 — and left it there if the field lost focus mid-number. The server log
+  // shows exactly that happening.
   const handleRunNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseInt(e.target.value)
-    if (!isNaN(value)) {
-      onRunNumberChange(value)
-      setRunNumber(value)
+    setRunNumberDraft(e.target.value)
+  }
+
+  const commitRunNumber = () => {
+    const value = parseInt(runNumberDraft, 10)
+    if (isNaN(value) || value < 0) {
+      // Nothing usable was typed: put the field back to what the DAQ holds.
+      setRunNumberDraft(runNumber !== null ? String(runNumber) : '')
+      return
     }
+    if (value === runNumber) return
+    onRunNumberChange(value)
+    setRunNumber(value)
   }
 
   /**
@@ -260,10 +280,18 @@ export function DAQState({
               <Input
                 id="runNumber"
                 type="number"
-                value={runNumber !== null ? runNumber : ''}
+                min={0}
+                value={runNumberDraft}
                 onChange={handleRunNumberChange}
+                onBlur={commitRunNumber}
+                onKeyDown={(e) => { if (e.key === 'Enter') commitRunNumber() }}
                 disabled={isRunning}
               />
+              {isRunning && (
+                <p className="text-xs text-muted-foreground">
+                  This is the run being taken. It can only be changed once the DAQ is stopped.
+                </p>
+              )}
             </div>
             
             {/* Save Data Checkbox */}

@@ -22,6 +22,7 @@ import {
   AudioWaveform,
   Server,
   GripHorizontal,
+  Pencil,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -32,6 +33,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
+import { cn } from "@/lib/utils"
 import { useToast } from '@/components/ui/use-toast'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
@@ -57,7 +59,21 @@ import {
   deactivateWaveformBoard,
   getCurrentStatus,
   getStatsRunStatus,
+  setRunNumber,
+  setSaveData,
 } from '@/lib/api'
+import { Slider } from "@/components/ui/slider"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 type ROI = {
   id: string;
@@ -119,7 +135,16 @@ interface CardHolderProps {
   startTime: string | null
   runNumber: number | null
   expandForBeam?: boolean
+  // Let the run status card push the run number and the data saving flag back
+  // to whoever owns them, so the whole dashboard agrees without a round trip.
+  onRunNumberChange?: (runNumber: number) => void
+  onSaveDataChange?: (save: boolean) => void
 }
+
+// How far the run number slider reaches on either side of where it starts. Wide
+// enough to jump back over a spoiled series, narrow enough to stay usable; the
+// number box next to it takes anything.
+const RUN_SLIDER_SPAN = 25
 
 // Each card row is 11.5rem with a 1.5rem gap. These viewport heights end after
 // the row padding, before the following row begins, so no clipped preview of
@@ -134,6 +159,8 @@ export function CardHolder({
   startTime,
   runNumber,
   expandForBeam = false,
+  onRunNumberChange,
+  onSaveDataChange,
 }: CardHolderProps) {
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
@@ -164,6 +191,15 @@ export function CardHolder({
   const [boards, setBoards] = useState<BoardInfo[]>([])
   const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
+  // Run number editor, opened by clicking the run number on the status card.
+  const [runEditorOpen, setRunEditorOpen] = useState(false)
+  const [runDraft, setRunDraft] = useState<number>(0)
+  const [runDraftText, setRunDraftText] = useState<string>('')
+  const [savingRunNumber, setSavingRunNumber] = useState(false)
+  // Pinned when the editor opens: bounds that moved with the draft would make
+  // the handle crawl instead of slide.
+  const [runSliderMin, setRunSliderMin] = useState(0)
+  const [runSliderMax, setRunSliderMax] = useState(RUN_SLIDER_SPAN)
   const [boardWaveforms, setBoardWaveforms] = useState<{ [boardId: string]: boolean }>({})
   const [currentAcquiring, setCurrentAcquiring] = useState<boolean>(false)
   // The device is sampling (independent of whether a run is logging it).
@@ -538,6 +574,75 @@ export function CardHolder({
     }
   }
 
+  // ── Run number editor ────────────────────────────────────────────────────
+  // Only reachable while the DAQ is stopped: during a run the number shown is
+  // the run being taken, and moving it would divorce the files already on disk
+  // from the metadata still to be written.
+
+  const openRunEditor = () => {
+    if (isRunning) return
+    const start = runNumber ?? 0
+    setRunDraft(start)
+    setRunDraftText(String(start))
+    setRunSliderMin(Math.max(0, start - RUN_SLIDER_SPAN))
+    setRunSliderMax(Math.max(RUN_SLIDER_SPAN, start + RUN_SLIDER_SPAN))
+    setRunEditorOpen(true)
+  }
+
+  const applyRunDraft = (value: number) => {
+    const clamped = Math.max(0, Math.floor(value))
+    setRunDraft(clamped)
+    setRunDraftText(String(clamped))
+  }
+
+  // A run can be started from another browser or from the Tuner. If that
+  // happens while this dialog is open, close it rather than let someone commit
+  // a run number under a live acquisition.
+  useEffect(() => {
+    if (isRunning) setRunEditorOpen(false)
+  }, [isRunning])
+
+  const commitRunNumber = async () => {
+    const target = Math.max(0, Math.floor(runDraft))
+    if (target === runNumber) { setRunEditorOpen(false); return }
+    setSavingRunNumber(true)
+    try {
+      await setRunNumber(target)
+      onRunNumberChange?.(target)
+      setRunEditorOpen(false)
+      toast({
+        title: 'Run number set',
+        description: `The next run will be run ${target}.`,
+      })
+    } catch (error) {
+      console.error('Failed to set the run number:', error)
+      toast({
+        title: 'Error',
+        description: 'Could not set the run number.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSavingRunNumber(false)
+    }
+  }
+
+  const toggleDataSaving = async (checked: boolean) => {
+    const previous = dataSavingEnabled
+    setDataSavingEnabled(checked)   // optimistic: the switch must feel immediate
+    try {
+      await setSaveData(checked)
+      onSaveDataChange?.(checked)
+    } catch (error) {
+      console.error('Failed to change data saving:', error)
+      setDataSavingEnabled(previous)
+      toast({
+        title: 'Error',
+        description: 'Could not change data saving.',
+        variant: 'destructive',
+      })
+    }
+  }
+
 
   /**
    * Activates or deactivates waveform recording for a single board.
@@ -633,19 +738,67 @@ export function CardHolder({
         {settings.showStatus && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Run Status
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm font-medium">
+                  Run Status
+                </CardTitle>
+                {/* In the header, not the body: the status cards are a fixed
+                    11.5rem and hide their overflow, so a row of its own in the
+                    body pushed the file bandwidth line out of the card. Scaled
+                    down to the height of the title so the header does not grow
+                    either — the Switch primitive has a fixed thumb, so this is
+                    a transform rather than smaller classes. */}
+                <span className="flex h-4 w-7 items-center" title={isRunning
+                  ? "Data saving cannot be changed while a run is going"
+                  : dataSavingEnabled
+                    ? "Data is being written to disk"
+                    : "Nothing will be written to disk"}>
+                  <Switch
+                    className="origin-left scale-[0.65]"
+                    checked={dataSavingEnabled}
+                    onCheckedChange={toggleDataSaving}
+                    disabled={isRunning}
+                    aria-label="Save data to disk"
+                  />
+                </span>
+                <span className={cn(
+                  "text-xs font-medium",
+                  isRunning ? "text-muted-foreground/60" : "text-muted-foreground",
+                )}>
+                  Save
+                </span>
+              </div>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {runNumber !== null ? `Run ${runNumber} - ` : ""}
-                {isRunning ? "Running" : "Stopped"}
+              {/* While a run is live the number is the run being taken and is
+                  read only. Stopped, the same number is the run that WILL be
+                  taken next, so it says so and can be clicked to change it. */}
+              <div className="flex items-baseline gap-2 text-2xl font-bold">
+                {runNumber !== null && (
+                  isRunning ? (
+                    <span>Run {runNumber} -</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => runEditorOpen ? setRunEditorOpen(false) : openRunEditor()}
+                      title="Click to change the run number"
+                      className="group inline-flex items-baseline gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span>Run {runNumber} -</span>
+                      <Pencil className="h-3.5 w-3.5 self-center opacity-40 transition-opacity group-hover:opacity-100" />
+                    </button>
+                  )
+                )}
+                <span>{isRunning ? "Running" : "Stopped"}</span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {isRunning ? `started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `Last Run: ${lastRunDuration}s` : "Stopped")}
+              <p className="truncate text-xs text-muted-foreground">
+                {isRunning
+                  ? `started ${formatTime(timer)} ago`
+                  : (runNumber !== null ? `next run — ` : '') +
+                    (lastRunDuration !== null ? `last run: ${lastRunDuration}s` : "stopped")}
               </p>
+
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <HardDrive className="h-3.5 w-3.5" />
@@ -657,6 +810,78 @@ export function CardHolder({
                     : `${fileBandwidth.toFixed(2)} MB/s`}
                 </span>
               </div>
+
+              {/* A dialog rather than an inline panel: the status cards have a
+                  fixed height and hide their overflow, so anything unfolded in
+                  place would be clipped. */}
+              <Dialog
+                open={runEditorOpen}
+                onOpenChange={(open) => open ? openRunEditor() : setRunEditorOpen(false)}
+              >
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Next run</DialogTitle>
+                    <DialogDescription>
+                      Sets the number the next run will be given. It can only be
+                      changed while the DAQ is stopped.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-5 py-2">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="run-number-draft">Run number</Label>
+                        <span className="text-2xl font-bold tabular-nums">{runDraft}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Slider
+                          className="flex-1"
+                          value={[runDraft]}
+                          min={runSliderMin}
+                          max={runSliderMax}
+                          step={1}
+                          onValueChange={([v]) => applyRunDraft(v)}
+                        />
+                        <Input
+                          id="run-number-draft"
+                          type="number"
+                          min={0}
+                          className="h-9 w-24"
+                          value={runDraftText}
+                          onChange={(e) => {
+                            setRunDraftText(e.target.value)
+                            const parsed = parseInt(e.target.value, 10)
+                            if (!isNaN(parsed) && parsed >= 0) setRunDraft(parsed)
+                          }}
+                          onBlur={() => applyRunDraft(runDraft)}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        The slider covers ±{RUN_SLIDER_SPAN} runs; type any number in the box.
+                      </p>
+                    </div>
+
+                    {/* The toggle itself lives on the card. Repeated here it
+                        would be a second control for one setting; what belongs
+                        here is what it means for the number above. */}
+                    <p className="border-t pt-4 text-xs text-muted-foreground">
+                      <Save className="mr-1 inline h-3 w-3 align-[-2px]" />
+                      {dataSavingEnabled
+                        ? 'Data saving is on: files are written and this number advances after each run.'
+                        : 'Data saving is off: nothing is written and this number stays where it is.'}
+                    </p>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setRunEditorOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={commitRunNumber} disabled={savingRunNumber}>
+                      {savingRunNumber ? 'Setting…' : 'Set run number'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         )}
