@@ -12,7 +12,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
 import { Activity, AlertTriangle, Cpu, HardDrive } from "lucide-react"
-import { getExperimentStats, getBoardConfiguration, getRunStatus } from "@/lib/api"
+import {
+  getExperimentStats, getBoardConfiguration, getRunStatus,
+  getStatsSampling, setStatsSampling,
+} from "@/lib/api"
 import {
   rateUnit, maxMagnitude, formatTick, formatValue,
   CHART_MARGIN, LEGEND_PROPS, yAxisLabel, xAxisLabel,
@@ -50,8 +53,32 @@ const METRICS = [
 ] as const
 type MetricKey = (typeof METRICS)[number]["key"]
 
-const MAX_POINTS = 60          // rolling history (~2 min at 2 s poll)
-const POLL_MS = 2000
+const MAX_POINTS = 60          // rolling history: 60 points at the sampling cadence
+
+// Sampling cadence choices offered on this page. This is NOT a UI-only poll
+// rate: one caendaq tick samples the counters, differences them and pushes to
+// Graphite, so the same number sets the refresh rate, the averaging window and
+// the Graphite resolution. Short = responsive and noisy, long = smooth trends.
+const SAMPLING_CHOICES = [
+  { ms: 500, label: "0.5 s" },
+  { ms: 1000, label: "1 s" },
+  { ms: 2000, label: "2 s" },
+  { ms: 5000, label: "5 s" },
+  { ms: 10000, label: "10 s" },
+  { ms: 30000, label: "30 s" },
+  { ms: 60000, label: "60 s" },
+] as const
+
+const DEFAULT_SAMPLING_MS = 1000
+// Never poll faster than the backend recomputes; below this the page just
+// re-fetches values that cannot have changed.
+const MIN_POLL_MS = 500
+
+function samplingLabel(ms: number): string {
+  const known = SAMPLING_CHOICES.find((c) => c.ms === ms)
+  if (known) return known.label
+  return ms >= 1000 ? `${(ms / 1000).toFixed(ms % 1000 ? 1 : 0)} s` : `${ms} ms`
+}
 
 // Categorical series colours, in fixed order, validated for colour-vision
 // deficiency against both surfaces (worst adjacent CVD ΔE 9.1 light / 8.4 dark).
@@ -104,6 +131,40 @@ export default function RunStats() {
 
   useEffect(() => { loadBoards() }, [loadBoards])
 
+  // Sampling cadence, owned by the server (conf/stats.json) so it survives a
+  // reload and applies to the next run too. Held in state here so the poll
+  // interval below can follow it.
+  const [samplingMs, setSamplingMs] = useState<number>(DEFAULT_SAMPLING_MS)
+  const [savingSampling, setSavingSampling] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    getStatsSampling()
+      .then((s) => {
+        if (!active) return
+        // Prefer what the running collector actually uses; fall back to the
+        // stored setting when no run is active.
+        setSamplingMs(s.active_interval_ms ?? s.stats_interval_ms)
+      })
+      .catch(() => { /* keep the default */ })
+    return () => { active = false }
+  }, [])
+
+  const changeSampling = useCallback(async (ms: number) => {
+    const previous = samplingMs
+    setSamplingMs(ms)            // optimistic: the plot re-paces immediately
+    setSavingSampling(true)
+    try {
+      const saved = await setStatsSampling(ms)
+      // The server clamps, so adopt what it stored rather than what was asked.
+      setSamplingMs(saved.active_interval_ms ?? saved.stats_interval_ms)
+    } catch {
+      setSamplingMs(previous)    // put the control back if it did not stick
+    } finally {
+      setSavingSampling(false)
+    }
+  }, [samplingMs])
+
   useEffect(() => {
     let active = true
     const poll = async () => {
@@ -128,9 +189,11 @@ export default function RunStats() {
       }
     }
     poll()
-    const id = setInterval(poll, POLL_MS)
+    // Poll at the cadence the backend evaluates at: polling faster only re-reads
+    // a value that cannot have changed yet, and makes the chart draw flat steps.
+    const id = setInterval(poll, Math.max(samplingMs, MIN_POLL_MS))
     return () => { active = false; clearInterval(id) }
-  }, [boardIdx, metric])
+  }, [boardIdx, metric, samplingMs])
 
   // A new run means new boards and a new time origin.
   useEffect(() => {
@@ -139,7 +202,11 @@ export default function RunStats() {
     if (isRunning) loadBoards()
   }, [isRunning, loadBoards])
 
-  useEffect(() => { setHistory([]); startRef.current = Date.now() }, [boardIdx, metric])
+  // Changing the cadence changes what a point means, so start the trace over
+  // rather than splicing 10 s averages onto 1 s ones.
+  useEffect(() => {
+    setHistory([]); startRef.current = Date.now()
+  }, [boardIdx, metric, samplingMs])
 
   // One row per configured board, carrying its live rates when a run supplies
   // them. Board order matches: the acquisition adds boards sorted by id.
@@ -311,12 +378,35 @@ export default function RunStats() {
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               {isRunning
-                ? `Last ${Math.round((MAX_POINTS * POLL_MS) / 1000 / 60)} minutes, refreshed every ${POLL_MS / 1000}s`
+                ? `Last ${MAX_POINTS} points at ${samplingLabel(samplingMs)}, averaged over each interval`
                 : "No run in progress — rates start when a run does"}
             </p>
           </div>
           {/* Filters in one row above the plot. */}
           <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={String(samplingMs)}
+              onValueChange={(v) => changeSampling(Number(v))}
+              disabled={savingSampling}
+            >
+              <SelectTrigger
+                className="h-9 w-32"
+                title="How often rates are evaluated. Also the window they are averaged over and the rate they reach Graphite."
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SAMPLING_CHOICES.map((c) => (
+                  <SelectItem key={c.ms} value={String(c.ms)}>Every {c.label}</SelectItem>
+                ))}
+                {/* A value set elsewhere (or clamped by the server) still shows. */}
+                {!SAMPLING_CHOICES.some((c) => c.ms === samplingMs) && (
+                  <SelectItem value={String(samplingMs)}>
+                    Every {samplingLabel(samplingMs)}
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
             <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>
               <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
               <SelectContent>

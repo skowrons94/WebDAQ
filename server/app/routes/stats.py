@@ -89,6 +89,71 @@ def set_graphite_config():
         return jsonify({'error': str(e)}), 500
 
 
+@bp.route('/stats/sampling', methods=['GET'])
+@jwt_required_custom
+def get_sampling():
+    """Rate sampling cadence, in ms, plus the range the backend accepts.
+
+    'active_interval_ms' is what the RUNNING collector is using, which differs
+    from the stored value only in the window between changing the setting and
+    starting the next run (or when no run is active, where it is null).
+    """
+    try:
+        sampling = stats_manager.get_sampling()
+        try:
+            from ..services.caen_acquisition import get_caen_acquisition
+            sampling['active_interval_ms'] = get_caen_acquisition(TEST_FLAG).stats_interval()
+        except Exception:
+            sampling['active_interval_ms'] = None
+        return jsonify(sampling), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/stats/sampling', methods=['POST'])
+@jwt_required_custom
+def set_sampling():
+    """Set the rate sampling cadence and apply it to a live run.
+
+    One number drives three things, because caendaq does them in one tick: how
+    often rates are recomputed, the window they are averaged over, and how often
+    they reach Graphite. It is persisted to conf/stats.json so the next run
+    starts with it, AND pushed to a running collector, which applies it to the
+    tick already in flight.
+
+    Body: {"stats_interval_ms": 10000, "stats_first_interval_ms": 2000}
+    Either field may be sent alone.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        interval = data.get('stats_interval_ms')
+        first = data.get('stats_first_interval_ms')
+        if interval is None and first is None:
+            return jsonify({'error': 'Missing stats_interval_ms or stats_first_interval_ms'}), 400
+
+        try:
+            sampling = stats_manager.set_sampling(interval, first)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+
+        # Apply to a live run so the operator sees the page change pace now,
+        # rather than only from the next run. Changing only the first-tick pacing
+        # has nothing to apply — it is consumed when a collector is created.
+        active = None
+        if interval is not None:
+            try:
+                from ..services.caen_acquisition import get_caen_acquisition
+                active = get_caen_acquisition(TEST_FLAG).set_stats_interval(
+                    sampling['stats_interval_ms'])
+            except Exception:
+                active = None
+        sampling['active_interval_ms'] = active
+        return jsonify(sampling), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @bp.route('/stats/paths', methods=['GET'])
 @jwt_required_custom
 def get_paths():

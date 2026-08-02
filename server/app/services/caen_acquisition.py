@@ -49,6 +49,34 @@ def _graphite_from_stats() -> Tuple[str, int, str]:
         return "", _DEFAULT_CARBON_PORT, _DEFAULT_GRAPHITE_PREFIX
 
 
+def _sampling_from_stats() -> Tuple[int, int]:
+    """Read the rate sampling cadence from conf/stats.json.
+
+    Returns (interval_ms, first_interval_ms). One caendaq tick samples,
+    differences and pushes, so interval_ms is simultaneously the refresh rate,
+    the averaging window and the Graphite resolution. first_interval_ms only
+    paces the opening tick, so a long window still shows numbers seconds after
+    Start instead of leaving the page blank.
+    """
+    from .stats_manager import (DEFAULT_STATS_INTERVAL_MS,
+                                DEFAULT_STATS_FIRST_INTERVAL_MS,
+                                MIN_STATS_INTERVAL_MS, MAX_STATS_INTERVAL_MS)
+
+    def _clamp(value: Any, fallback: int) -> int:
+        try:
+            return max(MIN_STATS_INTERVAL_MS, min(MAX_STATS_INTERVAL_MS, int(value)))
+        except (TypeError, ValueError):
+            return fallback
+
+    try:
+        with open(_STATS_FILE) as f:
+            cfg = json.load(f)
+        return (_clamp(cfg.get("stats_interval_ms"), DEFAULT_STATS_INTERVAL_MS),
+                _clamp(cfg.get("stats_first_interval_ms"), DEFAULT_STATS_FIRST_INTERVAL_MS))
+    except Exception:
+        return DEFAULT_STATS_INTERVAL_MS, DEFAULT_STATS_FIRST_INTERVAL_MS
+
+
 def _webdaq_version() -> str:
     """WebDAQ's own version: the git describe of this checkout, or 'unknown'.
     Recorded in run metadata so a dataset can be traced back to the exact code."""
@@ -218,12 +246,15 @@ class CaenAcquisition:
             return False
         try:
             graphite_host, graphite_port, graphite_prefix = _graphite_from_stats()
+            stats_interval_ms, stats_first_ms = _sampling_from_stats()
             self.daq = self._caendaq.DAQ(out_dir, run=int(run),
                                          max_file_bytes=int(max_file_bytes),
                                          write_header=bool(write_header),
                                          graphite_host=graphite_host,
                                          graphite_port=graphite_port,
-                                         graphite_prefix=graphite_prefix)
+                                         graphite_prefix=graphite_prefix,
+                                         stats_interval_ms=stats_interval_ms,
+                                         stats_first_interval_ms=stats_first_ms)
             self._boards = []
             # daq_state keeps boards sorted by id, so add order == board index.
             for board in boards:
@@ -359,6 +390,37 @@ class CaenAcquisition:
                 self.daq.set_graphite(str(host), int(port), str(prefix))
             except Exception as e:
                 self.logger.warning(f"set_graphite failed: {e}")
+
+    def set_stats_interval(self, interval_ms: Optional[int] = None) -> Optional[int]:
+        """Change the rate sampling cadence of a live run, in ms.
+
+        Reads conf/stats.json when called with nothing, so the persisted setting
+        and the running collector stay in step. caendaq applies it to the tick
+        already in flight, so shortening the interval speeds the rate page up
+        immediately rather than after the current long window expires.
+
+        Returns the interval actually applied, or None when no run is active —
+        the persisted value is still used by the next run either way.
+        """
+        if interval_ms is None:
+            interval_ms, _ = _sampling_from_stats()
+        if self.daq is None:
+            return None
+        try:
+            self.daq.set_stats_interval(int(interval_ms))
+            return int(self.daq.stats_interval())
+        except Exception as e:
+            self.logger.warning(f"set_stats_interval failed: {e}")
+            return None
+
+    def stats_interval(self) -> Optional[int]:
+        """The live run's sampling cadence in ms, or None when no run is active."""
+        if self.daq is None:
+            return None
+        try:
+            return int(self.daq.stats_interval())
+        except Exception:
+            return None
 
     # ------------------------------------------------------- provenance / FAIR
     def software_versions(self) -> Dict[str, Any]:

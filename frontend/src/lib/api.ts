@@ -731,6 +731,32 @@ export const setStatsGraphiteConfig = (
                ...(graphite_prefix !== undefined ? { graphite_prefix } : {}) })
        .then(res => res.data);
 
+// Rate sampling cadence. One caendaq tick samples the counters, differences
+// them and pushes to Graphite, so stats_interval_ms is simultaneously the
+// refresh rate, the averaging window and the Graphite resolution — it is not
+// just a UI poll rate. stats_first_interval_ms paces only the opening tick of a
+// run, so a long window still shows numbers a couple of seconds after Start.
+export interface StatsSampling {
+    stats_interval_ms: number;
+    stats_first_interval_ms: number;
+    min_ms: number;
+    max_ms: number;
+    /** What the RUNNING collector uses; null when no run is active. */
+    active_interval_ms: number | null;
+}
+
+export const getStatsSampling = (): Promise<StatsSampling> =>
+    api.get('/stats/sampling').then(res => res.data);
+
+// Persisted for the next run AND applied to a live one. The server clamps, so
+// use the values in the response rather than what was requested.
+export const setStatsSampling = (
+    stats_interval_ms?: number, stats_first_interval_ms?: number): Promise<StatsSampling> =>
+    api.post('/stats/sampling',
+             { ...(stats_interval_ms !== undefined ? { stats_interval_ms } : {}),
+               ...(stats_first_interval_ms !== undefined ? { stats_first_interval_ms } : {}) })
+       .then(res => res.data);
+
 // ── PSI ELOG ────────────────────────────────────────────────────────────────
 // The server talks to ELOG with a shared service account; entries are signed
 // with the WebDAQ user's name through the Author attribute.

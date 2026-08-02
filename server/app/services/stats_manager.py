@@ -35,6 +35,19 @@ logger = logging.getLogger(__name__)
 # conf/stats.json) so switching experiment is a settings change, not a rebuild.
 DEFAULT_GRAPHITE_PREFIX = "ancillary.rates"
 
+# Rate sampling cadence, in milliseconds. One caendaq tick samples the counters,
+# differences them and pushes to Graphite, so this single number is the refresh
+# rate, the averaging window AND the Graphite resolution — see StatsCollector.
+DEFAULT_STATS_INTERVAL_MS = 1000
+# How long the FIRST evaluation of a run waits. Kept short on purpose: a long
+# interval otherwise leaves the rate page blank for that long after Start.
+DEFAULT_STATS_FIRST_INTERVAL_MS = 2000
+# Must match StatsCollector::kMinIntervalMs / kMaxIntervalMs, otherwise the UI
+# would accept a value caendaq silently clamps and report back something the
+# collector never uses.
+MIN_STATS_INTERVAL_MS = 100
+MAX_STATS_INTERVAL_MS = 600000
+
 
 class StatsManager:
     """
@@ -106,6 +119,8 @@ class StatsManager:
             "graphite_host": self.graphite_client.host,
             "graphite_port": self.graphite_client.port,
             "graphite_prefix": DEFAULT_GRAPHITE_PREFIX,
+            "stats_interval_ms": DEFAULT_STATS_INTERVAL_MS,
+            "stats_first_interval_ms": DEFAULT_STATS_FIRST_INTERVAL_MS,
             "paths": []
         }
 
@@ -277,6 +292,53 @@ class StatsManager:
         self._save_config(self.stats_config)
         self.logger.info(f"Graphite metric prefix set to '{cleaned}'")
         return cleaned
+
+    # ----------------------------------------------------- rate sampling rate
+    def get_sampling(self) -> Dict[str, int]:
+        """The rate sampling cadence, in ms.
+
+        'stats_interval_ms' is one knob for three things because caendaq does
+        them in one tick: how often rates are recomputed, the window they are
+        averaged over, and how often they reach Graphite. 'first' only paces the
+        opening tick of a run.
+        """
+        return {
+            "stats_interval_ms": int(self.stats_config.get(
+                "stats_interval_ms", DEFAULT_STATS_INTERVAL_MS)),
+            "stats_first_interval_ms": int(self.stats_config.get(
+                "stats_first_interval_ms", DEFAULT_STATS_FIRST_INTERVAL_MS)),
+            "min_ms": MIN_STATS_INTERVAL_MS,
+            "max_ms": MAX_STATS_INTERVAL_MS,
+        }
+
+    def set_sampling(self, interval_ms: Optional[int] = None,
+                     first_interval_ms: Optional[int] = None) -> Dict[str, int]:
+        """Persist the sampling cadence and return what was actually stored.
+
+        Clamped to the same range caendaq enforces, so the value echoed back to
+        the UI is the value the collector will really use rather than what was
+        typed. Either field may be sent alone.
+        """
+        if interval_ms is not None:
+            self.stats_config['stats_interval_ms'] = self.clamp_interval(interval_ms)
+        if first_interval_ms is not None:
+            self.stats_config['stats_first_interval_ms'] = self.clamp_interval(first_interval_ms)
+        self._save_config(self.stats_config)
+        current = self.get_sampling()
+        self.logger.info(
+            f"Stats sampling set to {current['stats_interval_ms']} ms "
+            f"(first {current['stats_first_interval_ms']} ms)")
+        return current
+
+    @staticmethod
+    def clamp_interval(ms: Any) -> int:
+        """Clamp to caendaq's accepted range. Raises ValueError on non-numbers,
+        so a bad payload is a 400 rather than a silently ignored setting."""
+        try:
+            value = int(ms)
+        except (TypeError, ValueError):
+            raise ValueError(f"interval must be an integer number of milliseconds, got {ms!r}")
+        return max(MIN_STATS_INTERVAL_MS, min(MAX_STATS_INTERVAL_MS, value))
 
     @staticmethod
     def normalize_prefix(prefix: str) -> str:
