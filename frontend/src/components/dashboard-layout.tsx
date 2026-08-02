@@ -47,6 +47,7 @@ import { useRouter } from 'next/navigation'
 import { ModeToggle } from '@/components/ui/mode-toggle'
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ServerStatus } from '@/components/server-status'
+import { RunStatusIndicator } from '@/components/run-status-indicator'
 
 // Top-level pages, in nav order. Used for both the desktop and mobile menus
 // and to highlight the page the user is currently on.
@@ -210,6 +211,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             </CommandGroup>
                         </CommandList>
                     </CommandDialog>
+                    <RunStatusIndicator />
                     <ServerStatus />
                     <ModeToggle />
                     <DropdownMenu>

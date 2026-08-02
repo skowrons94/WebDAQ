@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import useAuthStore from '@/store/auth-store'
 import { Eye, EyeOff, Gauge, Pencil, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -54,6 +56,17 @@ function formatValue(value: number): string {
 }
 
 export default function StatsPage() {
+  // Same guard as every other page: this one was missing it, so a signed-out
+  // user landed on a rendered shell whose every request 401'd — the page looked
+  // broken instead of sending them to log in.
+  const token = useAuthStore((state) => state.token)
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    if (mounted && !token) router.push('/auth/login')
+  }, [mounted, token, router])
+
   const { toast } = useToast()
   const { paths, currentValues, setCurrentValue, setPaths } = useStatsStore()
   const [isLoading, setIsLoading] = useState(false)
@@ -265,6 +278,10 @@ export default function StatsPage() {
   }
 
   const enabledCount = paths.filter(p => p.enabled).length
+
+  // Render nothing until the token is confirmed, so a signed-out visitor never
+  // sees the shell flash before the redirect.
+  if (!mounted || !token) return null
 
   return (
     <Layout>
