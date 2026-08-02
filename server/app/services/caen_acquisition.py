@@ -77,6 +77,36 @@ def _sampling_from_stats() -> Tuple[int, int]:
         return DEFAULT_STATS_INTERVAL_MS, DEFAULT_STATS_FIRST_INTERVAL_MS
 
 
+# Keywords that newer caendaq builds accept and older ones do not, newest first.
+# WebDAQ and caendaq are updated independently — caendaq is a submodule compiled
+# into the env — so a server that knows about a keyword the installed module does
+# not must degrade, never fail the run.
+_OPTIONAL_DAQ_KWARGS = ("stats_first_interval_ms", "stats_interval_ms", "graphite_prefix")
+
+
+def _construct_daq(module: Any, out_dir: str, logger: logging.Logger, **kwargs: Any) -> Any:
+    """Build caendaq.DAQ, dropping keywords the installed module does not know.
+
+    pybind11 reports an unknown keyword as TypeError, so each rejection retires
+    the newest optional keyword and retries. Without this, updating WebDAQ
+    without rebuilding caendaq makes configure() fail and no run can start at
+    all — a much worse outcome than losing one setting.
+    """
+    attempt = dict(kwargs)
+    while True:
+        try:
+            return module.DAQ(out_dir, **attempt)
+        except TypeError:
+            stale = next((k for k in _OPTIONAL_DAQ_KWARGS if k in attempt), None)
+            if stale is None:
+                raise           # a real signature problem, not version skew
+            attempt.pop(stale)
+            logger.warning(
+                f"Installed caendaq does not accept '{stale}' — ignoring it and "
+                "retrying. Rebuild/reinstall the caendaq module to get this "
+                "setting (see server/native/README.md).")
+
+
 def _webdaq_version() -> str:
     """WebDAQ's own version: the git describe of this checkout, or 'unknown'.
     Recorded in run metadata so a dataset can be traced back to the exact code."""
@@ -247,14 +277,15 @@ class CaenAcquisition:
         try:
             graphite_host, graphite_port, graphite_prefix = _graphite_from_stats()
             stats_interval_ms, stats_first_ms = _sampling_from_stats()
-            self.daq = self._caendaq.DAQ(out_dir, run=int(run),
-                                         max_file_bytes=int(max_file_bytes),
-                                         write_header=bool(write_header),
-                                         graphite_host=graphite_host,
-                                         graphite_port=graphite_port,
-                                         graphite_prefix=graphite_prefix,
-                                         stats_interval_ms=stats_interval_ms,
-                                         stats_first_interval_ms=stats_first_ms)
+            self.daq = _construct_daq(self._caendaq, out_dir, self.logger,
+                                      run=int(run),
+                                      max_file_bytes=int(max_file_bytes),
+                                      write_header=bool(write_header),
+                                      graphite_host=graphite_host,
+                                      graphite_port=graphite_port,
+                                      graphite_prefix=graphite_prefix,
+                                      stats_interval_ms=stats_interval_ms,
+                                      stats_first_interval_ms=stats_first_ms)
             self._boards = []
             # daq_state keeps boards sorted by id, so add order == board index.
             for board in boards:
@@ -406,6 +437,11 @@ class CaenAcquisition:
             interval_ms, _ = _sampling_from_stats()
         if self.daq is None:
             return None
+        if not hasattr(self.daq, "set_stats_interval"):
+            self.logger.warning(
+                "Installed caendaq has no set_stats_interval() — the setting is "
+                "saved and will apply to the next run once caendaq is rebuilt.")
+            return None
         try:
             self.daq.set_stats_interval(int(interval_ms))
             return int(self.daq.stats_interval())
@@ -415,7 +451,7 @@ class CaenAcquisition:
 
     def stats_interval(self) -> Optional[int]:
         """The live run's sampling cadence in ms, or None when no run is active."""
-        if self.daq is None:
+        if self.daq is None or not hasattr(self.daq, "stats_interval"):
             return None
         try:
             return int(self.daq.stats_interval())
