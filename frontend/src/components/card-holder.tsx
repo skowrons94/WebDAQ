@@ -181,7 +181,9 @@ export function CardHolder({
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
   const [boards, setBoards] = useState<BoardInfo[]>([])
-  const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
+  // The most recent finished run: its number and how long it lasted, shown
+  // under the run number on the status card.
+  const [lastRun, setLastRun] = useState<{ number: number; duration: number } | null>(null)
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
   // Run number editor, opened by clicking the run number on the status card.
   const [runEditorOpen, setRunEditorOpen] = useState(false)
@@ -656,13 +658,21 @@ export function CardHolder({
     try {
       const response = await getRunMetadataAll()
       if (response.data && response.data.length > 0) {
-        // Get the last run (most recent)
-        const lastRun = response.data[response.data.length - 1]
-        if (lastRun.start_time && lastRun.end_time) {
-          const startTime = new Date(lastRun.start_time)
-          const endTime = new Date(lastRun.end_time)
+        // Pick the highest finished run rather than an end of the array: the
+        // endpoint sorts by run number descending, so the last element is the
+        // OLDEST run, and a run still in progress has no end_time yet.
+        const previous = response.data
+          .filter((run: any) => run.start_time && run.end_time)
+          .reduce(
+            (latest: any, run: any) =>
+              latest === null || run.run_number > latest.run_number ? run : latest,
+            null,
+          )
+        if (previous) {
+          const startTime = new Date(previous.start_time)
+          const endTime = new Date(previous.end_time)
           const durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000)
-          setLastRunDuration(durationSeconds)
+          setLastRun({ number: previous.run_number, duration: durationSeconds })
         }
       }
     } catch (error) {
@@ -740,7 +750,7 @@ export function CardHolder({
               <div className="flex items-baseline gap-2 text-2xl font-bold">
                 {runNumber !== null && (
                   isRunning ? (
-                    <span>Run {runNumber} -</span>
+                    <span>Run {runNumber}</span>
                   ) : (
                     <button
                       type="button"
@@ -748,7 +758,7 @@ export function CardHolder({
                       title="Click to change the run number"
                       className="group inline-flex items-baseline gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span>Run {runNumber} -</span>
+                      <span>Run {runNumber}</span>
                       <Pencil className="h-3.5 w-3.5 self-center opacity-40 transition-opacity group-hover:opacity-100" />
                     </button>
                   )
@@ -758,8 +768,9 @@ export function CardHolder({
               <p className="truncate text-xs text-muted-foreground">
                 {isRunning
                   ? `started ${formatTime(timer)} ago`
-                  : (runNumber !== null ? `next run — ` : '') +
-                    (lastRunDuration !== null ? `last run: ${lastRunDuration}s` : "stopped")}
+                  : lastRun !== null
+                    ? `last run (${lastRun.number}): ${lastRun.duration}s`
+                    : 'no previous run'}
               </p>
 
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
