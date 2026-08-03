@@ -39,7 +39,6 @@ import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
 import { useStatsStore } from '@/store/stats-store'
 import {
-  getRoiIntegral,
   getFileBandwidth,
   getConnectedCurrent,
   getIpCurrent,
@@ -62,6 +61,12 @@ import {
   setRunNumber,
   setSaveData,
 } from '@/lib/api'
+import {
+  type ROI,
+  getHistogramDashboardConfig,
+  getROIIntegrals,
+  roiKey,
+} from '@/lib/histogram-config'
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -75,28 +80,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-type ROI = {
-  id: string;
-  name: string;
-  low: number;
-  high: number;
+/**
+ * An ROI plus what it currently reads. The definition comes from the server;
+ * `integral`, `rate` and `lastUpdateTime` are measurements this component
+ * derives between refreshes and are deliberately not part of the stored record.
+ */
+type ROIMeasurement = ROI & {
   integral: number;
   rate: number;
   lastUpdateTime: number;
-  color: string;
-  enabled: boolean;
-}
-
-type HistogramConfig = {
-  id: string;
-  boardId: string;
-  channel: number;
-  visible: boolean;
-  size: 'small' | 'medium' | 'large';
-  label: string;
-  customLabel?: string;
-  position: { row: number; col: number };
-  rois: ROI[];
 }
 
 type ROICardData = {
@@ -104,7 +96,7 @@ type ROICardData = {
   histogramLabel: string;
   boardId: string;
   channel: number;
-  roi: ROI;
+  roi: ROIMeasurement;
 }
 
 type BoardStatus = {
@@ -207,7 +199,7 @@ export function CardHolder({
   const [statsCollecting, setStatsCollecting] = useState<boolean>(false)
   const [statsCount, setStatsCount] = useState<number>(0)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
-  const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
+  const roiDataHistoryRef = useRef<{ [key: string]: ROIMeasurement }>({})
   const [statusPanelHeight, setStatusPanelHeight] = useState<number>(DEFAULT_STATUS_PANEL_HEIGHT)
   const minimumStatusPanelHeight = expandForBeam
     ? STATUS_PANEL_HEIGHTS[1]
@@ -413,94 +405,65 @@ export function CardHolder({
     }
   }
 
-  // ✅ FIXED updateROIData FUNCTION
+  /**
+   * Refresh the ROI cards.
+   *
+   * Two requests, made together, whatever the number of ROIs: the configuration
+   * (which the DAQ server owns) and every integral in one batch. This used to be
+   * one request per ROI, awaited one after another inside a nested loop, so ten
+   * regions meant ten serialised round trips — and ten separate reads of the
+   * same spectra — before a single card could update.
+   */
   const updateROIData = async () => {
     try {
-      const response = await fetch('/api/cache?type=histograms')
-      const result = await response.json()
+      const [config, integrals] = await Promise.all([
+        getHistogramDashboardConfig(),
+        getROIIntegrals(),
+      ])
 
-      if (!result.success) {
-        console.error('Failed to fetch histogram configs:', result.error)
-        return
-      }
-
-      const histogramConfigs: HistogramConfig[] = result.data
+      const counts = new Map(
+        integrals.map((result) => [roiKey(result.histogramId, result.roiId), result]),
+      )
+      const now = Date.now()
       const newRoiCards: ROICardData[] = []
-      const newRoiDataHistory: { [key: string]: ROI } = {}
 
-      for (const config of histogramConfigs) {
-        if (!config.visible || !config.rois || config.rois.length === 0) continue
+      for (const histogram of config.histograms) {
+        if (!histogram.visible || !histogram.rois?.length) continue
 
-        for (const roi of config.rois) {
+        for (const roi of histogram.rois) {
           if (!roi.enabled) continue
 
-          try {
-            const integral = await getRoiIntegral(
-              config.boardId,
-              config.channel.toString(),
-              roi.low,
-              roi.high
-            )
+          const key = roiKey(histogram.id, roi.id)
+          const integral = counts.get(key)?.net ?? 0
 
-            const roiKey = `${config.id}_${roi.id}`
-            const currentTime = Date.now()
-
-            const previousROI = roiDataHistoryRef.current[roiKey]
-            const previousIntegral = previousROI?.integral || 0
-            const previousUpdateTime = previousROI?.lastUpdateTime || currentTime
-            const timeDifferenceSeconds = (currentTime - previousUpdateTime) / 1000
-
-            let rate = previousROI?.rate || 0
-            if (timeDifferenceSeconds > 0.1 && previousIntegral !== integral) {
-              const integralDifference = integral - previousIntegral
-              rate = Math.abs(integralDifference) / (timeDifferenceSeconds / 60)
+          // Counts per minute, from the change since the previous refresh.
+          const previous = roiDataHistoryRef.current[key]
+          let rate = previous?.rate ?? 0
+          if (previous) {
+            const minutes = (now - (previous.lastUpdateTime || now)) / 60000
+            if (minutes > 0.0016 && previous.integral !== integral) {
+              rate = Math.abs(integral - previous.integral) / minutes
             }
-
-            const updatedROI: ROI = {
-              ...roi,
-              integral,
-              rate: Math.max(0, rate),
-              lastUpdateTime: currentTime
-            }
-
-            roiDataHistoryRef.current[roiKey] = updatedROI
-
-            const cardData: ROICardData = {
-              histogramId: config.id,
-              histogramLabel: config.customLabel || config.label,
-              boardId: config.boardId,
-              channel: config.channel,
-              roi: updatedROI
-            }
-
-            newRoiCards.push(cardData)
-          } catch (error) {
-            console.error(`Failed to get ROI integral for ${config.id}, ROI ${roi.id}:`, error)
-
-            const roiKey = `${config.id}_${roi.id}`
-            const previousROI = roiDataHistoryRef[roiKey] || {
-              ...roi,
-              rate: 0,
-              lastUpdateTime: Date.now(),
-              integral: 0
-            }
-
-            newRoiDataHistory[roiKey] = previousROI
-
-            const cardData: ROICardData = {
-              histogramId: config.id,
-              histogramLabel: config.customLabel || config.label,
-              boardId: config.boardId,
-              channel: config.channel,
-              roi: previousROI
-            }
-
-            newRoiCards.push(cardData)
           }
+
+          const measured: ROIMeasurement = {
+            ...roi,
+            integral,
+            rate: Math.max(0, rate),
+            lastUpdateTime: now,
+          }
+          roiDataHistoryRef.current[key] = measured
+
+          newRoiCards.push({
+            histogramId: histogram.id,
+            histogramLabel: histogram.customLabel || histogram.label,
+            boardId: histogram.boardId,
+            channel: histogram.channel,
+            roi: measured,
+          })
         }
       }
 
-      // ✅ Update state once, safely
       setRoiCards(newRoiCards)
     } catch (error) {
       console.error('Failed to update ROI data:', error)
