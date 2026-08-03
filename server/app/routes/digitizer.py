@@ -6,6 +6,8 @@ from flask import Blueprint, request, jsonify
 
 from ..utils.jwt_utils import jwt_required_custom
 from ..services.daq_manager import get_daq_manager
+from ..services.board_scanner import get_board_scanner, detect_a4818_pids
+from ..utils.safe_registers import safe_register_names
 
 bp = Blueprint('digitizer', __name__)
 
@@ -13,6 +15,9 @@ TEST_FLAG = os.getenv('TEST_FLAG', False)
 
 # Initialize DAQ manager
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
+
+# Board discovery ("what is plugged in?"), shared process-wide: one scan at a time
+scanner = get_board_scanner(test_flag=TEST_FLAG)
 
 # Register map for common settings
 register_map = {
@@ -89,6 +94,58 @@ def get_board_connectivity():
         return jsonify(connectivity)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@bp.route('/digitizer/scan', methods=['POST'])
+@jwt_required_custom
+def start_board_scan():
+    """
+    Scan the links for digitizers.
+
+    Probing opens boards, so it cannot happen during a run: while the DAQ is
+    running the boards belong to caendaq, and a probe would either fail or
+    disturb the acquisition.
+    """
+    if daq_mgr.is_running():
+        return jsonify({'message': 'Cannot scan for boards while a run is in progress. '
+                                   'Stop the run first.'}), 409
+
+    options = request.get_json(silent=True) or {}
+
+    try:
+        status = scanner.start(options, daq_mgr.get_boards())
+    except ValueError as e:
+        # Bad options (an impossible VME range, nothing enabled) — the message
+        # says what to change.
+        return jsonify({'message': str(e)}), 400
+    except RuntimeError as e:
+        return jsonify({'message': str(e)}), 409
+
+    return jsonify(status), 202
+
+
+@bp.route('/digitizer/scan', methods=['GET'])
+@jwt_required_custom
+def get_board_scan_status():
+    """Progress and results of the current or last scan."""
+    return jsonify(scanner.get_status())
+
+
+@bp.route('/digitizer/scan/cancel', methods=['POST'])
+@jwt_required_custom
+def cancel_board_scan():
+    """Stop a running scan after the probe in flight."""
+    cancelled = scanner.cancel()
+    if not cancelled:
+        return jsonify({'message': 'No scan is running.'}), 409
+    return jsonify(scanner.get_status())
+
+
+@bp.route('/digitizer/scan/a4818', methods=['GET'])
+@jwt_required_custom
+def get_a4818_pids():
+    """PIDs of A4818 adapters found on the USB bus, to pre-fill the scan options."""
+    return jsonify({'pids': detect_a4818_pids()})
+
 
 @bp.route('/digitizer/polarity/<id>/<channel>', methods=['GET'])
 @jwt_required_custom
@@ -230,6 +287,75 @@ def set_setting(id, setting, value):
             return jsonify(-1)
     except Exception:
         return jsonify(-1)
+
+@bp.route('/digitizer/<id>/setting/<setting>', methods=['POST'])
+@jwt_required_custom
+def set_setting_online(id, setting):
+    """
+    Change a register, optionally writing it straight to the board.
+
+    Without 'online' this is the plain configuration edit: the value lands in
+    the board's JSON and takes effect the next time a run configures the board.
+    With 'online' the value is *also* written to the board itself, so the effect
+    is immediate — the point of tuning while watching a spectrum.
+
+    The configuration is always updated, even when the board write is refused or
+    fails, so the two never drift apart: what you see in the tuner is what the
+    next run will apply.
+    """
+    data = request.get_json(silent=True) or {}
+    if 'value' not in data:
+        return jsonify({'message': 'A value is required.'}), 400
+
+    try:
+        value = int(data['value'])
+    except (TypeError, ValueError):
+        return jsonify({'message': f"'{data['value']}' is not a whole number."}), 400
+    if value < 0:
+        return jsonify({'message': 'Register values cannot be negative.'}), 400
+
+    online = bool(data.get('online', False))
+
+    config = load_board_config(id)
+    if not config or 'registers' not in config:
+        return jsonify({'message': 'No register configuration for this board.'}), 404
+    if setting not in config['registers']:
+        return jsonify({'message': f"Board has no register '{setting}'."}), 404
+
+    register = config['registers'][setting]
+    config['registers'][setting]['value'] = hex(value)
+    if not save_board_config(id, config):
+        return jsonify({'message': 'Could not save the configuration.'}), 500
+
+    result = {'saved': True, 'written': False, 'reason': '', 'via': '',
+              'address': register.get('address', ''), 'value': hex(value)}
+
+    if online:
+        try:
+            address = int(str(register.get('address', '0')), 16)
+        except ValueError:
+            result['reason'] = 'This register has no usable address in the configuration.'
+            return jsonify(result)
+        result.update(daq_mgr.write_board_register(str(id), address, value))
+
+    return jsonify(result)
+
+
+@bp.route('/digitizer/<id>/online_registers', methods=['GET'])
+@jwt_required_custom
+def get_online_registers(id):
+    """
+    The registers of this board that may be written while it is acquiring.
+
+    The tuner asks for this once so it can mark which fields are tunable online
+    before the operator changes anything, rather than finding out per write.
+    """
+    board_info = daq_mgr.get_board_info(id)
+    if not board_info:
+        return jsonify({'message': 'Board not found'}), 404
+    dpp = board_info.get('dpp', 'DPP-PSD')
+    return jsonify({'dpp': dpp, 'registers': safe_register_names(dpp)})
+
 
 @bp.route('/digitizer/<id>/info', methods=['GET'])
 @jwt_required_custom

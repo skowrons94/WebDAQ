@@ -90,9 +90,10 @@ class TetrAMMController:
         }
         
         # Charge accumulation tracking
-        self.accumulated_charge = 0.0  # Reset to 0 when run starts, only increases when saving data
+        self.accumulated_charge = 0.0  # This run only; reset when a run starts
         self.total_accumulated_charge = 0.0  # Always increases
         self.previous_time = 0.0
+        self.accumulating = False  # True while a run is in progress
         self.charge_channel = 0  # Channel used for beam current readout and charge integration
         
         # Device settings
@@ -674,6 +675,24 @@ class TetrAMMController:
                 "2": self.values["2"][-101:-1].copy(),
                 "3": self.values["3"][-101:-1].copy()
             }
+
+    def get_history(self, since: float = 0.0, max_points: int = 20000) -> list:
+        """Timestamped beam-current samples retained by the circular buffer."""
+        with self.buffer_lock:
+            channel = str(self.charge_channel)
+            values = self.values.get(channel, self.values["0"])
+            valid = (self.times > 0) & (self.times >= float(since))
+            times = self.times[valid].copy()
+            selected_values = values[valid].copy()
+
+        if len(times) > max_points:
+            indices = np.linspace(0, len(times) - 1, max_points, dtype=int)
+            times = times[indices]
+            selected_values = selected_values[indices]
+        return [
+            [float(timestamp), float(value)]
+            for timestamp, value in zip(times, selected_values)
+        ]
     
     def get_data(self) -> Dict[str, float]:
         """
@@ -748,13 +767,17 @@ class TetrAMMController:
         time_diff = current_time - self.previous_time
         charge_increment = current_data * time_diff
             
-        # Always update total accumulated charge
+        # The lifetime total always integrates: it says how much charge the
+        # target has taken, in or out of a run.
         self.total_accumulated_charge += charge_increment
-            
-        # Only update accumulated charge if data is being saved
-        if self.save_data:
+
+        # The run figure integrates only while a run is in progress — it is what
+        # the online analysis normalises to, so beam delivered between runs must
+        # not appear in it. Note this follows the run, not data saving: a run
+        # that writes no data still delivers charge.
+        if self.accumulating:
             self.accumulated_charge += charge_increment
-            
+
         self.previous_time = current_time
     
     def reset_accumulated_charge(self) -> None:
@@ -773,7 +796,21 @@ class TetrAMMController:
             float: Accumulated charge in microamp-seconds
         """
         return self.accumulated_charge
-    
+
+    def set_accumulating(self, accumulating: bool) -> None:
+        """
+        Start or stop integrating charge into the per-run figure.
+
+        Driven by the DAQ run state, so the run charge cannot keep growing after
+        a run ends (or fail to grow during one).
+        """
+        with self.buffer_lock:
+            self.accumulating = bool(accumulating)
+
+    def is_accumulating(self) -> bool:
+        """Whether charge is currently being integrated into the run figure."""
+        return self.accumulating
+
     def get_total_accumulated_charge(self) -> float:
         """
         Get total accumulated charge across all time.

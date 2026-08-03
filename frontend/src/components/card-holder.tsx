@@ -1,13 +1,18 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import {
   Activity,
   BarChart,
   BatteryCharging,
-  Database,
   HardDrive,
-  Thermometer,
   CheckCircle,
   XCircle,
   Cpu,
@@ -16,7 +21,8 @@ import {
   Save,
   AudioWaveform,
   Server,
-  Boxes,
+  GripHorizontal,
+  Pencil,
 } from "lucide-react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -27,16 +33,13 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
+import { cn } from "@/lib/utils"
 import { useToast } from '@/components/ui/use-toast'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
 import { useStatsStore } from '@/store/stats-store'
 import {
-  getRoiIntegral,
   getFileBandwidth,
-  getDataCurrent,
-  getAccumulatedCharge,
-  getTotalAccumulatedCharge,
   getConnectedCurrent,
   getIpCurrent,
   getPortCurrent,
@@ -47,38 +50,45 @@ import {
   getStatsPaths,
   getStatsMetricLastValue,
   getCurrentModuleType,
+  getCurrentModuleSettings,
   getRunMetadataAll,
   getSaveData,
   getWaveformStatusPerBoard,
   activateWaveformBoard,
   deactivateWaveformBoard,
-  getXdaqInfo,
   getCurrentStatus,
   getStatsRunStatus,
+  setRunNumber,
+  setSaveData,
 } from '@/lib/api'
+import {
+  type ROI,
+  getHistogramDashboardConfig,
+  getROIIntegrals,
+  roiKey,
+} from '@/lib/histogram-config'
+import { Slider } from "@/components/ui/slider"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
-type ROI = {
-  id: string;
-  name: string;
-  low: number;
-  high: number;
+/**
+ * An ROI plus what it currently reads. The definition comes from the server;
+ * `integral`, `rate` and `lastUpdateTime` are measurements this component
+ * derives between refreshes and are deliberately not part of the stored record.
+ */
+type ROIMeasurement = ROI & {
   integral: number;
   rate: number;
   lastUpdateTime: number;
-  color: string;
-  enabled: boolean;
-}
-
-type HistogramConfig = {
-  id: string;
-  boardId: string;
-  channel: number;
-  visible: boolean;
-  size: 'small' | 'medium' | 'large';
-  label: string;
-  customLabel?: string;
-  position: { row: number; col: number };
-  rois: ROI[];
 }
 
 type ROICardData = {
@@ -86,7 +96,7 @@ type ROICardData = {
   histogramLabel: string;
   boardId: string;
   channel: number;
-  roi: ROI;
+  roi: ROIMeasurement;
 }
 
 type BoardStatus = {
@@ -110,24 +120,40 @@ type BoardInfo = {
   chan: number;
 }
 
-type XdaqInfo = {
-  container_running: boolean;
-  daq_status: string;
-  num_readout_units: number;
-  run_number: number | null;
-  input_bandwidth: number;
-  output_bandwidth: number;
-  file_bandwidth: number;
-}
 
 interface CardHolderProps {
   isRunning: boolean
   timer: number
   startTime: string | null
   runNumber: number | null
+  expandForBeam?: boolean
+  // Let the run status card push the run number and the data saving flag back
+  // to whoever owns them, so the whole dashboard agrees without a round trip.
+  onRunNumberChange?: (runNumber: number) => void
+  onSaveDataChange?: (save: boolean) => void
 }
 
-export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolderProps) {
+// How far the run number slider reaches on either side of where it starts. Wide
+// enough to jump back over a spoiled series, narrow enough to stay usable; the
+// number box next to it takes anything.
+const RUN_SLIDER_SPAN = 25
+
+// Each card row is 11.5rem with a 1.5rem gap. These viewport heights end after
+// the row padding, before the following row begins, so no clipped preview of
+// the next row appears beneath the pull handle.
+const STATUS_PANEL_HEIGHTS = [220, 428, 636] as const
+const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[0]
+const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height-v3'
+
+export function CardHolder({
+  isRunning,
+  timer,
+  startTime,
+  runNumber,
+  expandForBeam = false,
+  onRunNumberChange,
+  onSaveDataChange,
+}: CardHolderProps) {
   const { toast } = useToast()
   const { settings } = useVisualizationStore()
   // Treat a missing flag (older persisted settings) as enabled.
@@ -138,28 +164,121 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
 
   const [roiCards, setRoiCards] = useState<ROICardData[]>([])
   const [fileBandwidth, setFileBandwidth] = useState<number>(0)
-  const [beamCurrent, setBeamCurrent] = useState<number>(0)
-  const [beamCurrentChange, setBeamCurrentChange] = useState<number>(0)
-  const [accumulatedCharge, setAccumulatedCharge] = useState<number>(0)
-  const [totalAccumulatedCharge, setTotalAccumulatedCharge] = useState<number>(0)
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false)
   const [ipCurrent, setIpCurrent] = useState<string>('')
   const [portCurrent, setPortCurrent] = useState<string>('')
   const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
   const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
+  // Device settings as the server reports them. The address differs by module:
+  // the TetrAMM has ip + port, the RBD 9103 has a serial port and no ip at all.
+  const [currentModuleInfo, setCurrentModuleInfo] = useState<{
+    module_type?: string
+    ip?: string
+    port?: string | number
+    settings?: Record<string, string>
+  } | null>(null)
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
   const [boards, setBoards] = useState<BoardInfo[]>([])
-  const [lastRunDuration, setLastRunDuration] = useState<number | null>(null)
+  // The most recent finished run: its number and how long it lasted, shown
+  // under the run number on the status card.
+  const [lastRun, setLastRun] = useState<{ number: number; duration: number } | null>(null)
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
+  // Run number editor, opened by clicking the run number on the status card.
+  const [runEditorOpen, setRunEditorOpen] = useState(false)
+  const [runDraft, setRunDraft] = useState<number>(0)
+  const [runDraftText, setRunDraftText] = useState<string>('')
+  const [savingRunNumber, setSavingRunNumber] = useState(false)
+  // Pinned when the editor opens: bounds that moved with the draft would make
+  // the handle crawl instead of slide.
+  const [runSliderMin, setRunSliderMin] = useState(0)
+  const [runSliderMax, setRunSliderMax] = useState(RUN_SLIDER_SPAN)
   const [boardWaveforms, setBoardWaveforms] = useState<{ [boardId: string]: boolean }>({})
-  const [xdaqInfo, setXdaqInfo] = useState<XdaqInfo | null>(null)
   const [currentAcquiring, setCurrentAcquiring] = useState<boolean>(false)
+  // The device is sampling (independent of whether a run is logging it).
+  const [currentSampling, setCurrentSampling] = useState<boolean>(false)
   const [statsCollecting, setStatsCollecting] = useState<boolean>(false)
   const [statsCount, setStatsCount] = useState<number>(0)
   const intervalRefs = useRef<{ [key: string]: NodeJS.Timeout }>({})
-  const roiDataHistoryRef = useRef<{ [key: string]: ROI }>({})
+  const roiDataHistoryRef = useRef<{ [key: string]: ROIMeasurement }>({})
+  const [statusPanelHeight, setStatusPanelHeight] = useState<number>(DEFAULT_STATUS_PANEL_HEIGHT)
+  const minimumStatusPanelHeight = expandForBeam
+    ? STATUS_PANEL_HEIGHTS[1]
+    : STATUS_PANEL_HEIGHTS[0]
+  const displayedStatusPanelHeight = Math.max(statusPanelHeight, minimumStatusPanelHeight)
+  const availableStatusPanelHeights = STATUS_PANEL_HEIGHTS.filter(
+    height => height >= minimumStatusPanelHeight,
+  )
+  const [isResizingStatusPanel, setIsResizingStatusPanel] = useState(false)
+  const statusPanelDragRef = useRef<{
+    pointerId: number
+    startY: number
+    startHeight: number
+  } | null>(null)
+
+  useEffect(() => {
+    const stored = Number(window.localStorage.getItem(STATUS_PANEL_STORAGE_KEY))
+    if (STATUS_PANEL_HEIGHTS.includes(stored as typeof STATUS_PANEL_HEIGHTS[number])) {
+      setStatusPanelHeight(stored)
+    }
+  }, [])
+
+  const snapStatusPanelHeight = useCallback((height: number) => {
+    const snapped = availableStatusPanelHeights.reduce((closest, candidate) =>
+      Math.abs(candidate - height) < Math.abs(closest - height) ? candidate : closest)
+    setStatusPanelHeight(snapped)
+    window.localStorage.setItem(STATUS_PANEL_STORAGE_KEY, String(snapped))
+  }, [availableStatusPanelHeights])
+
+  const handleStatusResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.currentTarget.setPointerCapture(event.pointerId)
+    statusPanelDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startHeight: displayedStatusPanelHeight,
+    }
+    setIsResizingStatusPanel(true)
+  }
+
+  const handleStatusResizeMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = statusPanelDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const nextHeight = Math.min(
+      STATUS_PANEL_HEIGHTS[STATUS_PANEL_HEIGHTS.length - 1],
+      Math.max(minimumStatusPanelHeight, drag.startHeight + event.clientY - drag.startY),
+    )
+    setStatusPanelHeight(nextHeight)
+  }
+
+  const handleStatusResizeEnd = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const drag = statusPanelDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    const finalHeight = Math.min(
+      STATUS_PANEL_HEIGHTS[STATUS_PANEL_HEIGHTS.length - 1],
+      Math.max(minimumStatusPanelHeight, drag.startHeight + event.clientY - drag.startY),
+    )
+    statusPanelDragRef.current = null
+    setIsResizingStatusPanel(false)
+    snapStatusPanelHeight(finalHeight)
+  }
+
+  const handleStatusResizeKey = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const currentIndex = availableStatusPanelHeights.reduce((closestIndex, height, index) =>
+      Math.abs(height - displayedStatusPanelHeight) <
+      Math.abs(availableStatusPanelHeights[closestIndex] - displayedStatusPanelHeight)
+        ? index
+        : closestIndex, 0)
+    const direction = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+    if (!direction) return
+    event.preventDefault()
+    const nextIndex = Math.min(
+      availableStatusPanelHeights.length - 1,
+      Math.max(0, currentIndex + direction),
+    )
+    snapStatusPanelHeight(availableStatusPanelHeights[nextIndex])
+  }
 
   useEffect(() => {
     setVisibleMetrics(metrics.filter(metric => metric.isVisible))
@@ -202,17 +321,21 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
-        const [ip, port, isConnected, moduleType] = await Promise.all([
+        const [ip, port, isConnected, moduleType, moduleSettings] = await Promise.all([
           getIpCurrent(),
           getPortCurrent(),
           getConnectedCurrent(),
-          getCurrentModuleType()
+          getCurrentModuleType(),
+          // Range, averaging and the charge channel decide how the reading
+          // behaves; without them the card says only "Connected".
+          getCurrentModuleSettings().catch(() => null),
         ])
         setIpCurrent(ip)
         setPortCurrent(port)
         setIsConnectedCurrent(isConnected)
         setCurrentModuleType(moduleType.module_type)
         setCurrentModuleName(moduleType.module_type === 'rbd9103' ? 'RBD 9103' : 'TetrAMM')
+        if (moduleSettings) setCurrentModuleInfo(moduleSettings)
       } catch (error) {
         console.error('Failed to fetch initial current device data:', error)
       }
@@ -222,34 +345,25 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     fetchBoardConfiguration()
     updateBoardConnectivity() // Initial connectivity check on page load
     updateDaqStatuses() // Initial DAQ status check
-    updateXdaqInfo() // Initial XDAQ info check
 
     // Call updateStatsValues immediately and then set up interval
     // Small delay to ensure paths are loaded from store
     setTimeout(updateStatsValues, 500)
 
-    const beamCurrentInterval = setInterval(updateBeamCurrent, 1000)
     const roiInterval = setInterval(updateROIData, 1000)
     const bandwidthInterval = setInterval(updateBandwidthData, 1000)
-    const accumulatedChargeInterval = setInterval(updateAccumulatedCharge, 1000)
-    const totalAccumulatedChargeInterval = setInterval(updateTotalAccumulatedCharge, 1000)
     const boardStatusInterval = setInterval(updateBoardStatus, 2000)
     const boardConnectivityInterval = setInterval(updateBoardConnectivity, 5000) // Check every 5 seconds
     const statsInterval = setInterval(updateStatsValues, 5000) // Refresh stats every 5 seconds
     const daqStatusInterval = setInterval(updateDaqStatuses, 3000)
-    const xdaqInfoInterval = setInterval(updateXdaqInfo, 5000)
 
     return () => {
-      clearInterval(beamCurrentInterval)
       clearInterval(roiInterval)
       clearInterval(bandwidthInterval)
-      clearInterval(accumulatedChargeInterval)
-      clearInterval(totalAccumulatedChargeInterval)
       clearInterval(boardStatusInterval)
       clearInterval(boardConnectivityInterval)
       clearInterval(statsInterval)
       clearInterval(daqStatusInterval)
-      clearInterval(xdaqInfoInterval)
     }
   }, [])
 
@@ -293,94 +407,65 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     }
   }
 
-  // ✅ FIXED updateROIData FUNCTION
+  /**
+   * Refresh the ROI cards.
+   *
+   * Two requests, made together, whatever the number of ROIs: the configuration
+   * (which the DAQ server owns) and every integral in one batch. This used to be
+   * one request per ROI, awaited one after another inside a nested loop, so ten
+   * regions meant ten serialised round trips — and ten separate reads of the
+   * same spectra — before a single card could update.
+   */
   const updateROIData = async () => {
     try {
-      const response = await fetch('/api/cache?type=histograms')
-      const result = await response.json()
+      const [config, integrals] = await Promise.all([
+        getHistogramDashboardConfig(),
+        getROIIntegrals(),
+      ])
 
-      if (!result.success) {
-        console.error('Failed to fetch histogram configs:', result.error)
-        return
-      }
-
-      const histogramConfigs: HistogramConfig[] = result.data
+      const counts = new Map(
+        integrals.map((result) => [roiKey(result.histogramId, result.roiId), result]),
+      )
+      const now = Date.now()
       const newRoiCards: ROICardData[] = []
-      const newRoiDataHistory: { [key: string]: ROI } = {}
 
-      for (const config of histogramConfigs) {
-        if (!config.visible || !config.rois || config.rois.length === 0) continue
+      for (const histogram of config.histograms) {
+        if (!histogram.visible || !histogram.rois?.length) continue
 
-        for (const roi of config.rois) {
+        for (const roi of histogram.rois) {
           if (!roi.enabled) continue
 
-          try {
-            const integral = await getRoiIntegral(
-              config.boardId,
-              config.channel.toString(),
-              roi.low,
-              roi.high
-            )
+          const key = roiKey(histogram.id, roi.id)
+          const integral = counts.get(key)?.net ?? 0
 
-            const roiKey = `${config.id}_${roi.id}`
-            const currentTime = Date.now()
-
-            const previousROI = roiDataHistoryRef.current[roiKey]
-            const previousIntegral = previousROI?.integral || 0
-            const previousUpdateTime = previousROI?.lastUpdateTime || currentTime
-            const timeDifferenceSeconds = (currentTime - previousUpdateTime) / 1000
-
-            let rate = previousROI?.rate || 0
-            if (timeDifferenceSeconds > 0.1 && previousIntegral !== integral) {
-              const integralDifference = integral - previousIntegral
-              rate = Math.abs(integralDifference) / (timeDifferenceSeconds / 60)
+          // Counts per minute, from the change since the previous refresh.
+          const previous = roiDataHistoryRef.current[key]
+          let rate = previous?.rate ?? 0
+          if (previous) {
+            const minutes = (now - (previous.lastUpdateTime || now)) / 60000
+            if (minutes > 0.0016 && previous.integral !== integral) {
+              rate = Math.abs(integral - previous.integral) / minutes
             }
-
-            const updatedROI: ROI = {
-              ...roi,
-              integral,
-              rate: Math.max(0, rate),
-              lastUpdateTime: currentTime
-            }
-
-            roiDataHistoryRef.current[roiKey] = updatedROI
-
-            const cardData: ROICardData = {
-              histogramId: config.id,
-              histogramLabel: config.customLabel || config.label,
-              boardId: config.boardId,
-              channel: config.channel,
-              roi: updatedROI
-            }
-
-            newRoiCards.push(cardData)
-          } catch (error) {
-            console.error(`Failed to get ROI integral for ${config.id}, ROI ${roi.id}:`, error)
-
-            const roiKey = `${config.id}_${roi.id}`
-            const previousROI = roiDataHistoryRef[roiKey] || {
-              ...roi,
-              rate: 0,
-              lastUpdateTime: Date.now(),
-              integral: 0
-            }
-
-            newRoiDataHistory[roiKey] = previousROI
-
-            const cardData: ROICardData = {
-              histogramId: config.id,
-              histogramLabel: config.customLabel || config.label,
-              boardId: config.boardId,
-              channel: config.channel,
-              roi: previousROI
-            }
-
-            newRoiCards.push(cardData)
           }
+
+          const measured: ROIMeasurement = {
+            ...roi,
+            integral,
+            rate: Math.max(0, rate),
+            lastUpdateTime: now,
+          }
+          roiDataHistoryRef.current[key] = measured
+
+          newRoiCards.push({
+            histogramId: histogram.id,
+            histogramLabel: histogram.customLabel || histogram.label,
+            boardId: histogram.boardId,
+            channel: histogram.channel,
+            roi: measured,
+          })
         }
       }
 
-      // ✅ Update state once, safely
       setRoiCards(newRoiCards)
     } catch (error) {
       console.error('Failed to update ROI data:', error)
@@ -393,37 +478,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
       setFileBandwidth(fileBW)
     } catch (error) {
       console.error('Failed to update bandwidth data:', error)
-    }
-  }
-
-  const updateBeamCurrent = async () => {
-    try {
-      const currentData = await getDataCurrent()
-      setBeamCurrent(currentData)
-      if (isRunning && startTime) {
-        const initialCurrent = parseFloat(localStorage.getItem('initialBeamCurrent') || '0')
-        setBeamCurrentChange(Math.abs(currentData - initialCurrent))
-      }
-    } catch (error) {
-      console.error('Failed to update beam current:', error)
-    }
-  }
-
-  const updateAccumulatedCharge = async () => {
-    try {
-      const charge = await getAccumulatedCharge()
-      setAccumulatedCharge(charge)
-    } catch (error) {
-      console.error('Failed to update accumulated charge:', error)
-    }
-  }
-
-  const updateTotalAccumulatedCharge = async () => {
-    try {
-      const totalCharge = await getTotalAccumulatedCharge()
-      setTotalAccumulatedCharge(totalCharge)
-    } catch (error) {
-      console.error('Failed to update total accumulated charge:', error)
     }
   }
 
@@ -456,15 +510,26 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
 
   const updateDaqStatuses = async () => {
     try {
-      const [save, waves, currentStatus, statsStatus] = await Promise.all([
+      const [save, waves, currentStatus, currentConnected, statsStatus] = await Promise.all([
         getSaveData().catch(() => null),
         getWaveformStatusPerBoard().catch(() => null),
         getCurrentStatus().catch(() => null),
+        getConnectedCurrent().catch(() => null),
         getStatsRunStatus().catch(() => null),
       ])
       if (save !== null && save !== undefined) setDataSavingEnabled(Boolean(save))
       if (waves) setBoardWaveforms(waves)
-      if (currentStatus) setCurrentAcquiring(Boolean(currentStatus.running))
+      if (currentConnected !== null) setIsConnectedCurrent(Boolean(currentConnected))
+      if (currentStatus) {
+        // Two different things, and they were being confused:
+        //   running   — per-run current logging, which only starts with a run
+        //               that saves data. This is what the DAQ status row means.
+        //   acquiring — the picoammeter itself is producing samples, which it
+        //               does continuously once initialised. This is what the
+        //               device card means by "reading".
+        setCurrentAcquiring(Boolean(currentStatus.running))
+        setCurrentSampling(Boolean(currentStatus.acquiring ?? currentStatus.thread_alive))
+      }
       if (statsStatus) {
         setStatsCollecting(Boolean(statsStatus.collecting))
         setStatsCount(Number(statsStatus.enabled_paths_count ?? 0))
@@ -474,14 +539,75 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     }
   }
 
-  const updateXdaqInfo = async () => {
+  // ── Run number editor ────────────────────────────────────────────────────
+  // Only reachable while the DAQ is stopped: during a run the number shown is
+  // the run being taken, and moving it would divorce the files already on disk
+  // from the metadata still to be written.
+
+  const openRunEditor = () => {
+    if (isRunning) return
+    const start = runNumber ?? 0
+    setRunDraft(start)
+    setRunDraftText(String(start))
+    setRunSliderMin(Math.max(0, start - RUN_SLIDER_SPAN))
+    setRunSliderMax(Math.max(RUN_SLIDER_SPAN, start + RUN_SLIDER_SPAN))
+    setRunEditorOpen(true)
+  }
+
+  const applyRunDraft = (value: number) => {
+    const clamped = Math.max(0, Math.floor(value))
+    setRunDraft(clamped)
+    setRunDraftText(String(clamped))
+  }
+
+  // A run can be started from another browser or from the Tuner. If that
+  // happens while this dialog is open, close it rather than let someone commit
+  // a run number under a live acquisition.
+  useEffect(() => {
+    if (isRunning) setRunEditorOpen(false)
+  }, [isRunning])
+
+  const commitRunNumber = async () => {
+    const target = Math.max(0, Math.floor(runDraft))
+    if (target === runNumber) { setRunEditorOpen(false); return }
+    setSavingRunNumber(true)
     try {
-      const info = await getXdaqInfo()
-      if (info) setXdaqInfo(info)
+      await setRunNumber(target)
+      onRunNumberChange?.(target)
+      setRunEditorOpen(false)
+      toast({
+        title: 'Run number set',
+        description: `The next run will be run ${target}.`,
+      })
     } catch (error) {
-      console.error('Failed to update XDAQ info:', error)
+      console.error('Failed to set the run number:', error)
+      toast({
+        title: 'Error',
+        description: 'Could not set the run number.',
+        variant: 'destructive',
+      })
+    } finally {
+      setSavingRunNumber(false)
     }
   }
+
+  const toggleDataSaving = async (checked: boolean) => {
+    const previous = dataSavingEnabled
+    setDataSavingEnabled(checked)   // optimistic: the switch must feel immediate
+    try {
+      await setSaveData(checked)
+      onSaveDataChange?.(checked)
+    } catch (error) {
+      console.error('Failed to change data saving:', error)
+      setDataSavingEnabled(previous)
+      toast({
+        title: 'Error',
+        description: 'Could not change data saving.',
+        variant: 'destructive',
+      })
+    }
+  }
+
 
   /**
    * Activates or deactivates waveform recording for a single board.
@@ -532,13 +658,21 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     try {
       const response = await getRunMetadataAll()
       if (response.data && response.data.length > 0) {
-        // Get the last run (most recent)
-        const lastRun = response.data[response.data.length - 1]
-        if (lastRun.start_time && lastRun.end_time) {
-          const startTime = new Date(lastRun.start_time)
-          const endTime = new Date(lastRun.end_time)
+        // Pick the highest finished run rather than an end of the array: the
+        // endpoint sorts by run number descending, so the last element is the
+        // OLDEST run, and a run still in progress has no end_time yet.
+        const previous = response.data
+          .filter((run: any) => run.start_time && run.end_time)
+          .reduce(
+            (latest: any, run: any) =>
+              latest === null || run.run_number > latest.run_number ? run : latest,
+            null,
+          )
+        if (previous) {
+          const startTime = new Date(previous.start_time)
+          const endTime = new Date(previous.end_time)
           const durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000)
-          setLastRunDuration(durationSeconds)
+          setLastRun({ number: previous.run_number, duration: durationSeconds })
         }
       }
     } catch (error) {
@@ -550,26 +684,95 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
     return `${seconds} seconds`
   }
 
+  const enabledStatsPaths = paths.filter((path: any) => path.enabled)
+  const hasMonitoringCards =
+    (settings.showROIs && roiCards.length > 0) ||
+    (settings.showMetrics && visibleMetrics.length > 0) ||
+    (settings.showStats && enabledStatsPaths.length > 0)
+
   return (
-    <ScrollArea className="h-[420px] rounded-md border p-4">
-      <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-6 md:gap-8 lg:grid-cols-4">
+    <div className="h-full">
+      {(settings.showStatus || hasMonitoringCards) && (
+        <section className="h-full">
+          <div className="relative mb-2">
+            <div className="rounded-md border">
+              <div className="p-4 pb-0">
+                <h2 className="text-sm font-semibold">System status</h2>
+              </div>
+              <ScrollArea
+                className={isResizingStatusPanel
+                  ? ''
+                  : 'transition-[height] duration-150 ease-out'}
+                viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
+                style={{ height: displayedStatusPanelHeight }}
+              >
+                <div className="grid auto-rows-[11.5rem] grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-6 p-4 pb-5 [&>*]:h-full [&>*]:overflow-hidden [&>*]:snap-start">
         {/* Run Status Card */}
         {settings.showStatus && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Run Status
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm font-medium">
+                  Run Status
+                </CardTitle>
+                {/* In the header, not the body: the status cards are a fixed
+                    11.5rem and hide their overflow, so a row of its own in the
+                    body pushed the file bandwidth line out of the card. Scaled
+                    down to the height of the title so the header does not grow
+                    either — the Switch primitive has a fixed thumb, so this is
+                    a transform rather than smaller classes. */}
+                <span className="flex h-4 w-7 items-center" title={isRunning
+                  ? "Data saving cannot be changed while a run is going"
+                  : dataSavingEnabled
+                    ? "Data is being written to disk"
+                    : "Nothing will be written to disk"}>
+                  <Switch
+                    className="origin-left scale-[0.65]"
+                    checked={dataSavingEnabled}
+                    onCheckedChange={toggleDataSaving}
+                    disabled={isRunning}
+                    aria-label="Save data to disk"
+                  />
+                </span>
+                <span className={cn(
+                  "text-xs font-medium",
+                  isRunning ? "text-muted-foreground/60" : "text-muted-foreground",
+                )}>
+                  Save
+                </span>
+              </div>
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {runNumber !== null ? `Run ${runNumber} - ` : ""}
-                {isRunning ? "Running" : "Stopped"}
+              {/* While a run is live the number is the run being taken and is
+                  read only. Stopped, the same number is the run that WILL be
+                  taken next, so it says so and can be clicked to change it. */}
+              <div className="flex items-baseline gap-2 text-2xl font-bold">
+                {runNumber !== null && (
+                  isRunning ? (
+                    <span>Run {runNumber}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => runEditorOpen ? setRunEditorOpen(false) : openRunEditor()}
+                      title="Click to change the run number"
+                      className="group inline-flex items-baseline gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <span>Run {runNumber}</span>
+                      <Pencil className="h-3.5 w-3.5 self-center opacity-40 transition-opacity group-hover:opacity-100" />
+                    </button>
+                  )
+                )}
+                <span>{isRunning ? "Running" : "Stopped"}</span>
               </div>
-              <p className="text-xs text-muted-foreground">
-                {isRunning ? `started ${formatTime(timer)} ago` : (lastRunDuration !== null ? `Last Run: ${lastRunDuration}s` : "Stopped")}
+              <p className="truncate text-xs text-muted-foreground">
+                {isRunning
+                  ? `started ${formatTime(timer)} ago`
+                  : lastRun !== null
+                    ? `last run (${lastRun.number}): ${lastRun.duration}s`
+                    : 'no previous run'}
               </p>
+
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <HardDrive className="h-3.5 w-3.5" />
@@ -581,6 +784,78 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
                     : `${fileBandwidth.toFixed(2)} MB/s`}
                 </span>
               </div>
+
+              {/* A dialog rather than an inline panel: the status cards have a
+                  fixed height and hide their overflow, so anything unfolded in
+                  place would be clipped. */}
+              <Dialog
+                open={runEditorOpen}
+                onOpenChange={(open) => open ? openRunEditor() : setRunEditorOpen(false)}
+              >
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Next run</DialogTitle>
+                    <DialogDescription>
+                      Sets the number the next run will be given. It can only be
+                      changed while the DAQ is stopped.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-5 py-2">
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="run-number-draft">Run number</Label>
+                        <span className="text-2xl font-bold tabular-nums">{runDraft}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Slider
+                          className="flex-1"
+                          value={[runDraft]}
+                          min={runSliderMin}
+                          max={runSliderMax}
+                          step={1}
+                          onValueChange={([v]) => applyRunDraft(v)}
+                        />
+                        <Input
+                          id="run-number-draft"
+                          type="number"
+                          min={0}
+                          className="h-9 w-24"
+                          value={runDraftText}
+                          onChange={(e) => {
+                            setRunDraftText(e.target.value)
+                            const parsed = parseInt(e.target.value, 10)
+                            if (!isNaN(parsed) && parsed >= 0) setRunDraft(parsed)
+                          }}
+                          onBlur={() => applyRunDraft(runDraft)}
+                        />
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        The slider covers ±{RUN_SLIDER_SPAN} runs; type any number in the box.
+                      </p>
+                    </div>
+
+                    {/* The toggle itself lives on the card. Repeated here it
+                        would be a second control for one setting; what belongs
+                        here is what it means for the number above. */}
+                    <p className="border-t pt-4 text-xs text-muted-foreground">
+                      <Save className="mr-1 inline h-3 w-3 align-[-2px]" />
+                      {dataSavingEnabled
+                        ? 'Data saving is on: files are written and this number advances after each run.'
+                        : 'Data saving is off: nothing is written and this number stays where it is.'}
+                    </p>
+                  </div>
+
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setRunEditorOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={commitRunNumber} disabled={savingRunNumber}>
+                      {savingRunNumber ? 'Setting…' : 'Set run number'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         )}
@@ -648,70 +923,63 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
           )
         })()}
 
-        {/* XDAQ Readout Unit Card */}
-        {settings.showXDAQ && (() => {
-          const okIcon = <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-          const offIcon = <XCircle className="h-3.5 w-3.5 text-red-500" />
 
-          const status = xdaqInfo?.daq_status ?? 'Unknown'
-          let statusColor = 'text-muted-foreground'
-          if (status === 'Running') statusColor = 'text-green-600'
-          else if (status === 'Configured' || status === 'Initialized') statusColor = 'text-yellow-600'
-          else if (status === 'Unknown') statusColor = 'text-red-600'
-
-          const containerRunning = xdaqInfo?.container_running ?? false
+        {/* Picoammeter card — the settings that change how the reading behaves,
+            so a number that looks wrong can be explained without opening
+            Settings: which input is integrated, the range, and how much
+            averaging sits between the beam and the value on screen. */}
+        {settings.showStatus && currentEnabled && (() => {
+          const deviceSettings = currentModuleInfo?.settings ?? {}
+          const isTetramm = currentModuleType === 'tetramm'
+          // Two rows only — where the device is, and the setting that decides
+          // how the reading behaves. Everything else is one click away in
+          // Settings, and a card taller than its neighbours breaks the grid.
+          const rows: [string, string][] = isTetramm
+            ? [
+                ['Address', `${currentModuleInfo?.ip ?? ipCurrent}:${currentModuleInfo?.port ?? portCurrent}`],
+                ['Range', deviceSettings.RNG || 'AUTO'],
+              ]
+            : [
+                // The RBD is on a serial port; it has no IP.
+                ['Port', String(currentModuleInfo?.port ?? 'not set')],
+                // R0 is the RBD's autorange code; R1…R7 are fixed ranges.
+                ['Range', deviceSettings.range === 'R0'
+                  ? 'AUTO'
+                  : (deviceSettings.range || 'AUTO')],
+              ]
 
           return (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">XDAQ</CardTitle>
-                <Boxes className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-sm font-medium">{currentModuleName}</CardTitle>
+                <BatteryCharging className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${statusColor}`}>{status}</div>
-                <div className="mt-2 space-y-1.5 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <Boxes className="h-3.5 w-3.5" />
-                      Container
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-2xl font-bold ${
+                    isConnectedCurrent ? '' : 'text-red-600 dark:text-red-400'}`}>
+                    {isConnectedCurrent ? 'Connected' : 'Disconnected'}
+                  </span>
+                  {isConnectedCurrent && (
+                    <span className={`text-xs ${
+                      currentSampling ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      {currentSampling ? 'reading' : 'not sampling'}
                     </span>
-                    <span className="flex items-center gap-1 font-semibold">
-                      {containerRunning ? 'Running' : 'Stopped'}
-                      {containerRunning ? okIcon : offIcon}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
-                      <HardDrive className="h-3.5 w-3.5" />
-                      Data Bandwidth
-                    </span>
-                    <span className="font-semibold">
-                      {(xdaqInfo?.input_bandwidth ?? 0).toFixed(2)} MB/s
-                    </span>
-                  </div>
+                  )}
                 </div>
+
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t pt-2 text-xs">
+                  {rows.map(([label, value]) => (
+                    <div key={label} className="contents">
+                      <dt className="text-muted-foreground">{label}</dt>
+                      <dd className="truncate text-right font-medium" title={value}>{value}</dd>
+                    </div>
+                  ))}
+                </dl>
               </CardContent>
             </Card>
           )
         })()}
-
-        {/* Current Device Connection Status Card */}
-        {settings.showStatus && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                {currentModuleName}
-              </CardTitle>
-              <BatteryCharging className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{isConnectedCurrent ? "Connected" : "Disconnected"}</div>
-              <p className="text-xs text-muted-foreground">
-                {currentModuleType === 'tetramm' ? `IP: ${ipCurrent} Port: ${portCurrent}` : 'Serial Port'}
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Board Status Cards */}
         {settings.showStatus && boards.map((board) => {
@@ -809,64 +1077,6 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
           )
         })}
 
-        {/* Beam Current Card */}
-        {settings.showCurrent && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Beam Current
-              </CardTitle>
-              <Thermometer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{beamCurrent.toFixed(2)} uA</div>
-              <p className="text-xs text-muted-foreground">
-                {beamCurrentChange > 0 ? `+${beamCurrentChange.toFixed(2)}` : beamCurrentChange.toFixed(2)} uA from Start
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Accumulated Charge Card */}
-        {settings.showCurrent && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Accumulated Charge
-              </CardTitle>
-              <Thermometer className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{accumulatedCharge.toFixed(2)} uC</div>
-              <p className="text-xs text-muted-foreground">
-                Total Charge Accumulated
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Total Accumulated Charge Card */}
-        {settings.showCurrent && currentEnabled && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Total Accumulated Charge
-              </CardTitle>
-              <Database className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {totalAccumulatedCharge > 1000000 ? 
-                  `${(totalAccumulatedCharge/1000000).toFixed(2)} C` : 
-                  `${totalAccumulatedCharge.toFixed(2)} uC`}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Total Charge Accumulated since Last Reset
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
         {/* ROI Cards */}
         {settings.showROIs &&
           roiCards.map((cardData) => (
@@ -903,7 +1113,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
         }
 
         {/* Custom Metrics Cards */}
-        {visibleMetrics.map(metric => (
+        {settings.showMetrics && visibleMetrics.map(metric => (
           <Card key={metric.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
@@ -928,7 +1138,7 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
 
         {/* Stats/Graphite Metric Cards */}
         {settings.showStats &&
-          paths.filter((p: any) => p.enabled).map((path: any) => (
+          enabledStatsPaths.map((path: any) => (
             <Card key={path.path}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">
@@ -954,7 +1164,36 @@ export function CardHolder({ isRunning, timer, startTime, runNumber }: CardHolde
             </Card>
           ))
         }
-      </div>
-    </ScrollArea>
+                </div>
+              </ScrollArea>
+            </div>
+            <button
+              type="button"
+              role="separator"
+              aria-label="Resize overview status cards"
+              aria-orientation="horizontal"
+              aria-valuemin={expandForBeam ? 2 : 1}
+              aria-valuemax={3}
+              aria-valuenow={STATUS_PANEL_HEIGHTS.reduce((closestIndex, height, index) =>
+                Math.abs(height - displayedStatusPanelHeight) <
+                Math.abs(STATUS_PANEL_HEIGHTS[closestIndex] - displayedStatusPanelHeight)
+                  ? index
+                  : closestIndex, 0) + 1}
+              title="Drag to show one card row less or more. Use ↑ and ↓ with the keyboard."
+              onPointerDown={handleStatusResizeStart}
+              onPointerMove={handleStatusResizeMove}
+              onPointerUp={handleStatusResizeEnd}
+              onPointerCancel={handleStatusResizeEnd}
+              onKeyDown={handleStatusResizeKey}
+              className={`absolute -bottom-3 left-1/2 z-10 flex h-6 w-16 -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
+              }`}
+            >
+              <GripHorizontal className="h-4 w-4 text-muted-foreground" />
+            </button>
+          </div>
+        </section>
+      )}
+    </div>
   )
 }

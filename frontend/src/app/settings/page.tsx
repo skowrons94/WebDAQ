@@ -15,6 +15,7 @@ import { Board } from '@/components/board';
 import { VisualizationSettings } from '@/components/visualization-settings';
 import { CurrentModuleSettings } from '@/components/current-module-settings';
 import { TelegramSettings } from '@/components/telegram-settings';
+import { ElogSettings } from '@/components/elog/elog-settings';
 
 const queryClient = new QueryClient()
 
@@ -36,7 +37,7 @@ export default function SettingsPage() {
     // Suspense boundary around useSearchParams.
     useEffect(() => {
         const view = new URLSearchParams(window.location.search).get('view');
-        if (view && ['appearance', 'boards', 'current', 'notifications'].includes(view)) {
+        if (view && ['appearance', 'boards', 'current', 'notifications', 'elog'].includes(view)) {
             setActiveView(view);
         }
     }, []);
@@ -60,6 +61,8 @@ export default function SettingsPage() {
                 return <CurrentModuleSettings />;
             case 'notifications':
                 return <TelegramSettings />;
+            case 'elog':
+                return <ElogSettings />;
             default:
                 return (
                     < VisualizationSettings />
@@ -96,6 +99,13 @@ export default function SettingsPage() {
                                 onClick={() => setActiveView('notifications')}
                             >
                                 Notifications
+                            </Link>
+                            <Link
+                                href="#"
+                                className={`font-semibold ${activeView === 'elog' ? 'text-primary' : ''}`}
+                                onClick={() => setActiveView('elog')}
+                            >
+                                ELOG
                             </Link>
                             <Link
                                 href="#"

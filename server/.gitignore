@@ -40,3 +40,13 @@ next-env.d.ts
 
 # database
 app.db
+# Runtime / per-setup state, never committed: the board list and register
+# dumps, the picoammeter and Graphite settings, the ELOG and Telegram
+# credentials, the calibrations and the data itself. All of it is written with
+# defaults on first start, so a fresh clone needs none of it — and a committed
+# copy would overwrite whatever the DAQ machine is actually set to.
+/conf/
+/calib/
+/data/
+/cache/
+*.log

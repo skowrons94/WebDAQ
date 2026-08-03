@@ -1,10 +1,9 @@
 # app/utils/jwt_utils.py
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required
-from datetime import timedelta
 
 def generate_token(user_id):
     # PyJWT >= 2.10 requires the "sub" claim to be a string, so cast the id.
-    return create_access_token(identity=str(user_id), expires_delta=timedelta(days=1))
+    return create_access_token(identity=str(user_id))
 
 def get_current_user():
     # Identity is stored as a string in the token; cast back to int for callers.

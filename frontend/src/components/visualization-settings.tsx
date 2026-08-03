@@ -110,14 +110,6 @@ export function VisualizationSettings() {
                         />
                     </div>
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showXDAQ">Show XDAQ metrics</Label>
-                        <Switch
-                            id="showXDAQ"
-                            checked={settings.showXDAQ}
-                            onCheckedChange={(checked) => updateSettings({ showXDAQ: checked })}
-                        />
-                    </div>
-                    <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showROIs">Show Monitored ROIs</Label>
                         <Switch
                             id="showROIs"

@@ -2,10 +2,22 @@ import { NextResponse } from "next/server"
 import fs from "fs/promises"
 import path from "path"
 
+/**
+ * Small file-backed cache for state that belongs to the *browser client*, not to
+ * the DAQ.
+ *
+ * The histogram dashboard used to live here too — which histograms existed,
+ * their ROIs, their zooms and the dashboard settings. That was the wrong home:
+ * this runs in the Next.js process, so the DAQ server could not see the ROIs it
+ * was supposed to record with a run, and every deployment of the web server got
+ * its own copy. It now lives on the DAQ server in conf/histograms.json; see
+ * lib/histogram-config.ts.
+ *
+ * The old files are left in place. The server imports them once, on first start,
+ * to seed conf/histograms.json.
+ */
+
 const CACHE_DIR = path.join(process.cwd(), "cache")
-const ROI_CACHE_FILE = path.join(CACHE_DIR, "roi-cache-enhanced.json")
-const DASHBOARD_SETTINGS_FILE = path.join(CACHE_DIR, "dashboard-settings.json")
-const HISTOGRAM_CONFIGS_FILE = path.join(CACHE_DIR, "histogram-configs.json")
 const VIS_CHANNELS_FILE = path.join(CACHE_DIR, "visualization-channels.json")
 const WAVE_CONFIG_FILE = path.join(CACHE_DIR, "wave-config.json")
 const WORKING_DIRS_FILE = path.join(CACHE_DIR, "working-directories.json")
@@ -23,53 +35,14 @@ const DEFAULT_WAVE_CONFIG = {
   selectedWaveform: {} as Record<string, number>,
 }
 
-// Enhanced ROI structure
-type ROI = {
-  id: string
-  name: string
-  low: number
-  high: number
-  integral: number
-  color: string
-  enabled: boolean
+const FILES: Record<string, { file: string; fallback: unknown }> = {
+  "visualization-channels": { file: VIS_CHANNELS_FILE, fallback: DEFAULT_VIS_CHANNELS },
+  "wave-config": { file: WAVE_CONFIG_FILE, fallback: DEFAULT_WAVE_CONFIG },
+  "working-directories": { file: WORKING_DIRS_FILE, fallback: DEFAULT_WORKING_DIRS },
 }
 
-type ROICollection = {
-  [histogramId: string]: ROI[]
-}
-
-type HistogramConfig = {
-  id: string
-  boardId: string
-  channel: number
-  visible: boolean
-  size: "small" | "medium" | "large"
-  label: string
-  customLabel?: string
-  position: { row: number; col: number }
-  zoomRange?: {
-    xmin: number
-    xmax: number
-    ymin: number
-    ymax: number
-    timestamp?: number
-  }
-  rois: ROI[]
-}
-
-type DashboardSettings = {
-  layout: "grid" | "rows" | "custom"
-  gridCols: number
-  isLogScale: boolean
-  syncZoom: boolean
-  showLabels: boolean
-  showROIs: boolean
-  showIntegrals: boolean
-  autoUpdate: boolean
-  updateInterval: number
-  theme: "auto" | "light" | "dark"
-  rebinFactor?: number
-}
+/** Types this route used to own, now served by the DAQ server. */
+const MOVED = new Set(["rois", "settings", "histograms", "zoom-ranges", "zoom-range", "histogram", "all"])
 
 async function ensureCacheDirectoryExists() {
   try {
@@ -79,12 +52,15 @@ async function ensureCacheDirectoryExists() {
   }
 }
 
-async function ensureFileExists(filePath: string, defaultContent: string) {
-  try {
-    await fs.access(filePath)
-  } catch (error) {
-    await fs.writeFile(filePath, defaultContent)
-  }
+function movedResponse(dataType: string) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: `'${dataType}' now lives on the DAQ server under /histograms/config. ` +
+        `Use the helpers in lib/histogram-config.ts.`,
+    },
+    { status: 410 },
+  )
 }
 
 // GET - Retrieve cached data
@@ -93,153 +69,31 @@ export async function GET(request: Request) {
     await ensureCacheDirectoryExists()
 
     const { searchParams } = new URL(request.url)
-    const dataType = searchParams.get("type") || "rois"
+    const dataType = searchParams.get("type") || ""
 
-    switch (dataType) {
-      case "rois":
-        await ensureFileExists(ROI_CACHE_FILE, "{}")
-        const roiData = await fs.readFile(ROI_CACHE_FILE, "utf-8")
-        return NextResponse.json({
-          success: true,
-          data: JSON.parse(roiData) as ROICollection,
-        })
+    if (MOVED.has(dataType)) return movedResponse(dataType)
 
-      case "settings":
-        await ensureFileExists(
-          DASHBOARD_SETTINGS_FILE,
-          JSON.stringify({
-            layout: "grid",
-            gridCols: 3,
-            isLogScale: false,
-            syncZoom: false,
-            showLabels: true,
-            showROIs: true,
-            showIntegrals: true,
-            autoUpdate: true,
-            updateInterval: 2000,
-            theme: "auto",
-            rebinFactor: 1,
-          }),
-        )
-        const settingsData = await fs.readFile(DASHBOARD_SETTINGS_FILE, "utf-8")
-        return NextResponse.json({
-          success: true,
-          data: JSON.parse(settingsData) as DashboardSettings,
-        })
-
-      case "histograms":
-        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-        const histogramData = await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")
-        return NextResponse.json({
-          success: true,
-          data: JSON.parse(histogramData) as HistogramConfig[],
-        })
-
-      case "visualization-channels":
-        await ensureFileExists(VIS_CHANNELS_FILE, JSON.stringify(DEFAULT_VIS_CHANNELS))
-        const visChannelsData = await fs.readFile(VIS_CHANNELS_FILE, "utf-8")
-        return NextResponse.json({
-          success: true,
-          data: { ...DEFAULT_VIS_CHANNELS, ...JSON.parse(visChannelsData) },
-        })
-
-      case "wave-config":
-        await ensureFileExists(WAVE_CONFIG_FILE, JSON.stringify(DEFAULT_WAVE_CONFIG))
-        const waveConfigData = await fs.readFile(WAVE_CONFIG_FILE, "utf-8")
-        return NextResponse.json({
-          success: true,
-          data: { ...DEFAULT_WAVE_CONFIG, ...JSON.parse(waveConfigData) },
-        })
-
-      case "working-directories":
-        await ensureFileExists(WORKING_DIRS_FILE, JSON.stringify(DEFAULT_WORKING_DIRS))
-        const workingDirsData = await fs.readFile(WORKING_DIRS_FILE, "utf-8")
-        return NextResponse.json({
-          success: true,
-          data: { ...DEFAULT_WORKING_DIRS, ...JSON.parse(workingDirsData) },
-        })
-
-      case "zoom-ranges":
-        // For backward compatibility, extract zoom ranges from histogram configs
-        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-        const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
-        const zoomRanges: { [key: string]: any } = {}
-
-        histogramConfigs.forEach((config) => {
-          if (config.zoomRange) {
-            zoomRanges[config.id] = config.zoomRange
-          }
-        })
-
-        return NextResponse.json({
-          success: true,
-          data: zoomRanges,
-        })
-
-      case "all":
-        // Return all cached data
-        await ensureFileExists(ROI_CACHE_FILE, "{}")
-        await ensureFileExists(
-          DASHBOARD_SETTINGS_FILE,
-          JSON.stringify({
-            layout: "grid",
-            gridCols: 3,
-            isLogScale: false,
-            syncZoom: false,
-            showLabels: true,
-            showROIs: true,
-            showIntegrals: true,
-            autoUpdate: true,
-            updateInterval: 2000,
-            theme: "auto",
-            rebinFactor: 1,
-          }),
-        )
-        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-
-        const [allRoiData, allSettingsData, allHistogramData] = await Promise.all([
-          fs.readFile(ROI_CACHE_FILE, "utf-8"),
-          fs.readFile(DASHBOARD_SETTINGS_FILE, "utf-8"),
-          fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8"),
-        ])
-
-        const allHistogramConfigs = JSON.parse(allHistogramData) as HistogramConfig[]
-        const allZoomRanges: { [key: string]: any } = {}
-
-        allHistogramConfigs.forEach((config) => {
-          if (config.zoomRange) {
-            allZoomRanges[config.id] = config.zoomRange
-          }
-        })
-
-        return NextResponse.json({
-          success: true,
-          data: {
-            rois: JSON.parse(allRoiData) as ROICollection,
-            settings: JSON.parse(allSettingsData) as DashboardSettings,
-            histograms: allHistogramConfigs,
-            zoomRanges: allZoomRanges,
-          },
-        })
-
-      default:
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Invalid data type",
-          },
-          { status: 400 },
-        )
+    const entry = FILES[dataType]
+    if (!entry) {
+      return NextResponse.json({ success: false, error: "Invalid data type" }, { status: 400 })
     }
+
+    let stored: unknown = {}
+    try {
+      stored = JSON.parse(await fs.readFile(entry.file, "utf-8"))
+    } catch (error) {
+      // Missing or unreadable: the defaults are the answer, and writing the file
+      // is the caller's business, not a side effect of reading it.
+      stored = {}
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: { ...(entry.fallback as object), ...(stored as object) },
+    })
   } catch (error) {
     console.error("Failed to read cache data:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to read cache data",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ success: false, error: "Failed to read cache data" }, { status: 500 })
   }
 }
 
@@ -249,304 +103,23 @@ export async function POST(request: Request) {
     await ensureCacheDirectoryExists()
 
     const body = await request.json()
-    const { type, data, histogramId } = body
+    const { type, data } = body
 
     if (!type || !data) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing type or data",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ success: false, error: "Missing type or data" }, { status: 400 })
     }
 
-    switch (type) {
-      case "rois":
-        await fs.writeFile(ROI_CACHE_FILE, JSON.stringify(data, null, 2))
-        break
+    if (MOVED.has(type)) return movedResponse(type)
 
-      case "settings":
-        await fs.writeFile(DASHBOARD_SETTINGS_FILE, JSON.stringify(data, null, 2))
-        break
-
-      case "histograms":
-        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(data, null, 2))
-        break
-
-      case "visualization-channels":
-        await fs.writeFile(VIS_CHANNELS_FILE, JSON.stringify(data, null, 2))
-        break
-
-      case "wave-config":
-        await fs.writeFile(WAVE_CONFIG_FILE, JSON.stringify(data, null, 2))
-        break
-
-      case "working-directories":
-        await fs.writeFile(WORKING_DIRS_FILE, JSON.stringify(data, null, 2))
-        break
-
-      case "zoom-range":
-        // Save zoom range within histogram config
-        if (!histogramId) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: "Missing histogramId for zoom-range",
-            },
-            { status: 400 },
-          )
-        }
-
-        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-        const existingHistograms = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
-
-        const histogramIndex = existingHistograms.findIndex((h) => h.id === histogramId)
-        if (histogramIndex >= 0) {
-          existingHistograms[histogramIndex].zoomRange = {
-            ...data,
-            timestamp: Date.now(),
-          }
-          await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(existingHistograms, null, 2))
-        }
-        break
-
-      case "zoom-ranges":
-        // Save multiple zoom ranges within their respective histogram configs
-        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-        const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
-
-        // Update each histogram with its zoom range
-        Object.entries(data).forEach(([histId, zoomData]: [string, any]) => {
-          const histIndex = histogramConfigs.findIndex((h) => h.id === histId)
-          if (histIndex >= 0) {
-            histogramConfigs[histIndex].zoomRange = zoomData
-          }
-        })
-
-        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(histogramConfigs, null, 2))
-        break
-
-      case "all":
-        if (data.rois) {
-          await fs.writeFile(ROI_CACHE_FILE, JSON.stringify(data.rois, null, 2))
-        }
-        if (data.settings) {
-          await fs.writeFile(DASHBOARD_SETTINGS_FILE, JSON.stringify(data.settings, null, 2))
-        }
-        if (data.histograms) {
-          await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(data.histograms, null, 2))
-        }
-        break
-
-      default:
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Invalid data type",
-          },
-          { status: 400 },
-        )
+    const entry = FILES[type]
+    if (!entry) {
+      return NextResponse.json({ success: false, error: "Invalid data type" }, { status: 400 })
     }
 
+    await fs.writeFile(entry.file, JSON.stringify(data, null, 2))
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Failed to write cache data:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to write cache data",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-// DELETE - Clear cached data
-export async function DELETE(request: Request) {
-  try {
-    const body = await request.json().catch(() => ({}))
-    const { searchParams } = new URL(request.url)
-    const dataType = searchParams.get("type") || body.type || "all"
-    const histogramId = searchParams.get("id") || body.id
-
-    switch (dataType) {
-      case "rois":
-        await fs.writeFile(ROI_CACHE_FILE, "{}")
-        break
-
-      case "settings":
-        await fs.writeFile(
-          DASHBOARD_SETTINGS_FILE,
-          JSON.stringify({
-            layout: "grid",
-            gridCols: 3,
-            isLogScale: false,
-            syncZoom: false,
-            showLabels: true,
-            showROIs: true,
-            showIntegrals: true,
-            autoUpdate: true,
-            updateInterval: 2000,
-            theme: "auto",
-            rebinFactor: 1,
-          }),
-        )
-        break
-
-      case "histograms":
-        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, "[]")
-        break
-
-      case "histogram":
-        // Remove specific histogram from cache (used when visibility is toggled off)
-        if (histogramId) {
-          // Remove from histogram configs
-          await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-          const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
-          const updatedConfigs = histogramConfigs.filter((h) => h.id !== histogramId)
-          await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(updatedConfigs, null, 2))
-
-          // Remove from ROI data
-          await ensureFileExists(ROI_CACHE_FILE, "{}")
-          const roiData = JSON.parse(await fs.readFile(ROI_CACHE_FILE, "utf-8")) as ROICollection
-          delete roiData[histogramId]
-          await fs.writeFile(ROI_CACHE_FILE, JSON.stringify(roiData, null, 2))
-        }
-        break
-
-      case "zoom-ranges":
-        // Clear zoom ranges from all histogram configs
-        await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-        const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
-
-        histogramConfigs.forEach((config) => {
-          delete config.zoomRange
-        })
-
-        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(histogramConfigs, null, 2))
-        break
-
-      case "all":
-        await fs.writeFile(ROI_CACHE_FILE, "{}")
-        await fs.writeFile(
-          DASHBOARD_SETTINGS_FILE,
-          JSON.stringify({
-            layout: "grid",
-            gridCols: 3,
-            isLogScale: false,
-            syncZoom: false,
-            showLabels: true,
-            showROIs: true,
-            showIntegrals: true,
-            autoUpdate: true,
-            updateInterval: 2000,
-            theme: "auto",
-            rebinFactor: 1,
-          }),
-        )
-        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, "[]")
-        break
-
-      default:
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Invalid data type",
-          },
-          { status: 400 },
-        )
-    }
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Failed to clear cache data:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to clear cache data",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-// PUT - Update specific ROI or histogram
-export async function PUT(request: Request) {
-  try {
-    await ensureCacheDirectoryExists()
-
-    const body = await request.json()
-    const { type, histogramId, roiId, data } = body
-
-    if (type === "roi" && histogramId && roiId) {
-      // Update specific ROI
-      await ensureFileExists(ROI_CACHE_FILE, "{}")
-      const roiData = JSON.parse(await fs.readFile(ROI_CACHE_FILE, "utf-8")) as ROICollection
-
-      if (!roiData[histogramId]) {
-        roiData[histogramId] = []
-      }
-
-      const roiIndex = roiData[histogramId].findIndex((roi) => roi.id === roiId)
-      if (roiIndex >= 0) {
-        roiData[histogramId][roiIndex] = { ...roiData[histogramId][roiIndex], ...data }
-      } else {
-        roiData[histogramId].push({ id: roiId, ...data } as ROI)
-      }
-
-      await fs.writeFile(ROI_CACHE_FILE, JSON.stringify(roiData, null, 2))
-      return NextResponse.json({ success: true })
-    }
-
-    if (type === "histogram" && histogramId) {
-      // Update specific histogram
-      await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-      const histogramData = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
-
-      const histogramIndex = histogramData.findIndex((hist) => hist.id === histogramId)
-      if (histogramIndex >= 0) {
-        histogramData[histogramIndex] = { ...histogramData[histogramIndex], ...data }
-      } else {
-        histogramData.push({ id: histogramId, ...data } as HistogramConfig)
-      }
-
-      await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(histogramData, null, 2))
-      return NextResponse.json({ success: true })
-    }
-
-    if (type === "zoom-range" && histogramId) {
-      // Update specific histogram zoom range within histogram config
-      await ensureFileExists(HISTOGRAM_CONFIGS_FILE, "[]")
-      const histogramConfigs = JSON.parse(await fs.readFile(HISTOGRAM_CONFIGS_FILE, "utf-8")) as HistogramConfig[]
-
-      const histogramIndex = histogramConfigs.findIndex((h) => h.id === histogramId)
-      if (histogramIndex >= 0) {
-        histogramConfigs[histogramIndex].zoomRange = {
-          ...data,
-          timestamp: Date.now(),
-        }
-        await fs.writeFile(HISTOGRAM_CONFIGS_FILE, JSON.stringify(histogramConfigs, null, 2))
-      }
-
-      return NextResponse.json({ success: true })
-    }
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Invalid update parameters",
-      },
-      { status: 400 },
-    )
-  } catch (error) {
-    console.error("Failed to update cache data:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to update cache data",
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ success: false, error: "Failed to write cache data" }, { status: 500 })
   }
 }

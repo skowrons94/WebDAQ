@@ -13,7 +13,7 @@ This guide helps diagnose and resolve common issues with the LunaDAQ system. Iss
 5. [Histogram and Visualization Issues](#histogram-and-visualization-issues)
 6. [Current Monitor Issues](#current-monitor-issues)
 7. [Database Issues](#database-issues)
-8. [Docker and XDAQ Issues](#docker-and-xdaq-issues)
+8. [Acquisition Issues](#acquisition-issues)
 9. [Network and Connectivity Issues](#network-and-connectivity-issues)
 10. [Performance Issues](#performance-issues)
 11. [Diagnostic Commands](#diagnostic-commands)
@@ -21,6 +21,56 @@ This guide helps diagnose and resolve common issues with the LunaDAQ system. Iss
 ---
 
 ## Server Issues
+
+### The server runs in the wrong conda environment
+
+**Symptoms** — the server starts and serves pages, but something it needs is
+"not installed", and it is installed:
+
+- `The py_elog package is not installed on the server`, yet `conda list -n luna`
+  shows `elog`
+- `Error configuring acquisition: add_board(): incompatible function arguments`
+- `caendaq` reported as missing when the tuner tries an online write
+
+**Cause.** The backend must run in the `luna` environment, which is where
+`caendaq`, `elog` and the CAEN libraries live. Two ways it ends up elsewhere:
+
+1. `conda run -n luna python` does not always pick that environment's
+   interpreter — on some conda versions it resolves `python` from the PATH it
+   inherited, so the server runs in whatever environment the person who started
+   the web app was in.
+2. Starting the server by hand without activating first: `python main.py` uses
+   whatever `python` means in that terminal.
+
+**Check which interpreter is actually serving:**
+
+```bash
+lsof -ti tcp:5001 -sTCP:LISTEN | xargs ps -o command=
+```
+
+The path must be `<conda>/envs/luna/bin/python`. `Start an Experiment` also
+reports it — the response carries `"python": "…/envs/luna/bin/python"`, and
+warns when that interpreter cannot import what the backend needs.
+
+**Fix:**
+
+```bash
+LunaDAQ stop
+conda activate luna
+LunaDAQ backend           # refuses to start if caendaq is not importable
+```
+
+or start it again from the web interface, which now resolves the environment's
+interpreter by path.
+
+**If the environment really is missing a package:**
+
+```bash
+conda env update -f environment.yml          # picks up anything added to the file
+conda install -n luna -c paulscherrerinstitute elog   # elog is not on PyPI
+```
+
+Re-running `install.sh` does both and then verifies every package imports.
 
 ### Server Won't Start
 
@@ -236,20 +286,20 @@ curl -X POST http://localhost:5001/experiment/refresh_board_connections
 | Check | Command/Action |
 |-------|----------------|
 | Boards connected | `curl http://localhost:5001/digitizer/connectivity` |
-| Docker running | `docker ps` |
-| XDAQ container exists | `docker ps -a \| grep xdaq` |
+| At least one board added | `curl http://localhost:5001/experiment/get_board_configuration` |
+| `caendaq` importable | `python -c "import caendaq; print(caendaq.__file__)"` |
 | Run directory writable | `touch data/test && rm data/test` |
 
 **Common solutions:**
 
-1. **Reset XDAQ:**
+1. **Reset the acquisition state:**
    ```bash
-   curl -X POST http://localhost:5001/experiment/xdaq/reset
+   curl -X POST http://localhost:5001/experiment/reset
    ```
 
-2. **Restart Docker container:**
+2. **Reopen the digitizers** (Board page → Refresh connections), or:
    ```bash
-   docker restart xdaq_container
+   curl -X POST http://localhost:5001/experiment/refresh_board_connections
    ```
 
 3. **Check server logs** for specific error messages
@@ -286,7 +336,7 @@ curl -X POST http://localhost:5001/experiment/refresh_board_connections
 
 **Symptoms:**
 - Run stops without user action
-- Error message about XDAQ
+- Error message about the acquisition failing to arm
 
 **Solutions:**
 
@@ -302,9 +352,9 @@ curl -X POST http://localhost:5001/experiment/refresh_board_connections
    - Board may have disconnected
    - Check server logs for error messages
 
-4. **Monitor XDAQ status:**
+4. **Monitor the file write bandwidth:**
    ```bash
-   curl http://localhost:5001/experiment/xdaq/file_bandwidth
+   curl http://localhost:5001/experiment/file_bandwidth
    ```
 
 ### Low Count Rates
@@ -518,84 +568,76 @@ flask db upgrade
 
 ---
 
-## Docker and XDAQ Issues
+## Acquisition Issues
 
-### Docker Container Won't Start
+```{note}
+Earlier versions ran acquisition as XDAQ inside a Docker container, with a spy
+server on port 6060. Neither exists any more — acquisition and the online spectra
+both run inside the DAQ server process. If a guide tells you to restart a
+container or check port 6060, it predates v4.0.
+```
+
+### The acquisition module is missing or out of date
 
 **Symptoms:**
-- XDAQ initialization fails
-- Docker errors in logs
+- `ModuleNotFoundError: No module named 'caendaq'` in the server log
+- Start fails immediately with an import error
+- A warning that unknown keyword arguments were dropped when building the DAQ
 
 **Solutions:**
 
-1. **Check Docker status:**
+1. **Rebuild it** — this is also needed after a `git pull` that moves the submodule:
    ```bash
-   sudo systemctl status docker
-   docker ps -a
+   conda activate luna
+   pip install server/native/caendaq
    ```
 
-2. **Pull latest image:**
+2. **Check the submodule is actually checked out:**
    ```bash
-   docker pull skowrons/xdaq:latest
+   git submodule update --init --recursive
    ```
 
-3. **Remove old container:**
+3. **Confirm which build is loaded:**
    ```bash
-   docker stop xdaq_container
-   docker rm xdaq_container
+   python -c "import caendaq; print(caendaq.__file__)"
    ```
 
-4. **Check available resources:**
-   ```bash
-   docker system df
-   docker system prune  # Careful: removes unused data
-   ```
-
-### XDAQ State Machine Errors
+### Boards do not arm, or a synchronised start hangs
 
 **Symptoms:**
-- "Configure failed" errors
-- "Enable failed" errors
+- Start returns but no data is written
+- One board runs and the others do not
 
 **Solutions:**
 
-1. **Reset XDAQ:**
-   ```bash
-   curl -X POST http://localhost:5001/experiment/xdaq/reset
-   ```
+1. **Check every board is connected** on the Board page. A board that answers
+   `board_info` but not the run is usually held by another process — no other
+   program may have the digitizers open.
+2. **Check the sync settings.** With an external synchronised start, the boards
+   wait for the start signal; without the cabling, they wait forever. Switch to
+   individual start to confirm the boards themselves are fine.
+3. **Reopen the connections** (Board page → Refresh connections) and start again.
 
-2. **Restart container:**
-   ```bash
-   docker restart xdaq_container
-   ```
-
-3. **Check container logs:**
-   ```bash
-   docker logs xdaq_container
-   ```
-
-### Spy Server Not Responding
+### Spectra are empty while data is being written
 
 **Symptoms:**
-- Port 6060 connection refused
-- Histograms not available
+- The run writes `.caendat` files but the histograms stay flat
 
 **Solutions:**
 
-1. **Check if spy server is running:**
-   ```bash
-   netstat -an | grep 6060
-   ```
+1. **Check the channel is enabled** and that its threshold is not above the
+   signal — look at the waveform first.
+2. **Check the rebin factor** on the Histograms page; a very large value on a
+   thin spectrum can look flat.
+3. **Confirm the board and channel** on the histogram card match the detector you
+   expect. Spectra are addressed by board id and channel, not by label.
 
-2. **Verify XDAQ is in correct state:**
-   ```bash
-   curl http://localhost:5001/experiment/get_run_status
-   ```
+### The histogram dashboard is empty after an upgrade
 
-3. **Check LunaSpy installation:**
-   ```bash
-   which LunaSpy
-   ```
+The dashboard now lives on the DAQ server, in `conf/histograms.json` in the
+working directory. An empty dashboard usually means the server was started from a
+different directory than before — check where its `data/` folder is and look for
+`conf/histograms.json` next to it.
 
 ---
 
@@ -715,18 +757,18 @@ curl http://localhost:5001/experiment/get_run_status
 # Check board connectivity
 curl http://localhost:5001/digitizer/connectivity
 
-# Check XDAQ bandwidth
-curl http://localhost:5001/experiment/xdaq/file_bandwidth
+# Check the file write bandwidth
+curl http://localhost:5001/experiment/file_bandwidth
 ```
 
 ### System Status
 
 ```bash
 # Check all services
-ps aux | grep -E "main.py|docker|node"
+ps aux | grep -E "main.py|node"
 
 # Check ports in use
-netstat -tlnp | grep -E "5001|3000|6060"
+netstat -tlnp | grep -E "5001|3000"
 
 # Check disk space
 df -h
@@ -734,9 +776,8 @@ df -h
 # Check memory
 free -h
 
-# Check Docker
-docker ps -a
-docker system df
+# Check the acquisition module
+python -c "import caendaq; print(caendaq.__file__)"
 ```
 
 ### Log Analysis
@@ -744,9 +785,6 @@ docker system df
 ```bash
 # View server output
 tail -f /path/to/server.log
-
-# View Docker logs
-docker logs -f xdaq_container
 
 # Search for errors
 grep -i error /path/to/server.log | tail -50
@@ -777,7 +815,7 @@ If you cannot resolve an issue:
 1. **Collect diagnostic information:**
    - Server logs
    - Browser console output
-   - Docker logs
+   - The working directory the server was started in, and its `conf/`
    - System information (`uname -a`, `python --version`)
 
 2. **Check documentation:**

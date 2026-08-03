@@ -8,7 +8,6 @@ This page provides a detailed step-by-step guide to install and configure the Lu
 1. [Prerequisites](#prerequisites)
 2. [Installation Steps](#installation-steps)  
    - [Clone Repository](#1-clone-repository)  
-   - [Docker Setup](#2-docker-setup)  
    - [Conda Environment (Optional)](#3-conda-environment-optional)  
    - [Server Configuration](#4-server-configuration)  
    - [Frontend Setup](#5-frontend-setup)  
@@ -23,27 +22,25 @@ The LunaDAQ is compatibile only with Linux systems, so ensure to use a PC with a
 
 | Component       | Version      | Verification Command      |
 |-----------------|--------------|----------------------------|
-| Docker          | Latest       | `docker --version`         |
-| Node.js         | ≥ v14.x      | `node -v`                  |
+| Node.js         | ≥ v18.x      | `node -v`                  |
 | Python          | ≥ v3.7       | `python3 --version`        |
 | Flask           | ≥ 2.0        | `flask --version`          |
 | SQLite          | ≥ 3.35       | `sqlite3 --version`        |
 | npm             | ≥ 7.x        | `npm -v`                   |
 
-For an easy installation of all the requirements, an `environment.yml` file is provided to create the `luna` conda environment which will install all the requirements, apart from Docker.
+For an easy installation of all the requirements, an `environment.yml` file is provided to create the `luna` conda environment which will install all of them.
 
-For the Docker installation, please follow the official [Docker guide](https://docs.docker.com/engine/install/) and complete the post installation steps as well. Once completed, the docker status can be checked through `sudo systemctl status docker` command.
+```{note}
+No Docker is required. Acquisition runs in process through the CaenDAQ library;
+earlier versions ran XDAQ inside a container, and that is no longer the case.
+```
 
 In order to communicate succesfully with the CAEN boards, the [CAENVME Library](https://www.caen.it/products/caenvmelib-library/), the [CAENComm Library](https://www.caen.it/products/caencomm-library/) and [CAENDigitizer Library](https://www.caen.it/products/caendigitizer-library/) must be installed in the operating system. Additionally, if the USB communication is used, remember to install the drivers for the CAEN board that is being used.
 
-Finally, to have the support for the online data visualization (so in order to spy on the data acquisition), the [LunaSpy](https://github.com/skowrons94/LunaSpy) software must be installed:
-
-```bash
-git clone https://github.com/skowrons94/LunaSpy.git
-cd LunaSpy && mkdir build && cd build && cmake .. # Prepare the CMake build
-make # Build the software
-sudo ln -s LunaSpy /usr/local/bin/LunaSpy # Create a symbolic link
-```
+Online data visualisation needs no extra software: the spectra come from the same
+CaenDAQ instance that is writing the data, so there is nothing separate to build
+or keep running. (Earlier versions required LunaSpy for this; it is no longer
+used.)
 
 ## Common Issues
 
@@ -116,19 +113,17 @@ In the following all the steps for a fresh installation of LunaDAQ will be repor
 First, the repository must be cloned:
 
 ```bash
-git clone https://github.com/skowrons94/WebDAQ.git
+git clone --recurse-submodules https://github.com/skowrons94/WebDAQ.git
 cd WebDAQ
 ```
 
----
+The submodules matter: `server/native/caendaq` is the acquisition library and
+`server/native/rureader` the offline converter. If you have already cloned
+without them, run `git submodule update --init --recursive`.
 
-### 2. Docker Setup (Optional)
-
-The DAQ server relies on a pre-built Docker image where all the XDAQ components are located. Run:
-```bash
-docker pull skowrons/xdaq:latest
-```
-in order to download the latest XDAQ image. This part is skippaple since when the XDAQ is being launched, Docker will automatically download the image by itself. However, it can take several minutes, so it is advisable to do beforehand.
+The quickest path from here is `./install.sh`, which performs every step below
+and is safe to re-run. The manual steps are documented for the cases where it
+does not fit.
 
 ---
 
@@ -228,7 +223,7 @@ The web page will be looking for the server at the IP and port reported in `fron
 | npm build failures             | Clear `node_modules/` and run `npm install --force`. |
 | Missing environment variables  | Ensure `.env` files exist in both `server/` and `frontend/` directories. |
 | CAEN library errors            | Verify CAENVMElib, CAENComm, and CAENDigitizer are properly installed. |
-| Docker permission denied       | Add your user to the docker group: `sudo usermod -a -G docker $USER` |
+| `caendaq` not found            | Rebuild the acquisition module: `pip install server/native/caendaq` |
 | ROOT conflicts                 | Follow the Common Issues section above to configure Conda environment. |
 
 For more detailed troubleshooting, see the [Troubleshooting Guide](troubleshooting.md).

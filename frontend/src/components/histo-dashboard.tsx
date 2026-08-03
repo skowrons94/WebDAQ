@@ -1,7 +1,17 @@
 "use client"
 
-import { useState, useEffect, useRef, useCallback } from "react"
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, getRoiIntegral, getRebinFactor, setRebinFactor } from "@/lib/api"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, setRebinFactor } from "@/lib/api"
+// The dashboard's configuration lives on the DAQ server (conf/histograms.json).
+// These are the only definitions of ROI and HistogramConfig — see
+// lib/histogram-config.ts for why there used to be three.
+import {
+  type DashboardSettings,
+  type HistogramConfig,
+  type ROI,
+  roiKey,
+} from "@/lib/histogram-config"
+import useHistogramStore from "@/store/histogram-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from "@/lib/load-jsroot"
@@ -111,7 +121,7 @@ const SortableHistogramCard = ({ config, roiIntegrals, onAddROI, onEditHistogram
                 {config.rois
                   .filter((r) => r.enabled)
                   .map((roi) => {
-                    const value = roiIntegrals[`${config.id}_${roi.id}`] ?? roi.integral ?? 0
+                    const value = roiIntegrals[roiKey(config.id, roi.id)] ?? 0
                     return (
                       <button
                         key={roi.id}
@@ -175,55 +185,12 @@ const ROOT_COLOR_PRESETS: { hex: string; name: string; index: number }[] = [
   { hex: "#000000", name: "Black", index: 1 },
 ]
 
-type ROI = {
-  id: string
-  name: string
-  low: number
-  high: number
-  integral: number
-  rate: number // counts per minute
-  lastUpdateTime: number // timestamp for rate calculation
-  color: string
-  enabled: boolean
-}
-
-type HistogramConfig = {
-  id: string
-  boardId: string
-  channel: number
-  visible: boolean
-  size: "small" | "medium" | "large"
-  label: string
-  customLabel?: string
-  position: { row: number; col: number }
-  order: number
-  zoomRange?: {
-    xmin: number
-    xmax: number
-    timestamp?: number
-  }
-  rois: ROI[]
-}
-
-type DashboardSettings = {
-  layout: "grid" | "rows" | "custom"
-  gridCols: number
-  isLogScale: boolean
-  syncZoom: boolean
-  showLabels: boolean
-  showROIs: boolean
-  showIntegrals: boolean
-  autoUpdate: boolean
-  updateInterval: number
-  theme: "auto" | "light" | "dark"
-  rebinFactor: number
-}
-
 type HistogramDialogProps = {
   isOpen: boolean
   onClose: () => void
   histogram: HistogramConfig | null
-  onSave: (config: HistogramConfig) => void
+  /** The id is absent when creating: the server assigns it. */
+  onSave: (config: Partial<HistogramConfig> & { id?: string }) => void
   onDelete?: (id: string) => void
   boards: BoardData[]
 }
@@ -233,7 +200,8 @@ type ROIDialogProps = {
   onClose: () => void
   histogramId: string
   roi: ROI | null
-  onSave: (histogramId: string, roi: ROI) => void
+  /** The id is absent when creating: the server assigns it. */
+  onSave: (histogramId: string, roi: Partial<ROI> & { id?: string }) => void
   onDelete?: (histogramId: string, roiId: string) => void
 }
 
@@ -262,18 +230,9 @@ const ROIDialog = ({ isOpen, onClose, histogramId, roi, onSave, onDelete }: ROID
   }, [roi])
 
   const handleSave = () => {
-    const updatedROI: ROI = {
-      id: roi?.id || `roi_${Date.now()}`,
-      name,
-      low,
-      high,
-      color,
-      enabled,
-      integral: roi?.integral || 0,
-      rate: roi?.rate || 0,
-      lastUpdateTime: roi?.lastUpdateTime || Date.now(),
-    }
-    onSave(histogramId, updatedROI)
+    // Only the definition. Integrals and rates are measurements the server
+    // reports, not fields of the stored ROI.
+    onSave(histogramId, { id: roi?.id, name, low, high, color, enabled })
     onClose()
   }
 
@@ -395,21 +354,17 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
   const handleSave = () => {
     if (!boardId) return
 
-    const config: HistogramConfig = {
-      id: histogram?.id || `hist_${Date.now()}`,
+    // Only what this dialog edits. Id, order, zoom and ROIs are the server's —
+    // sending them back would let a stale dialog undo an ROI added since it opened.
+    onSave({
+      id: histogram?.id,
       boardId,
       channel,
       size,
       label: customLabel || `Board ${boardId} - Channel ${channel}`,
       customLabel,
       visible,
-      position: histogram?.position || { row: 0, col: 0 },
-      order: histogram?.order || Date.now(), // Use timestamp as default order
-      zoomRange: histogram?.zoomRange,
-      rois: histogram?.rois || [],
-    }
-
-    onSave(config)
+    })
     onClose()
   }
 
@@ -450,8 +405,8 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
               type="number"
               min="0"
               max={
-                boards.find((b) => b.id === boardId)?.chan
-                  ? Number.parseInt(boards.find((b) => b.id === boardId)!.chan) - 1
+                boards.find((b) => String(b.id) === String(boardId))?.chan
+                  ? Number(boards.find((b) => String(b.id) === String(boardId))!.chan) - 1
                   : 0
               }
               value={channel}
@@ -519,25 +474,24 @@ export default function EnhancedHistogramDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
 
-  // Enhanced state management
-  const [histograms, setHistograms] = useState<HistogramConfig[]>([])
+  // Configuration comes from the server, through the store. Nothing about which
+  // histograms exist, their ROIs or their zooms is owned by this component any
+  // more — it renders them and asks the store to change them.
+  const histograms = useHistogramStore((state) => state.histograms)
+  const dashboardSettings = useHistogramStore((state) => state.settings)
+  const storeIntegrals = useHistogramStore((state) => state.integrals)
+  const configLoaded = useHistogramStore((state) => state.loaded)
+  const loadConfig = useHistogramStore((state) => state.load)
+  const refreshIntegrals = useHistogramStore((state) => state.refreshIntegrals)
   const histogramsRef = useRef<HistogramConfig[]>([])
-  // ROI integrals are kept in their own map so live updates don't retrigger histogram redraws
-  const [roiIntegrals, setRoiIntegrals] = useState<{ [key: string]: number }>({})
-  const roiRateRef = useRef<{ [key: string]: { rate: number; lastUpdate: number; lastIntegral: number } }>({})
-  const [dashboardSettings, setDashboardSettings] = useState<DashboardSettings>({
-    layout: "grid",
-    gridCols: 3,
-    isLogScale: false,
-    syncZoom: false,
-    showLabels: true,
-    showROIs: true,
-    showIntegrals: true,
-    autoUpdate: true,
-    updateInterval: 5000, // Default 5 seconds
-    theme: "auto",
-    rebinFactor: 1,
-  })
+
+  // The card wants a plain number per ROI; `net` is gross minus background once
+  // an estimator exists, and equals gross until then.
+  const roiIntegrals = useMemo(() => {
+    const map: { [key: string]: number } = {}
+    for (const [key, result] of Object.entries(storeIntegrals)) map[key] = result.net
+    return map
+  }, [storeIntegrals])
 
   // Dialog states
   const [histogramDialogOpen, setHistogramDialogOpen] = useState(false)
@@ -561,9 +515,6 @@ export default function EnhancedHistogramDashboard() {
 
   // Update interval ref to properly manage the interval
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
-  // Debounced server-write timers
-  const histogramConfigsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const settingsSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Keep ref in sync so callbacks can read latest histograms without stale closures
   useEffect(() => {
@@ -584,8 +535,12 @@ export default function EnhancedHistogramDashboard() {
   // Load saved settings and histograms
   useEffect(() => {
     const initializeApp = async () => {
-      await loadDashboardSettings()
-      await loadHistogramConfigs()
+      // One request for the whole dashboard, instead of three cache round trips.
+      await loadConfig()
+      // The spy manager's rebin has to match what the stored settings say, or the
+      // first integrals come back binned differently from the spectra on screen.
+      setRebinFactor(useHistogramStore.getState().settings.rebinFactor)
+        .catch((error) => console.error("Failed to apply the rebin factor:", error))
       await fetchBoardConfiguration()
       await fetchRunStatus()
     }
@@ -626,7 +581,9 @@ export default function EnhancedHistogramDashboard() {
       updateIntervalRef.current = null
     }
 
-    if (dashboardSettings.autoUpdate && jsrootLoaded && boards.length > 0) {
+    // Also waits on configLoaded: ticking before the server's configuration
+    // arrives would ask for the integrals of an empty dashboard.
+    if (configLoaded && dashboardSettings.autoUpdate && jsrootLoaded && boards.length > 0) {
       updateIntervalRef.current = setInterval(() => {
         if (histogramsRef.current.length === 0) return
         updateAllHistograms()
@@ -639,7 +596,7 @@ export default function EnhancedHistogramDashboard() {
         updateIntervalRef.current = null
       }
     }
-  }, [jsrootLoaded, boards.length, dashboardSettings.autoUpdate, dashboardSettings.updateInterval])
+  }, [configLoaded, jsrootLoaded, boards.length, dashboardSettings.autoUpdate, dashboardSettings.updateInterval])
 
   // JSROOT theme and font handling
   useEffect(() => {
@@ -688,7 +645,7 @@ export default function EnhancedHistogramDashboard() {
 
     try {
       // Load saved zoom from cache first
-      const savedZoom = await loadZoomFromCache(config.id)
+      const savedZoom = savedZoomFor(config.id)
 
       // Create histogram and draw it
       await updateHistogramData(config, savedZoom)
@@ -864,7 +821,7 @@ export default function EnhancedHistogramDashboard() {
       histogramPainters.current[config.id] = painter
       setupZoomPersistence(painter, config)
 
-      const zoomToApply = preservedZoom ?? (isFirstTime ? initialZoom || config.zoomRange : null)
+      const zoomToApply = preservedZoom ?? (isFirstTime ? initialZoom || config.zoom : null)
       if (zoomToApply && zoomToApply.xmin < zoomToApply.xmax) {
         setTimeout(() => {
           const fp = painter.getFramePainter?.()
@@ -927,7 +884,7 @@ export default function EnhancedHistogramDashboard() {
       // Save zoom to cache with debouncing
       clearTimeout(fp.saveZoomTimeout)
       fp.saveZoomTimeout = setTimeout(() => {
-        saveZoomToCache(config.id, { xmin, xmax })
+        saveZoom(config.id, { xmin, xmax })
 
         // Sync zoom if enabled
         if (dashboardSettings.syncZoom) {
@@ -990,51 +947,16 @@ export default function EnhancedHistogramDashboard() {
     return match ? match.index : 2 // fall back to red if somehow unknown
   }
 
-  // Save zoom to cache. Uses functional setState to avoid stale-closure overwrites
-  // when several histograms zoom concurrently.
-  const saveZoomToCache = async (histogramId: string, zoom: { xmin: number; xmax: number }) => {
-    try {
-      const zoomData = { ...zoom, timestamp: Date.now() }
-      const synced = histogramsRef.current.map((h) =>
-        h.id === histogramId ? { ...h, zoomRange: zoomData } : h,
-      )
-      histogramsRef.current = synced
-      setHistograms(synced)
-      await fetch("/api/cache", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: "zoom-range",
-          histogramId,
-          data: zoomData,
-        }),
-      })
-    } catch (error) {
-      console.error("Failed to save zoom to cache:", error)
-    }
+  // Persist a zoom. The store applies it locally at once and debounces the write,
+  // so this is safe to call from a wheel handler.
+  const saveZoom = (histogramId: string, zoom: { xmin: number; xmax: number }) => {
+    useHistogramStore.getState().setZoom(histogramId, zoom)
   }
 
-  // Load zoom from cache
-  const loadZoomFromCache = async (histogramId: string) => {
-    try {
-      // Try loading from cache API first
-      const response = await fetch(`/api/cache?type=zoom-ranges`)
-      const data = await response.json()
-      if (data.success && data.data && data.data[histogramId]) {
-        return data.data[histogramId]
-      }
-
-      // Fallback: check if zoom is in histogram config
-      const config = histograms.find((h) => h.id === histogramId)
-      if (config?.zoomRange) {
-        return config.zoomRange
-      }
-
-    } catch (error) {
-      console.error("Failed to load zoom from cache:", error)
-    }
-    return null
-  }
+  // The zoom to restore on mount, from the configuration the server just sent.
+  // This is what makes leaving the page and coming back land on the same view.
+  const savedZoomFor = (histogramId: string) =>
+    histogramsRef.current.find((h) => h.id === histogramId)?.zoom ?? null
 
   // Sync zoom to other histograms
   const syncZoomToOthers = (sourceId: string, xmin: number, xmax: number) => {
@@ -1046,7 +968,7 @@ export default function EnhancedHistogramDashboard() {
           const fp = painter.getFramePainter()
           if (fp && fp.originalZoom) {
             fp.originalZoom(xmin, xmax, 0, 0)
-            saveZoomToCache(id, { xmin, xmax })
+            saveZoom(id, { xmin, xmax })
           }
         } catch (error) {
           console.error(`Failed to sync zoom to histogram ${id}:`, error)
@@ -1055,124 +977,42 @@ export default function EnhancedHistogramDashboard() {
     })
   }
 
-  // Settings persistence. Optimistic local update + debounced server write.
-  // No remount, no re-fetch — the dependent useEffects pick up the change and redraw.
+  // Settings changes go to the store, which applies them locally at once and
+  // debounces the write. Call sites pass a whole settings object; the store
+  // treats it as a patch, so that keeps working.
   const saveDashboardSettings = useCallback(
     (settings: DashboardSettings) => {
-      const validatedSettings = {
-        ...settings,
-        updateInterval: Math.max(1000, settings.updateInterval),
-      }
+      const rebinChanged = settings.rebinFactor !== dashboardSettings.rebinFactor
+      useHistogramStore.getState().setSettings(settings)
 
-      setDashboardSettings(validatedSettings)
-
-      // Push rebin to backend immediately so the next histogram fetch is rebinned correctly
-      if (validatedSettings.rebinFactor !== dashboardSettings.rebinFactor) {
-        setRebinFactor(validatedSettings.rebinFactor)
-      }
-
-      // Debounced persistence to avoid spam during slider drags
-      if (settingsSaveTimeoutRef.current) clearTimeout(settingsSaveTimeoutRef.current)
-      settingsSaveTimeoutRef.current = setTimeout(() => {
-        fetch("/api/cache", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "settings", data: validatedSettings }),
-        }).catch((error) => {
-          console.error("Failed to save dashboard settings:", error)
+      // The spy manager rebins server-side, so it has to be told before the next
+      // fetch or the spectrum and its integrals disagree about binning.
+      if (rebinChanged) {
+        setRebinFactor(settings.rebinFactor).catch((error) => {
+          console.error("Failed to apply the rebin factor:", error)
           toast({
             title: "Error",
-            description: "Failed to save dashboard settings.",
+            description: "Failed to apply the rebin factor.",
             variant: "destructive",
           })
         })
-      }, 300)
+      }
     },
     [toast, dashboardSettings.rebinFactor],
   )
-
-  const loadDashboardSettings = useCallback(async () => {
-    try {
-      const response = await fetch("/api/cache?type=settings")
-      const data = await response.json()
-      if (data.success && data.data) {
-        const settings = {
-          ...data.data,
-          // Ensure minimum interval is 1 second, default to 5 seconds
-          updateInterval: Math.max(1000, data.data.updateInterval || 5000),
-          rebinFactor: data.data.rebinFactor || 1,
-        }
-
-        setDashboardSettings((prev) => ({ ...prev, ...settings }))
-        setRebinFactor(settings.rebinFactor)
-      }
-    } catch (error) {
-      console.error("Failed to load dashboard settings:", error)
-    }
-  }, [])
-
-  // Optimistic in-memory update + debounced server write. The state update is what the
-  // UI reacts to; the persistence is fire-and-forget so it never blocks the user.
-  // Also syncs histogramsRef synchronously so any update scheduled in the same tick
-  // sees the new config (the ref-syncing useEffect only runs after React commits).
-  const saveHistogramConfigs = useCallback(
-    (configs: HistogramConfig[]) => {
-      histogramsRef.current = configs
-      setHistograms(configs)
-      if (histogramConfigsSaveTimeoutRef.current) clearTimeout(histogramConfigsSaveTimeoutRef.current)
-      histogramConfigsSaveTimeoutRef.current = setTimeout(() => {
-        fetch("/api/cache", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "histograms", data: configs }),
-        }).catch((error) => {
-          console.error("Failed to save histogram configs:", error)
-          toast({
-            title: "Error",
-            description: "Failed to save histogram configurations.",
-            variant: "destructive",
-          })
-        })
-      }, 300)
-    },
-    [toast],
-  )
-
-  const loadHistogramConfigs = useCallback(async () => {
-    try {
-      const response = await fetch("/api/cache?type=histograms")
-      const data = await response.json()
-      if (data.success && data.data && Array.isArray(data.data) && data.data.length > 0) {
-        histogramsRef.current = data.data
-        setHistograms(data.data)
-      }
-    } catch (error) {
-      console.error("Failed to load histogram configs:", error)
-    }
-  }, [])
-
-  // Remove histogram from cache when visibility is toggled off
-  const removeHistogramFromCache = useCallback(async (histogramId: string) => {
-    try {
-      await fetch("/api/cache", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "histogram", id: histogramId }),
-      })
-
-      // Clean up refs
-
-    } catch (error) {
-      console.error("Failed to remove histogram from cache:", error)
-    }
-  }, [])
 
   // API calls
   const fetchBoardConfiguration = async () => {
     try {
       const response = await getBoardConfiguration()
-      setBoards(response.data)
-      return response.data
+      // Ids arrive as numbers and are compared against the strings the Select
+      // and the saved histogram configurations use. Normalise once here.
+      const boardList = (response.data ?? []).map((board: BoardData) => ({
+        ...board,
+        id: String(board.id),
+      }))
+      setBoards(boardList)
+      return boardList
     } catch (error) {
       console.error("Failed to fetch board configuration:", error)
       toast({
@@ -1203,21 +1043,19 @@ export default function EnhancedHistogramDashboard() {
     setHistogramDialogOpen(true)
   }
 
-  const saveHistogram = (config: HistogramConfig) => {
-    const current = histogramsRef.current
-    const updatedHistograms = current.find((h) => h.id === config.id)
-      ? current.map((h) => (h.id === config.id ? config : h))
-      : [...current, config]
-
-    saveHistogramConfigs(updatedHistograms)
+  const saveHistogram = async (config: Partial<HistogramConfig> & { id?: string }) => {
+    const store = useHistogramStore.getState()
+    const saved = config.id
+      ? (await store.updateHistogram(config.id, config), store.histograms.find((h) => h.id === config.id))
+      : await store.addHistogram(config)
 
     // Targeted redraw of the affected histogram (if visible) so changes apply now
-    if (config.visible) updateHistogramData(config, undefined, { forceRebuild: true })
+    const latest = useHistogramStore.getState().histograms.find((h) => h.id === (saved?.id ?? config.id))
+    if (latest?.visible) updateHistogramData(latest, undefined, { forceRebuild: true })
   }
 
-  const deleteHistogram = (id: string) => {
-    const updatedHistograms = histogramsRef.current.filter((h) => h.id !== id)
-    saveHistogramConfigs(updatedHistograms)
+  const deleteHistogram = async (id: string) => {
+    await useHistogramStore.getState().removeHistogram(id)
 
     // Clean up refs and painters
     delete histogramRefs.current[id]
@@ -1225,9 +1063,6 @@ export default function EnhancedHistogramDashboard() {
     delete canvasObjects.current[id]
     delete updateChain.current[id]
     delete pendingForce.current[id]
-
-    // Remove from cache
-    removeHistogramFromCache(id)
   }
 
   // ROI management
@@ -1241,86 +1076,29 @@ export default function EnhancedHistogramDashboard() {
     setRoiDialogOpen(true)
   }
 
-  const saveROI = (histogramId: string, roi: ROI) => {
-    const updatedHistograms = histogramsRef.current.map((h) => {
-      if (h.id === histogramId) {
-        const existingROI = h.rois.find((r) => r.id === roi.id)
-        const updatedROIs = existingROI ? h.rois.map((r) => (r.id === roi.id ? roi : r)) : [...h.rois, roi]
-        return { ...h, rois: updatedROIs }
-      }
-      return h
-    })
-
-    saveHistogramConfigs(updatedHistograms)
-
-    // Targeted redraw of the affected histogram so ROI lines refresh immediately
-    const affected = updatedHistograms.find((h) => h.id === histogramId)
-    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
-  }
-
-  const deleteROI = (histogramId: string, roiId: string) => {
-    const updatedHistograms = histogramsRef.current.map((h) => {
-      if (h.id === histogramId) {
-        return { ...h, rois: h.rois.filter((r) => r.id !== roiId) }
-      }
-      return h
-    })
-
-    saveHistogramConfigs(updatedHistograms)
-
-    // Drop any cached integral for the removed ROI
-    setRoiIntegrals((prev) => {
-      const next = { ...prev }
-      delete next[`${histogramId}_${roiId}`]
-      return next
-    })
-    delete roiRateRef.current[`${histogramId}_${roiId}`]
-
-    const affected = updatedHistograms.find((h) => h.id === histogramId)
-    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
-  }
-
-  // Update ROI integrals for all visible histograms.
-  // Writes only to the roiIntegrals map, not the histograms state, so this tick
-  // does NOT cause histogram redraws / interval restarts.
-  const updateROIIntegrals = async () => {
-    const visibleHistograms = histogramsRef.current.filter((h) => h.visible)
-
-    const integralPromises: Promise<{ histogramId: string; roiId: string; integral: number }>[] = []
-
-    for (const config of visibleHistograms) {
-      for (const roi of config.rois.filter((r) => r.enabled)) {
-        integralPromises.push(
-          getRoiIntegral(config.boardId, config.channel.toString(), roi.low, roi.high)
-            .then((integral) => ({ histogramId: config.id, roiId: roi.id, integral }))
-            .catch((error) => {
-              console.error(`Failed to get ROI integral for ${config.id}/${roi.id}:`, error)
-              return { histogramId: config.id, roiId: roi.id, integral: 0 }
-            }),
-        )
-      }
+  const saveROI = async (histogramId: string, roi: Partial<ROI> & { id?: string }) => {
+    const store = useHistogramStore.getState()
+    if (roi.id) {
+      await store.updateRoi(histogramId, roi.id, roi)
+    } else {
+      await store.addRoi(histogramId, roi)
     }
 
-    const results = await Promise.all(integralPromises)
-    if (results.length === 0) return
-
-    const now = Date.now()
-    setRoiIntegrals((prev) => {
-      const next = { ...prev }
-      for (const r of results) {
-        const key = `${r.histogramId}_${r.roiId}`
-        const previous = roiRateRef.current[key]
-        const dt = previous ? (now - previous.lastUpdate) / 1000 : 0
-        let rate = previous?.rate ?? 0
-        if (previous && dt > 0.1 && previous.lastIntegral !== r.integral) {
-          rate = Math.abs(r.integral - previous.lastIntegral) / dt
-        }
-        roiRateRef.current[key] = { rate: Math.max(0, rate), lastUpdate: now, lastIntegral: r.integral }
-        next[key] = r.integral
-      }
-      return next
-    })
+    // Targeted redraw of the affected histogram so ROI overlays refresh immediately
+    const affected = useHistogramStore.getState().histograms.find((h) => h.id === histogramId)
+    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
   }
+
+  const deleteROI = async (histogramId: string, roiId: string) => {
+    await useHistogramStore.getState().removeRoi(histogramId, roiId)
+
+    const affected = useHistogramStore.getState().histograms.find((h) => h.id === histogramId)
+    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
+  }
+
+  // Every ROI's counts in a single request, rather than one request per ROI per
+  // tick, each of which made the server re-read the same spectrum.
+  const updateROIIntegrals = () => refreshIntegrals()
 
   // Reorder histograms. Pure state update — the visibleHistograms sort handles
   // the visual reorder; no remount or redraw is needed.
@@ -1333,12 +1111,8 @@ export default function EnhancedHistogramDashboard() {
     const newIndex = current.findIndex((h) => h.id === over.id)
     if (oldIndex === -1 || newIndex === -1) return
 
-    const reordered = arrayMove(current, oldIndex, newIndex).map((histogram, index) => ({
-      ...histogram,
-      order: index,
-    }))
-
-    saveHistogramConfigs(reordered)
+    const reordered = arrayMove(current, oldIndex, newIndex)
+    useHistogramStore.getState().reorder(reordered.map((h) => h.id))
   }
 
   // Zoom management
@@ -1351,15 +1125,7 @@ export default function EnhancedHistogramDashboard() {
       }
     })
 
-    const updatedHistograms = histogramsRef.current.map((h) => ({ ...h, zoomRange: undefined }))
-    saveHistogramConfigs(updatedHistograms)
-
-    // Clear zoom cache
-    fetch("/api/cache", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "zoom-ranges" }),
-    })
+    useHistogramStore.getState().clearZoom()
 
     toast({
       title: "Zoom Reset",
@@ -1381,13 +1147,13 @@ export default function EnhancedHistogramDashboard() {
   const getHistogramSize = (size: "small" | "medium" | "large") => {
     switch (size) {
       case "small":
-        return "h-60"
+        return "h-72"
       case "medium":
-        return "h-80"
-      case "large":
         return "h-96"
+      case "large":
+        return "h-[32rem]"
       default:
-        return "h-80"
+        return "h-96"
     }
   }
 
@@ -1401,7 +1167,7 @@ export default function EnhancedHistogramDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <main className="flex-1 container mx-auto p-4">
+      <main className="flex-1 w-full px-4 py-4">
         {/* Header Controls */}
         <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
           <div className="flex items-center gap-2">

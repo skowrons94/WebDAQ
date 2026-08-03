@@ -28,13 +28,14 @@ The LunaDAQ server follows a layered architecture pattern:
 │   (Routes: auth, experiment, digitizer, histograms, etc.)   │
 ├─────────────────────────────────────────────────────────────┤
 │                      Service Layer                           │
-│   (DAQManager, SpyManager, StatsManager, ResolutionTuner)   │
+│  (DAQManager, CaenAcquisition, SpyManager, StatsManager,    │
+│   HistogramConfigStore, ROI analysis, ResolutionTuner)      │
 ├─────────────────────────────────────────────────────────────┤
 │                      Utility Layer                           │
-│   (Digitizer, XDAQ, Graphite, TetrAMM, RBD9103)            │
+│  (Digitizer, spy snapshots, Graphite, TetrAMM, RBD9103)     │
 ├─────────────────────────────────────────────────────────────┤
 │                    Hardware / External                       │
-│   (CAEN Boards, Docker/XDAQ, Graphite DB, Current Meters)   │
+│  (CAEN Boards via caendaq, Graphite DB, Current Meters)     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -61,14 +62,20 @@ server/
 │   │   └── tuning.py       # Resolution tuner endpoints
 │   ├── services/           # Business logic managers
 │   │   ├── daq_manager.py  # Centralized DAQ state
-│   │   ├── spy_manager.py  # Histogram spy server
+│   │   ├── caen_acquisition.py # In-process acquisition (caendaq)
+│   │   ├── digitizer_container.py # Persistent board connections
+│   │   ├── spy_manager.py  # Online spectra from caendaq
+│   │   ├── histogram_config.py # Histogram dashboard & ROIs
+│   │   ├── roi_analysis.py # ROI integrals, per-run roi.json
 │   │   ├── stats_manager.py # Graphite data collection
+│   │   ├── graphite_reader.py # Render-API reads
+│   │   ├── run_data.py     # Run directory contents
 │   │   └── resolution_tuner.py # Parameter optimization
 │   └── utils/              # Hardware interfaces
 │       ├── dgtz.py         # CAEN digitizer wrapper
-│       ├── spy.py          # ReadoutUnit spy client
-│       ├── xdaq.py         # XDAQ/Docker management
+│       ├── spy.py          # Spectrum snapshots from caendaq
 │       ├── graphite.py     # Graphite HTTP client
+│       ├── graphite_current.py # Beam current from a metric
 │       ├── tetramm.py      # TetrAMM controller
 │       ├── rbd9103.py      # RBD 9103 controller
 │       └── jwt_utils.py    # JWT authentication
@@ -103,7 +110,6 @@ serve(app, host='0.0.0.0', port=5001, threads=10)
 The `cleanup_on_shutdown` function handles graceful termination:
 - Stops DAQ acquisition if running
 - Stops board monitoring thread
-- Stops Docker container
 - Closes all digitizer connections
 - Stops current monitoring devices
 
@@ -271,10 +277,10 @@ Manages persistent connections to CAEN boards to avoid frequent reconnections.
 | Method | Parameters | Returns | Description |
 |--------|------------|---------|-------------|
 | `prepare_run_start` | - | - | Create directories, copy configs |
-| `configure_xdaq_for_run` | - | - | Configure XDAQ topology |
-| `start_xdaq` | - | - | Start XDAQ acquisition |
-| `stop_xdaq` | - | - | Stop XDAQ acquisition |
-| `reset_xdaq` | - | - | Reset XDAQ system |
+| `start_acquisition` | - | - | Arm the boards and start writing (via caendaq) |
+| `stop_acquisition` | - | - | Stop the boards and close the files |
+| `reset_acquisition` | - | - | Drop and rebuild the acquisition state |
+| `add_run_state_listener` | `callback(running)` | - | Register a run start/stop hook |
 | `start_board_monitoring` | - | - | Start health monitoring thread |
 | `stop_board_monitoring` | - | - | Stop monitoring thread |
 | `increment_run_number` | - | `int` | Increment and persist run number |
@@ -501,13 +507,13 @@ Routes are organized by functionality using Flask Blueprints.
 | `/experiment/set_data_size_limit` | POST | Set max file size |
 | `/experiment/get_data_size_limit` | GET | Get size limit |
 
-#### XDAQ Status
+#### Acquisition Status
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/experiment/xdaq/file_bandwidth` | GET | File writing speed |
-| `/experiment/xdaq/output_bandwidth` | GET | Network output speed |
-| `/experiment/xdaq/reset` | POST | Reset XDAQ system |
+| `/experiment/file_bandwidth` | GET | File writing speed, summed across boards |
+| `/experiment/stats` | GET | Per-board, per-channel rates from caendaq |
+| `/experiment/reset` | POST | Reset the acquisition state |
 
 ---
 
@@ -561,7 +567,33 @@ Routes are organized by functionality using Flask Blueprints.
 | `/waveforms/activate` | POST | Enable waveforms |
 | `/waveforms/deactivate` | POST | Disable waveforms |
 | `/waveforms/status` | GET | Waveform status |
-| `/spy/status` | GET | Spy server status |
+| `/spy/status` | GET | Spy status |
+
+#### Dashboard configuration
+
+The histogram dashboard is server-side state, stored in `conf/histograms.json`
+and served from the same blueprint. See
+[Spectra and ROIs](histograms-and-rois.md) for what it means operationally.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/histograms/config` | GET | The whole dashboard: settings and every histogram with its ROIs and zoom |
+| `/histograms/config` | PUT | Replace the whole dashboard (import, reset to defaults) |
+| `/histograms/config/settings` | PUT | Patch the display settings |
+| `/histograms/config/histograms` | POST | Add a histogram |
+| `/histograms/config/histograms/<id>` | PUT / DELETE | Update or remove one |
+| `/histograms/config/order` | PUT | Reorder the cards |
+| `/histograms/config/histograms/<id>/zoom` | PUT | Store a zoom (send `null` to clear) |
+| `/histograms/config/zoom` | DELETE | Clear every saved zoom |
+| `/histograms/config/histograms/<id>/rois` | POST | Add an ROI |
+| `/histograms/config/histograms/<id>/rois/<roi_id>` | PUT / DELETE | Update or remove one |
+| `/histograms/roi_integrals` | GET | **Every** ROI's counts in one request; `?all=1` includes hidden and disabled |
+| `/histograms/run/<n>/roi_snapshot` | POST | Write a run's `roi.json` now |
+
+`/histograms/roi_integrals` returns `{gross, background, net}` per ROI and reads
+each spectrum once per board/channel rather than once per region. `background` is
+`null` and `net == gross` until a background estimator exists; the shape is fixed
+so that adding one changes neither the API nor the stored files.
 
 ---
 
@@ -678,59 +710,37 @@ Python wrapper for the CAEN Digitizer C library.
 
 ---
 
-### XDAQ Interface
+### Acquisition Interface
 
-**Location:** `server/app/utils/xdaq.py`
+**Location:** `server/app/services/caen_acquisition.py`
 
-Manages XDAQ Docker container and SOAP messaging.
-
-**Class: xdaq_messenger**
-
-Sends SOAP messages to XDAQ applications.
+Owns the in-process `caendaq.DAQ` instance: board registration, arming, the
+synchronised start, file writing and the rate statistics. There is no external
+acquisition process and no message passing — the calls are direct into C++.
 
 | Method | Description |
 |--------|-------------|
-| `create_action_message(action)` | Build SOAP action request |
-| `create_parameter_message(name, type, value)` | Build parameter set message |
-| `send_message(message)` | Execute HTTP request |
-
-**Class: topology**
-
-Manages XDAQ topology configuration.
-
-| Method | Description |
-|--------|-------------|
-| `load_topology()` | Parse `topology.xml` |
-| `configure_pt()` | Configure Persistent Topology |
-| `enable_pt()` | Start PT background threads |
-| `write_ruconf(daq_state)` | Update RU configuration |
-| `get_daq_status()` | Query DAQ state |
-
-**Class: container**
-
-Docker container manager.
-
-| Method | Description |
-|--------|-------------|
-| `initialize()` | Start XDAQ Docker container |
-| `start_container()` | Create and run container |
-| `stop()` | Stop Docker container |
+| `configure(boards, run_dir)` | Register boards and set the output directory |
+| `start()` / `stop()` | Arm and disarm the boards |
+| `board_index(board_id)` | Map a board id to its caendaq index |
+| `stats()` | Per-board, per-channel rate snapshot |
+| `set_graphite(host, prefix)` | Retarget the rate publisher |
+| `stats_interval()` | The sampling cadence currently in use |
 
 ---
 
-### Spy Server Interface
+### Spy Interface
 
 **Location:** `server/app/utils/spy.py`
 
-Connects to XDAQ ReadoutUnit spy server (port 6060).
-
-**Class: ReadoutUnitSpy**
+Builds a ROOT `TH1F` from the spectra caendaq is already accumulating in C++,
+addressed by `(board, channel)`. Snapshots are taken **on demand** — there is no
+socket, no background collection thread and no separate monitoring process.
 
 | Method | Description |
 |--------|-------------|
-| `start(daq_state)` | Initialize spy connection |
-| `stop()` | Shutdown and cleanup |
-| `get_object(hist_type, idx)` | Retrieve histogram/waveform |
+| `start(daq_state)` / `stop()` | Follow the run state |
+| `histogram(board_index, channel, type)` | Snapshot a spectrum or waveform |
 
 ---
 
@@ -819,9 +829,11 @@ Per-board register configuration.
 }
 ```
 
-### conf/topology.xml
+### conf/histograms.json
 
-XDAQ topology definition (ReadoutUnit, BuilderUnit configuration).
+The histogram dashboard: which spectra are shown, their labels, ROIs, zooms and
+the display settings. Owned by `services/histogram_config.py`; written atomically
+on every change. See [Spectra and ROIs](histograms-and-rois.md).
 
 ### conf/current.json
 
@@ -878,19 +890,21 @@ Calibration coefficients (one line per channel).
    │   ├─ Copy board configs to run directory
    │   └─ Copy calibration files to run directory
    │
-4. ├─ configure_xdaq_for_run()
-   │   ├─ Write RUCaen.conf
-   │   └─ Configure topology
+4. ├─ caen_acquisition.configure()
+   │   ├─ Register the boards with caendaq
+   │   └─ Set the run output directory
    │
-5. ├─ start_xdaq()
-   │   ├─ Configure state machine
-   │   └─ Enable acquisition
+5. ├─ caen_acquisition.start()
+   │   ├─ Arm the boards
+   │   └─ Synchronised start
    │
 6. ├─ start_board_monitoring()
    │   └─ Start health check thread
    │
-7. ├─ spy_manager.start_spy()
-   │   └─ Connect to spy socket (port 6060)
+7. ├─ Notify run-state listeners
+   │   ├─ Charge integration on
+   │   ├─ Stats collection on
+   │   └─ ROI snapshot arms for this run number
    │
 8. └─ Create RunMetadata in database
 ```
@@ -901,12 +915,12 @@ Calibration coefficients (one line per channel).
 CAEN Digitizer Board
        │
        ▼
-XDAQ ReadoutUnit (Docker)
+caendaq (in process)
        │
-       ├──► Data Files (if saving enabled)
+       ├──► .caendat files (if saving enabled)
        │
        ▼
-Spy Socket (port 6060)
+Spectrum snapshot (in memory)
        │
        ▼
 ReadoutUnitSpy (spy.py)
@@ -1060,7 +1074,9 @@ Services (DAQManager, SpyManager, etc.) use singletons to ensure single resource
 DigitizerContainer maintains open board connections to reduce latency.
 
 ### State Machine Pattern
-DAQ uses running/stopped states; XDAQ uses Configure/Enable/Disable transitions.
+DAQ uses running/stopped states, and every path that changes them goes through
+`set_running_state`, so run-state listeners (charge, stats, ROI snapshot) see
+every transition regardless of what caused it.
 
 ### Observer Pattern
 Board monitoring thread watches connection health; tuning thread updates session progress.

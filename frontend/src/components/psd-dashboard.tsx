@@ -79,7 +79,11 @@ export default function PSDDashboard() {
   const fetchBoardConfiguration = async () => {
     try {
       const response = await getBoardConfiguration()
-      setBoards(response.data)
+      // Ids arrive as numbers; everything downstream compares them as strings.
+      setBoards((response.data ?? []).map((board: BoardData) => ({
+        ...board,
+        id: String(board.id),
+      })))
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
       toast({
@@ -157,7 +161,7 @@ export default function PSDDashboard() {
   }, [getSelectedChannels, updateBoardChannelSelection])
 
   const handleSelectAllChannels = useCallback((boardId: string, checked: boolean) => {
-    const board = boards.find((b: BoardData) => b.id === boardId)
+    const board = boards.find((b: BoardData) => String(b.id) === String(boardId))
     if (!board) return
 
     const allChannels = Array.from({ length: parseInt(board.chan) }, (_, i) => i)

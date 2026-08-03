@@ -7,6 +7,8 @@ export interface BoardChannelSelection {
     channels: number[]
 }
 
+export type BeamPanelPlacement = 'beside-controls' | 'top' | 'status' | 'below-status'
+
 export interface VisualizationSettings {
     theme: 'light' | 'dark' | 'system'
     showStats: boolean
@@ -16,9 +18,9 @@ export interface VisualizationSettings {
     showStatus: boolean
     showCurrent: boolean
     currentEnabled: boolean
-    showXDAQ: boolean
     showROIs: boolean
     showMetrics: boolean
+    beamPanelPlacement: BeamPanelPlacement
     selectedBoardsChannelsPSD: BoardChannelSelection[]
     selectedBoardsChannelsWaveform: BoardChannelSelection[]
 }
@@ -43,9 +45,9 @@ const DEFAULT_SETTINGS: VisualizationSettings = {
     showStatus: true,
     showCurrent: true,
     currentEnabled: true,
-    showXDAQ: true,
     showROIs: true,
     showMetrics: true,
+    beamPanelPlacement: 'beside-controls',
     selectedBoardsChannelsPSD: [],
     selectedBoardsChannelsWaveform: []
 }

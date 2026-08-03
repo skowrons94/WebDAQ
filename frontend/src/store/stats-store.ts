@@ -3,6 +3,9 @@ import { create } from 'zustand'
 export interface StatPath {
   path: string
   alias: string
+  /** Unit of the reading ('kV', 'uA'); shown on the card and written into the
+   *  run's stats.csv header. Empty when the metric has none. */
+  unit?: string
   enabled: boolean
 }
 

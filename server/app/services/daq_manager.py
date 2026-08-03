@@ -9,7 +9,7 @@ Key Features:
 - DAQ state management (running status, run number, save settings)
 - Board configuration management (add/remove CAEN boards)
 - Settings persistence to JSON files
-- XDAQ topology configuration
+- caendaq acquisition lifecycle + board-failure monitoring
 - Run directory management
 - Board information queries for digitizer control
 
@@ -26,236 +26,22 @@ import urllib.request
 import urllib.parse
 import urllib.error
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Callable, Dict, List, Optional, Any
 
-from ..utils import xdaq
-from ..utils.dgtz import digitizer
+from .digitizer_container import DigitizerContainer
+from .telegram_notifier import TelegramNotifier
+from ..utils.safe_registers import is_online_safe
+from ..utils.board_defaults import default_board_config
 
 logger = logging.getLogger(__name__)
 
-class DigitizerContainer:
+
+class BoardConfigError(ValueError):
+    """A board configuration the operator has to fix (not a hardware failure).
+
+    The message is written for the operator and is shown verbatim in the UI.
     """
-    Container class to manage persistent digitizer connections.
-    Maintains open digitizer connections to avoid frequent open/close operations.
-    """
-    
-    def __init__(self, test_flag: bool = False):
-        """
-        Initialize the digitizer container.
-        
-        Args:
-            test_flag: Enable test mode for development
-        """
-        self.logger = logging.getLogger(__name__ + '.DigitizerContainer')
-        self.test_flag = test_flag
-        self.digitizers = {}  # {board_id: digitizer_instance}
-        self.connection_locks = {}  # {board_id: threading.Lock}
-    
-    def _create_digitizer(self, board_config: Dict[str, Any]) -> Optional[digitizer]:
-        """
-        Create and open a digitizer connection with retry logic.
-        
-        Args:
-            board_config: Board configuration dictionary
-            
-        Returns:
-            Digitizer instance or None if failed
-        """
-        if self.test_flag:
-            return None
-        
-        link_type_map = {"USB": 0, "Optical": 1, "A4818": 5}
-        link_type = link_type_map.get(board_config["link_type"], 0)
-        
-        dgtz = digitizer(
-            link_type, 
-            int(board_config["link_num"]), 
-            int(board_config["id"]), 
-            int(board_config["vme"], 16)
-        )
-        
-        # Try to open connection with up to 3 attempts
-        for attempt in range(3):
-            try:
-                dgtz.open()
-                if dgtz.get_connected():
-                    self.logger.info(f"Successfully connected to board {board_config['id']} on attempt {attempt + 1}")
-                    return dgtz
-                else:
-                    self.logger.warning(f"Failed to connect to board {board_config['id']} on attempt {attempt + 1}")
-            except Exception as e:
-                self.logger.error(f"Exception connecting to board {board_config['id']} on attempt {attempt + 1}: {e}")
-            
-            # Wait 1 second before retry (except on the last attempt)
-            if attempt < 2:
-                time.sleep(1.0)
-        
-        # All attempts failed
-        self.logger.error(f"Failed to connect to board {board_config['id']} after 3 attempts")
-        return None
-    
-    def add_board(self, board_config: Dict[str, Any]) -> bool:
-        """
-        Add a board and create persistent digitizer connection.
-        
-        Args:
-            board_config: Board configuration dictionary
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        board_id = str(board_config['id'])
-        
-        # Create lock for this board
-        self.connection_locks[board_id] = threading.Lock()
-        
-        # Create and store digitizer connection
-        dgtz = self._create_digitizer(board_config)
-        if dgtz is not None:
-            self.digitizers[board_id] = dgtz
-            self.logger.info(f"Added persistent connection for board {board_id}")
-            return True
-        else:
-            # Clean up lock if connection failed
-            self.connection_locks.pop(board_id, None)
-            return False
-    
-    def remove_board(self, board_id: str) -> None:
-        """
-        Remove a board and close its digitizer connection.
-        
-        Args:
-            board_id: Board ID string
-        """
-        board_id = str(board_id)
-        
-        # Close and remove digitizer connection
-        if board_id in self.digitizers:
-            try:
-                self.digitizers[board_id].close()
-                self.logger.info(f"Closed connection for board {board_id}")
-            except Exception as e:
-                self.logger.error(f"Error closing connection for board {board_id}: {e}")
-            
-            del self.digitizers[board_id]
-        
-        # Remove lock
-        self.connection_locks.pop(board_id, None)
-    
-    def get_digitizer(self, board_id: str) -> Optional[digitizer]:
-        """
-        Get digitizer instance for a board.
-        
-        Args:
-            board_id: Board ID string
-            
-        Returns:
-            Digitizer instance or None if not found
-        """
-        return self.digitizers.get(str(board_id))
-    
-    def get_connection_lock(self, board_id: str) -> Optional[threading.Lock]:
-        """
-        Get connection lock for a board.
-        
-        Args:
-            board_id: Board ID string
-            
-        Returns:
-            Lock instance or None if not found
-        """
-        return self.connection_locks.get(str(board_id))
-    
-    def is_connected(self, board_id: str) -> bool:
-        """
-        Check if board is connected.
-        
-        Args:
-            board_id: Board ID string
-            
-        Returns:
-            True if connected, False otherwise
-        """
-        if self.test_flag:
-            return True
-        
-        dgtz = self.get_digitizer(board_id)
-        if dgtz is None:
-            return False
-        
-        try:
-            return dgtz.get_connected()
-        except Exception as e:
-            self.logger.error(f"Error checking connection for board {board_id}: {e}")
-            return False
-    
-    def read_register(self, board_id: str, address: int) -> Optional[int]:
-        """
-        Read register from a board using persistent connection.
-        
-        Args:
-            board_id: Board ID string
-            address: Register address
-            
-        Returns:
-            Register value or None if failed
-        """
-        if self.test_flag:
-            return 0
-        
-        dgtz = self.get_digitizer(board_id)
-        if dgtz is None:
-            return None
-        
-        lock = self.get_connection_lock(board_id)
-        if lock is None:
-            return None
-        
-        try:
-            with lock:
-                if dgtz.get_connected():
-                    return dgtz.read_register(address)
-                else:
-                    self.logger.warning(f"Board {board_id} not connected for register read")
-                    return None
-        except Exception as e:
-            self.logger.error(f"Error reading register 0x{address:X} from board {board_id}: {e}")
-            return None
-    
-    def refresh_board_connection(self, board_id: str, board_config: Dict[str, Any]) -> bool:
-        """
-        Refresh connection for a specific board (close and reopen).
-        
-        Args:
-            board_id: Board ID string
-            board_config: Board configuration dictionary
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        self.remove_board(board_id)
-        return self.add_board(board_config)
-    
-    def get_all_board_ids(self) -> List[str]:
-        """
-        Get list of all board IDs with persistent connections.
-        
-        Returns:
-            List of board ID strings
-        """
-        return list(self.digitizers.keys())
-    
-    def cleanup(self) -> None:
-        """Close all digitizer connections."""
-        for board_id, dgtz in self.digitizers.items():
-            try:
-                dgtz.close()
-                self.logger.info(f"Closed connection for board {board_id}")
-            except Exception as e:
-                self.logger.error(f"Error closing connection for board {board_id}: {e}")
-        
-        self.digitizers.clear()
-        self.connection_locks.clear()
+
 
 class DAQManager:
     """
@@ -296,38 +82,29 @@ class DAQManager:
         # Flask app reference for background threads that need app context
         self.flask_app = None
 
+        # Called when a run starts or stops, whatever started or stopped it —
+        # the charge integration hangs off this so it can never be left running
+        # by a client that failed to say "stop".
+        self.run_state_listeners: List[Callable[[bool], None]] = []
+
         # Telegram notification settings (loaded from persistent storage)
-        self._load_telegram_settings()
-        self.telegram_notification_sent = False  # Track if notification was sent for current run
+        self.telegram = TelegramNotifier()
         
         # Initialize persistent connections for existing boards
         for board in self.daq_state.get('boards', []):
             board_id = str(board['id'])
             if not self.digitizer_container.add_board(board):
                 self.logger.warning(f"Failed to create persistent connection for board {board_id}")
+
+        # A board listed in settings.json whose register file is missing leaves
+        # every register-driven page (tuner, CAEN dashboard) empty and a run
+        # unable to configure. Rebuild what is missing instead of carrying the
+        # inconsistency forward.
+        self._repair_board_configs()
         
-        # Initialize XDAQ topology if not in test mode
-        if not self.test_flag:
-            self.topology = xdaq.topology("conf/topology.xml")
-            self.topology.load_topology()
-            self.topology.display()
-            
-            # Initialize container
-            directory = os.path.realpath("./")
-            self.container = xdaq.container(directory)
-            self.container.initialize()
-            self.logger.info("XDAQ container initialized")
-            
-            # Configure and enable PT
-            self.topology.configure_pt()
-            self.logger.info("PT configured")
-            self.topology.enable_pt()
-            self.logger.info("PT enabled")
-        else:
-            self.topology = None
-            self.container = None
-            self.logger.info("Running in test mode - XDAQ disabled")
-        
+        # Acquisition runs in-process via caen_acquisition (the caendaq module).
+        self.logger.info("Acquisition backend: caendaq")
+
         # Update project files
         self._update_project()
     
@@ -366,9 +143,9 @@ class DAQManager:
             'save': False,
             'limit_size': False,
             'file_size_limit': 0,
-            'boards': []
+            'boards': [],
         }
-        
+
         try:
             with open(settings_file, 'w') as f:
                 json.dump(default_state, f, indent=4)
@@ -379,18 +156,11 @@ class DAQManager:
         return default_state
     
     def _update_project(self) -> None:
-        """Update project configuration files."""
+        """Persist the DAQ state to conf/settings.json."""
         try:
-            # Save DAQ state to JSON
             with open('conf/settings.json', 'w') as f:
                 json.dump(self.daq_state, f, indent=4)
-            
-            # Update XDAQ configuration if not in test mode
-            if not self.test_flag and self.topology:
-                self.topology.write_ruconf(self.daq_state)
-            
             self.logger.debug("Project configuration updated")
-            
         except Exception as e:
             self.logger.error(f"Error updating project: {e}")
     
@@ -404,20 +174,8 @@ class DAQManager:
         return self.daq_state.copy()
     
     def is_running(self) -> bool:
-        """
-        Check if DAQ is currently running.
-        
-        Returns:
-            True if DAQ is running, False otherwise
-        """
-        if not self.test_flag and self.topology:
-            try:
-                status = self.topology.get_daq_status()
-                self.daq_state['running'] = (status == "Running")
-            except Exception as e:
-                self.logger.warning(f"Error checking DAQ status: {e}")
-                self.daq_state['running'] = False
-        
+        """True if a run is active (tracked via set_running_state)."""
+
         return self.daq_state['running']
     
     def get_run_number(self) -> int:
@@ -503,12 +261,12 @@ class DAQManager:
     def get_start_time(self) -> Optional[str]:
         """
         Get DAQ start time.
-        
+
         Returns:
             Start time string or None if not running
         """
         return self.daq_state.get('start_time')
-    
+
     def get_boards(self) -> List[Dict[str, Any]]:
         """
         Get list of configured CAEN boards.
@@ -518,17 +276,203 @@ class DAQManager:
         """
         return self.daq_state['boards'].copy()
     
+    @staticmethod
+    def _has_registers(config_file: str) -> bool:
+        """Whether a board config exists AND actually carries registers.
+
+        Older test-mode runs wrote a placeholder with an empty "registers" block;
+        treat those as missing so they get regenerated with real defaults.
+        """
+        try:
+            with open(config_file) as f:
+                return bool(json.load(f).get("registers"))
+        except Exception:
+            return False
+
+    @staticmethod
+    def board_config_path(board: Dict[str, Any]) -> str:
+        """Where a board's register dump lives."""
+        return f"conf/{board.get('name')}_{board.get('id')}.json"
+
+    def _repair_board_configs(self) -> None:
+        """
+        Rebuild register files that are missing or empty.
+
+        The board list and the register dumps are separate files, so they can
+        drift apart — a config deleted by hand, a copied settings.json, an
+        interrupted first start. The symptom is a board that looks configured
+        while /digitizer/<id>/registers answers "Registers not found", which
+        reads as a broken page rather than as missing data. Rebuilding here
+        means the server comes up consistent with what it advertises.
+        """
+        for board in self.daq_state.get('boards', []):
+            config_file = self.board_config_path(board)
+            if self._has_registers(config_file):
+                continue
+
+            board_id = str(board['id'])
+            self.logger.warning(f"Board {board_id} has no register configuration at {config_file}")
+            try:
+                os.makedirs('conf', exist_ok=True)
+                if self.test_flag:
+                    config = default_board_config(
+                        name=board.get('name', 'V1730'),
+                        board_id=int(board['id']),
+                        dpp=board.get('dpp', 'DPP-PSD'),
+                        channels=int(board.get('chan', 16)),
+                    )
+                    with open(config_file, 'w') as f:
+                        json.dump(config, f, indent=4)
+                    self.logger.info(
+                        f"Rebuilt default {board.get('dpp', 'DPP-PSD')} configuration for mock "
+                        f"board {board_id} ({len(config['registers'])} registers)")
+                elif self._read_registers_from_board(board, config_file):
+                    self.logger.info(f"Re-read register configuration for board {board_id} from the board")
+                else:
+                    self.logger.error(
+                        f"Board {board_id} is configured but its registers could not be read — "
+                        "the tuner and the CAEN dashboard will have nothing to show. "
+                        "Check the connection, then remove and re-add the board.")
+            except Exception as e:
+                self.logger.error(f"Could not rebuild configuration for board {board_id}: {e}")
+
+    def _read_registers_from_board(self, board: Dict[str, Any], config_file: str) -> bool:
+        """Dump a connected board's registers to its config file. False if unreachable."""
+        board_id = str(board['id'])
+        dgtz = self.digitizer_container.get_digitizer(board_id)
+        if dgtz is None:
+            return False
+        lock = self.digitizer_container.get_connection_lock(board_id)
+        try:
+            if lock:
+                lock.acquire()
+            if not dgtz.get_connected():
+                return False
+            if board.get('dpp') == 'DPP-PHA':
+                dgtz.read_pha(config_file)
+            else:
+                dgtz.read_psd(config_file)
+        except Exception as e:
+            self.logger.error(f"Reading registers from board {board_id} failed: {e}")
+            return False
+        finally:
+            if lock:
+                lock.release()
+        return self._has_registers(config_file)
+
+    def find_board_with_id(self, board_id: Any) -> Optional[Dict[str, Any]]:
+        """The already-configured board using this id, or None.
+
+        Compares as strings because ids arrive both as numbers (settings.json)
+        and as strings (the REST API).
+        """
+        for board in self.daq_state['boards']:
+            if str(board['id']) == str(board_id):
+                return board.copy()
+        return None
+
+    def _validate_new_board(self, board_config: Dict[str, Any]) -> None:
+        """
+        Check a board can be added, and normalise its id.
+
+        Board ids must be unique: the id names the board's configuration file,
+        identifies the board inside the unified data file, and selects the master
+        of a synchronised chain. Two boards sharing one would overwrite each
+        other's configuration and make their data indistinguishable — so this is
+        rejected up front, before any file is written or any board is opened.
+
+        Raises:
+            BoardConfigError: with a message meant for the operator
+        """
+        raw_id = board_config.get('id')
+        if raw_id is None or str(raw_id).strip() == '':
+            raise BoardConfigError("A board ID is required.")
+
+        try:
+            board_id = int(str(raw_id).strip())
+        except (TypeError, ValueError):
+            raise BoardConfigError(f"Board ID must be a whole number (got '{raw_id}').")
+
+        if board_id < 0:
+            raise BoardConfigError(f"Board ID must not be negative (got {board_id}).")
+
+        existing = self.find_board_with_id(board_id)
+        if existing is not None:
+            raise BoardConfigError(
+                f"Board ID {board_id} is already used by '{existing.get('name', 'another board')}'. "
+                "Two boards cannot share an ID — it names the board's configuration file, "
+                "identifies it in the data file, and picks the master of a synchronised chain. "
+                "Give this board a different ID, or remove the existing one first."
+            )
+
+        # Store the id as a number so sorting and comparisons stay consistent
+        # regardless of whether it arrived as "1" or 1.
+        board_config['id'] = board_id
+
+    def _insert_board_sorted(self, board_config: Dict[str, Any]) -> None:
+        """Insert a board into daq_state['boards'], keeping it sorted by id."""
+        board_id = int(board_config['id'])
+        insert_index = 0
+        for i, existing in enumerate(self.daq_state['boards']):
+            if int(existing['id']) > board_id:
+                insert_index = i
+                break
+            insert_index = i + 1
+        self.daq_state['boards'].insert(insert_index, board_config)
+
     def add_board(self, board_config: Dict[str, Any]) -> bool:
         """
         Add a new CAEN board to the configuration.
-        
+
         Args:
             board_config: Board configuration dictionary
-            
+
         Returns:
-            True if successful, False otherwise
+            True if successful, False if the board could not be reached
+
+        Raises:
+            BoardConfigError: the configuration itself is invalid (e.g. an ID
+                another board already uses). Raised before anything is written
+                or opened, so a rejected board leaves no trace.
         """
+        self._validate_new_board(board_config)
+
         try:
+            # Test mode: no hardware. Register a mock board with sensible defaults
+            # so the whole flow (add board -> start run -> mock data) works. The
+            # MockDigitizer answers for any board added here.
+            if self.test_flag:
+                board_config.setdefault("name", "V1730")   # decodable default (PHA & PSD)
+                board_config["chan"] = int(board_config.get("chan", 16))
+                os.makedirs("conf", exist_ok=True)
+                os.makedirs("calib", exist_ok=True)
+                config_file = f"conf/{board_config['name']}_{board_config['id']}.json"
+                # With no hardware to read, fabricate the register dump the
+                # digitizer would have produced. It is the source of truth for
+                # the dashboard and for how the run starts (0x8100), so an empty
+                # one leaves the UI blank — regenerate those too.
+                if not self._has_registers(config_file):
+                    config = default_board_config(
+                        name=board_config['name'],
+                        board_id=int(board_config['id']),
+                        dpp=board_config.get('dpp', 'DPP-PSD'),
+                        channels=board_config['chan'],
+                    )
+                    with open(config_file, 'w') as f:
+                        json.dump(config, f, indent=4)
+                    self.logger.info(
+                        f"Created default {board_config.get('dpp', 'DPP-PSD')} register "
+                        f"configuration for mock board at {config_file} "
+                        f"({len(config['registers'])} registers)")
+                calib_file = f"calib/{board_config['name']}_{board_config['id']}.cal"
+                with open(calib_file, 'w') as f:
+                    for _ in range(board_config['chan']):
+                        f.write("0.0 1.0\n")
+                self._insert_board_sorted(board_config)
+                self._update_project()
+                self.logger.info(f"Added mock board: {board_config['name']} (ID {board_config['id']})")
+                return True
+
             # Create persistent digitizer connection
             if not self.digitizer_container.add_board(board_config):
                 self.logger.error(f"Failed to create persistent connection for board {board_config['id']}")
@@ -576,16 +520,8 @@ class DAQManager:
                     f.write("0.0 1.0\n")
             
             # Add board to configuration in sorted order by board_id
-            board_id = int(board_config['id'])
-            insert_index = 0
-            for i, existing_board in enumerate(self.daq_state['boards']):
-                if int(existing_board['id']) > board_id:
-                    insert_index = i
-                    break
-                insert_index = i + 1
-            
-            self.daq_state['boards'].insert(insert_index, board_config)
-            
+            self._insert_board_sorted(board_config)
+
             # Update project
             self._update_project()
             
@@ -691,76 +627,6 @@ class DAQManager:
             self.logger.error(f"Error preparing run start: {e}")
             return False
     
-    def configure_xdaq_for_run(self) -> bool:
-        """
-        Configure XDAQ for the current run.
-        
-        Returns:
-            True if configuration successful
-        """
-        if self.test_flag or not self.topology:
-            return True
-        
-        try:
-            run_number = self.daq_state['run']
-            save = self.daq_state['save']
-            limit_size = self.daq_state['limit_size']
-            file_size_limit = self.daq_state['file_size_limit']
-            
-            # Configure XDAQ
-            self.topology.set_cycle_counter(0)
-            
-            if limit_size:
-                self.topology.set_file_size_limit(file_size_limit)
-            else:
-                self.topology.set_file_size_limit(0)
-            
-            self.topology.set_run_number(run_number)
-            self.topology.set_enable_files(save)
-            self.topology.set_file_paths(f"/home/xdaq/project/data/run{run_number}/")
-            
-            self.topology.configure()
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Error configuring XDAQ: {e}")
-            return False
-    
-    def start_xdaq(self) -> bool:
-        """
-        Start XDAQ data acquisition.
-        
-        Returns:
-            True if start successful
-        """
-        if self.test_flag or not self.topology:
-            return True
-        
-        try:
-            self.topology.start()
-            return True
-        except Exception as e:
-            self.logger.error(f"Error starting XDAQ: {e}")
-            return False
-    
-    def stop_xdaq(self) -> bool:
-        """
-        Stop XDAQ data acquisition.
-        
-        Returns:
-            True if stop successful
-        """
-        if self.test_flag or not self.topology:
-            return True
-        
-        try:
-            self.topology.halt()
-            return True
-        except Exception as e:
-            self.logger.error(f"Error stopping XDAQ: {e}")
-            return False
-    
     def set_running_state(self, running: bool, start_time: Optional[str] = None) -> None:
         """
         Set DAQ running state.
@@ -769,9 +635,11 @@ class DAQManager:
             running: True if DAQ is running
             start_time: Start time string (auto-generated if None)
         """
+        changed = bool(self.daq_state.get('running')) != bool(running)
         self.daq_state['running'] = running
-        
+
         if running:
+            self.board_status = {}   # reset board-failure flags at run start
             if start_time is None:
                 # Emit a timezone-aware ISO 8601 timestamp (includes the local
                 # UTC offset, e.g. 2026-05-27T14:30:00+02:00). Without the offset
@@ -781,9 +649,30 @@ class DAQManager:
             self.daq_state['start_time'] = start_time
         else:
             self.daq_state['start_time'] = None
-        
+
         self._update_project()
-    
+
+        if changed:
+            self._notify_run_state(bool(running))
+
+    def add_run_state_listener(self, callback: Callable[[bool], None]) -> None:
+        """
+        Register `callback(running)`, called whenever a run starts or stops.
+
+        Every path that begins or ends a run goes through set_running_state, so
+        a listener sees the transition regardless of who caused it — the run
+        buttons, an auto-restart, or a shutdown.
+        """
+        self.run_state_listeners.append(callback)
+
+    def _notify_run_state(self, running: bool) -> None:
+        """Tell the listeners the run state changed, without letting one break the rest."""
+        for callback in list(self.run_state_listeners):
+            try:
+                callback(running)
+            except Exception as e:
+                self.logger.error(f"Run state listener failed: {e}")
+
     def increment_run_number(self) -> None:
         """Increment run number (typically after successful run)."""
         if self.daq_state['save'] or self.test_flag:
@@ -793,164 +682,159 @@ class DAQManager:
     
     def get_file_bandwidth(self) -> float:
         """
-        Get current file bandwidth from XDAQ.
-        
-        Returns:
-            File bandwidth in MB/s
+        Current file write bandwidth in MB/s, summed across boards, from the
+        caendaq statistics.
         """
-        if not self.daq_state['running'] or self.test_flag or not self.topology:
-            return 0.0
-        
         try:
-            actors = self.topology.get_all_actors()
-            total_bandwidth = 0.0
-            for actor in actors:
-                for a in actor:
-                    total_bandwidth += float(a.get_file_bandwith())
-            return total_bandwidth
+            from .caen_acquisition import get_caen_acquisition
+            total_bps = sum(b.get('write_rate', 0.0)
+                            for b in get_caen_acquisition(self.test_flag).stats())
+            return total_bps / (1024.0 * 1024.0)
         except Exception as e:
-            self.logger.error(f"Error getting file bandwidth: {e}")
+            self.logger.debug(f"Error getting file bandwidth: {e}")
             return 0.0
     
-    def get_output_bandwidth(self) -> float:
+    def write_board_register(self, board_id: str, address: int, value: int) -> Dict[str, Any]:
         """
-        Get current output bandwidth from XDAQ.
-        
-        Returns:
-            Output bandwidth in MB/s
-        """
-        if not self.daq_state['running'] or self.test_flag or not self.topology:
-            return 0.0
-        
-        try:
-            actors = self.topology.get_all_actors()
-            total_bandwidth = 0.0
-            for actor in actors:
-                for a in actor:
-                    total_bandwidth += float(a.get_output_bandwith())
-            return total_bandwidth
-        except Exception as e:
-            self.logger.error(f"Error getting output bandwidth: {e}")
-            return 0.0
-    
-    def get_xdaq_info(self) -> Dict[str, Any]:
-        """
-        Collect status information about the XDAQ Readout Unit(s) for display.
+        Write a register straight to a board (online tuning).
 
-        Gathers the docker container state, the overall DAQ status reported by
-        the topology, and the Readout Unit run number and input/output/file
-        bandwidths. Only Readout Unit information is reported, since that is the
-        only actor type normally present in this setup.
+        Which of the two ways in depends on who holds the board: during a run
+        that is caendaq, between runs it is the probe connection. The caller
+        does not need to know which.
+
+        Only registers on the safe list are written; anything else is reported
+        back unwritten, with the reason, so the change still lives in the
+        configuration file and applies at the next start.
 
         Returns:
-            Dictionary with XDAQ Readout Unit status information.
+            {'written': bool, 'reason': str, 'via': 'run'|'probe'|''}
         """
-        info = {
-            'container_running': False,
-            'daq_status': 'Unknown',
-            'num_readout_units': 0,
-            'run_number': None,
-            'input_bandwidth': 0.0,
-            'output_bandwidth': 0.0,
-            'file_bandwidth': 0.0,
-        }
+        board = self.find_board_with_id(board_id)
+        if board is None:
+            return {'written': False, 'reason': f"No board with id {board_id}.", 'via': ''}
 
-        # In test mode there is no real container/topology, so report a
-        # plausible idle/running state derived from the saved DAQ state.
-        if self.test_flag or not self.topology:
-            info['container_running'] = True
-            info['daq_status'] = 'Running' if self.daq_state.get('running') else 'Idle'
-            info['num_readout_units'] = len(self.daq_state.get('boards', []))
-            info['run_number'] = self.daq_state.get('run')
-            return info
+        allowed, reason = is_online_safe(int(address), board.get('dpp', 'DPP-PSD'))
+        if not allowed:
+            return {'written': False, 'reason': reason, 'via': ''}
 
-        # Docker container status
-        try:
-            container = self.container.client.containers.get('xdaq')
-            info['container_running'] = (container.status == 'running')
-        except Exception as e:
-            self.logger.debug(f"Could not query xdaq container status: {e}")
-            info['container_running'] = False
+        if self.is_running():
+            from .caen_acquisition import get_caen_acquisition
+            acquisition = get_caen_acquisition(self.test_flag)
+            if acquisition.write_register(str(board_id), int(address), int(value)):
+                return {'written': True, 'reason': '', 'via': 'run'}
+            return {'written': False, 'via': 'run', 'reason': (
+                "The running acquisition did not accept the write. The configuration has "
+                "been saved and applies at the next run.")}
 
-        # Number of Readout Units (read from the parsed topology, no network calls)
-        try:
-            info['num_readout_units'] = self.topology.how_many_ru()
-        except Exception as e:
-            self.logger.debug(f"Could not read Readout Unit count: {e}")
+        if self.digitizer_container.write_register(str(board_id), int(address), int(value)):
+            return {'written': True, 'reason': '', 'via': 'probe'}
+        return {'written': False, 'via': 'probe', 'reason': (
+            "The board did not accept the write — it may be disconnected. The configuration "
+            "has been saved and applies at the next run.")}
 
-        # Overall DAQ status (queries the actors over SOAP)
-        try:
-            info['daq_status'] = self.topology.get_daq_status()
-        except Exception as e:
-            self.logger.debug(f"Could not read DAQ status: {e}")
-
-        # Readout Unit run number and bandwidths (queried over SOAP)
-        try:
-            ru_actors = self.topology.get_ru_actors()
-        except Exception as e:
-            self.logger.debug(f"Could not read Readout Unit actors: {e}")
-            ru_actors = []
-
-        if ru_actors:
+    def release_digitizers(self) -> None:
+        """Close the persistent probe connections so caendaq can open the boards
+        for a run. Best-effort; a no-op in test mode / when nothing is connected."""
+        for board_id in self.digitizer_container.get_all_board_ids():
+            dgtz = self.digitizer_container.get_digitizer(board_id)
+            lock = self.digitizer_container.get_connection_lock(board_id)
+            if dgtz is None:
+                continue
             try:
-                info['run_number'] = ru_actors[0].get_run_number()
+                if lock:
+                    with lock:
+                        if dgtz.get_connected():
+                            dgtz.close()
+                elif dgtz.get_connected():
+                    dgtz.close()
             except Exception as e:
-                self.logger.debug(f"Could not read Readout Unit run number: {e}")
+                self.logger.warning(f"release_digitizers: board {board_id}: {e}")
 
-            # Bandwidths are only meaningful while running
-            if self.daq_state.get('running'):
-                input_bw = output_bw = file_bw = 0.0
-                for act in ru_actors:
-                    try:
-                        input_bw += float(act.get_input_bandwith())
-                        output_bw += float(act.get_output_bandwith())
-                        file_bw += float(act.get_file_bandwith())
-                    except Exception as e:
-                        self.logger.debug(f"Could not read Readout Unit bandwidth: {e}")
-                info['input_bandwidth'] = input_bw
-                info['output_bandwidth'] = output_bw
-                info['file_bandwidth'] = file_bw
+    def reacquire_digitizers(self, attempts: int = 3, delay: float = 1.0) -> Dict[str, bool]:
+        """Reopen the persistent probe connections after a run.
 
-        return info
+        Retries, because the first attempt right after a run routinely fails: the
+        boards are closed by caendaq microseconds earlier and a CAEN link — an
+        optical chain especially — is not always ready to be reopened that fast.
+        Without the retry a single transient CommError left every board reading
+        "Disconnected" on the dashboard for the rest of the session, since nothing
+        else reopens them until the next run.
 
-    def reset_xdaq(self) -> bool:
+        Best-effort: a board that stays shut is logged, not raised. Returns
+        {board_id: connected} so callers can say which ones came back.
         """
-        Reset XDAQ system.
-        
-        Returns:
-            True if reset successful
+        results: Dict[str, bool] = {}
+        for board_id in self.digitizer_container.get_all_board_ids():
+            dgtz = self.digitizer_container.get_digitizer(board_id)
+            lock = self.digitizer_container.get_connection_lock(board_id)
+            if dgtz is None:
+                continue
+
+            tries = max(1, attempts)
+            last_error: Optional[Exception] = None
+            connected = False
+            for attempt in range(tries):
+                try:
+                    if lock:
+                        with lock:
+                            if not dgtz.get_connected():
+                                dgtz.open()
+                            connected = dgtz.get_connected()
+                    else:
+                        if not dgtz.get_connected():
+                            dgtz.open()
+                        connected = dgtz.get_connected()
+                    last_error = None
+                except Exception as e:
+                    last_error = e
+                    connected = False
+
+                # The retry hangs off the connection actually being back, not off
+                # open() having raised: a board that comes back closed without an
+                # error deserves the same second chance.
+                if connected:
+                    if attempt:
+                        self.logger.info(
+                            f"reacquire_digitizers: board {board_id} reopened on "
+                            f"attempt {attempt + 1}")
+                    break
+                self.logger.debug(
+                    f"reacquire_digitizers: board {board_id} attempt {attempt + 1}"
+                    f"/{tries}: {last_error or 'still closed'}")
+                if attempt < tries - 1:
+                    time.sleep(delay)
+
+            results[board_id] = connected
+            if not connected:
+                self.logger.warning(
+                    f"reacquire_digitizers: board {board_id} did not reopen after "
+                    f"{tries} attempts"
+                    + (f": {last_error}" if last_error else "")
+                    + " — it will show as disconnected until it is refreshed or a "
+                      "new run is started.")
+        return results
+
+    def reset_acquisition(self) -> bool:
         """
-        if self.test_flag:
-            return True
-
-        # The topology description must be present in the working directory's
-        # conf/ (it is seeded there from server/conf/ when the measurement
-        # directory is initialised). Without it the reset cannot proceed.
-        if not os.path.exists("conf/topology.xml"):
-            self.logger.error("Cannot reset XDAQ: conf/topology.xml not found")
-            return False
-
+        Reset the acquisition: stop board monitoring, tear down the caendaq DAQ,
+        return the boards to the probe layer, and clear the running flag. Used by
+        the 'Reset acquisition' button to recover from a stuck state.
+        """
         try:
-            # Reinitialize topology
-            self.topology = xdaq.topology("conf/topology.xml")
-            self.topology.load_topology()
-            self.topology.display()
-            
-            # Reset container
-            self.container.reset()
-            self.logger.info("XDAQ container reset")
-            
-            # Reconfigure and enable PT
-            self.topology.configure_pt()
-            self.logger.info("PT reconfigured")
-            self.topology.enable_pt()
-            self.logger.info("PT re-enabled")
-            
-            return True
-            
+            self.stop_board_monitoring()
         except Exception as e:
-            self.logger.error(f"Error resetting XDAQ: {e}")
-            return False
+            self.logger.debug(f"reset: stop monitoring: {e}")
+        try:
+            from .caen_acquisition import get_caen_acquisition
+            get_caen_acquisition(self.test_flag).stop()
+        except Exception as e:
+            self.logger.warning(f"reset: error stopping acquisition: {e}")
+        try:
+            self.reacquire_digitizers()
+        except Exception as e:
+            self.logger.debug(f"reset: reacquire: {e}")
+        self.set_running_state(False)
+        return True
     
     def get_board_info(self, board_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -962,8 +846,11 @@ class DAQManager:
         Returns:
             Board configuration dictionary or None if not found
         """
+        # Board ids reach us as strings from the URL, but may be stored as ints
+        # (boards added through the API keep the string, older/hand-written
+        # settings.json files use numbers). Compare as strings so either works.
         for board in self.daq_state['boards']:
-            if board['id'] == board_id:
+            if str(board['id']) == str(board_id):
                 return board.copy()
         return None
     
@@ -983,82 +870,47 @@ class DAQManager:
     
     def _monitor_boards_thread(self) -> None:
         """
-        Thread function to monitor board status by reading address 0x8178 using persistent connections.
-        Runs every second and checks for non-zero values which indicate board failure.
-        If auto-restart is enabled, will trigger a restart after 30 seconds delay.
+        Monitor board health from caendaq's board-FAIL counter (bit 26 of the
+        aggregate header) — no board is polled directly, so there is no conflict
+        with caendaq owning the digitizers during a run. On the FIRST failure of a
+        board it sends a Telegram notification and, if enabled, triggers the
+        auto-restart callback (once per board per run).
         """
-        self.logger.info("Board monitoring thread started")
+        self.logger.info("Board monitoring thread started (caendaq board-FAIL)")
+
+        try:
+            from .caen_acquisition import get_caen_acquisition
+            acq = get_caen_acquisition(self.test_flag)
+        except Exception as e:
+            self.logger.error(f"Board monitoring: no caendaq acquisition: {e}")
+            acq = None
 
         while not self.monitor_stop_event.is_set():
             try:
-                failure_detected = False
-                failed_board_id = None
-                failure_value = 0
+                if acq is not None and acq.is_running():
+                    for board_id, h in acq.board_health().items():
+                        st = self.board_status.setdefault(
+                            board_id, {'failed': False, 'failures': 0, 'last_value': 0})
+                        failures = int(h.get('failures', 0))
+                        st['failures'] = failures
+                        st['last_value'] = failures
 
-                for board in self.daq_state['boards']:
-                    board_id = str(board['id'])
-
-                    # Initialize board status if not exists
-                    if board_id not in self.board_status:
-                        self.board_status[board_id] = {'failed': False, 'last_value': 0}
-
-                    # Skip if already failed (once failed, stays failed)
-                    if self.board_status[board_id]['failed']:
-                        continue
-
-                    # If already have a non-zero last value, skip further checks
-                    if self.board_status[board_id]['last_value'] != 0:
-                        continue
-
-                    try:
-                        # Read register 0x8178 using persistent connection
-                        value = self.digitizer_container.read_register(board_id, 0x8178)
-
-                        if value is not None:
-                            self.board_status[board_id]['last_value'] = value
-
-                            # Check if value is non-zero (indicates failure)
-                            if value != 0:
-                                self.board_status[board_id]['failed'] = True
-                                self.logger.warning(f"Board {board_id} failed - address 0x8178 = 0x{value:X}")
-                                failure_detected = True
-                                failed_board_id = board_id
-                                failure_value = value
-                        else:
-                            # Try refreshing the connection once
-                            self.refresh_board_connection(board_id)
-                            self.logger.warning(f"Could not read register from board {board_id} for monitoring")
-
-                    except Exception as e:
-                        # Try refreshing the connection once
-                        self.refresh_board_connection(board_id)
-                        self.logger.error(f"Error monitoring board {board_id}: {e}")
-
-                # Handle failure: send notification and trigger auto-restart if enabled
-                if failure_detected:
-                    # Send Telegram notification (only once per run)
-                    self.send_board_failure_notification(
-                        failed_board_id,
-                        self._get_failure_type_string(failure_value),
-                        self.daq_state['run']
-                    )
-
-                    # Trigger auto-restart if enabled
-                    if self.auto_restart_enabled and not self.restart_pending:
-                        self._handle_auto_restart(failed_board_id, failure_value)
-
-                # Sleep for 1 second or until stop event is set
-                if not self.monitor_stop_event.wait(1.0):
-                    continue
-                else:
-                    break
+                        # Act only on the first transition to "failed" for a board.
+                        if h.get('failed') and not st['failed']:
+                            st['failed'] = True
+                            self.logger.warning(
+                                f"Board {board_id} FAILED (caendaq FAIL bit; {failures} aggregates)")
+                            self.send_board_failure_notification(
+                                board_id, self._get_failure_type_string(failures),
+                                self.daq_state['run'])
+                            if self.auto_restart_enabled and not self.restart_pending:
+                                self._handle_auto_restart(board_id, failures)
 
             except Exception as e:
                 self.logger.error(f"Error in board monitoring thread: {e}")
-                if not self.monitor_stop_event.wait(1.0):
-                    continue
-                else:
-                    break
+
+            if self.monitor_stop_event.wait(1.0):
+                break
 
         self.logger.info("Board monitoring thread stopped")
 
@@ -1190,11 +1042,26 @@ class DAQManager:
     
     def get_board_status(self) -> Dict[str, Dict[str, Any]]:
         """
-        Get current status of all boards.
+        Current per-board status, keyed by board id: {'failed': bool, 'failures': int}.
 
-        Returns:
-            Dictionary mapping board_id to status info: {'failed': bool, 'last_value': int}
+        During a run this is driven by caendaq's board-FAIL counter (bit 26 of the
+        aggregate header). A board that fails even once stays flagged for the rest
+        of the run (the flag is reset at run start). No board is polled directly.
         """
+        try:
+            from .caen_acquisition import get_caen_acquisition
+            acq = get_caen_acquisition(self.test_flag)
+            if acq.is_running():
+                for bid, h in acq.board_health().items():
+                    prev = self.board_status.get(bid, {})
+                    failures = int(h.get('failures', 0))
+                    self.board_status[bid] = {
+                        'failed': bool(h.get('failed')) or bool(prev.get('failed')),
+                        'failures': failures,
+                        'last_value': failures,  # kept for frontend compatibility
+                    }
+        except Exception as e:
+            self.logger.debug(f"get_board_status caendaq merge failed: {e}")
         return self.board_status.copy()
 
     def get_auto_restart_enabled(self) -> bool:
@@ -1266,216 +1133,51 @@ class DAQManager:
 
     # ==================== Telegram Notification Methods ====================
 
-    def _load_telegram_settings(self) -> None:
-        """Load Telegram settings from persistent storage."""
-        telegram_file = 'conf/telegram_settings.json'
-
-        if os.path.exists(telegram_file):
-            try:
-                with open(telegram_file, 'r') as f:
-                    settings = json.load(f)
-                self.telegram_enabled = settings.get('enabled', False)
-                self.telegram_bot_token = settings.get('bot_token', '')
-                self.telegram_chat_id = settings.get('chat_id', '')
-                self.logger.info("Loaded Telegram settings from file")
-            except Exception as e:
-                self.logger.error(f"Error loading Telegram settings: {e}")
-                self.telegram_enabled = False
-                self.telegram_bot_token = ''
-                self.telegram_chat_id = ''
-        else:
-            self.telegram_enabled = False
-            self.telegram_bot_token = ''
-            self.telegram_chat_id = ''
-            # Save default settings
-            self._save_telegram_settings()
-
-    def _save_telegram_settings(self) -> None:
-        """Save Telegram settings to persistent storage."""
-        telegram_file = 'conf/telegram_settings.json'
-        settings = {
-            'enabled': self.telegram_enabled,
-            'bot_token': self.telegram_bot_token,
-            'chat_id': self.telegram_chat_id,
-        }
-        try:
-            with open(telegram_file, 'w') as f:
-                json.dump(settings, f, indent=4)
-            self.logger.debug("Saved Telegram settings to file")
-        except Exception as e:
-            self.logger.error(f"Error saving Telegram settings: {e}")
-
+    # --- Telegram (delegated to TelegramNotifier) ---
     def get_telegram_settings(self) -> Dict[str, Any]:
-        """
-        Get current Telegram notification settings.
-
-        Returns:
-            Dictionary with enabled, bot_token (masked), and chat_id
-        """
-        return {
-            'enabled': self.telegram_enabled,
-            'bot_token': self._mask_token(self.telegram_bot_token),
-            'chat_id': self.telegram_chat_id,
-            'configured': bool(self.telegram_bot_token and self.telegram_chat_id),
-        }
-
-    def _mask_token(self, token: str) -> str:
-        """Mask the bot token for display (show first 10 and last 5 chars)."""
-        if not token or len(token) < 20:
-            return '*' * len(token) if token else ''
-        return token[:10] + '*' * (len(token) - 15) + token[-5:]
+        return self.telegram.get_settings()
 
     def set_telegram_settings(self, enabled: bool = None, bot_token: str = None, chat_id: str = None) -> None:
-        """
-        Update Telegram notification settings.
-
-        Args:
-            enabled: Enable/disable Telegram notifications
-            bot_token: Telegram bot API token
-            chat_id: Telegram chat ID to send messages to
-        """
-        if enabled is not None:
-            self.telegram_enabled = enabled
-        if bot_token is not None:
-            self.telegram_bot_token = bot_token
-        if chat_id is not None:
-            self.telegram_chat_id = chat_id
-
-        self._save_telegram_settings()
-        self.logger.info(f"Telegram settings updated: enabled={self.telegram_enabled}")
-
-    def send_telegram_message(self, message: str) -> bool:
-        """
-        Send a message via Telegram bot.
-
-        Args:
-            message: The message text to send
-
-        Returns:
-            True if message was sent successfully, False otherwise
-        """
-        if not self.telegram_enabled:
-            self.logger.debug("Telegram notifications disabled, not sending message")
-            return False
-
-        if not self.telegram_bot_token or not self.telegram_chat_id:
-            self.logger.warning("Telegram bot token or chat ID not configured")
-            return False
-
-        try:
-            url = f"https://api.telegram.org/bot{self.telegram_bot_token}/sendMessage"
-            data = urllib.parse.urlencode({
-                'chat_id': self.telegram_chat_id,
-                'text': message,
-                'parse_mode': 'HTML'
-            }).encode('utf-8')
-
-            request = urllib.request.Request(url, data=data, method='POST')
-            request.add_header('Content-Type', 'application/x-www-form-urlencoded')
-
-            with urllib.request.urlopen(request, timeout=10) as response:
-                result = json.loads(response.read().decode('utf-8'))
-                if result.get('ok'):
-                    self.logger.info("Telegram message sent successfully")
-                    return True
-                else:
-                    self.logger.error(f"Telegram API error: {result}")
-                    return False
-
-        except urllib.error.HTTPError as e:
-            self.logger.error(f"Telegram HTTP error: {e.code} - {e.reason}")
-            return False
-        except urllib.error.URLError as e:
-            self.logger.error(f"Telegram URL error: {e.reason}")
-            return False
-        except Exception as e:
-            self.logger.error(f"Error sending Telegram message: {e}")
-            return False
+        self.telegram.set_settings(enabled=enabled, bot_token=bot_token, chat_id=chat_id)
 
     def test_telegram_connection(self) -> Dict[str, Any]:
-        """
-        Test the Telegram bot connection by sending a test message.
-
-        Returns:
-            Dictionary with success status and message
-        """
-        if not self.telegram_bot_token or not self.telegram_chat_id:
-            return {
-                'success': False,
-                'message': 'Bot token or chat ID not configured'
-            }
-
-        test_message = "🔬 <b>WebDAQ Test Message</b>\n\nTelegram notifications are working correctly!"
-
-        # Temporarily enable for test
-        original_enabled = self.telegram_enabled
-        self.telegram_enabled = True
-
-        success = self.send_telegram_message(test_message)
-
-        # Restore original state
-        self.telegram_enabled = original_enabled
-
-        if success:
-            return {
-                'success': True,
-                'message': 'Test message sent successfully'
-            }
-        else:
-            return {
-                'success': False,
-                'message': 'Failed to send test message. Check bot token and chat ID.'
-            }
+        return self.telegram.test_connection()
 
     def reset_telegram_notification_flag(self) -> None:
-        """Reset the notification sent flag. Call this when a new run starts."""
-        self.telegram_notification_sent = False
-        self.logger.debug("Telegram notification flag reset for new run")
+        self.telegram.reset_notification_flag()
 
     def send_board_failure_notification(self, board_id: str, failure_type: str, run_number: int) -> bool:
-        """
-        Send a Telegram notification about board failure.
-        Only sends if notification hasn't been sent for this run yet.
+        return self.telegram.send_board_failure(
+            board_id, failure_type, run_number,
+            self.auto_restart_enabled, self.auto_restart_delay)
 
-        Args:
-            board_id: ID of the failed board
-            failure_type: Description of the failure type
-            run_number: Current run number
+    def _board_held_by_acquisition(self, board_id: str) -> bool:
+        """Whether caendaq currently holds this board open for the running acquisition.
 
-        Returns:
-            True if notification was sent, False otherwise
+        Says nothing about the link being healthy — that is what the 'failed' flag
+        from board monitoring is for. It answers only "who owns this board", which
+        is what connectivity needs while the probe layer has let go of it.
         """
-        if self.telegram_notification_sent:
-            self.logger.debug("Telegram notification already sent for this run, skipping")
+        try:
+            from .caen_acquisition import get_caen_acquisition
+            acq = get_caen_acquisition(self.test_flag)
+            return acq.is_running() and acq.board_index(str(board_id)) is not None
+        except Exception as e:
+            self.logger.debug(f"connectivity: no caendaq state for board {board_id}: {e}")
             return False
-
-        message = (
-            f"⚠️ <b>LUNA DAQ Board Failure Alert</b>\n\n"
-            f"<b>Run Number:</b> {run_number}\n"
-            f"<b>Board ID:</b> {board_id}\n"
-            f"<b>Failure Type:</b> {failure_type}\n"
-            f"<b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-        )
-
-        if self.auto_restart_enabled:
-            message += f"🔄 Auto-restart is enabled. Run will restart in {self.auto_restart_delay} seconds."
-        else:
-            message += "⏹️ Auto-restart is disabled. Manual intervention required."
-
-        success = self.send_telegram_message(message)
-        if success:
-            self.telegram_notification_sent = True
-
-        return success
-
-    # ==================== End Telegram Methods ====================
 
     def check_board_connectivity(self) -> Dict[str, Dict[str, Any]]:
         """
-        Check connectivity status of all configured boards using persistent connections.
-        
+        Check connectivity status of all configured boards.
+
+        Which layer to ask depends on who owns the boards. Outside a run that is
+        the persistent probe connections. During a run it is caendaq: start_run
+        calls release_digitizers() to hand the boards over, so the probe layer has
+        no connections left and asking it would report every board as
+        disconnected mid-run while the acquisition is reading them perfectly well.
+
         Returns:
-            Dictionary mapping board_id to connectivity status: 
+            Dictionary mapping board_id to connectivity status:
             {'connected': bool, 'ready': bool, 'failed': bool}
         """
         board_connectivity = {}
@@ -1492,6 +1194,10 @@ class DAQManager:
                 # In test mode, simulate connectivity
                 connectivity_status['connected'] = True
                 connectivity_status['ready'] = not self.is_running()
+            elif self.is_running():
+                # caendaq owns the boards for the duration of the run.
+                connectivity_status['connected'] = self._board_held_by_acquisition(board_id)
+                connectivity_status['ready'] = False
             else:
                 # Use persistent digitizer connection
                 connectivity_status['connected'] = self.digitizer_container.is_connected(board_id)

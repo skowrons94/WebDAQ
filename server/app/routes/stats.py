@@ -27,7 +27,8 @@ def get_graphite_config():
         config = stats_manager.get_config_info()
         return jsonify({
             'graphite_host': config['graphite_host'],
-            'graphite_port': config['graphite_port']
+            'graphite_port': config['graphite_port'],
+            'graphite_prefix': config['graphite_prefix']
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -36,27 +37,118 @@ def get_graphite_config():
 @bp.route('/stats/graphite_config', methods=['POST'])
 @jwt_required_custom
 def set_graphite_config():
-    """Update Graphite server configuration."""
+    """Update Graphite server configuration.
+
+    'graphite_prefix' is optional and independent of host/port: it is the root
+    of the metric tree caendaq publishes rates under, and it names the
+    experiment ('ancillary.rates.12c12c'), not a board. Sending it alone is
+    allowed, so switching campaign does not mean re-entering the server.
+    """
     try:
         data = request.get_json()
         graphite_host = data.get('graphite_host')
         graphite_port = data.get('graphite_port')
+        graphite_prefix = data.get('graphite_prefix')
 
-        if not graphite_host or not graphite_port:
+        if graphite_prefix is None and (not graphite_host or not graphite_port):
             return jsonify({'error': 'Missing graphite_host or graphite_port'}), 400
 
-        # Update the stats_manager's graphite client
-        stats_manager.graphite_client.host = graphite_host
-        stats_manager.graphite_client.port = int(graphite_port)
-        # IMPORTANT: Update base_url as well since it's cached
-        stats_manager.graphite_client.base_url = f"http://{graphite_host}:{int(graphite_port)}"
+        if graphite_host and graphite_port:
+            # Update the stats_manager's graphite client
+            stats_manager.graphite_client.host = graphite_host
+            stats_manager.graphite_client.port = int(graphite_port)
+            # IMPORTANT: Update base_url as well since it's cached
+            stats_manager.graphite_client.base_url = f"http://{graphite_host}:{int(graphite_port)}"
 
-        # Update the config file
-        stats_manager.stats_config['graphite_host'] = graphite_host
-        stats_manager.stats_config['graphite_port'] = int(graphite_port)
-        stats_manager._save_config(stats_manager.stats_config)
+            # Update the config file
+            stats_manager.stats_config['graphite_host'] = graphite_host
+            stats_manager.stats_config['graphite_port'] = int(graphite_port)
+            stats_manager._save_config(stats_manager.stats_config)
 
-        return jsonify({'message': 'Graphite configuration updated'}), 200
+        if graphite_prefix is not None:
+            try:
+                graphite_prefix = stats_manager.set_graphite_prefix(graphite_prefix)
+            except ValueError as e:
+                return jsonify({'error': str(e)}), 400
+
+        # Push the new settings to a running acquisition so caendaq's rate
+        # publisher retargets immediately (Carbon port from stats.json). Read
+        # host back from the config so a prefix-only change keeps the server.
+        try:
+            from ..services.caen_acquisition import get_caen_acquisition
+            get_caen_acquisition(TEST_FLAG).set_graphite(
+                stats_manager.stats_config.get('graphite_host', ''),
+                prefix=stats_manager.get_graphite_prefix())
+        except Exception:
+            pass
+
+        return jsonify({'message': 'Graphite configuration updated',
+                        'graphite_prefix': stats_manager.get_graphite_prefix()}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/stats/sampling', methods=['GET'])
+@jwt_required_custom
+def get_sampling():
+    """Rate sampling cadence, in ms, plus the range the backend accepts.
+
+    'active_interval_ms' is what the RUNNING collector is using, which differs
+    from the stored value only in the window between changing the setting and
+    starting the next run (or when no run is active, where it is null).
+    """
+    try:
+        sampling = stats_manager.get_sampling()
+        try:
+            from ..services.caen_acquisition import get_caen_acquisition
+            sampling['active_interval_ms'] = get_caen_acquisition(TEST_FLAG).stats_interval()
+        except Exception:
+            sampling['active_interval_ms'] = None
+        return jsonify(sampling), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/stats/sampling', methods=['POST'])
+@jwt_required_custom
+def set_sampling():
+    """Set the rate sampling cadence and apply it to a live run.
+
+    One number drives three things, because caendaq does them in one tick: how
+    often rates are recomputed, the window they are averaged over, and how often
+    they reach Graphite. It is persisted to conf/stats.json so the next run
+    starts with it, AND pushed to a running collector, which applies it to the
+    tick already in flight.
+
+    Body: {"stats_interval_ms": 10000, "stats_first_interval_ms": 2000}
+    Either field may be sent alone.
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        interval = data.get('stats_interval_ms')
+        first = data.get('stats_first_interval_ms')
+        if interval is None and first is None:
+            return jsonify({'error': 'Missing stats_interval_ms or stats_first_interval_ms'}), 400
+
+        try:
+            sampling = stats_manager.set_sampling(interval, first)
+        except ValueError as e:
+            return jsonify({'error': str(e)}), 400
+
+        # Apply to a live run so the operator sees the page change pace now,
+        # rather than only from the next run. Changing only the first-tick pacing
+        # has nothing to apply — it is consumed when a collector is created.
+        active = None
+        if interval is not None:
+            try:
+                from ..services.caen_acquisition import get_caen_acquisition
+                active = get_caen_acquisition(TEST_FLAG).set_stats_interval(
+                    sampling['stats_interval_ms'])
+            except Exception:
+                active = None
+        sampling['active_interval_ms'] = active
+        return jsonify(sampling), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -81,11 +173,12 @@ def add_path():
         data = request.get_json()
         path = data.get('path')
         alias = data.get('alias')
+        unit = data.get('unit')
 
         if not path:
             return jsonify({'error': 'Missing required field: path'}), 400
 
-        if stats_manager.add_path(path, alias):
+        if stats_manager.add_path(path, alias, unit):
             return jsonify({'message': 'Path added successfully', 'path': path}), 201
         else:
             return jsonify({'error': 'Failed to add path or path already exists'}), 400
@@ -114,8 +207,9 @@ def update_path(path):
         data = request.get_json()
         alias = data.get('alias')
         enabled = data.get('enabled')
+        unit = data.get('unit')
 
-        if stats_manager.update_path(path, alias, enabled):
+        if stats_manager.update_path(path, alias, enabled, unit):
             return jsonify({'message': 'Path updated successfully'}), 200
         else:
             return jsonify({'error': 'Path not found'}), 404
@@ -170,6 +264,75 @@ def get_stats_run_status():
 
 
 # Data Retrieval Endpoints
+
+@bp.route('/stats/connection', methods=['GET'])
+@jwt_required_custom
+def get_connection_status():
+    """
+    Is the Graphite server answering?
+
+    The metrics page shows this as a light: without it, a server that is down
+    looks exactly like a set of metrics that happen to have no data.
+    """
+    config = stats_manager.get_config_info()
+    try:
+        reachable = stats_manager.graphite_client.check_connection()
+    except Exception as e:
+        return jsonify({
+            'reachable': False,
+            'host': config.get('graphite_host'),
+            'port': config.get('graphite_port'),
+            'error': str(e),
+        }), 200
+
+    return jsonify({
+        'reachable': bool(reachable),
+        'host': config.get('graphite_host'),
+        'port': config.get('graphite_port'),
+        'error': '' if reachable else 'No answer from the Graphite server.',
+    }), 200
+
+
+@bp.route('/stats/browse', methods=['GET'])
+@jwt_required_custom
+def browse_metrics():
+    """
+    One level of the Graphite metric tree, for picking metrics instead of
+    typing their paths.
+
+    Query parameters:
+    - prefix: the branch to open ('' for the root, 'accelerator' for its children)
+    - search: match anywhere in the tree instead of walking it level by level
+
+    Returns {'nodes': [{'path', 'is_leaf'}], 'prefix': str}.
+    """
+    prefix = (request.args.get('prefix') or '').strip('.')
+    search = (request.args.get('search') or '').strip()
+
+    try:
+        if search:
+            # Graphite matches one level at a time, so a free-text search has to
+            # be asked for at each depth. Three levels covers the trees in use
+            # here and keeps this to a few quick queries.
+            nodes = []
+            seen = set()
+            for depth in range(3):
+                pattern = '.'.join(['*'] * depth + [f'*{search}*']) if depth else f'*{search}*'
+                for node in stats_manager.graphite_client.find_metrics(pattern):
+                    if node['path'] not in seen:
+                        seen.add(node['path'])
+                        nodes.append(node)
+            nodes.sort(key=lambda n: n['path'])
+            return jsonify({'nodes': nodes, 'prefix': ''}), 200
+
+        query = f'{prefix}.*' if prefix else '*'
+        return jsonify({
+            'nodes': stats_manager.graphite_client.find_metrics(query),
+            'prefix': prefix,
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 @bp.route('/stats/metric/<path:metric>', methods=['GET'])
 @jwt_required_custom

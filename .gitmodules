@@ -1,0 +1,6 @@
+[submodule "server/native/caendaq"]
+	path = server/native/caendaq
+	url = https://github.com/skowrons94/CaenDAQ.git
+[submodule "server/native/rureader"]
+	path = server/native/rureader
+	url = https://github.com/skowrons94/RUReader.git

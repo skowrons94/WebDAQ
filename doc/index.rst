@@ -12,7 +12,14 @@ Welcome to LunaDAQ's documentation!
 
    welcome.md
    installation.md
+   example-session.md
    usage.md
+   caen-settings.md
+   histograms-and-rois.md
+   current-and-charge.md
+   monitoring-and-alerts.md
+   elog.md
+   directory-structure.md
    details.md
    server-architecture.md
    troubleshooting.md

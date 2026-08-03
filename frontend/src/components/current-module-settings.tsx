@@ -15,9 +15,33 @@ import {
   getCurrentModuleSettings,
   updateCurrentModuleSettings,
   getCurrentStatus,
+  getSerialPorts,
   getCurrentGraphiteConfig,
-  setCurrentGraphiteConfig
+  setCurrentGraphiteConfig,
+  browseMetrics,
+  type MetricNode
 } from '@/lib/api'
+import { RefreshCw, Search } from 'lucide-react'
+
+/** Scale factors turning a monitored metric's own unit into the µA used here. */
+const METRIC_UNITS = [
+  { value: '1', label: 'µA — microamps' },
+  { value: '0.001', label: 'nA — nanoamps' },
+  { value: '1000', label: 'mA — milliamps' },
+  { value: '1000000', label: 'A — amps' },
+] as const
+
+const MODULE_LABELS: Record<string, string> = {
+  tetramm: 'TetrAMM',
+  rbd9103: 'RBD 9103',
+  graphite: 'Monitored value',
+}
+
+interface SerialPort {
+  device: string
+  description?: string
+  hwid?: string
+}
 
 interface ModuleSettings {
   module_type: string
@@ -46,6 +70,8 @@ export function CurrentModuleSettings() {
 
   // RBD 9103 settings
   const [rbdPort, setRbdPort] = useState('/dev/tty.usbserial-A50285BI')
+  const [serialPorts, setSerialPorts] = useState<SerialPort[]>([])
+  const [manualPort, setManualPort] = useState(false)
   const [rbdBaudrate, setRbdBaudrate] = useState('57600')
   const [rbdHighSpeed, setRbdHighSpeed] = useState(false)
   const [rbdRange, setRbdRange] = useState('R0')
@@ -53,17 +79,36 @@ export function CurrentModuleSettings() {
   const [rbdInputMode, setRbdInputMode] = useState('G0')
   const [rbdBias, setRbdBias] = useState('B0')
 
+  // Monitored-metric ("graphite") module settings
+  const [metricPath, setMetricPath] = useState('')
+  const [metricScale, setMetricScale] = useState('1')
+  const [metricInterval, setMetricInterval] = useState('1')
+  const [metricSearch, setMetricSearch] = useState('')
+  const [metricMatches, setMetricMatches] = useState<MetricNode[]>([])
+  const [searching, setSearching] = useState(false)
+
   // Graphite configuration
   const [graphiteHost, setGraphiteHost] = useState('172.18.9.54')
   const [graphitePort, setGraphitePort] = useState('2003')
 
   useEffect(() => {
     loadSettings()
+    loadSerialPorts()
     const interval = setInterval(() => {
       loadStatus()
     }, 2000)
     return () => clearInterval(interval)
   }, [])
+
+  const loadSerialPorts = async () => {
+    try {
+      const res = await getSerialPorts()
+      setSerialPorts(res?.ports || [])
+    } catch (error) {
+      console.warn('Failed to list serial ports:', error)
+      setSerialPorts([])
+    }
+  }
 
   const loadGraphiteConfig = async () => {
     try {
@@ -102,6 +147,10 @@ export function CurrentModuleSettings() {
           setTetramRange(settingsResponse.settings.RNG || 'AUTO')
           setTetramNrSamp(settingsResponse.settings.NRSAMP || '10000')
         }
+      } else if (settingsResponse.module_type === 'graphite') {
+        setMetricPath(settingsResponse.metric || '')
+        setMetricScale(String(settingsResponse.scale ?? 1))
+        setMetricInterval(String(settingsResponse.poll_interval_s ?? 1))
       } else if (settingsResponse.module_type === 'rbd9103') {
         setRbdPort(settingsResponse.port || '/dev/tty.usbserial-A50285BI')
         setRbdBaudrate(String(settingsResponse.baudrate || 57600))
@@ -169,7 +218,7 @@ export function CurrentModuleSettings() {
 
       toast({
         title: 'Success',
-        description: `Switched to ${newModuleType === 'tetramm' ? 'TetrAMM' : 'RBD 9103'}`
+        description: `Switched to ${MODULE_LABELS[newModuleType] ?? newModuleType}`
       })
 
       // Reload settings
@@ -253,6 +302,48 @@ export function CurrentModuleSettings() {
     }
   }
 
+  const handleSearchMetrics = async () => {
+    try {
+      setSearching(true)
+      const result = await browseMetrics('', metricSearch.trim())
+      setMetricMatches(result.nodes.filter((node) => node.is_leaf).slice(0, 40))
+    } catch (error: any) {
+      console.error('Error searching metrics:', error)
+      toast({
+        title: 'Error',
+        description: 'Could not reach Graphite to list metrics. Check the Stats page server settings.',
+        variant: 'destructive'
+      })
+    } finally {
+      setSearching(false)
+    }
+  }
+
+  const handleSaveMetricSettings = async () => {
+    try {
+      await updateCurrentModuleSettings({
+        metric: metricPath.trim(),
+        scale: parseFloat(metricScale),
+        poll_interval_s: parseFloat(metricInterval)
+      })
+
+      toast({
+        title: 'Success',
+        description: 'Monitored value settings updated'
+      })
+
+      await loadSettings()
+
+    } catch (error: any) {
+      console.error('Error saving monitored value settings:', error)
+      toast({
+        title: 'Error',
+        description: error.response?.data?.error || 'Failed to save monitored value settings',
+        variant: 'destructive'
+      })
+    }
+  }
+
   const handleSaveGraphiteConfig = async () => {
     try {
       await setCurrentGraphiteConfig(graphiteHost, parseInt(graphitePort))
@@ -285,7 +376,8 @@ export function CurrentModuleSettings() {
         <CardHeader>
           <CardTitle>Current Measurement Module</CardTitle>
           <CardDescription>
-            Select which picoammeter module to use for current measurements
+            Select where the beam current is read from — a picoammeter, or a value
+            already monitored in Graphite
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -303,6 +395,7 @@ export function CurrentModuleSettings() {
                 <SelectContent>
                   <SelectItem value="tetramm">TetrAMM (4-channel TCP/IP)</SelectItem>
                   <SelectItem value="rbd9103">RBD 9103 (Single-channel Serial)</SelectItem>
+                  <SelectItem value="graphite">Monitored value (Graphite metric)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -327,9 +420,10 @@ export function CurrentModuleSettings() {
 
       {/* Module-specific settings */}
       <Tabs value={moduleType} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="tetramm">TetrAMM Settings</TabsTrigger>
           <TabsTrigger value="rbd9103">RBD 9103 Settings</TabsTrigger>
+          <TabsTrigger value="graphite">Monitored Value</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tetramm">
@@ -441,15 +535,75 @@ export function CurrentModuleSettings() {
               {/* Connection Settings */}
               <div className="space-y-2">
                 <Label htmlFor="rbd-port">Serial Port</Label>
-                <Input
-                  id="rbd-port"
-                  value={rbdPort}
-                  onChange={(e) => setRbdPort(e.target.value)}
-                  placeholder="/dev/ttyUSB0"
-                />
+                <div className="flex items-center gap-2">
+                  {!manualPort ? (
+                    <Select
+                      value={rbdPort}
+                      onValueChange={(v) => {
+                        if (v === '__manual__') {
+                          setManualPort(true)
+                        } else {
+                          setRbdPort(v)
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="rbd-port" className="flex-1">
+                        <SelectValue placeholder="Select a serial port" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {serialPorts.length === 0 && (
+                          <SelectItem value="__none__" disabled>
+                            No serial ports detected
+                          </SelectItem>
+                        )}
+                        {/* Keep the configured port selectable even if it isn't
+                            currently present (e.g. device unplugged). */}
+                        {rbdPort && !serialPorts.some((p) => p.device === rbdPort) && (
+                          <SelectItem value={rbdPort}>{rbdPort} (configured)</SelectItem>
+                        )}
+                        {serialPorts.map((p) => (
+                          <SelectItem key={p.device} value={p.device}>
+                            {p.device}
+                            {p.description ? ` — ${p.description}` : ''}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="__manual__">Enter manually…</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      id="rbd-port"
+                      className="flex-1"
+                      value={rbdPort}
+                      onChange={(e) => setRbdPort(e.target.value)}
+                      placeholder="/dev/ttyUSB0"
+                    />
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={loadSerialPorts}
+                    title="Rescan serial ports"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  {manualPort && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setManualPort(false)}>
+                      Pick from list
+                    </Button>
+                  )}
+                </div>
                 <p className="text-xs text-muted-foreground">
-                  USB serial port device path (e.g., /dev/ttyUSB0 on Linux, COM3 on Windows)
+                  Pick a detected device, or choose “Enter manually…” to type a path
+                  (e.g. /dev/ttyUSB0 on Linux, COM3 on Windows). Use the refresh button to rescan.
                 </p>
+                {moduleType === 'rbd9103' && status && status.port_exists === false && (
+                  <p className="text-xs text-red-500">
+                    Device {status.port || rbdPort} not found — the serial port does not exist.
+                    Check that the RBD 9103 is plugged in and the path is correct.
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -561,6 +715,114 @@ export function CurrentModuleSettings() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="graphite">
+          <Card>
+            <CardHeader>
+              <CardTitle>Monitored Value Configuration</CardTitle>
+              <CardDescription>
+                Read the beam current from a value already monitored in Graphite — the
+                accelerator&apos;s own current readout, for instance — instead of from a
+                picoammeter. The value is plotted, logged to the run&apos;s current.txt and
+                integrated into the accumulated charge exactly as a picoammeter&apos;s would be.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="metric-path">Metric Path</Label>
+                <Input
+                  id="metric-path"
+                  value={metricPath}
+                  onChange={(e) => setMetricPath(e.target.value)}
+                  placeholder="accelerator.beam_current"
+                />
+                <p className="text-xs text-muted-foreground">
+                  The Graphite path of the value to use. Read through the same server the
+                  Stats page is configured with.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="metric-search">Find a metric</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="metric-search"
+                    className="flex-1"
+                    value={metricSearch}
+                    onChange={(e) => setMetricSearch(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSearchMetrics() }}
+                    placeholder="current"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleSearchMetrics}
+                    disabled={searching}
+                  >
+                    <Search className="mr-2 h-4 w-4" />
+                    Search
+                  </Button>
+                </div>
+                {metricMatches.length > 0 && (
+                  <div className="max-h-48 overflow-y-auto rounded-md border">
+                    {metricMatches.map((node) => (
+                      <button
+                        key={node.path}
+                        type="button"
+                        className="block w-full px-3 py-1.5 text-left font-mono text-xs hover:bg-muted"
+                        onClick={() => {
+                          setMetricPath(node.path)
+                          setMetricMatches([])
+                        }}
+                      >
+                        {node.path}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="metric-unit">Metric Unit</Label>
+                  <Select value={metricScale} onValueChange={setMetricScale}>
+                    <SelectTrigger id="metric-unit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {METRIC_UNITS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    The unit the metric is published in. Everything downstream works in µA,
+                    so getting this wrong scales the charge by the same factor.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="metric-interval">Poll Interval (s)</Label>
+                  <Input
+                    id="metric-interval"
+                    value={metricInterval}
+                    onChange={(e) => setMetricInterval(e.target.value)}
+                    placeholder="1"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    How often Graphite is queried. Polling faster than the value is
+                    published adds load without adding samples.
+                  </p>
+                </div>
+              </div>
+
+              <Button onClick={handleSaveMetricSettings} className="w-full">
+                Save Monitored Value Settings
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Status Information */}
@@ -573,8 +835,14 @@ export function CurrentModuleSettings() {
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="font-medium">Module Type:</span>{' '}
-                {status.module_type === 'tetramm' ? 'TetrAMM' : 'RBD 9103'}
+                {MODULE_LABELS[status.module_type] ?? status.module_type}
               </div>
+              {status.metric && (
+                <div className="col-span-2">
+                  <span className="font-medium">Metric:</span>{' '}
+                  <span className="font-mono text-xs">{status.metric}</span>
+                </div>
+              )}
               <div>
                 <span className="font-medium">Connected:</span>{' '}
                 {status.connected ? 'Yes' : 'No'}
@@ -615,7 +883,9 @@ export function CurrentModuleSettings() {
         <CardHeader>
           <CardTitle>Graphite Server Configuration</CardTitle>
           <CardDescription>
-            Configure the Graphite server for sending current measurement metrics
+            Where measured current is <strong>sent</strong> (Carbon plaintext ingest,
+            usually port 2003). Reading values back — the monitored-value module and the
+            history behind long-run plots — uses the render API configured on the Stats page.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

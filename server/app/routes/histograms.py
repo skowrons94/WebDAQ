@@ -5,6 +5,8 @@ from app.utils.jwt_utils import jwt_required_custom
 
 from ..services.daq_manager import get_daq_manager
 from ..services.spy_manager import get_spy_manager
+from ..services import roi_analysis
+from ..services.histogram_config import get_histogram_config
 
 TEST_FLAG = os.getenv('TEST_FLAG', False)
 
@@ -13,6 +15,167 @@ bp = Blueprint('histograms', __name__)
 # Initialize managers
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 spy_mgr = get_spy_manager(test_flag=TEST_FLAG)
+histogram_config = get_histogram_config()
+
+# Record every run's ROIs into its data directory when it stops.
+roi_analysis.register_run_hook()
+
+
+# ─────────────────────────────────────────────── dashboard configuration
+# The dashboard's own state — which histograms exist, their ROIs, their zooms —
+# lives here rather than in the browser, so it survives a restart, is the same
+# for every operator, and can be recorded with the run.
+
+@bp.route('/histograms/config', methods=['GET'])
+@jwt_required_custom
+def get_dashboard_config():
+    """The whole dashboard: settings and every histogram with its ROIs and zoom."""
+    return jsonify(histogram_config.get_config()), 200
+
+
+@bp.route('/histograms/config', methods=['PUT'])
+@jwt_required_custom
+def replace_dashboard_config():
+    """Replace the whole dashboard. Used for import and for 'reset to defaults'."""
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Expected a configuration object'}), 400
+    return jsonify(histogram_config.replace_config(payload)), 200
+
+
+@bp.route('/histograms/config/settings', methods=['PUT'])
+@jwt_required_custom
+def update_dashboard_settings():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Expected a settings object'}), 400
+    return jsonify(histogram_config.update_settings(payload)), 200
+
+
+@bp.route('/histograms/config/histograms', methods=['POST'])
+@jwt_required_custom
+def add_dashboard_histogram():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Expected a histogram object'}), 400
+    if not str(payload.get('boardId', '')).strip():
+        return jsonify({'error': 'A histogram needs a boardId'}), 400
+    return jsonify(histogram_config.add_histogram(payload)), 201
+
+
+@bp.route('/histograms/config/histograms/<histogram_id>', methods=['PUT'])
+@jwt_required_custom
+def update_dashboard_histogram(histogram_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Expected a histogram object'}), 400
+    updated = histogram_config.update_histogram(histogram_id, payload)
+    if updated is None:
+        return jsonify({'error': f'No histogram {histogram_id}'}), 404
+    return jsonify(updated), 200
+
+
+@bp.route('/histograms/config/histograms/<histogram_id>', methods=['DELETE'])
+@jwt_required_custom
+def delete_dashboard_histogram(histogram_id):
+    if not histogram_config.delete_histogram(histogram_id):
+        return jsonify({'error': f'No histogram {histogram_id}'}), 404
+    return jsonify({'message': 'Histogram removed'}), 200
+
+
+@bp.route('/histograms/config/order', methods=['PUT'])
+@jwt_required_custom
+def reorder_dashboard_histograms():
+    payload = request.get_json(silent=True) or {}
+    order = payload.get('order')
+    if not isinstance(order, list):
+        return jsonify({'error': 'Expected {"order": [histogramId, ...]}'}), 400
+    return jsonify(histogram_config.reorder([str(value) for value in order])), 200
+
+
+@bp.route('/histograms/config/histograms/<histogram_id>/zoom', methods=['PUT'])
+@jwt_required_custom
+def set_dashboard_zoom(histogram_id):
+    """
+    Store a histogram's zoom.
+
+    Saved rather than broadcast: an operator who leaves the page and comes back
+    finds their view where they left it, but a zoom here does not move the plot
+    under someone else who has the dashboard open.
+    """
+    payload = request.get_json(silent=True)
+    updated = histogram_config.set_zoom(
+        histogram_id, payload if isinstance(payload, dict) else None)
+    if updated is None:
+        return jsonify({'error': f'No histogram {histogram_id}'}), 404
+    return jsonify(updated), 200
+
+
+@bp.route('/histograms/config/zoom', methods=['DELETE'])
+@jwt_required_custom
+def clear_dashboard_zoom():
+    return jsonify(histogram_config.clear_all_zoom()), 200
+
+
+@bp.route('/histograms/config/histograms/<histogram_id>/rois', methods=['POST'])
+@jwt_required_custom
+def add_dashboard_roi(histogram_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Expected an ROI object'}), 400
+    roi = histogram_config.add_roi(histogram_id, payload)
+    if roi is None:
+        return jsonify({'error': f'No histogram {histogram_id}'}), 404
+    return jsonify(roi), 201
+
+
+@bp.route('/histograms/config/histograms/<histogram_id>/rois/<roi_id>', methods=['PUT'])
+@jwt_required_custom
+def update_dashboard_roi(histogram_id, roi_id):
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({'error': 'Expected an ROI object'}), 400
+    roi = histogram_config.update_roi(histogram_id, roi_id, payload)
+    if roi is None:
+        return jsonify({'error': f'No ROI {roi_id} on histogram {histogram_id}'}), 404
+    return jsonify(roi), 200
+
+
+@bp.route('/histograms/config/histograms/<histogram_id>/rois/<roi_id>', methods=['DELETE'])
+@jwt_required_custom
+def delete_dashboard_roi(histogram_id, roi_id):
+    if not histogram_config.delete_roi(histogram_id, roi_id):
+        return jsonify({'error': f'No ROI {roi_id} on histogram {histogram_id}'}), 404
+    return jsonify({'message': 'ROI removed'}), 200
+
+
+@bp.route('/histograms/roi_integrals', methods=['GET'])
+@jwt_required_custom
+def get_roi_integrals():
+    """
+    Every configured ROI's integral in one request.
+
+    Replaces one request per ROI per dashboard tick, and — because the spectrum
+    is read once per board/channel instead of once per ROI — one spy read per
+    channel instead of one per region.
+
+    Pass all=1 to include histograms that are hidden and ROIs that are switched
+    off, which is what the run snapshot uses.
+    """
+    include_all = request.args.get('all') in ('1', 'true', 'yes')
+    results = roi_analysis.compute_integrals(
+        visible_only=not include_all, enabled_only=not include_all)
+    return jsonify({'results': results}), 200
+
+
+@bp.route('/histograms/run/<int:run_number>/roi_snapshot', methods=['POST'])
+@jwt_required_custom
+def write_roi_snapshot(run_number):
+    """Write a run's roi.json now, rather than waiting for the run to end."""
+    path = roi_analysis.write_run_snapshot(run_number)
+    if path is None:
+        return jsonify({'error': 'Nothing to record, or the run has no data directory'}), 404
+    return jsonify({'message': 'ROI snapshot written', 'path': path}), 200
 
 @bp.route('/histograms/rebin', methods=['POST'])
 @jwt_required_custom
@@ -507,7 +670,8 @@ def get_psd_histogram(board_id, channel):
     try:
         boards = daq_mgr.get_boards()
         histo = spy_mgr.get_histogram(board_id, channel, boards, histogram_type='psd')
-        histo.RebinX(100)
+        # caendaq PSD is 2048 x-bins; rebin to a compact 128 x 256 for the browser.
+        histo.RebinX(16)
         json_data = spy_mgr.convert_histogram_to_json(histo)
         return json_data if json_data else ""
     except Exception as e:

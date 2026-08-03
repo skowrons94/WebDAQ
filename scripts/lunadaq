@@ -1,0 +1,229 @@
+#!/usr/bin/env bash
+# LunaDAQ process control.
+#
+# Starting the web app is easy; getting rid of a crashed one is not. A frontend
+# or backend that died badly can leave its port bound, and the next start then
+# fails with "address already in use" — usually in the middle of a shift, to
+# someone who did not start it in the first place.
+#
+#   lunadaq start     start the frontend (freeing its port first)
+#   lunadaq backend   start the backend in this terminal
+#   lunadaq stop      stop both, escalating from SIGTERM to SIGKILL
+#   lunadaq restart   stop both, then start the frontend
+#   lunadaq status    show what is holding each port
+#
+# Only processes that look like ours are ever killed: an unrelated program on
+# port 3000 is reported and left alone.
+
+set -uo pipefail
+
+FRONTEND_PORT="${LUNADAQ_FRONTEND_PORT:-3000}"
+BACKEND_PORT="${LUNADAQ_BACKEND_PORT:-5001}"
+KILL_TIMEOUT="${LUNADAQ_KILL_TIMEOUT:-10}"   # seconds to wait for a clean exit
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+FRONTEND_DIR="$REPO_ROOT/frontend"
+SERVER_DIR="$REPO_ROOT/server"
+
+if [ -t 1 ]; then
+    BOLD=$'\033[1m'; RED=$'\033[31m'; GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RESET=$'\033[0m'
+else
+    BOLD=""; RED=""; GREEN=""; YELLOW=""; RESET=""
+fi
+
+info() { echo "${BOLD}·${RESET} $*"; }
+ok()   { echo "${GREEN}✓${RESET} $*"; }
+warn() { echo "${YELLOW}!${RESET} $*"; }
+err()  { echo "${RED}✗${RESET} $*" >&2; }
+
+# PIDs LISTENing on a port. Empty (and silent) when the port is free or when
+# neither lsof nor fuser is installed.
+port_pids() {
+    local port="$1"
+    if command -v lsof >/dev/null 2>&1; then
+        lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null
+    elif command -v fuser >/dev/null 2>&1; then
+        fuser -n tcp "$port" 2>/dev/null | tr -s ' ' '\n' | grep -E '^[0-9]+$'
+    fi
+}
+
+cmdline() {
+    ps -p "$1" -o command= 2>/dev/null | tr -d '\n'
+}
+
+# Is this port holder a LunaDAQ process? The backend is the Python/waitress
+# process running main.py; the frontend is Next.js, started from this checkout.
+is_ours() {
+    local role="$1" cmd="$2"
+    case "$role" in
+        backend)  [[ "$cmd" == *main.py* || "$cmd" == *waitress* ]] ;;
+        frontend) [[ "$cmd" == *next-server* || "$cmd" == *"next start"* \
+                     || "$cmd" == *"$FRONTEND_DIR"* \
+                     || ( "$cmd" == *node* && "$cmd" == *.next* ) ]] ;;
+        *) return 1 ;;
+    esac
+}
+
+# SIGTERM, wait for the process to actually go, SIGKILL if it will not.
+kill_pid() {
+    local pid="$1" waited=0
+    kill -TERM "$pid" 2>/dev/null || return 0
+    while kill -0 "$pid" 2>/dev/null; do
+        if [ "$waited" -ge "$KILL_TIMEOUT" ]; then
+            warn "PID $pid ignored SIGTERM after ${KILL_TIMEOUT}s — sending SIGKILL"
+            kill -KILL "$pid" 2>/dev/null
+            sleep 1
+            break
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    ! kill -0 "$pid" 2>/dev/null
+}
+
+# Free one port. Returns non-zero only if something we own refused to die.
+stop_port() {
+    local role="$1" port="$2" label="$3" failed=0 found=0
+    local pids; pids="$(port_pids "$port")"
+
+    [ -z "$pids" ] && { info "$label (port $port): not running"; return 0; }
+
+    local pid cmd
+    for pid in $pids; do
+        cmd="$(cmdline "$pid")"
+        [ -z "$cmd" ] && continue
+        found=1
+        if is_ours "$role" "$cmd"; then
+            info "Stopping $label (PID $pid)…"
+            if kill_pid "$pid"; then
+                ok "$label stopped"
+            else
+                err "Could not stop PID $pid — try: kill -9 $pid"
+                failed=1
+            fi
+        else
+            warn "Port $port is held by something else (PID $pid: ${cmd:0:60}) — left alone"
+            failed=1
+        fi
+    done
+
+    [ "$found" -eq 0 ] && info "$label (port $port): not running"
+    return $failed
+}
+
+require_dir() {
+    [ -d "$1" ] || { err "Not found: $1 (is this script still inside the WebDAQ checkout?)"; exit 1; }
+}
+
+# node and python both come from the luna environment.
+activate_env() {
+    [ "${CONDA_DEFAULT_ENV:-}" = "luna" ] && return 0
+    command -v conda >/dev/null 2>&1 || return 0
+
+    local base prefix
+    base="$(conda info --base 2>/dev/null)" || return 0
+    # Called from inside an environment, some shells report that environment as
+    # the base; the real root is above its envs/ directory.
+    case "$base" in */envs/*) base="${base%/envs/*}" ;; esac
+    [ -n "$base" ] && [ -f "$base/etc/profile.d/conda.sh" ] || return 0
+
+    # Ask conda where luna actually is instead of assuming envs_dirs.
+    prefix="$(conda env list 2>/dev/null | awk '$1 == "luna" { print $NF }' | head -1)"
+
+    # conda's shell functions read unset variables, so nounset has to stand down
+    # while they run — with it on, activation fails and the app starts against
+    # whatever node happens to be on PATH.
+    set +u
+    # shellcheck disable=SC1091
+    . "$base/etc/profile.d/conda.sh"
+    if [ -n "$prefix" ]; then
+        conda activate "$prefix" 2>/dev/null
+    else
+        conda activate luna 2>/dev/null
+    fi
+    if [ "${CONDA_DEFAULT_ENV:-}" != "luna" ] && [ "${CONDA_PREFIX:-}" != "$prefix" ]; then
+        warn "Could not activate the 'luna' environment — using the current one"
+    fi
+    set -u
+}
+
+cmd_status() {
+    local role port label pids pid cmd
+    for entry in "frontend:$FRONTEND_PORT:Frontend" "backend:$BACKEND_PORT:Backend"; do
+        IFS=: read -r role port label <<< "$entry"
+        pids="$(port_pids "$port")"
+        if [ -z "$pids" ]; then
+            echo "  $label (port $port): ${YELLOW}not running${RESET}"
+            continue
+        fi
+        for pid in $pids; do
+            cmd="$(cmdline "$pid")"
+            if is_ours "$role" "$cmd"; then
+                echo "  $label (port $port): ${GREEN}running${RESET} — PID $pid"
+            else
+                echo "  $label (port $port): ${RED}held by another program${RESET} — PID $pid: ${cmd:0:70}"
+            fi
+        done
+    done
+}
+
+cmd_stop() {
+    local rc=0
+    stop_port frontend "$FRONTEND_PORT" "Frontend" || rc=1
+    stop_port backend "$BACKEND_PORT" "Backend" || rc=1
+    return $rc
+}
+
+cmd_start() {
+    require_dir "$FRONTEND_DIR"
+    # A leftover instance would only make `npm run start` fail on a bound port.
+    stop_port frontend "$FRONTEND_PORT" "Frontend" || {
+        err "Port $FRONTEND_PORT is not free — not starting."
+        exit 1
+    }
+    activate_env
+    # Braced: bash 3.2 swallows the following multibyte character into the name.
+    info "Starting the frontend on port ${FRONTEND_PORT}…"
+    cd "$FRONTEND_DIR" && exec npm run start
+}
+
+cmd_backend() {
+    require_dir "$SERVER_DIR"
+    stop_port backend "$BACKEND_PORT" "Backend" || {
+        err "Port $BACKEND_PORT is not free — not starting."
+        exit 1
+    }
+    activate_env
+
+    # The backend must run in the luna environment: caendaq (and the CAEN
+    # libraries behind it) live there. Started against another interpreter it
+    # comes up looking healthy and then fails at the first run, with an error
+    # about acquisition rather than about the environment — so refuse instead.
+    if ! python -c "import caendaq" >/dev/null 2>&1; then
+        err "This interpreter has no 'caendaq' module: $(command -v python || echo 'no python on PATH')"
+        err "The backend needs the luna environment. Run 'conda activate luna' first,"
+        err "or start the server from the web interface, which does it for you."
+        exit 1
+    fi
+
+    info "Starting the backend on port ${BACKEND_PORT} ($(python -c 'import sys; print(sys.prefix)'))…"
+    cd "$SERVER_DIR" && exec python main.py
+}
+
+case "${1:-start}" in
+    start)   cmd_start ;;
+    backend) cmd_backend ;;
+    stop)    cmd_stop ;;
+    restart) cmd_stop; cmd_start ;;
+    status)  cmd_status ;;
+    -h|--help|help)
+        # The header comment is the help text; print it up to the first line of code.
+        awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "${BASH_SOURCE[0]}"
+        ;;
+    *)
+        err "Unknown command '${1}'"
+        echo "Usage: lunadaq [start|backend|stop|restart|status]" >&2
+        exit 2
+        ;;
+esac

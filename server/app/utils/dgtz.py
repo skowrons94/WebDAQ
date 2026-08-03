@@ -320,11 +320,32 @@ class Digitizer:
         """
         self.logger.info(f"Reading DPP-PHA configuration to {file_name}")
         
-        # DPP-PHA register map with descriptions
+        # DPP-PHA register map, checked against the register table in
+        # UM5678 rev.3 p.8. Registers not in that table are deliberately absent:
+        #   0x1n44 "Shaped Trigger Delay"      — no such DPP-PHA register
+        #   0x1n7C "Baseline Hold-Off"         — removed by CAEN in rev.01
+        #   0x1nB8 "Trapezoid Baseline Offset" — no such DPP-PHA register
+        #
+        # This dump is not just a report: caendaq replays every register in it
+        # back to the board at configure time. So it holds R/W acquisition
+        # settings only. Read-only registers (status, firmware revision, ADC
+        # temperature) and write-only commands (data flush, calibration, resets)
+        # are excluded because writing them back would be meaningless or harmful,
+        # and so are the VME bus/readout controls (0xEF00 Readout Control,
+        # 0xEF0C MCST, 0xEF10 Relocation, 0xEF14/18 Interrupt) and board
+        # housekeeping (0x8138 voltage level, 0x8144 analog monitor, 0x8168 fan,
+        # 0x81B4 buffer occupancy, 0x8118/0x81A0 LVDS) — replaying those can
+        # disturb the readout itself.
         register_map: Dict[int, str] = {
+            # Record Length is a group register: it may be WRITTEN at the
+            # broadcast address 0x8020, but the manual requires it to be READ
+            # individually at 0x1n20 — so read it per channel like DPP-PSD does.
+            0x1020: "Record Length",
+            # Input Dynamic Range is a DPP-PHA register too (UM5678 rev.3 p.8,
+            # 0x1n28) — read it so the dashboard can show the input full scale.
+            0x1028: "Input Dynamic Range",
             0x1034: "Number of Events per Aggregate",
             0x1038: "Pre Trigger",
-            0x1044: "Shaped Trigger Delay",
             0x1054: "RC-CR2 Smoothing Factor",
             0x1058: "Input Rise Time",
             0x105C: "Trapezoid Rise Time",
@@ -332,22 +353,25 @@ class Digitizer:
             0x1064: "Peaking Time",
             0x1068: "Decay Time",
             0x106C: "Trigger Threshold",
+            0x1070: "Rise Time Validation Window",
             0x1074: "Trigger Hold-Off Width",
             0x1078: "Peak Hold-Off",
-            0x107C: "Baseline Hold-Off",
             0x1080: "DPP Algorithm Control",
             0x1084: "Shaped Trigger Width",
             0x1098: "DC Offset",
             0x10A0: "DPP Algorithm Control 2",
-            0x10B8: "Trapezoid Baseline Offset",
             0x10C4: "Fine Gain",
             0x10D4: "Veto Width",
             0x8000: "Board Configuration",
             0x800C: "Aggregate Configuration",
-            0x8020: "Record Length",
             0x8100: "Acquisition Control",
             0x810C: "Global Trigger Mask",
+            0x8110: "Front Panel TRG-OUT Enable Mask",
+            0x811C: "Front Panel I/O Control",
             0x8120: "Channel Enable Mask",
+            0x8170: "Run/Start/Stop Delay",
+            0x817C: "Disable External Trigger",
+            0x81C4: "Extended Veto Delay",
             0xEF08: "Board ID",
             0xEF1C: "Aggregate Number per BLT"
         }
@@ -366,13 +390,17 @@ class Digitizer:
         """
         self.logger.info(f"Reading DPP-PSD configuration to {file_name}")
         
-        # DPP-PSD register map (similar to PHA with some differences)
+        # DPP-PSD register map, checked against the register table in
+        # UM4380 rev.6 p.7. Note the differences from DPP-PHA: there is no
+        # "Fine Gain" (0x1nC4) and no "Trapezoid Baseline Offset" (0x1nB8) in
+        # this firmware, so neither is read here.
         register_map: Dict[int, str] = {
             0x1020: "Record Length",
             0x1028: "Input Dynamic Range",
             0x1034: "Number of Events per Aggregate",
             0x1038: "Pre Trigger",
             0x103C: "CFD Settings",
+            0x1044: "Charge Zero Suppression Threshold",
             0x1054: "Short Gate",
             0x1058: "Long Gate",
             0x105C: "Gate Offset",
@@ -386,14 +414,18 @@ class Digitizer:
             0x1080: "DPP Algorithm Control",
             0x1084: "DPP Algorithm Control 2",
             0x1098: "DC Offset",
-            0x10B8: "Trapezoid Baseline Offset",
-            0x10C4: "Fine Gain",
             0x10D4: "Veto Width",
+            0x10D8: "Early Baseline Freeze",
             0x8000: "Board Configuration",
             0x800C: "Aggregate Configuration",
             0x8100: "Acquisition Control",
             0x810C: "Global Trigger Mask",
+            0x8110: "Front Panel TRG-OUT Enable Mask",
+            0x811C: "Front Panel I/O Control",
             0x8120: "Channel Enable Mask",
+            0x8170: "Run/Start/Stop Delay",
+            0x817C: "Disable External Trigger",
+            0x81C4: "Extended Veto Delay",
             0xEF08: "Board ID",
             0xEF1C: "Aggregate Number per BLT"
         }

@@ -1,26 +1,34 @@
 #!/usr/bin/env bash
 #
-# LunaDAQ installer
-# -----------------
-# One-shot setup for a fresh Linux PC. It is idempotent: every step checks
+# LunaDAQ installer (Linux / macOS)
+# ---------------------------------
+# One-shot setup for a fresh Linux/macOS PC. It is idempotent: every step checks
 # whether the work is already done before doing it, so re-running is safe.
 #
+# Acquisition is fully in-process via the caendaq module, installed with
+# `pip install` (scikit-build-core builds it via CMake).
+#
+# The two C++ components are git submodules pinned under server/native/:
+#   server/native/caendaq   — CaenDAQ, the acquisition backend (Python module)
+#   server/native/rureader  — RUReader, the offline .caendat → ROOT converter
+#
 # Steps:
-#   1. Install Docker, configure the daemon + docker group, pull the XDAQ images
-#      (skowrons/xdaq:latest and skowrons/xdaq:sync)
-#   2. Install Miniforge (conda)            — skipped if conda is already present
-#   3. Create the `luna` conda environment  — skipped if it already exists
-#   4. Build RUReader and RUSpy (LunaSpy)    — cloned/updated, built, installed
-#      from https://github.com/skowrons94      to /usr/local/bin
-#   5. Configure frontend/.env and build the frontend
-#   6. Add a `LunaDAQ` alias to ~/.bashrc that launches the frontend
+#   1. System build tools (git, cmake, make, g++, curl)
+#   2. Check out the git submodules (CaenDAQ, RUReader)
+#   3. Install Miniforge (conda)            — skipped if conda is already present
+#   4. Create the `luna` conda environment  — skipped if it already exists
+#   5. Build RUReader (offline .caendat → ROOT converter) and the caendaq
+#      Python module (installed into the luna environment)
+#   6. Configure frontend/.env and build the frontend
+#   7. Add a `LunaDAQ` alias to ~/.bashrc that launches the frontend
 #
 # Usage:
 #   ./install.sh
 #
 # Optional environment overrides:
 #   NEXT_PUBLIC_API_URL   pre-set the API URL (skips the prompt)
-#   LUNA_SRC_DIR          where to clone RUReader/LunaSpy (default: WebDAQ's parent)
+#   LUNA_SRC_DIR          fallback checkout dir, used only when the submodules
+#                         are unavailable (default: WebDAQ's parent)
 #
 set -eo pipefail
 
@@ -28,6 +36,9 @@ set -eo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FRONTEND_DIR="$REPO_ROOT/frontend"
 ENV_FILE="$FRONTEND_DIR/.env"
+NATIVE_DIR="$REPO_ROOT/server/native"
+CAENDAQ_DIR="$NATIVE_DIR/caendaq"
+RUREADER_DIR="$NATIVE_DIR/rureader"
 SRC_DIR="${LUNA_SRC_DIR:-$(dirname "$REPO_ROOT")}"
 GITHUB_USER="skowrons94"
 MINIFORGE_DIR="$HOME/miniforge3"
@@ -71,7 +82,6 @@ ensure_build_tools() {
 
     warn "Missing: ${missing[*]} — attempting to install"
     if have apt-get; then
-        # build-essential covers make + g++.
         local pkgs=(); for m in "${missing[@]}"; do [ "$m" = "g++" ] && pkgs+=(build-essential) || pkgs+=("$m"); done
         $SUDO apt-get update -qq && $SUDO apt-get install -y "${pkgs[@]}"
     elif have dnf; then
@@ -84,51 +94,36 @@ ensure_build_tools() {
     ok "Build tools installed"
 }
 
-# ── 1. Docker ──────────────────────────────────────────────────────────────────
-NEED_DOCKER_RELOGIN=0
-ensure_docker() {
-    step "Setting up Docker"
-    if have docker; then
-        ok "Docker present ($(docker --version 2>/dev/null))"
+# ── 1. Git submodules (CaenDAQ, RUReader) ─────────────────────────────────────
+ensure_submodules() {
+    step "Checking out the C++ submodules (CaenDAQ, RUReader)"
+
+    if [ ! -f "$REPO_ROOT/.gitmodules" ]; then
+        warn ".gitmodules missing — skipping (sources will be looked up / cloned later)"
+        return
+    fi
+    if [ ! -d "$REPO_ROOT/.git" ] && [ ! -f "$REPO_ROOT/.git" ]; then
+        warn "Not a git checkout (downloaded tarball?) — cannot init submodules"
+        return
+    fi
+
+    # --init creates them on a fresh clone; --recursive picks up nested ones.
+    # Not --remote: the superproject pins a known-good commit for each.
+    if git -C "$REPO_ROOT" submodule update --init --recursive; then
+        ok "Submodules up to date"
     else
-        info "Installing Docker via the official get.docker.com script…"
-        local tmp; tmp="$(mktemp)"
-        if have curl; then curl -fsSL https://get.docker.com -o "$tmp"
-        else wget -qO "$tmp" https://get.docker.com; fi
-        $SUDO sh "$tmp"
-        rm -f "$tmp"
-        ok "Docker installed"
+        warn "git submodule update failed — falling back to standalone checkouts"
+        return
     fi
 
-    # Enable and start the daemon on systemd-based distros.
-    if have systemctl; then
-        $SUDO systemctl enable --now docker 2>/dev/null \
-            || warn "Could not enable/start docker via systemctl — start it manually if needed"
-    fi
-
-    # Add the current user to the docker group so 'docker' works without sudo.
-    # The change only applies to new login sessions.
-    if [ "$(id -u)" -ne 0 ]; then
-        $SUDO groupadd -f docker 2>/dev/null || true
-        if id -nG "$USER" 2>/dev/null | grep -qw docker; then
-            ok "User '$USER' already in the docker group"
+    local m
+    for m in "$CAENDAQ_DIR" "$RUREADER_DIR"; do
+        if [ -f "$m/CMakeLists.txt" ]; then
+            info "$(basename "$m") @ $(git -C "$m" rev-parse --short HEAD 2>/dev/null || echo '?')"
         else
-            $SUDO usermod -aG docker "$USER" \
-                && { warn "Added '$USER' to the docker group — log out/in (or run 'newgrp docker') to use docker without sudo"; NEED_DOCKER_RELOGIN=1; } \
-                || warn "Could not add '$USER' to the docker group"
+            warn "$m looks empty — its build step will fall back to a standalone checkout"
         fi
-    fi
-
-    # Pull the XDAQ images. Fall back to sudo if the daemon isn't reachable
-    # without it (the group change isn't active in this shell yet).
-    local DOCKER="docker"
-    docker info >/dev/null 2>&1 || DOCKER="$SUDO docker"
-    local img
-    for img in skowrons/xdaq:latest skowrons/xdaq:sync; do
-        info "Pulling $img (this can take a while)…"
-        $DOCKER pull "$img" || warn "Failed to pull $img — retry later with 'docker pull $img'"
     done
-    ok "Docker images ready"
 }
 
 # ── 2. Miniforge / conda ──────────────────────────────────────────────────────
@@ -151,7 +146,6 @@ ensure_conda() {
         ok "Miniforge installed"
     fi
 
-    # Make `conda activate` usable for the rest of this script.
     local conda_base
     conda_base="$( { have conda && conda info --base; } || echo "$MINIFORGE_DIR")"
     # shellcheck disable=SC1091
@@ -163,7 +157,13 @@ ensure_conda() {
 ensure_luna_env() {
     step "Creating the 'luna' conda environment"
     if conda env list | grep -qE '(^|/)luna[[:space:]]*$|/luna$'; then
-        ok "Environment 'luna' already exists — skipping (use 'conda env update -f environment.yml' to refresh)"
+        # An existing environment used to be left alone, so a dependency added
+        # to environment.yml after the first install never arrived — the
+        # failure then surfaced much later as a missing module. Update it.
+        info "Environment 'luna' exists — updating it from environment.yml…"
+        conda env update -f "$REPO_ROOT/environment.yml" --prune \
+            || warn "Update failed; the environment is unchanged. Fix the error above and re-run."
+        ok "Environment 'luna' up to date"
     else
         info "Building environment from environment.yml (this can take several minutes)…"
         conda env create -f "$REPO_ROOT/environment.yml"
@@ -171,47 +171,115 @@ ensure_luna_env() {
     fi
     conda activate luna
     ok "Activated 'luna'"
+
+    verify_env_packages
 }
 
-# ── 4. C++ software (RUReader, RUSpy) ──────────────────────────────────────────
-# build_and_install <repo> <primary-binary> [fallback-binary]
-build_and_install() {
-    local repo="$1" primary="$2" fallback="${3:-}"
-    local url="https://github.com/$GITHUB_USER/$repo.git"
-    local dir="$SRC_DIR/$repo"
+# The packages the server cannot run without. Checked by import, in the
+# environment that was just built: a package that conda reports as installed but
+# that fails to import (wrong architecture, broken build) is the same problem as
+# one that is missing, and both are cheaper to find here than at the first run.
+verify_env_packages() {
+    local missing=()
+    local module
+    for module in flask waitress serial elog requests; do
+        python -c "import $module" >/dev/null 2>&1 || missing+=("$module")
+    done
 
-    step "Building $repo → ${primary}"
-    if [ -d "$dir/.git" ]; then
-        info "Updating existing checkout ($dir)…"
-        git -C "$dir" pull --ff-only || warn "git pull failed; building current checkout"
-    else
-        info "Cloning $url → $dir"
-        git clone "$url" "$dir"
+    if [ ${#missing[@]} -eq 0 ]; then
+        ok "All Python packages import correctly (including elog for the logbook)"
+        return
     fi
 
-    mkdir -p "$dir/build"
-    ( cd "$dir/build" && cmake .. && make -j"$(ncpu)" )
+    warn "These modules do not import in 'luna': ${missing[*]}"
+    for module in "${missing[@]}"; do
+        case "$module" in
+            elog)
+                warn "  elog — the ELOG logbook will not work. It is NOT on PyPI:"
+                warn "         conda install -n luna -c paulscherrerinstitute elog"
+                ;;
+            *)
+                warn "  $module — try: conda env update -f environment.yml"
+                ;;
+        esac
+    done
+}
 
-    # Locate the produced executable (handles either naming).
-    local bin
-    bin="$(find "$dir/build" -maxdepth 3 -type f -name "$primary" 2>/dev/null | head -n1)"
-    if [ -z "$bin" ] && [ -n "$fallback" ]; then
-        bin="$(find "$dir/build" -maxdepth 3 -type f -name "$fallback" 2>/dev/null | head -n1)"
+# ── Source resolution ────────────────────────────────────────────────────────
+# Prefer the pinned submodule under server/native; fall back to a standalone
+# checkout beside WebDAQ (cloning it if needed) so the installer still works in
+# a tarball / no-submodule checkout. Echoes the directory to use.
+resolve_source() {
+    local submodule_dir="$1" repo="$2" fallback_dir="$SRC_DIR/$2"
+
+    if [ -f "$submodule_dir/CMakeLists.txt" ]; then
+        echo "$submodule_dir"
+        return
     fi
-    [ -n "$bin" ] || die "Could not find built '$primary' binary under $dir/build"
+    if [ -d "$fallback_dir/.git" ]; then
+        git -C "$fallback_dir" pull --ff-only >/dev/null 2>&1 || true
+        echo "$fallback_dir"
+        return
+    fi
+    git clone "https://github.com/$GITHUB_USER/$repo.git" "$fallback_dir" >&2
+    echo "$fallback_dir"
+}
 
+# ── 4. RUReader (offline .caendat → ROOT converter) ────────────────────────────
+build_rureader() {
+    local primary="RUReader"
+    local dir; dir="$(resolve_source "$RUREADER_DIR" "RUReader")"
+
+    step "Building RUReader → $primary"
+    info "Source: $dir"
+
+    # Out-of-tree build dir so the submodule working tree stays clean.
+    cmake -S "$dir" -B "$dir/build" >/dev/null
+    cmake --build "$dir/build" -j"$(ncpu)"
+
+    local bin; bin="$(find "$dir/build" -maxdepth 3 -type f -name "$primary" 2>/dev/null | head -n1)"
+    [ -n "$bin" ] || die "Could not find built '$primary' under $dir/build"
     $SUDO install -m 755 "$bin" "/usr/local/bin/$primary"
     ok "Installed $primary → /usr/local/bin/$primary"
 }
 
-build_cpp_software() {
-    # RUReader produces the 'RUReader' binary; LunaSpy produces 'RUSpy'
-    # (older checkouts name it 'LunaSpy', handled as a fallback).
-    build_and_install "RUReader" "RUReader"
-    build_and_install "LunaSpy"  "RUSpy" "LunaSpy"
+# ── 5. caendaq Python module (the acquisition backend) ─────────────────────────
+build_caendaq() {
+    step "Building the caendaq Python module"
+
+    local dir; dir="$(resolve_source "$CAENDAQ_DIR" "CaenDAQ")"
+    info "Source: $dir"
+
+    # Install into the active env with pip (scikit-build-core drives CMake).
+    # CaenDAQ's CMake defaults to CAENDAQ_WITH_CAEN=AUTO: it links the real
+    # backend when libCAENDigitizer + jsoncpp are present and silently falls
+    # back to the mock (fully usable with TEST_FLAG=True) when they are not.
+    # One install either way — no probing or retrying needed here.
+    #
+    # If CAEN is installed somewhere find_path does not reach, pass the root:
+    #   CAEN_DGTZ_ROOT=/opt/CAEN ./install.sh
+    local pip_args=()
+    if [[ -n "${CAEN_DGTZ_ROOT:-}" ]]; then
+        info "Using CAEN_DGTZ_ROOT=$CAEN_DGTZ_ROOT"
+        pip_args+=(--config-settings=cmake.define.CAEN_DGTZ_ROOT="$CAEN_DGTZ_ROOT")
+    fi
+    pip install "$dir" "${pip_args[@]}" || die "caendaq install failed"
+
+    python -c "import caendaq; print('    caendaq', caendaq.__file__)" \
+        || die "caendaq did not import after install (wrong env?)"
+
+    # Report which backend actually got built, so a missing libCAENDigitizer is
+    # visible at install time rather than at the first attempt to arm a board.
+    if python -c "import caendaq, sys; sys.exit(0 if caendaq.HAS_CAEN else 1)"; then
+        ok "caendaq installed WITH CAEN hardware support"
+    else
+        warn "caendaq installed MOCK-ONLY (no libCAENDigitizer/jsoncpp found)"
+        warn "TEST_FLAG=True works; real hardware does not. Install the CAEN"
+        warn "libraries (and libjsoncpp-dev), then re-run this script."
+    fi
 }
 
-# ── 5. Frontend ────────────────────────────────────────────────────────────────
+# ── 6. Frontend ────────────────────────────────────────────────────────────────
 configure_and_build_frontend() {
     step "Configuring and building the frontend"
 
@@ -229,7 +297,6 @@ configure_and_build_frontend() {
         warn "Non-interactive shell — using $api_url"
     fi
 
-    # Write/replace the NEXT_PUBLIC_API_URL line, preserving any other content.
     if [ -f "$ENV_FILE" ] && grep -qE '^NEXT_PUBLIC_API_URL=' "$ENV_FILE"; then
         local tmp; tmp="$(mktemp)"
         sed "s|^NEXT_PUBLIC_API_URL=.*|NEXT_PUBLIC_API_URL=$api_url|" "$ENV_FILE" > "$tmp" && mv "$tmp" "$ENV_FILE"
@@ -245,64 +312,64 @@ configure_and_build_frontend() {
     ok "Frontend built"
 }
 
-# ── 6. LunaDAQ alias ────────────────────────────────────────────────────────────
+# ── 7. LunaDAQ alias ────────────────────────────────────────────────────────────
 add_alias() {
     step "Adding the 'LunaDAQ' launcher to ~/.bashrc"
     local bashrc="$HOME/.bashrc"
-    if grep -qE '^(alias LunaDAQ=|LunaDAQ\(\))' "$bashrc" 2>/dev/null; then
-        ok "Launcher already present — leaving it untouched"
-        return
+    local script="$REPO_ROOT/scripts/lunadaq"
+
+    chmod +x "$script" 2>/dev/null || true
+    touch "$bashrc"
+
+    # The launcher is a one-line delegation to scripts/lunadaq, so its logic can
+    # be fixed by updating the repository instead of every shell profile. Older
+    # installs wrote the whole function into ~/.bashrc; drop that version (and
+    # any previous marker block) before writing the current one.
+    if grep -qE '^(alias LunaDAQ=|LunaDAQ\(\)|# >>> WebDAQ launcher >>>)' "$bashrc" 2>/dev/null; then
+        cp "$bashrc" "$bashrc.webdaq.bak"
+        local tmp; tmp="$(mktemp)"
+        awk '
+            /^# >>> WebDAQ launcher >>>$/ { inblock = 1; next }
+            /^# <<< WebDAQ launcher <<<$/ { inblock = 0; next }
+            inblock { next }
+            /^# Launch the LunaDAQ frontend \(added by WebDAQ install.sh\)$/ { legacy = 1; next }
+            legacy && /^\}$/ { legacy = 0; next }
+            legacy { next }
+            /^alias LunaDAQ=/ { next }
+            { print }
+        ' "$bashrc" > "$tmp" && mv "$tmp" "$bashrc"
+        info "Replaced the previous launcher (backup: $bashrc.webdaq.bak)"
     fi
+
     cat >> "$bashrc" <<EOF
 
-# Launch the LunaDAQ frontend (added by WebDAQ install.sh)
-# Stops any previous instance still listening on the dev server port
-# before starting a new one.
-LunaDAQ() {
-    local port=3000
-    local pids=""
-    if command -v lsof >/dev/null 2>&1; then
-        pids="\$(lsof -ti:\$port 2>/dev/null)"
-    elif command -v fuser >/dev/null 2>&1; then
-        pids="\$(fuser -n tcp \$port 2>/dev/null | tr -s ' ')"
-    fi
-    if [ -n "\$pids" ]; then
-        echo "LunaDAQ already running on port \$port (PIDs:\$pids) — stopping it…"
-        kill \$pids 2>/dev/null
-        sleep 1
-        if command -v lsof >/dev/null 2>&1; then
-            pids="\$(lsof -ti:\$port 2>/dev/null)"
-        elif command -v fuser >/dev/null 2>&1; then
-            pids="\$(fuser -n tcp \$port 2>/dev/null | tr -s ' ')"
-        fi
-        [ -n "\$pids" ] && kill -9 \$pids 2>/dev/null
-    fi
-    conda activate luna && cd "$FRONTEND_DIR" && npm run start
-}
+# >>> WebDAQ launcher >>>
+# start | backend | stop | restart | status  —  see $script
+LunaDAQ() { "$script" "\$@"; }
+# <<< WebDAQ launcher <<<
 EOF
-    ok "Launcher added — run 'LunaDAQ' in a new terminal to start the web app"
+    ok "Launcher added — 'LunaDAQ' starts the web app, 'LunaDAQ stop' shuts it down"
 }
 
 # ── Run ──────────────────────────────────────────────────────────────────────
 main() {
     echo -e "${BOLD}LunaDAQ installer${RESET}"
     info "Repository: $REPO_ROOT"
-    info "C++ sources will live in: $SRC_DIR"
+    info "C++ sources (submodules): $NATIVE_DIR"
 
     ensure_build_tools
-    ensure_docker
+    ensure_submodules
     ensure_conda
     ensure_luna_env
-    build_cpp_software
+    build_rureader
+    build_caendaq
     configure_and_build_frontend
     add_alias
 
     step "Done!"
     info "Start the web app with: ${BOLD}LunaDAQ${RESET} (open a new terminal first, or run 'source ~/.bashrc')"
-    info "Then open ${BOLD}http://localhost:3000${RESET} and click ‘Start an Experiment’."
-    if [ "$NEED_DOCKER_RELOGIN" -eq 1 ]; then
-        warn "Remember to log out and back in so Docker works without sudo."
-    fi
+    info "Then open ${BOLD}http://localhost:3000${RESET} and click 'Start an Experiment'."
+    info "For a hardware-free trial, run the backend with ${BOLD}TEST_FLAG=True${RESET}."
 }
 
 main "$@"
