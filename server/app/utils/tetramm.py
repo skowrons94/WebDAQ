@@ -30,6 +30,8 @@ from typing import Dict, Any, Union
 
 import numpy as np
 
+from .carbon import CarbonPusher
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,9 @@ class TetrAMMController:
         self.port = port
         self.graphite_host = graphite_host
         self.graphite_port = graphite_port
+        # Batched and breaker-guarded, so a dead collector costs one connect a
+        # minute instead of one per channel per sample.
+        self._carbon = CarbonPusher('tetramm')
         
         # Connection management
         self.socket = None
@@ -543,13 +548,20 @@ class TetrAMMController:
             # Parse measurement data
             timestamp = datetime.now().timestamp()
             num_channels = int(self.settings.get('CHN', 4))
-            
+
+            # Collected under the lock, pushed after releasing it. Monitoring is
+            # the least important thing this method does and it is the only part
+            # that talks to another machine, so it must not be holding the lock
+            # that the web layer needs to read a plot or that start/stop needs
+            # to flip accumulation. See the note on _push_metrics.
+            metrics = []
+
             # Update data buffers with thread safety
             with self.buffer_lock:
                 # Shift time buffer and add new timestamp
                 self.times = np.roll(self.times, -1)
                 self.times[-1] = timestamp
-                
+
                 # Process each channel's data
                 for i in range(min(num_channels, len(data_str))):
                     channel_key = str(i)
@@ -559,43 +571,40 @@ class TetrAMMController:
                         raw_value = float(data_str[i])
                         current_ua = raw_value * 1e6  # Convert to microamps
                         self.values[channel_key][-1] = current_ua
-                        
-                        # Send to Graphite monitoring system
-                        self._send_metric_to_graphite(f"tetram.ch{i}", current_ua, timestamp)
-                
+
+                        metrics.append((f"tetram.ch{i}", current_ua))
+
                 # Save to file if data logging is enabled
                 if self.save_data:
                     self._log_measurement_to_file(timestamp, num_channels)
                 self.update_accumulated_charge()
-            
+
+            self._push_metrics(metrics, timestamp)
+
         except Exception as e:
             self.logger.warning(f"Error acquiring TetrAMM measurement: {e}")
     
+    def _push_metrics(self, metrics: list, timestamp: float) -> None:
+        """
+        Send this sample's channels to Carbon, as one batch, outside the lock.
+
+        Must not be called while holding buffer_lock: a Carbon that is gone
+        makes this cost a full connect timeout, and everything that reads the
+        current — the plots, the status endpoint, run start/stop flipping
+        accumulation — waits on that lock.
+
+        Never raises, and gives up on an unreachable collector until its
+        cooldown expires (see CarbonPusher).
+        """
+        self._carbon.send(self.graphite_host, self.graphite_port, metrics, timestamp)
+
+    def get_graphite_state(self) -> dict:
+        """Push status, so 'no data in Graphite' is answerable from the UI."""
+        return self._carbon.state()
+
     def _send_metric_to_graphite(self, metric_path: str, value: float, timestamp: float) -> None:
-        """
-        Send a metric to Graphite monitoring system.
-        
-        Args:
-            metric_path: Metric path (e.g., "tetram.ch0")
-            value: Metric value
-            timestamp: Unix timestamp
-        """
-        try:
-            # Create socket connection to Graphite
-            with socket.create_connection((self.graphite_host, self.graphite_port), timeout=1) as sock:
-                # Format message: metric_path value timestamp
-                message = f"{metric_path} {value} {int(timestamp)}\n"
-                sock.sendall(message.encode('utf-8'))
-                
-        except Exception as e:
-            # Don't log every Graphite error to avoid spam
-            if hasattr(self, '_last_graphite_error_time'):
-                if time.time() - self._last_graphite_error_time > 60:  # Log once per minute
-                    self.logger.warning(f"Failed to send metric to Graphite: {e}")
-                    self._last_graphite_error_time = time.time()
-            else:
-                self.logger.warning(f"Failed to send metric to Graphite: {e}")
-                self._last_graphite_error_time = time.time()
+        """Single-metric push, kept for callers outside the acquisition loop."""
+        self._push_metrics([(metric_path, value)], timestamp)
     
     def _log_measurement_to_file(self, timestamp: float, num_channels: int) -> None:
         """

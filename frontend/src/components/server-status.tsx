@@ -40,16 +40,41 @@ export function ServerStatus() {
     const popoverRef = useRef<HTMLDivElement>(null)
     const logsRef = useRef<HTMLPreElement>(null)
 
-    // Poll status every 3s
+    // Poll status every 3s.
+    //
+    // Asymmetric on purpose: one good answer is enough to say "online", but it
+    // takes MISSES_BEFORE_OFFLINE consecutive bad ones to say "offline". The
+    // probe behind /api/server-control gives up after 2s, and a server that is
+    // merely busy — every worker thread tied up, a heavy stats query, a run
+    // starting — can miss that deadline while being perfectly alive. Reporting
+    // each miss directly made the badge flicker online → offline → online
+    // within a few seconds, which reads as "the DAQ is falling over" when
+    // nothing is wrong. A server that is genuinely gone is still reported, just
+    // ~9s later, and that is the right trade for something an operator watches
+    // out of the corner of their eye.
     useEffect(() => {
+        const MISSES_BEFORE_OFFLINE = 3
+        let misses = 0
+
         const check = async () => {
             try {
                 const res = await fetch('/api/server-control')
                 const data = await res.json()
-                setConnected(data.running)
-                setCurrentDirectory(data.currentDirectory ?? null)
-                setServerTestMode(Boolean(data.testMode))
+                if (data.running) {
+                    misses = 0
+                    setConnected(true)
+                    setCurrentDirectory(data.currentDirectory ?? null)
+                    setServerTestMode(Boolean(data.testMode))
+                    return
+                }
+                misses += 1
             } catch {
+                misses += 1
+            }
+            // Below the threshold, keep showing the last known state rather
+            // than an unknown one — including on the very first polls, where
+            // `connected` is still null and the badge shows nothing.
+            if (misses >= MISSES_BEFORE_OFFLINE) {
                 setConnected(false)
                 setCurrentDirectory(null)
                 setServerTestMode(false)

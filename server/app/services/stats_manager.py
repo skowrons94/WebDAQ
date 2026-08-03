@@ -25,9 +25,14 @@ import threading
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime
 
-from ..utils.graphite import GraphiteClient
+from ..utils.graphite import GraphiteClient, GraphiteUnavailable
 
 logger = logging.getLogger(__name__)
+
+# Read timeout for the stats poll path. Well under the old 30s default: these
+# queries run on waitress worker threads serving the dashboard, so a query that
+# outlives the poll interval it was issued for is only holding a worker hostage.
+STATS_READ_TIMEOUT_S = 5
 
 # Root of the metric tree caendaq publishes rates under. It names the
 # EXPERIMENT, not a board — set it to 'ancillary.rates.12c12c' and that campaign
@@ -68,7 +73,8 @@ class StatsManager:
         self.logger = logging.getLogger(__name__ + '.StatsManager')
 
         # Initialize Graphite client
-        self.graphite_client = GraphiteClient(graphite_host, graphite_port)
+        self.graphite_client = GraphiteClient(graphite_host, graphite_port,
+                                              timeout=STATS_READ_TIMEOUT_S)
         self.logger.info(f"Stats manager initialized with Graphite at {graphite_host}:{graphite_port}")
 
         # Load configuration
@@ -383,6 +389,12 @@ class StatsManager:
                         if value is not None:
                             return (value, timestamp)
                     break  # got a response, just no non-null points — widen window
+                except GraphiteUnavailable:
+                    # The server is known to be down. Widening the window or
+                    # retrying cannot help, and this loop is an amplifier: four
+                    # windows times two attempts is eight stalled queries for
+                    # one caller. Give up on the whole path at once.
+                    return (None, None)
                 except Exception as e:
                     if attempt == 0:
                         self.logger.debug(

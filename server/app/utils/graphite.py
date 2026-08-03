@@ -18,11 +18,42 @@ Purpose: Graphite database interface for LUNA experiment monitoring
 
 import requests
 import logging
+import threading
+import time
 from typing import List, Tuple, Optional, Dict, Any
 from datetime import datetime
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# How long to wait for the TCP handshake, as opposed to for the answer. These
+# are very different things and the distinction is what keeps a dead Graphite
+# from taking WebDAQ with it. A host that is merely SLOW still completes the
+# handshake in milliseconds on the local network; a host that is gone (powered
+# off, or a firewall dropping SYNs rather than refusing them) never completes it
+# at all, and without a separate short deadline every query then blocks for the
+# full read timeout. Two seconds is far beyond any healthy LAN handshake.
+DEFAULT_CONNECT_TIMEOUT_S = 2.0
+
+# Consecutive failures before the breaker opens. Above one so that a single
+# dropped packet or a render hiccup does not blind the dashboard.
+DEFAULT_FAILURE_THRESHOLD = 3
+
+# How long the breaker stays open before letting one probe through. Short enough
+# that a Graphite coming back is picked up on its own within the minute, long
+# enough that a dead host is not retried on every dashboard poll.
+DEFAULT_COOLDOWN_S = 60.0
+
+
+class GraphiteUnavailable(TimeoutError):
+    """
+    Raised instead of a network call while the breaker is open.
+
+    Subclasses TimeoutError so callers that already treat a timeout as "no data
+    this round" keep working unchanged — the difference is that this one is
+    raised immediately rather than after a stalled connect.
+    """
+
 
 class GraphiteClient:
     """
@@ -32,25 +63,165 @@ class GraphiteClient:
     and handling various data formats from Graphite render API.
     """
     
-    def __init__(self, host: str, port: int = 80, timeout: int = 30):
+    def __init__(self, host: str, port: int = 80, timeout: int = 30,
+                 connect_timeout: float = DEFAULT_CONNECT_TIMEOUT_S,
+                 failure_threshold: int = DEFAULT_FAILURE_THRESHOLD,
+                 cooldown_s: float = DEFAULT_COOLDOWN_S):
         """
         Initialize the GraphiteClient with connection parameters.
-        
+
         Args:
             host: Hostname or IP address of the Graphite server
             port: Port number of the Graphite server (default: 80)
-            timeout: Request timeout in seconds (default: 30)
+            timeout: Time to wait for the ANSWER, in seconds (default: 30)
+            connect_timeout: Time to wait for the TCP handshake, in seconds
+            failure_threshold: Consecutive failures that open the breaker
+            cooldown_s: How long the breaker stays open before probing again
         """
         self.host = host
         self.port = port
         self.timeout = timeout
+        self.connect_timeout = connect_timeout
         self.base_url = f"http://{host}:{port}"
-        
+
+        # Circuit breaker. Every caller shares one client across waitress worker
+        # threads, so this state is shared and needs its own lock.
+        self.failure_threshold = max(1, int(failure_threshold))
+        self.cooldown_s = float(cooldown_s)
+        self._breaker_lock = threading.Lock()
+        self._failures = 0
+        self._open_until: Optional[float] = None   # monotonic deadline
+        self._probing = False                      # a half-open probe is in flight
+        self._last_error: Optional[str] = None
+
         self.logger = logging.getLogger(__name__ + '.GraphiteClient')
-        
+
         self.logger.info(f"GraphiteClient initialized for {self.base_url}")
-        self.logger.debug(f"Request timeout set to {timeout} seconds")
-    
+        self.logger.debug(
+            f"Timeouts: {connect_timeout}s connect / {timeout}s read; "
+            f"breaker opens after {self.failure_threshold} failures "
+            f"for {self.cooldown_s}s")
+
+    # ── Circuit breaker ──────────────────────────────────────────────────────
+    #
+    # The point is not to spare Graphite, it is to spare US. A query runs on a
+    # waitress worker thread; with the server unreachable every one of them
+    # parks in connect() and the request queue grows without bound until the
+    # whole DAQ interface is unusable. Failing instantly keeps the workers free.
+
+    @property
+    def _timeouts(self):
+        """requests' (connect, read) pair."""
+        return (self.connect_timeout, self.timeout)
+
+    def _breaker_admit(self) -> bool:
+        """
+        Decide whether a network call may go ahead.
+
+        Returns True to proceed, and raises GraphiteUnavailable when the breaker
+        is open. Exactly one caller is admitted as the half-open probe once the
+        cooldown expires; the rest keep failing fast until that probe settles,
+        so a dead host costs one handshake per cooldown rather than one per
+        thread.
+        """
+        with self._breaker_lock:
+            if self._open_until is None:
+                return True
+
+            if time.monotonic() < self._open_until or self._probing:
+                raise GraphiteUnavailable(
+                    f"Graphite at {self.base_url} is marked unavailable "
+                    f"({self._last_error or 'no route'}); not retried until the "
+                    f"cooldown expires")
+
+            # Cooldown expired and nobody else is probing: this call becomes it.
+            self._probing = True
+            self.logger.info(
+                f"Probing Graphite at {self.base_url} after {self.cooldown_s}s")
+            return True
+
+    def _breaker_success(self) -> None:
+        with self._breaker_lock:
+            recovered = self._open_until is not None
+            self._failures = 0
+            self._open_until = None
+            self._probing = False
+            self._last_error = None
+        if recovered:
+            self.logger.warning(
+                f"Graphite at {self.base_url} is reachable again; resuming queries")
+
+    def _breaker_failure(self, error: Exception) -> None:
+        with self._breaker_lock:
+            self._failures += 1
+            self._last_error = str(error).split('\n')[0][:200]
+            was_open = self._open_until is not None
+            self._probing = False
+            if self._failures >= self.failure_threshold:
+                self._open_until = time.monotonic() + self.cooldown_s
+                newly_open = not was_open
+            else:
+                newly_open = False
+        if newly_open:
+            # Logged once per outage, not once per query: the flood of identical
+            # tracebacks is itself part of what makes an outage hard to read.
+            self.logger.error(
+                f"Graphite at {self.base_url} unreachable after {self._failures} "
+                f"attempts ({self._last_error}). Queries will fail immediately "
+                f"and it will be probed every {self.cooldown_s}s until it "
+                f"answers. WebDAQ acquisition is unaffected.")
+
+    def reset_breaker(self) -> None:
+        """
+        Forget an outage and query again on the next call.
+
+        Recovery is automatic — the breaker probes on its own every cooldown —
+        so this is only for when you have just fixed Graphite and would rather
+        not wait for the next probe.
+        """
+        with self._breaker_lock:
+            self._failures = 0
+            self._open_until = None
+            self._probing = False
+            self._last_error = None
+        self.logger.info(f"Graphite breaker for {self.base_url} reset by request")
+
+    @property
+    def available(self) -> bool:
+        """False while the breaker is open, i.e. queries would fail instantly."""
+        with self._breaker_lock:
+            return self._open_until is None
+
+    def breaker_state(self) -> Dict[str, Any]:
+        """Breaker status, for the UI and /stats endpoints."""
+        with self._breaker_lock:
+            open_for = (None if self._open_until is None
+                        else max(0.0, self._open_until - time.monotonic()))
+            return {
+                'available': self._open_until is None,
+                'consecutive_failures': self._failures,
+                'retry_in_s': None if open_for is None else round(open_for, 1),
+                'last_error': self._last_error,
+            }
+
+    def _get(self, url: str, params: Dict[str, Any],
+             timeout: Optional[Any] = None) -> requests.Response:
+        """A GET guarded by the breaker, with the connect deadline applied."""
+        self._breaker_admit()
+        try:
+            response = requests.get(url, params=params,
+                                    timeout=timeout or self._timeouts)
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            # Only transport failures count against the breaker. An HTTP error
+            # or unparseable body means Graphite is up and talking, which is a
+            # different problem and must not stop us querying it.
+            self._breaker_failure(e)
+            raise
+        self._breaker_success()
+        return response
+
+
     def get_data(self,
                  target: str,
                  from_time: str,
@@ -95,9 +266,9 @@ class GraphiteClient:
 
         try:
             # Make HTTP request to Graphite
-            response = requests.get(url, params=params, timeout=self.timeout)
+            response = self._get(url, params)
             response.raise_for_status()
-            
+
             self.logger.debug(f"Graphite response status: {response.status_code}")
             
             # Parse JSON response
@@ -134,11 +305,16 @@ class GraphiteClient:
             self.logger.debug(f"Retrieved {len(result)} datapoints for target: {target}")
             return result
             
+        except GraphiteUnavailable:
+            # Already logged once when the breaker opened; re-raised as-is so
+            # the caller can tell "known down" from "just failed".
+            raise
+
         except requests.exceptions.Timeout as e:
             error_msg = f"Timeout querying Graphite for target {target}: {e}"
             self.logger.error(error_msg)
             raise TimeoutError(error_msg)
-            
+
         except requests.exceptions.ConnectionError as e:
             error_msg = f"Connection error to Graphite server {self.base_url}: {e}"
             self.logger.error(error_msg)
@@ -193,12 +369,12 @@ class GraphiteClient:
             params[f'target'] = target
         
         try:
-            response = requests.get(url, params=params, timeout=self.timeout)
+            response = self._get(url, params)
             response.raise_for_status()
-            
+
             data = response.json()
             result = {}
-            
+
             for series in data:
                 target_name = series.get('target', 'unknown')
                 datapoints = series.get('datapoints', [])
@@ -230,9 +406,9 @@ class GraphiteClient:
             # and a wrong port pointing at some other web service would then show
             # up as "connected" while every metric stayed empty. A JSON list back
             # from /metrics/find means this really is Graphite.
-            response = requests.get(f"{self.base_url}/metrics/find",
-                                    params={'query': '*', 'format': 'json'},
-                                    timeout=5)
+            response = self._get(f"{self.base_url}/metrics/find",
+                                 {'query': '*', 'format': 'json'},
+                                 timeout=(self.connect_timeout, 5))
 
             if response.status_code >= 400:
                 self.logger.warning(f"Graphite server returned status {response.status_code}")
@@ -251,14 +427,21 @@ class GraphiteClient:
 
             return is_connected
             
+        except GraphiteUnavailable:
+            # Known down, so this is not news and not worth a second line in the
+            # log. check_connection is the one caller allowed to ask anyway: it
+            # exists to report status, and the breaker's own probe is what will
+            # notice the recovery.
+            return False
+
         except requests.exceptions.ConnectionError:
             self.logger.warning(f"Cannot connect to Graphite server at {self.base_url}")
             return False
-            
+
         except requests.exceptions.Timeout:
             self.logger.warning("Graphite server connection test timed out")
             return False
-            
+
         except Exception as e:
             self.logger.warning(f"Graphite connection test failed: {e}")
             return False
@@ -280,9 +463,8 @@ class GraphiteClient:
             "nothing here" rather than failing.
         """
         try:
-            response = requests.get(f"{self.base_url}/metrics/find",
-                                    params={'query': query, 'format': 'json'},
-                                    timeout=self.timeout)
+            response = self._get(f"{self.base_url}/metrics/find",
+                                 {'query': query, 'format': 'json'})
             response.raise_for_status()
             data = response.json()
         except Exception as e:
@@ -329,11 +511,11 @@ class GraphiteClient:
                 'format': 'json'
             }
             
-            response = requests.get(url, params=params, timeout=self.timeout)
+            response = self._get(url, params)
             response.raise_for_status()
-            
+
             data = response.json()
-            
+
             # Extract metric names from the response
             metrics = []
             for item in data:
@@ -359,15 +541,16 @@ class GraphiteClient:
             'port': self.port,
             'base_url': self.base_url,
             'timeout': self.timeout,
+            'connect_timeout': self.connect_timeout,
             'connected': False,
             'response_time_ms': None,
             'error': None
         }
-        
+        info.update(self.breaker_state())
+
         try:
-            import time
             start_time = time.time()
-            
+
             # Test connection
             info['connected'] = self.check_connection()
             

@@ -32,6 +32,8 @@ import socket
 
 import numpy as np
 
+from .carbon import CarbonPusher
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -102,6 +104,9 @@ class RBD9103Controller:
         # Graphite configuration
         self.graphite_host = graphite_host
         self.graphite_port = graphite_port
+        # Breaker-guarded, so a dead collector costs one connect a minute
+        # instead of one per sample.
+        self._carbon = CarbonPusher('rbd9103')
 
         # Data acquisition threading
         self.acquisition_thread = None
@@ -682,9 +687,6 @@ class RBD9103Controller:
                 self.current_range = range_str
                 self.current_stability = stability
 
-                # Send to Graphite monitoring system
-                self._send_metric_to_graphite("rbd9103.current", current_ua, timestamp)
-
                 # Save to file if data logging is enabled
                 if self.save_data:
                     self._log_measurement_to_file(timestamp, current_ua)
@@ -692,29 +694,32 @@ class RBD9103Controller:
                 # Update accumulated charge
                 self.update_accumulated_charge()
 
+            # Outside the lock on purpose: this is the only step that talks to
+            # another machine, and everything that reads the current waits on
+            # that lock. See _push_metrics.
+            self._push_metrics([("rbd9103.current", current_ua)], timestamp)
+
         except Exception as e:
             self.logger.warning(f"Error processing RBD 9103 sample: {e}")
 
+    def _push_metrics(self, metrics: list, timestamp: float) -> None:
+        """
+        Send this sample to Carbon, outside the lock.
+
+        Must not be called while holding buffer_lock: an unreachable collector
+        makes this cost a full connect timeout, and the plots, the status
+        endpoint and run start/stop all wait on that lock. Never raises, and
+        stops trying until the cooldown expires (see CarbonPusher).
+        """
+        self._carbon.send(self.graphite_host, self.graphite_port, metrics, timestamp)
+
+    def get_graphite_state(self) -> dict:
+        """Push status, so 'no data in Graphite' is answerable from the UI."""
+        return self._carbon.state()
+
     def _send_metric_to_graphite(self, metric_path: str, value: float, timestamp: float) -> None:
-        """
-        Send a metric to Graphite monitoring system.
-
-        Args:
-            metric_path: Metric path (e.g., "rbd9103.current")
-            value: Metric value
-            timestamp: Unix timestamp
-        """
-        try:
-            with socket.create_connection((self.graphite_host, self.graphite_port), timeout=1) as sock:
-                message = f"{metric_path} {value} {int(timestamp)}\n"
-                sock.sendall(message.encode('utf-8'))
-
-        except Exception as e:
-            # Don't log every Graphite error to avoid spam
-            if not hasattr(self, '_last_graphite_error_time') or \
-               (time.time() - self._last_graphite_error_time > 60):
-                self.logger.warning(f"Failed to send metric to Graphite: {e}")
-                self._last_graphite_error_time = time.time()
+        """Single-metric push, kept for callers outside the acquisition loop."""
+        self._push_metrics([(metric_path, value)], timestamp)
 
     def _log_measurement_to_file(self, timestamp: float, current_ua: float) -> None:
         """
