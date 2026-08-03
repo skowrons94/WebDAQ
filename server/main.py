@@ -3,6 +3,20 @@ import os
 import signal
 import sys
 import logging
+
+# Before anything else: creating the app opens the digitizers and the
+# picoammeter, so a second launch has already reached into a running
+# acquisition by the time waitress discovers the port is taken. The check has
+# to happen above these imports, not in __main__ below, because `app =
+# create_app()` runs at import time.
+if __name__ == '__main__':
+    from app.utils.single_instance import refuse_if_already_running
+
+    _conflict = refuse_if_already_running()
+    if _conflict:
+        print(f"Refusing to start.\n\n{_conflict}", file=sys.stderr)
+        sys.exit(1)
+
 from waitress import serve
 from app import create_app, db
 from app.models.user import User
@@ -229,25 +243,13 @@ def cleanup_on_shutdown(signum=None, frame=None):
 import threading
 import time as _time
 
-# PID file so a stray backend is trivial to find/kill (scripts/kill-server.sh).
-_PID_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache', 'daq-server.pid')
-
-
-def _write_pid_file():
-    try:
-        os.makedirs(os.path.dirname(_PID_FILE), exist_ok=True)
-        with open(_PID_FILE, 'w') as f:
-            f.write(str(os.getpid()))
-    except Exception as e:
-        logger.debug(f"could not write pid file: {e}")
-
-
-def _remove_pid_file():
-    try:
-        if os.path.exists(_PID_FILE):
-            os.remove(_PID_FILE)
-    except Exception:
-        pass
+# PID file so a stray backend is trivial to find/kill (scripts/kill-server.sh),
+# and so the guard at the top of this file can tell whether one is already up.
+# Removing it is ownership-checked: see app/utils/single_instance.py.
+from app.utils.single_instance import (
+    remove_pid_file as _remove_pid_file,
+    write_pid_file as _write_pid_file,
+)
 
 
 def _launcher_watchdog():
