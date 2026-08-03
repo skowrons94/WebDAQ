@@ -7,8 +7,10 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 from ..utils.tetramm import tetram_controller, TetrAMMController
 from ..utils.rbd9103 import rbd9103_controller, RBD9103Controller, list_serial_ports
+from ..utils.graphite_current import GraphiteCurrentController
 from ..services.daq_manager import get_daq_manager
 from ..services.run_metadata_snapshot import sync_run_metadata_file
+from ..services import graphite_reader
 from ..services import run_data
 
 from app import db
@@ -33,20 +35,37 @@ running = False
 _TOTAL_SAVE_THRESHOLD_UC = 50.0
 _last_saved_total = 0.0
 
+# The modules that report a single current rather than a set of channels.
+SINGLE_CHANNEL_MODULES = ("rbd9103", "graphite")
+
+# What the current plot may ask for in one request. `bins` is what the chart
+# actually draws (a plot cannot show more points than it has pixels); the raw
+# limit only bounds how much of the controller's buffer is reduced into them.
+MAX_HISTORY_BINS = 5000
+MAX_RAW_HISTORY_POINTS = 200000
+
 # Open conf/current.json if exists, create default if not
 if os.path.exists("conf/current.json"):
     with open("conf/current.json") as f:
         settings = json.load(f)
 else:
     settings = {
-        "module_type": "tetramm",  # "tetramm" or "rbd9103"
+        "module_type": "tetramm",  # "tetramm", "rbd9103" or "graphite"
         "tetramm_ip": "169.254.145.10",
         "tetramm_port": 10001,
         "tetramm_charge_channel": 0,
         "rbd9103_port": "/dev/tty.usbserial-A50285BI",
         "rbd9103_baudrate": 57600,
         "rbd9103_high_speed": False,
+        # Beam current read from a monitored Graphite metric instead of from a
+        # picoammeter, for setups that take it from the accelerator. 'scale'
+        # converts that metric into the µA everything else here works in.
+        "graphite_metric": "",
+        "graphite_metric_scale": 1.0,
+        "graphite_poll_interval_s": 1.0,
         "total_accumulated": 0,
+        # Carbon plaintext ingest, i.e. where samples are PUSHED. Reading
+        # history back uses the render API configured in conf/stats.json.
         "graphite_host": "172.18.9.54",
         "graphite_port": 2003
     }
@@ -57,12 +76,40 @@ else:
 # Initialize controllers
 tetramm_ctrl = None
 rbd9103_ctrl = None
+graphite_ctrl = None
 controller = None  # Active controller
+
+
+def _build_graphite_controller() -> GraphiteCurrentController:
+    """The Graphite-backed current module, configured from conf/current.json."""
+    return GraphiteCurrentController(
+        metric=settings.get("graphite_metric", ""),
+        scale=settings.get("graphite_metric_scale", 1.0),
+        poll_interval_s=settings.get("graphite_poll_interval_s", 1.0),
+    )
+
+
+def _is_single_channel() -> bool:
+    """Whether the active module reports one current rather than four channels."""
+    return settings.get("module_type", "tetramm") in SINGLE_CHANNEL_MODULES
+
 
 # Initialize the selected module
 module_type = settings.get("module_type", "tetramm")
 
-if TEST_FLAG:
+if module_type == "graphite":
+    # Deliberately not simulated under TEST_FLAG: this module needs no hardware
+    # in the first place, so the useful thing in test mode is the real one
+    # pointed at a real metric. With no metric configured it simply reports
+    # nothing, which is the honest answer.
+    graphite_ctrl = _build_graphite_controller()
+    graphite_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+    try:
+        graphite_ctrl.initialize()
+    except Exception as e:
+        print(f"Warning: Could not start the Graphite current module at startup: {e}")
+    controller = graphite_ctrl
+elif TEST_FLAG:
     # No picoammeter in test mode. Substitute a simulated one so the current
     # readout, the accumulated charge and the per-run current.txt all behave —
     # otherwise a test-mode run produces no current data at all and the plots
@@ -273,7 +320,7 @@ def reset_device():
 @bp.route('/current/data', methods=['GET'])
 @jwt_required_custom
 def get_data():
-    if( "rbd9103" in settings.get("module_type", "") ):
+    if _is_single_channel():
         data = controller.get_data()
         if( data < 1e-9 ): data = 0
         return jsonify(data)
@@ -284,25 +331,35 @@ def get_data():
         if( data < 1e-9 ): data = 0
         return jsonify(data)
 
+def _collimator(channel: str):
+    """A collimator channel, or zero on the modules that have none.
+
+    Only the TetrAMM has these extra inputs. Reporting zero rather than failing
+    keeps a dashboard that polls them from filling the log with errors on a
+    single-channel setup.
+    """
+    if _is_single_channel():
+        return jsonify(0)
+    data = controller.get_data()[channel]
+    if( data < 1e-9 ): data = 0
+    return jsonify(data)
+
+
 @bp.route('/current/collimator/1', methods=['GET'])
 @jwt_required_custom
 def get_data_1():
-    data = controller.get_data()["1"]
-    if( data < 1e-9 ): data = 0
-    return jsonify(data)
+    return _collimator("1")
 
 @bp.route('/current/collimator/2', methods=['GET'])
 @jwt_required_custom
 def get_data_2():
-    data = controller.get_data()["2"]
-    if( data < 1e-9 ): data = 0
-    return jsonify(data)
+    return _collimator("2")
 
 @bp.route('/current/data_array', methods=['GET'])
 @jwt_required_custom
 def get_data_array():
     # Real thing
-    if( "rbd9103" in settings.get("module_type", "") ):
+    if _is_single_channel():
         data = controller.get_data_array().tolist()
     else:
         data = controller.get_data_array()["0"].tolist()
@@ -312,12 +369,96 @@ def get_data_array():
     return jsonify(data)
 
 
+def _history_metric(channel: int) -> str:
+    """The Graphite metric the active module publishes its current under.
+
+    Every module pushes to Carbon as it samples, so Graphite is a complete
+    record of a run even when it is far longer than the in-memory buffer.
+    """
+    module = settings.get("module_type", "tetramm")
+    if module == "graphite":
+        return str(settings.get("graphite_metric", "") or "")
+    if module == "rbd9103":
+        return "rbd9103.current"
+    return f"tetram.ch{int(channel)}"
+
+
+def _bin_samples(samples, start, end, bins):
+    """
+    Reduce timestamped samples to at most ``bins`` fixed-width bins.
+
+    Returns ``([[time, mean, min, max], ...], bin_width_s)`` with empty bins
+    dropped, so a window that outruns the data does not produce a line full of
+    holes.
+
+    Striding — keeping every Nth sample — is cheaper, but on a three-day run it
+    reduces a 200 ms beam trip to a 4% chance of being drawn at all. Carrying
+    the min and max alongside the mean means a trip stays visible however far
+    the plot is zoomed out, at four numbers per bin instead of one.
+    """
+    if not samples:
+        return [], None
+
+    times = np.fromiter((s[0] for s in samples), dtype=float, count=len(samples))
+    values = np.fromiter((s[1] for s in samples), dtype=float, count=len(samples))
+
+    # One NaN would take its whole bin's mean, min and max with it, so a single
+    # hole in the archive would draw as a gap several minutes wide.
+    usable = np.isfinite(times) & np.isfinite(values)
+    if not usable.all():
+        times, values = times[usable], values[usable]
+        if times.size == 0:
+            return [], None
+
+    span = float(end) - float(start)
+    if span <= 0 or bins <= 0:
+        return [[float(t), float(v), float(v), float(v)]
+                for t, v in zip(times, values)], None
+
+    width = span / bins
+    index = np.clip(((times - float(start)) / width).astype(np.int64), 0, bins - 1)
+
+    counts = np.bincount(index, minlength=bins)
+    value_sums = np.bincount(index, weights=values, minlength=bins)
+    time_sums = np.bincount(index, weights=times, minlength=bins)
+    minima = np.full(bins, np.inf)
+    maxima = np.full(bins, -np.inf)
+    np.minimum.at(minima, index, values)
+    np.maximum.at(maxima, index, values)
+
+    filled = counts > 0
+    if not filled.any():
+        return [], width
+
+    counts = counts[filled]
+    rows = np.column_stack((
+        time_sums[filled] / counts,     # the bin's own mean time, not its centre
+        value_sums[filled] / counts,
+        minima[filled],
+        maxima[filled],
+    ))
+    return rows.tolist(), width
+
+
 @bp.route('/current/history', methods=['GET'])
 @jwt_required_custom
 def get_current_history():
-    """Timestamped beam-current history for rolling and run-start plots."""
+    """
+    Timestamped beam-current history for the rolling and run-start plots.
+
+    Pass ``bins`` to have the window reduced here rather than in the browser.
+    That is what makes a three-day run viable: the response is a fixed number of
+    points whatever the run's length, so the payload, the parse and the chart
+    render all stop growing with it. Rows become ``[time, mean, min, max]``.
+
+    Without ``bins`` the old ``[time, value]`` rows are returned unchanged, so
+    existing clients (the mobile app) keep working.
+    """
     try:
         max_points = max(100, min(20000, int(request.args.get('max_points', 20000))))
+        bins_arg = request.args.get('bins')
+        bins = (max(10, min(MAX_HISTORY_BINS, int(bins_arg)))
+                if bins_arg is not None else None)
         since_arg = request.args.get('since')
         if since_arg is not None:
             since = float(since_arg)
@@ -327,12 +468,17 @@ def get_current_history():
     except (TypeError, ValueError):
         return jsonify({"message": "Invalid history range"}), 400
 
+    now = time.time()
+
     if controller is None:
         return jsonify({
             "samples": [],
-            "sampled_at": time.time(),
+            "sampled_at": now,
             "sample_interval_s": None,
             "channel": 0,
+            "binned": bool(bins),
+            "bin_width_s": None,
+            "source": "none",
         })
 
     try:
@@ -340,8 +486,12 @@ def get_current_history():
     except (AttributeError, TypeError, ValueError):
         channel = 0
 
+    # With binning the reduction happens below, so take the buffer whole rather
+    # than letting get_history() stride it first and throw away the extremes.
     try:
-        samples = controller.get_history(since=since, max_points=max_points)
+        samples = controller.get_history(
+            since=since,
+            max_points=MAX_RAW_HISTORY_POINTS if bins else max_points)
     except Exception as e:
         print(f"Warning: could not read timestamped current history: {e}")
         return jsonify({"message": "Could not read current history"}), 500
@@ -349,18 +499,39 @@ def get_current_history():
     source = "controller-buffer"
     interval = getattr(controller, 'acquisition_interval', None)
 
-    # A controller buffer is large but finite. If a dashboard is reopened deep
-    # into a long run, reconstruct the missing prefix from current.txt once;
-    # subsequent incremental polls start at the newest returned timestamp and
-    # stay on the cheap in-memory path.
+    # The controller's buffer is large but finite — around 14 hours at the
+    # TetrAMM's sampling rate. A dashboard opened deep into a long run needs the
+    # missing prefix from somewhere else.
+    tolerance = max(5.0, 3.0 * (interval or 1.0))
     buffer_misses_start = (
         since_arg is not None
         and daq_mgr.is_running()
-        and (not samples or samples[0][0] - since > max(5.0, 3.0 * (interval or 1.0)))
+        and (not samples or samples[0][0] - since > tolerance)
     )
+
     if buffer_misses_start:
+        # Graphite first: it holds the whole run, it consolidates server-side,
+        # and asking it for three days costs the same as asking for three
+        # minutes. Reading current.txt instead means parsing every line of a
+        # half-million-line file on a dashboard poll.
+        metric = _history_metric(channel)
+        scale = (float(settings.get("graphite_metric_scale", 1.0) or 1.0)
+                 if settings.get("module_type") == "graphite" else 1.0)
+        from_graphite = graphite_reader.fetch_series(
+            metric,
+            from_time=f'-{max(1, int(now - since))}s',
+            until_time='now',
+            max_points=bins or max_points,
+            scale=scale)
+        if from_graphite:
+            samples = [point for point in from_graphite if point[0] >= since]
+            source = "graphite"
+
+    if buffer_misses_start and source != "graphite":
+        # No Graphite (unreachable, or the metric is not archived): fall back to
+        # the run's own log. Correct, just expensive.
         recorded = run_data.read_current(
-            daq_mgr.get_run_number(), max_points=max_points)
+            daq_mgr.get_run_number(), max_points=MAX_RAW_HISTORY_POINTS if bins else max_points)
         if recorded.get("available") and recorded.get("start_time"):
             try:
                 recorded_start = datetime.fromisoformat(
@@ -380,11 +551,21 @@ def get_current_history():
             except (TypeError, ValueError):
                 pass
 
+    bin_width = None
+    if bins and samples:
+        # Bin across the data's own extent, not the requested window. A window
+        # that reaches back further than the data — a run whose log starts late,
+        # a buffer that has only just filled — would otherwise put every sample
+        # in the first bin and draw a single point.
+        samples, bin_width = _bin_samples(samples, samples[0][0], samples[-1][0], bins)
+
     return jsonify({
         "samples": samples,
-        "sampled_at": time.time(),
+        "sampled_at": now,
         "sample_interval_s": interval,
         "channel": channel,
+        "binned": bool(bins),
+        "bin_width_s": bin_width,
         "source": source,
     })
 
@@ -459,13 +640,13 @@ def get_module_type():
 @bp.route('/current/module_type', methods=['POST'])
 @jwt_required_custom
 def set_module_type():
-    global settings, controller, tetramm_ctrl, rbd9103_ctrl, running
+    global settings, controller, tetramm_ctrl, rbd9103_ctrl, graphite_ctrl, running
 
     data = request.get_json()
     new_module_type = data.get('module_type')
 
-    if new_module_type not in ['tetramm', 'rbd9103']:
-        return jsonify({"error": "Invalid module type. Must be 'tetramm' or 'rbd9103'"}), 400
+    if new_module_type not in ['tetramm', 'rbd9103', 'graphite']:
+        return jsonify({"error": "Invalid module type. Must be 'tetramm', 'rbd9103' or 'graphite'"}), 400
 
     if new_module_type == settings.get("module_type"):
         return jsonify({"message": "Module type already set"}), 200
@@ -493,6 +674,21 @@ def set_module_type():
 
     # Initialize new controller
     try:
+        if new_module_type == "graphite":
+            # Needs no hardware, so it is the real module in test mode too.
+            if not graphite_ctrl:
+                graphite_ctrl = _build_graphite_controller()
+            else:
+                graphite_ctrl.configure(
+                    metric=settings.get("graphite_metric", ""),
+                    scale=settings.get("graphite_metric_scale", 1.0),
+                    poll_interval_s=settings.get("graphite_poll_interval_s", 1.0))
+            graphite_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
+            graphite_ctrl.initialize()
+            controller = graphite_ctrl
+            controller.set_accumulating(daq_mgr.is_running())
+            return jsonify({"message": "Switched to the monitored Graphite metric"}), 200
+
         if TEST_FLAG:
             # Rebuild the simulated module in the shape of the chosen device:
             # the RBD 9103 reports a single current, the TetrAMM four channels.
@@ -549,6 +745,16 @@ def get_module_settings():
     # controller only has them once it has initialised (and the simulated module
     # has none at all), so reading the controller alone reports "nothing
     # configured" for a device that is perfectly well configured.
+    if module_type == "graphite":
+        # No device file: the module IS its configuration.
+        return jsonify({
+            "module_type": "graphite",
+            "metric": settings.get("graphite_metric", ""),
+            "scale": settings.get("graphite_metric_scale", 1.0),
+            "poll_interval_s": settings.get("graphite_poll_interval_s", 1.0),
+            "settings": getattr(controller, 'settings', {}) if controller else {},
+        })
+
     settings_file = 'conf/tetram.json' if module_type == "tetramm" else 'conf/rbd9103.json'
     controller_settings = {}
     try:
@@ -595,7 +801,23 @@ def update_module_settings():
     module_type = settings.get("module_type", "tetramm")
 
     try:
-        if module_type == "tetramm":
+        if module_type == "graphite":
+            if "metric" in data:
+                settings["graphite_metric"] = str(data["metric"] or "").strip()
+            if "scale" in data:
+                settings["graphite_metric_scale"] = float(data["scale"])
+            if "poll_interval_s" in data:
+                settings["graphite_poll_interval_s"] = max(0.2, float(data["poll_interval_s"]))
+
+            # Retarget the live module rather than making the operator restart
+            # it: the charge already integrated is kept either way.
+            if controller and hasattr(controller, "configure"):
+                controller.configure(
+                    metric=settings.get("graphite_metric", ""),
+                    scale=settings.get("graphite_metric_scale", 1.0),
+                    poll_interval_s=settings.get("graphite_poll_interval_s", 1.0))
+
+        elif module_type == "tetramm":
             # Update TetrAMM settings
             if "ip" in data:
                 settings["tetramm_ip"] = data["ip"]
@@ -794,6 +1016,13 @@ def get_status():
                     basic_status["connected"] = True
                 else:
                     basic_status["connected"] = bool(controller.is_connected())
+            elif module_type == "graphite":
+                # "Connected" here means the metric is arriving, not that the
+                # server answers — a reachable Graphite with a dead metric is
+                # not a working current readout.
+                basic_status["connected"] = controller.is_connected()
+                basic_status["metric"] = getattr(controller, 'metric', '')
+                basic_status["latest_measurement"] = float(controller.get_data())
             elif module_type == "rbd9103":
                 basic_status["connected"] = controller.is_connected()
                 # Report whether the configured serial device file exists at all,

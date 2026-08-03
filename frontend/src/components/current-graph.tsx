@@ -1,10 +1,12 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef, type ReactNode } from "react"
+import { useState, useEffect, useMemo, type ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+import {
+  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts"
 import { getCurrentHistory } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
 import { cn } from '@/lib/utils'
@@ -13,10 +15,19 @@ import {
   CHART_MARGIN, yAxisLabel, xAxisLabel,
 } from '@/lib/chart-format'
 
-/** One plotted sample: wall-clock label plus the reading in µA. */
+/**
+ * One plotted point: a time bucket of the beam current, in µA.
+ *
+ * `value` is the bucket's mean and `low`/`high` its extremes. On a short window
+ * a bucket holds one sample and the three are equal; on a three-day run each
+ * holds thousands, and the extremes are the only thing keeping a beam trip
+ * visible — averaging alone would smooth a two-second trip out of existence.
+ */
 interface CurrentPoint {
   timestamp: number
   value: number
+  low: number
+  high: number
 }
 
 const STOPPED_WINDOWS = [
@@ -25,7 +36,35 @@ const STOPPED_WINDOWS = [
   { seconds: 120, label: "2m" },
   { seconds: 300, label: "5m" },
 ] as const
-const MAX_CHART_POINTS = 20000
+
+/**
+ * Points requested from the server, whatever the window's length.
+ *
+ * The card is at most ~1200 px wide, so beyond roughly this many points every
+ * additional one lands on a pixel that is already drawn: it costs payload,
+ * parse time and render time and changes nothing on screen. Holding the whole
+ * run at full resolution in the browser instead is what made a three-day run
+ * unusable — hundreds of thousands of points re-sorted and re-splined once a
+ * second.
+ */
+const TARGET_BINS = 600
+
+/** Poll bounds. See `refreshDelay`. */
+const MIN_REFRESH_MS = 1000
+const MAX_REFRESH_MS = 15000
+
+/**
+ * How long to wait before refetching.
+ *
+ * A plot cannot change faster than its own resolution: once a bucket spans
+ * seven minutes, redrawing every second is 400 wasted requests and renders per
+ * bucket. Pacing the poll to the bucket width means the dashboard gets *lighter*
+ * as a run gets longer, which is exactly backwards from how it behaved before.
+ */
+const refreshDelay = (binWidthSeconds: number | null | undefined): number => {
+  if (!binWidthSeconds || !Number.isFinite(binWidthSeconds)) return MIN_REFRESH_MS
+  return Math.min(MAX_REFRESH_MS, Math.max(MIN_REFRESH_MS, binWidthSeconds * 1000))
+}
 
 const clockLabel = (timestamp: number) =>
   new Date(timestamp).toLocaleTimeString([], {
@@ -34,26 +73,24 @@ const clockLabel = (timestamp: number) =>
     second: "2-digit",
   })
 
-const downsample = (points: CurrentPoint[]): CurrentPoint[] => {
-  if (points.length <= MAX_CHART_POINTS) return points
-  const lastIndex = points.length - 1
-  return Array.from({ length: MAX_CHART_POINTS }, (_, index) =>
-    points[Math.round((index * lastIndex) / (MAX_CHART_POINTS - 1))])
+/** "7 min", "12 s" — the averaging window, for the operator's benefit. */
+const describeResolution = (seconds: number): string => {
+  if (seconds >= 3600) return `${(seconds / 3600).toFixed(1)} h`
+  if (seconds >= 60) return `${Math.round(seconds / 60)} min`
+  return `${Math.max(1, Math.round(seconds))} s`
 }
 
-const mergeSamples = (
-  previous: CurrentPoint[],
-  samples: [number, number][],
-): CurrentPoint[] => {
-  const byTimestamp = new Map(previous.map(point => [point.timestamp, point]))
-  samples.forEach(([timestampSeconds, value]) => {
-    const timestamp = timestampSeconds * 1000
-    byTimestamp.set(timestamp, { timestamp, value })
-  })
-  return downsample(
-    Array.from(byTimestamp.values()).sort((a, b) => a.timestamp - b.timestamp),
-  )
-}
+/**
+ * Server rows to plot points. Binned rows are [time, mean, min, max]; raw rows
+ * are [time, value], which collapse to a zero-width band.
+ */
+const toPoints = (samples: number[][]): CurrentPoint[] =>
+  samples.map(([timestamp, value, low, high]) => ({
+    timestamp: timestamp * 1000,
+    value,
+    low: low ?? value,
+    high: high ?? value,
+  }))
 
 interface CurrentGraphProps {
   title?: string
@@ -75,56 +112,54 @@ export default function CurrentGraph({
   fillHeight = false,
 }: CurrentGraphProps = {}) {
   const [data, setData] = useState<CurrentPoint[]>([])
+  const [binWidth, setBinWidth] = useState<number | null>(null)
   const [stoppedWindow, setStoppedWindow] = useState(30)
-  const latestRunSampleRef = useRef<number | null>(null)
   const isRunning = useRunControlStore((state) => state.isRunning)
   const startTime = useRunControlStore((state) => state.startTime)
 
   useEffect(() => {
     let cancelled = false
-    latestRunSampleRef.current = null
+    let timer: ReturnType<typeof setTimeout> | undefined
     setData([])
+    setBinWidth(null)
 
+    // The whole window is refetched each time rather than accumulated here.
+    // The server reduces it to TARGET_BINS points with numpy — cheaper than the
+    // browser merging and re-sorting a growing array, and it leaves no state to
+    // drift out of step with the run.
     const fetchData = async () => {
       try {
-        if (isRunning) {
-          if (!startTime) return
-          const runStartSeconds = new Date(startTime).getTime() / 1000
-          const history = await getCurrentHistory({
-            // On first load this reconstructs the run from the controller's
-            // timestamped buffer. Later polls ask only for new samples.
-            since: latestRunSampleRef.current ?? runStartSeconds,
-            maxPoints: MAX_CHART_POINTS,
-          })
-          if (cancelled) return
-          setData(previous => mergeSamples(previous, history.samples))
-          const newest = history.samples.at(-1)?.[0]
-          if (newest !== undefined) {
-            latestRunSampleRef.current = newest + 1e-6
-          }
-        } else {
-          const history = await getCurrentHistory({
-            seconds: stoppedWindow,
-            maxPoints: MAX_CHART_POINTS,
-          })
-          if (cancelled) return
-          setData(history.samples.map(([timestamp, value]) => ({
-            timestamp: timestamp * 1000,
-            value,
-          })))
-        }
+        const history = isRunning
+          ? (startTime
+            ? await getCurrentHistory({
+              since: new Date(startTime).getTime() / 1000,
+              bins: TARGET_BINS,
+            })
+            : null)
+          : await getCurrentHistory({ seconds: stoppedWindow, bins: TARGET_BINS })
+
+        if (cancelled || !history) return
+        setData(toPoints(history.samples))
+        setBinWidth(history.bin_width_s ?? null)
+        return history.bin_width_s
       } catch (error) {
         console.error("Error fetching current data:", error)
       }
+      return null
     }
 
-    fetchData() // Fetch initial data
-
-    const intervalId = setInterval(fetchData, 1000) // Update every second
+    // Chained rather than setInterval: a slow or stalled request must not queue
+    // another behind it, which is its own way of wedging the page.
+    const poll = async () => {
+      const width = await fetchData()
+      if (cancelled) return
+      timer = setTimeout(poll, refreshDelay(width))
+    }
+    poll()
 
     return () => {
       cancelled = true
-      clearInterval(intervalId)
+      if (timer) clearTimeout(timer)
     }
   }, [isRunning, startTime, stoppedWindow])
 
@@ -166,19 +201,39 @@ export default function CurrentGraph({
   // from the data so the axis shows short numbers instead of "0.0004" or
   // "12000" — long tick labels are what makes them collide.
   const { scale, unit } = useMemo(
-    () => currentUnit(maxMagnitude(data.map(d => d.value))),
+    () => currentUnit(maxMagnitude(data.map(d => d.high))),
     [data],
   )
   const scaled = useMemo(
-    () => data.map(d => ({ ...d, value: d.value * scale })),
+    () => data.map(d => ({
+      timestamp: d.timestamp,
+      value: d.value * scale,
+      // Recharts draws an Area between the two ends of a [low, high] pair.
+      range: [d.low * scale, d.high * scale] as [number, number],
+    })),
     [data, scale],
   )
 
+  // Only worth drawing where a bucket actually covers a spread of samples.
+  const hasBand = useMemo(
+    () => data.some(d => d.high > d.low),
+    [data],
+  )
+
+  const resolutionNote = binWidth && binWidth >= 2
+    ? `${describeResolution(binWidth)} average`
+    : null
+
   const historyControl = isRunning ? (
-    <Badge variant="outline" className="w-fit gap-1.5">
-      <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-      Since run start
-    </Badge>
+    <div className="flex items-center gap-2">
+      <Badge variant="outline" className="w-fit gap-1.5">
+        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+        Since run start
+      </Badge>
+      {resolutionNote && (
+        <span className="text-xs text-muted-foreground">{resolutionNote}</span>
+      )}
+    </div>
   ) : (
     <div className="flex items-center gap-2">
       <span className="text-xs text-muted-foreground">Past</span>
@@ -241,7 +296,7 @@ export default function CurrentGraph({
           ? "min-h-0 flex-1"
           : compact ? "h-52 sm:h-56" : "h-64"}>
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={scaled} margin={CHART_MARGIN}>
+            <ComposedChart data={scaled} margin={CHART_MARGIN}>
               <CartesianGrid strokeDasharray="3 3" stroke={themeColors.gridLines} />
               <XAxis
                 dataKey="timestamp"
@@ -275,10 +330,29 @@ export default function CurrentGraph({
                 labelStyle={{ color: themeColors.text }}
                 itemStyle={{ color: themeColors.text }}
                 labelFormatter={(label) => clockLabel(Number(label))}
-                formatter={(v: number) => [formatValue(v, unit), "Current"]}
+                formatter={(v: number | number[], name: string) => (
+                  Array.isArray(v)
+                    ? [`${formatValue(v[0], unit)} – ${formatValue(v[1], unit)}`, "Range"]
+                    : [formatValue(v, unit), name === "range" ? "Range" : "Current"]
+                )}
+                isAnimationActive={false}
               />
+              {hasBand && (
+                <Area
+                  dataKey="range"
+                  name="Range"
+                  stroke="none"
+                  fill={themeColors.lineColor}
+                  fillOpacity={0.18}
+                  isAnimationActive={false}
+                  activeDot={false}
+                />
+              )}
               <Line
-                type="monotone"
+                // Linear, not monotone: a spline over hundreds of points is
+                // solved on every render and is meaningless at this spacing,
+                // where consecutive points are a pixel apart.
+                type="linear"
                 dataKey="value"
                 name="Current"
                 stroke={themeColors.lineColor}
@@ -286,7 +360,7 @@ export default function CurrentGraph({
                 dot={false}
                 isAnimationActive={false}
               />
-            </LineChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
       </CardContent>

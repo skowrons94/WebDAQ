@@ -471,23 +471,36 @@ export const getDataCollimator2 = () =>
 export const getArrayDataCurrent = () =>
     api.get('/current/data_array').then(res => res.data);
 export interface LiveCurrentHistory {
-    /** [Unix timestamp in seconds, current in µA]. */
-    samples: [number, number][]
+    /**
+     * Raw: [Unix timestamp in seconds, current in µA].
+     * Binned (`bins` requested): [time, mean, min, max], all in µA.
+     */
+    samples: number[][]
     sampled_at: number
     sample_interval_s: number | null
     channel: number
-    source: "controller-buffer" | "run-log"
+    binned?: boolean
+    /** Seconds covered by one bin — how often the plot can meaningfully change. */
+    bin_width_s?: number | null
+    source: "controller-buffer" | "graphite" | "run-log" | "none"
 }
 export const getCurrentHistory = (params: {
     seconds?: number
     since?: number
     maxPoints?: number
+    /**
+     * Reduce the window to this many points server-side. A run's length then
+     * stops mattering: the response, the parse and the chart render are all
+     * fixed-size whether the run is three minutes or three days old.
+     */
+    bins?: number
 }): Promise<LiveCurrentHistory> =>
     api.get('/current/history', {
         params: {
             seconds: params.seconds,
             since: params.since,
             max_points: params.maxPoints,
+            bins: params.bins,
         },
     }).then(res => res.data);
 export const getAccumulatedCharge = () =>

@@ -51,33 +51,38 @@ class GraphiteClient:
         self.logger.info(f"GraphiteClient initialized for {self.base_url}")
         self.logger.debug(f"Request timeout set to {timeout} seconds")
     
-    def get_data(self, 
-                 target: str, 
-                 from_time: str, 
-                 until_time: str = 'now', 
-                 format: str = 'json') -> List[Tuple[datetime, Optional[float]]]:
+    def get_data(self,
+                 target: str,
+                 from_time: str,
+                 until_time: str = 'now',
+                 format: str = 'json',
+                 max_data_points: Optional[int] = None) -> List[Tuple[datetime, Optional[float]]]:
         """
         Retrieve time-series data for a given metric from Graphite.
-        
+
         This method queries the Graphite render API to fetch data points
         for a specified metric over a given time range.
-        
+
         Args:
             target: Metric name or Graphite function (e.g., 'tetram.ch0', 'ancillary.rates.*')
             from_time: Start time for query (e.g., '-1h', '-1d', '20240101')
             until_time: End time for query (default: 'now')
             format: Response format (default: 'json')
-            
+            max_data_points: Cap on the number of points returned. Graphite
+                consolidates (averages) to fit, so a three-day window costs no
+                more to fetch or to plot than a three-minute one. Omit for the
+                metric's native resolution.
+
         Returns:
             List of tuples containing (timestamp, value) pairs
-            
+
         Raises:
             requests.RequestException: For HTTP communication errors
             ValueError: For invalid response format
             TimeoutError: For request timeout
         """
         self.logger.debug(f"Querying Graphite: target={target}, from={from_time}, until={until_time}")
-        
+
         url = f"{self.base_url}/render"
         params = {
             'target': target,
@@ -85,7 +90,9 @@ class GraphiteClient:
             'until': until_time,
             'format': format
         }
-        
+        if max_data_points:
+            params['maxDataPoints'] = int(max_data_points)
+
         try:
             # Make HTTP request to Graphite
             response = requests.get(url, params=params, timeout=self.timeout)
