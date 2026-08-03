@@ -1,8 +1,13 @@
 # Beam current and accumulated charge
 
-WebDAQ reads the beam current from one picoammeter — a **TetrAMM** or an
-**RBD 9103** — and integrates it into two separate numbers. Both appear on the
-dashboard in the *Beam & Charge* card, and both end up in the run record.
+WebDAQ reads the beam current from one of three sources — a **TetrAMM**, an
+**RBD 9103**, or a **monitored value** already published to Graphite — and
+integrates it into two separate numbers. Both appear on the dashboard in the
+*Beam & Charge* card, and both end up in the run record.
+
+Whichever source you pick behaves identically everywhere else: the same plot, the
+same `current.txt`, the same accumulated charge. Choose it in
+Settings → Current Measurement Module.
 
 ---
 
@@ -89,7 +94,77 @@ run, keep it.
 
 ---
 
-## 4. What is recorded
+## 4. Monitored value (a Graphite metric)
+
+Not every setup has a picoammeter on the target. If the accelerator already
+publishes its own beam current to the laboratory's Graphite server, WebDAQ can
+use that number directly. Settings → Current Measurement Module → **Monitored
+value**.
+
+| Setting | Meaning |
+|---------|---------|
+| Metric path | The Graphite path, e.g. `accelerator.beam_current`. Use **Search** to pick it from the tree rather than typing it. |
+| Metric unit | The unit the metric is published in — nA, µA, mA or A. Everything downstream works in µA; **getting this wrong scales the accumulated charge by the same factor.** |
+| Poll interval | How often Graphite is asked. Polling faster than the value is published adds load without adding samples. |
+
+The module is read-only: it does not configure the accelerator, it just follows
+the number. The charge is integrated by the trapezoid rule using the metric's own
+timestamps, not wall-clock, so a poll that returns three archived points
+contributes the charge of those three points.
+
+**What it refuses to integrate.** A monitored value is not a dedicated
+instrument, and it fails in ways a picoammeter does not:
+
+- **Gaps.** If Graphite is unreachable for ten minutes, those ten minutes count
+  as unmeasured and contribute nothing. The alternative — assuming the current
+  held — would invent charge that was never delivered.
+- **NaN and negative readings** are dropped. A NaN would poison the running total
+  irrecoverably; a negative reading, which is what an unplugged or
+  wrongly-wired readout produces, would silently subtract charge that really was
+  delivered. Zero is kept, because beam off is a real measurement.
+
+**Connected** on this module means *the metric is arriving*, not that the
+Graphite server answers. A reachable server publishing nothing for this path
+reads as disconnected, which is the honest answer — otherwise a run could start
+against a dead number.
+
+```{note}
+Two different Graphite endpoints are involved and they are easy to confuse. The
+**Carbon** ingest (port 2003, Settings → Current Module) is where WebDAQ *sends*
+measured current. The **render API** (Settings → Stats page) is where it *reads*
+values back — including this module and the long-run history behind the current
+plot. A monitored value that never arrives is usually the render API pointing at
+port 2003.
+```
+
+---
+
+## 5. The current plot
+
+The dashboard plots the beam current from the start of the run. Two behaviours
+are worth understanding:
+
+- **The plot is binned, not thinned.** However long the run, the server reduces
+  the window to a fixed number of points before sending it, so a three-day run
+  costs the browser the same as a three-minute one. Each point carries the mean
+  *and* the extremes of its time bin, drawn as a shaded band — so a two-second
+  beam trip that a plain average would smooth away stays visible even when one
+  bin spans seven minutes. The averaging window is shown next to the plot
+  whenever it exceeds a couple of seconds.
+- **It refreshes at the rate it can meaningfully change.** A short window updates
+  every second; a multi-day run updates every fifteen. A long run therefore makes
+  the dashboard lighter, not heavier.
+
+When the run is stopped the plot shows a rolling window instead — 30 s to 5 min,
+selectable above the plot.
+
+For a run longer than the in-memory buffer (roughly fourteen hours), the history
+is fetched from Graphite, which is why the plot is complete even if you open the
+dashboard on the third day of a run.
+
+---
+
+## 6. What is recorded
 
 | File | Written when | Contents |
 |------|--------------|----------|
@@ -103,7 +178,7 @@ charge.
 
 ---
 
-## 5. Checks that catch most problems
+## 7. Checks that catch most problems
 
 1. **Beam off, current near zero?** If not, the input is floating or picking up
    noise. Nothing downstream will be right until this is.

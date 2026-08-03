@@ -167,7 +167,7 @@ def make_shell_context():
 def cleanup_on_shutdown(signum=None, frame=None):
     """
     Clean shutdown handler for CTRL+C (SIGINT) and SIGTERM.
-    Stops acquisition, threads, and Docker containers gracefully.
+    Stops acquisition, background threads and hardware connections gracefully.
     
     Args:
         signum: Signal number (unused but required by signal handler interface)

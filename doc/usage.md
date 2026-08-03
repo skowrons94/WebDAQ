@@ -147,10 +147,10 @@ If metadata values haven't changed since the last run, a warning will appear. Re
 
 1. Click the **Start** button in the Experiment Controls panel
 2. The system will:
-   - Create a new run directory (if saving)
-   - Configure the XDAQ system
-   - Begin data acquisition
-   - Start the spy server for monitoring
+   - Create a new run directory (if saving) and copy the board configurations into it
+   - Arm the boards and start them together on their synchronised start
+   - Begin writing `.caendat` files
+   - Switch on charge integration, the rate collector and any run-linked alerts
 3. The run status indicator will change to "Running"
 
 ### During Acquisition
@@ -166,9 +166,9 @@ While the run is active:
 
 1. Click the **Stop** button in the Experiment Controls panel
 2. The system will:
-   - Stop the XDAQ acquisition
+   - Stop the acquisition and release the boards
    - Save run metadata to the database
-   - Write a metadata.json file to the run directory
+   - Write `metadata.json` and `roi.json` to the run directory
    - Update the accumulated charge from current readings
 3. The run status indicator will change to "Stopped"
 
@@ -440,7 +440,7 @@ If issues occur during acquisition:
 1. **Check the card view** for error indicators
 2. **Verify board connectivity** in Settings
 3. **Monitor bandwidth** - low bandwidth may indicate disk issues
-4. **Check XDAQ status** via the API if needed
+4. **Check the file write bandwidth** on the status card — a stall points at the disk
 5. **Review server logs** for detailed error messages
 
 See the [Troubleshooting Guide](troubleshooting.md) for common issues and solutions.

@@ -12,7 +12,9 @@ or from any PC on the network.
 Acquisition runs **in process**: the boards are read, decoded and written by
 [CaenDAQ](https://github.com/skowrons94/CaenDAQ), a C++ library bound into the
 Python server. There is no XDAQ, no Docker container and no spy socket in the
-data path.
+data path. The `.caendat` files keep the XDAQ header layout on purpose, so runs
+from any version convert with the same
+[RUReader](https://github.com/skowrons94/RUReader).
 
 ---
 
@@ -24,7 +26,8 @@ data path.
 | **Acquisition** | One unified `.caendat` file per run across all boards, with multi-board synchronisation driven by the boards' own start mode. |
 | **Online tuning** | Change thresholds, gates and trapezoid parameters **while the run is going**, and watch the trace and the spectrum react. Only the parameters that are safe to move mid-run are sent to the board. |
 | **Monitoring** | Per-channel spectra, waveforms and PSD plots; event, pile-up, lost and saturation rates per channel; beam current and accumulated charge. |
-| **Slow control** | Beam current from a TetrAMM or an RBD 9103, plus any metric on the laboratory's Graphite server, recorded into each run's `stats.csv`. |
+| **Spectra & ROIs** | Named regions of interest with live counts, defined once on the server: the same dashboard on every screen, restored after a restart, and written into each run as `roi.json`. |
+| **Slow control** | Beam current from a TetrAMM, an RBD 9103, or a value the accelerator already publishes to Graphite — plus any other metric, recorded into each run's `stats.csv`. |
 | **Bookkeeping** | Run metadata for FAIR-compliant conversion, the collaboration's PSI ELOG logbook, Telegram alerts on board failure, and Grafana alert rules tied to the run. |
 
 **Stack** — Flask + SQLAlchemy on the server, React/Next.js in the browser,
@@ -115,13 +118,20 @@ Everything is in `doc/`, and builds with Sphinx (`cd doc && make html`).
 | Chapter | Read it for |
 |---------|-------------|
 | **[A complete session](doc/example-session.md)** | One run from a cold machine to a written logbook entry. **Start here.** |
+| [How WebDAQ works](doc/details.md) | What happens when you press Start, what is stored and where, and what can be changed while a run is going. |
 | [CAEN digitizers](doc/caen-settings.md) | Scanning and adding boards, trigger and trapezoid settings, PSD gates, worked examples for HPGe and scintillators, multi-board synchronisation, online tuning. |
-| [Beam current and charge](doc/current-and-charge.md) | TetrAMM and RBD 9103 settings, and what the two accumulated charges mean. |
+| [Spectra and ROIs](doc/histograms-and-rois.md) | The histogram dashboard, regions of interest, and the per-run `roi.json`. |
+| [Beam current and charge](doc/current-and-charge.md) | TetrAMM, RBD 9103 and monitored-metric settings, and what the two accumulated charges mean. |
 | [Monitoring and alerts](doc/monitoring-and-alerts.md) | What Graphite and Grafana each do, the Stats page, `stats.csv`, run-linked alerts, Telegram. |
 | [ELOG](doc/elog.md) | Reading and writing the collaboration logbook from run control. |
 | [User guide](doc/usage.md) | Screen-by-screen reference. |
+| [Directory structure](doc/directory-structure.md) | What lives where, in the repository and in a working directory. |
 | [Server architecture](doc/server-architecture.md) | How the backend is put together. |
 | [Troubleshooting](doc/troubleshooting.md) | When something does not work. |
+
+Published at
+[skowrons94.github.io/WebDAQ](https://skowrons94.github.io/WebDAQ/index.html),
+rebuilt automatically from `doc/` on every push to `main`.
 
 ---
 

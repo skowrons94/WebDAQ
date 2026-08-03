@@ -7,7 +7,9 @@ The two C++ components WebDAQ builds on, pinned as **git submodules**:
 | `caendaq/` | [skowrons94/CaenDAQ](https://github.com/skowrons94/CaenDAQ) | The acquisition backend (`import caendaq`) — reads the boards, writes `.caendat`, decodes online spectra |
 | `rureader/` | [skowrons94/RUReader](https://github.com/skowrons94/RUReader) | Offline `.caendat` → ROOT converter (installed as `/usr/local/bin/RUReader`) |
 
-Together they replace the old XDAQ + Docker + LunaSpy/RUSpy chain.
+Together they replace the old XDAQ + Docker + LunaSpy/RUSpy chain. The
+`.caendat` **file format** is unchanged — it keeps the XDAQ header layout on
+purpose, so runs from any version of WebDAQ convert with the same RUReader.
 
 ## Checking them out
 

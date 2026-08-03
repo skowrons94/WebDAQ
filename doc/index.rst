@@ -15,6 +15,7 @@ Welcome to LunaDAQ's documentation!
    example-session.md
    usage.md
    caen-settings.md
+   histograms-and-rois.md
    current-and-charge.md
    monitoring-and-alerts.md
    elog.md

@@ -142,7 +142,9 @@ class Result:
 
 
 def read_header(words, result):
-    """Parse the XDAQ file header. Returns the offset where aggregates start."""
+    """Parse the .caendat file header (XDAQ layout, kept for compatibility).
+
+    Returns the offset where the board aggregates start."""
     if not words:
         raise ValueError("file is empty")
 

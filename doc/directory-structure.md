@@ -31,7 +31,7 @@ configuration, or legacy.
 | `app/` | The application package (see below). |
 | `migrations/` | Alembic/Flask-Migrate database migrations. Seeded into each measurement directory on first init. |
 | `scripts/` | Helper shell scripts: `check_db.sh` (safe DB upgrade used at launch), `convert.sh`, `sync.sh`. |
-| `conf/` | **Active runtime configuration** (read/written while running). Board configs (`DT5720B_0.json`, …), `topology.xml` (XDAQ), `settings.json`, `current.json`, `rbd9103.json`, `tetram.json`, `stats.json`, `telegram_settings.json`. |
+| `conf/` | **Active runtime configuration** (read/written while running). Board configs (`DT5720B_0.json`, …), `settings.json`, `histograms.json` (histogram dashboard and ROIs), `current.json`, `rbd9103.json`, `tetram.json`, `stats.json`, `telegram_settings.json`, `elog_settings.json`. |
 | `json/` | **Template/reference register maps** per board model and firmware (`DT5720_PSD.json`, `V1730_PHA.json`, …). Source definitions used to build a board's `conf/` entry; not modified at runtime. |
 | `calib/` | Energy-calibration files per board (`*.cal`). |
 | `data/` | Acquired run data (runtime output). |
@@ -44,9 +44,9 @@ configuration, or legacy.
 |------|------------|
 | `__init__.py` | App factory: creates the Flask app and registers blueprints. |
 | `models/` | SQLAlchemy models (`User`, `RunMetadata`). |
-| `routes/` | API endpoints grouped by area: `experiment.py` (run control), `digitizer.py` (board config), `histograms.py` (spectra), `current.py` (TetrAMM / RBD 9103 current), `auth.py`, `stats.py`, `calib.py`, `faraday.py`. |
-| `services/` | Long-lived state: `daq_manager.py` (DAQ state), `spy_manager.py` (XDAQ spy sockets). |
-| `utils/` | Hardware/driver interfaces and helpers: `xdaq.py` (XDAQ/Docker control), `rbd9103.py`, `tetramm.py`, JWT utilities, etc. |
+| `routes/` | API endpoints grouped by area: `experiment.py` (run control), `digitizer.py` (board config), `histograms.py` (spectra, plus the dashboard/ROI configuration), `current.py` (beam current), `auth.py`, `stats.py`, `calib.py`, `elog.py`, `data.py`, `faraday.py`. |
+| `services/` | Long-lived state and background work: `daq_manager.py` (run state), `caen_acquisition.py` (the in-process CaenDAQ acquisition), `spy_manager.py` (online spectra), `histogram_config.py` (the histogram dashboard), `roi_analysis.py` (ROI integrals and the per-run `roi.json`), `stats_manager.py`, `run_data.py`. |
+| `utils/` | Hardware/driver interfaces and helpers: `dgtz.py` (CAEN digitizer wrapper), `spy.py` (spectrum snapshots from CaenDAQ), `tetramm.py`, `rbd9103.py`, `graphite_current.py` (beam current from a monitored metric), `graphite.py`, JWT utilities. |
 
 ## `frontend/` — Next.js web interface
 
