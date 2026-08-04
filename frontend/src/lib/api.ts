@@ -829,11 +829,60 @@ export const getElogAttributes = () =>
         names: string[]; defaults: Record<string, string>; author: string;
     });
 
+// One field of the logbook's entry form, as the ELOG server itself defines it.
+// 'fixed' fields are filled in by ELOG and shown read-only; 'select' and 'radio'
+// only accept a value from `options`.
+export type ElogField = {
+    name: string;               // the form field name ELOG posts back
+    label: string;              // the human name, matching an entry's attributes
+    type: 'text' | 'select' | 'radio' | 'checkbox' | 'fixed';
+    options: string[];
+    required: boolean;
+    conditional: boolean;       // choosing this reloads the rest of the form
+    value: string;              // ELOG's own default, if any
+};
+
+export const getElogFields = (condition: Record<string, string> = {}) =>
+    api.get('/elog/fields', { params: condition }).then(res => res.data as {
+        fields: ElogField[];
+        source: 'form' | 'entries';   // read from the logbook, or guessed from old entries
+        defaults: Record<string, string>;
+        author: string;
+    });
+
+export type ElogRunSummary = {
+    run_number: number;
+    start_time: string | null;
+    end_time: string | null;
+    run_type: string | null;
+    target_name: string | null;
+    accumulated_charge: number | null;
+    flag: string | null;
+    complete: boolean;
+};
+
+export const getElogRuns = (limit = 50) =>
+    api.get('/elog/runs', { params: { limit } }).then(res => res.data as { runs: ElogRunSummary[] });
+
+export const getElogRunDraft = (runNumber: number) =>
+    api.get(`/elog/run_draft/${runNumber}`).then(res => res.data as {
+        run_number: number;
+        text: string;
+        attributes: Record<string, string>;
+        // Which inputs the draft could actually find, so the composer can say
+        // when a run has, say, no current log.
+        sources: {
+            database: boolean; directory: boolean; metadata: boolean;
+            current: boolean; stats: boolean; rois: boolean;
+        };
+    });
+
 export const postElogEntry = (entry: {
     text: string;
     attributes: Record<string, string>;
     reply_to?: number | null;
     encoding?: string;
+    suppress_email?: boolean;
 }, files: File[] = []) => {
     if (files.length === 0) {
         return api.post('/elog/entries', entry).then(res => res.data as { id: number; message: string });
@@ -844,6 +893,7 @@ export const postElogEntry = (entry: {
     form.append('attributes', JSON.stringify(entry.attributes));
     if (entry.reply_to) form.append('reply_to', String(entry.reply_to));
     if (entry.encoding) form.append('encoding', entry.encoding);
+    if (entry.suppress_email) form.append('suppress_email', 'true');
     files.forEach(file => form.append('attachments', file));
     return api.post('/elog/entries', form).then(res => res.data as { id: number; message: string });
 };

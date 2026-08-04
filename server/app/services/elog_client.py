@@ -16,11 +16,13 @@ through this class, so replacing py_elog stays a local change.
 """
 
 import os
+import re
 import json
 import time
 import logging
 import tempfile
 import threading
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlsplit
@@ -46,6 +48,62 @@ _INTERNAL_ATTRIBUTES = {
     'In reply to', 'Reply to', 'Edit',
 }
 
+# The form definition is read from the ELOG server itself; it only changes when
+# someone edits elogd.cfg, so it can be held for a while.
+_FIELDS_TTL = 300.0
+
+# ELOG speaks latin-1 on the wire and py_elog encodes with it unconditionally, so
+# a single character outside that range raises UnicodeEncodeError and the whole
+# entry is lost. These are the ones that actually turn up: the Greek mu people
+# type for microamps, and the punctuation any editor or chat client substitutes
+# automatically. Anything else is folded by NFKD (é→e) and, failing that, becomes
+# '?' — a lossy entry still beats a refused one.
+_LATIN1_SUBSTITUTIONS = {
+    'μ': 'u',                                     # μ (Greek mu) — µA
+    '‘': "'", '’': "'", '‚': "'", '‛': "'",
+    '“': '"', '”': '"', '„': '"', '‟': '"',
+    '′': "'", '″': '"',
+    '–': '-', '—': '-', '―': '-', '−': '-',
+    '…': '...', '•': '*', ' ': ' ',
+    '←': '<-', '→': '->', '↔': '<->', '⇒': '=>',
+    '≈': '~', '≠': '!=', '≤': '<=', '≥': '>=',
+    '√': 'sqrt', '∞': 'inf', '∑': 'sum', 'Δ': 'Delta',
+    'α': 'alpha', 'β': 'beta', 'γ': 'gamma', 'σ': 'sigma',
+    '€': 'EUR', '™': '(TM)',
+}
+
+
+def to_latin1(value: str) -> str:
+    """
+    Rewrite a string so ELOG's latin-1 encoding cannot reject it.
+
+    Characters already representable are left exactly as they are, so ordinary
+    accented text (Gesuè) is untouched.
+    """
+    if not isinstance(value, str):
+        return value
+    try:
+        value.encode('iso-8859-1')
+        return value
+    except UnicodeEncodeError:
+        pass
+
+    out: List[str] = []
+    for ch in value:
+        try:
+            ch.encode('iso-8859-1')
+            out.append(ch)
+            continue
+        except UnicodeEncodeError:
+            pass
+        if ch in _LATIN1_SUBSTITUTIONS:
+            out.append(_LATIN1_SUBSTITUTIONS[ch])
+            continue
+        folded = (unicodedata.normalize('NFKD', ch)
+                  .encode('iso-8859-1', 'ignore').decode('iso-8859-1'))
+        out.append(folded or '?')
+    return ''.join(out)
+
 
 class ElogError(Exception):
     """An ELOG operation failed for a reason worth showing the operator."""
@@ -64,6 +122,7 @@ class ElogClient:
         self._cache: Dict[int, Tuple[float, Dict[str, Any]]] = {}
         self._logbook = None          # cached py_elog Logbook
         self._logbook_key = None      # settings the cached Logbook was built from
+        self._fields: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
         self._load()
 
     # ── settings ─────────────────────────────────────────────────────────────
@@ -129,6 +188,7 @@ class ElogClient:
         with self._lock:
             self._logbook = None
             self._cache.clear()
+            self._fields.clear()
         self._save()
         self.logger.info(f"ELOG settings updated: enabled={self.enabled}, url={self.url}")
 
@@ -172,6 +232,13 @@ class ElogClient:
             return f"{text} — check the ELOG user and password."
         if 'Timeout' in name:
             return f"{text} — the ELOG server did not answer in time."
+        # ELOG names the offending attribute in its rejection page, but not what
+        # to do about it; the composer marks required fields, so point back there.
+        missing = re.search(r"attribute\s+'?\"?([^'\"]+?)'?\"?\s+(?:is\s+)?(?:not\s+)?(?:set|missing|entered)",
+                            text, re.I)
+        if missing:
+            return (f"{text} — the logbook requires '{missing.group(1)}'. "
+                    "Fill in every field marked with * in the composer.")
         return text
 
     def test_connection(self) -> Dict[str, Any]:
@@ -326,10 +393,156 @@ class ElogClient:
                     names.append(name)
         return names
 
+    # ── the logbook's own form definition ────────────────────────────────────
+    #
+    # ELOG has no API that describes a logbook's attributes, but its "new entry"
+    # page is generated from exactly that configuration. Reading that page tells
+    # us what the server will actually accept: which fields exist, which are
+    # required, and which take a fixed set of values. Learning the fields from
+    # recent entries instead (attribute_names) shows what *used* to be there and
+    # offers every one as free text, which is how an entry ends up rejected for a
+    # missing or misspelled required attribute.
+
+    _ROW = re.compile(
+        r'class="attribname"[^>]*>(?P<label>.*?)</td>(?P<cell>.*?)'
+        r'(?=class="attribname"|id="TextParent"|</table>)',
+        re.DOTALL | re.IGNORECASE)
+    _SELECT = re.compile(r'<select[^>]*\bname="(?P<name>[^"]+)"(?P<rest>.*?)</select>',
+                         re.DOTALL | re.IGNORECASE)
+    _OPTION = re.compile(r'<option[^>]*\bvalue="(?P<value>[^"]*)"', re.IGNORECASE)
+    _INPUT = re.compile(r'<input\b(?P<attrs>[^>]*)>', re.IGNORECASE)
+    _ATTR = re.compile(r'(\w+)\s*=\s*"([^"]*)"|(\w+)\s*=\s*([^\s>"]+)', re.IGNORECASE)
+
+    @classmethod
+    def _parse_input(cls, raw: str) -> Dict[str, str]:
+        found: Dict[str, str] = {}
+        for m in cls._ATTR.finditer(raw):
+            key = (m.group(1) or m.group(3) or '').lower()
+            found[key] = m.group(2) if m.group(2) is not None else (m.group(4) or '')
+        return found
+
+    def _parse_form(self, html: str) -> List[Dict[str, Any]]:
+        """The attribute fields of an ELOG 'new entry' page, in the page's order."""
+        fields: List[Dict[str, Any]] = []
+        for row in self._ROW.finditer(html):
+            raw_label, cell = row.group('label'), row.group('cell')
+            # ELOG marks a required attribute with a red asterisk in the label.
+            required = bool(re.search(r'<font[^>]*color=["\']?red', raw_label, re.I))
+            label = re.sub(r'<[^>]*>', '', raw_label).replace('*', '').strip().rstrip(':').strip()
+            # Not attributes: the timestamp ELOG stamps itself and the upload slots.
+            if not label or label == 'Entry time' or label.startswith('Attachment'):
+                continue
+
+            # Choosing this attribute reloads the form, which means the rest of
+            # the fields depend on it (ELOG's conditional attributes).
+            conditional = 'cond_submit' in cell
+
+            select = self._SELECT.search(cell)
+            if select:
+                options = [v for v in self._OPTION.findall(select.group('rest')) if v]
+                fields.append({'name': select.group('name'), 'label': label,
+                               'type': 'select', 'options': options,
+                               'required': required, 'conditional': conditional, 'value': ''})
+                continue
+
+            radios: List[str] = []
+            checks: List[str] = []
+            name = ''
+            kind = 'text'
+            value = ''
+            for m in self._INPUT.finditer(cell):
+                attrs = self._parse_input(m.group('attrs'))
+                field_name = attrs.get('name', '')
+                # Skip ELOG's own bookkeeping and the "Add ..." extend buttons.
+                if not field_name or field_name.startswith('extend_'):
+                    continue
+                input_type = (attrs.get('type') or 'text').lower()
+                if input_type == 'submit':
+                    continue
+                name = name or field_name
+                if input_type == 'radio':
+                    kind = 'radio'
+                    radios.append(attrs.get('value', ''))
+                elif input_type == 'checkbox':
+                    kind = 'checkbox'
+                    checks.append(attrs.get('value', ''))
+                elif input_type == 'hidden':
+                    # ELOG fills this one itself (e.g. Author bound to the login).
+                    kind = 'fixed'
+                    value = attrs.get('value', '')
+                else:
+                    kind = 'text'
+                    value = attrs.get('value', '')
+
+            if not name:
+                continue
+            fields.append({'name': name, 'label': label, 'type': kind,
+                           'options': radios or checks, 'required': required,
+                           'conditional': conditional, 'value': value})
+        return fields
+
+    def describe_fields(self, condition: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        """
+        What this logbook's entry form offers, straight from the server.
+
+        ``condition`` supplies the value of a conditional attribute (Category,
+        typically) so the fields it unlocks are included.
+
+        Falls back to the fields of recent entries when the page cannot be read
+        or parsed, so the composer always has something to show.
+        """
+        if not self.url:
+            raise ElogError("No ELOG logbook is configured. Set its URL in Settings → ELOG.")
+
+        key = json.dumps(condition or {}, sort_keys=True)
+        with self._lock:
+            hit = self._fields.get(key)
+        if hit and (time.time() - hit[0]) < _FIELDS_TTL:
+            return {'fields': hit[1], 'source': 'form'}
+
+        logbook = self._get_logbook()
+        try:
+            import requests
+            params = {'cmd': 'New'}
+            params.update(condition or {})
+            response = requests.get(
+                logbook._url, params=params, verify=False, timeout=_TIMEOUT,
+                headers={'Cookie': logbook._make_user_and_pswd_cookie()}
+                if (logbook._user or logbook._password) else {})
+            response.raise_for_status()
+            fields = self._parse_form(response.content.decode('utf-8', 'replace'))
+        except Exception as e:
+            self.logger.warning(f"Could not read the ELOG entry form: {e}")
+            fields = []
+
+        def as_text(name: str) -> Dict[str, Any]:
+            return {'name': name, 'label': name, 'type': 'text', 'options': [],
+                    'required': False, 'conditional': False, 'value': ''}
+
+        if not fields:
+            # The form told us nothing — fall back to what recent entries used.
+            return {'fields': [as_text(n) for n in self.attribute_names()],
+                    'source': 'entries'}
+
+        # A logbook whose fields are conditional shows almost nothing until one
+        # is chosen — 12C_12C_gamma offers only Category — which would leave the
+        # operator unable to fill in Subject or Run name at all. Recent entries
+        # show which attributes the logbook really stores, so they are offered as
+        # free text alongside the authoritative fields from the form.
+        known = {f['label'] for f in fields} | {f['name'] for f in fields}
+        extra = [as_text(n) for n in self.attribute_names()
+                 if n not in known and n not in _INTERNAL_ATTRIBUTES]
+
+        combined = fields + extra
+        with self._lock:
+            self._fields[key] = (time.time(), combined)
+        return {'fields': combined, 'source': 'form' if not extra else 'form+entries'}
+
     # ── writing ──────────────────────────────────────────────────────────────
 
     def post_entry(self, text: str, attributes: Dict[str, str], reply_to: Optional[int] = None,
-                   attachments: Optional[List[Any]] = None, encoding: str = 'plain') -> int:
+                   attachments: Optional[List[Any]] = None, encoding: str = 'plain',
+                   suppress_email: bool = False) -> int:
         """
         Submit an entry (or a reply to one) and return its message id.
 
@@ -338,14 +551,25 @@ class ElogClient:
             attributes: ELOG attributes; the defaults from settings fill any gaps
             reply_to: parent message id, to thread the entry under it
             attachments: werkzeug FileStorage objects from the upload form
+            suppress_email: post without triggering the logbook's email notification
         """
         if not self.enabled:
             raise ElogError("ELOG posting is switched off in Settings → ELOG.")
+
+        # py_elog accepts these three spellings only, and silently means 'plain'
+        # for anything else; normalise so 'html' from a client is not rejected.
+        encoding = {'plain': 'plain', 'html': 'HTML', 'elcode': 'ELCode'}.get(
+            (encoding or 'plain').lower(), 'plain')
 
         logbook = self._get_logbook()
 
         merged = dict(self.default_attributes)
         merged.update({k: v for k, v in (attributes or {}).items() if v not in (None, '')})
+
+        # ELOG is a latin-1 protocol. Fold anything it cannot carry rather than
+        # letting py_elog raise UnicodeEncodeError and lose the entry.
+        text = to_latin1(text or '')
+        merged = {k: to_latin1(v) if isinstance(v, str) else v for k, v in merged.items()}
 
         temp_dir: Optional[tempfile.TemporaryDirectory] = None
         paths: List[str] = []
@@ -359,15 +583,22 @@ class ElogClient:
 
         try:
             msg_id = logbook.post(
-                text or '',
+                text,
                 msg_id=int(reply_to) if reply_to else None,
                 reply=bool(reply_to),
                 attributes=merged,
                 attachments=paths or None,
                 encoding=encoding,
+                suppress_email_notification=bool(suppress_email),
                 # Uploads take longer than a read, so this one gets more room.
                 timeout=_TIMEOUT * 3,
             )
+        except UnicodeEncodeError as e:
+            # to_latin1 should have made this impossible; if it still happens the
+            # operator needs to know it is the text, not the connection.
+            raise ElogError(
+                "The entry contains a character ELOG cannot store "
+                f"({e.object[e.start:e.end]!r}). Please remove it and try again.")
         except Exception as e:
             raise ElogError(f"ELOG rejected the entry: {self._describe(e)}")
         finally:
