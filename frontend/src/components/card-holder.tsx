@@ -121,6 +121,22 @@ type BoardInfo = {
 }
 
 
+// What each beam-current source is called on screen. An unrecognised one keeps
+// its own name: showing it under another module's is how a Graphite metric came
+// to be labelled "TetrAMM".
+const CURRENT_MODULE_LABELS: Record<string, string> = {
+  tetramm: 'TetrAMM',
+  rbd9103: 'RBD 9103',
+  graphite: 'Monitored value',
+}
+
+// Sources that are a physical picoammeter, and so have a device card worth
+// showing: an address to reach, a range, a connection that can drop. A
+// monitored Graphite metric has none of those — it is a number the accelerator
+// already publishes — so it gets no such card.
+const PICOAMMETER_MODULES = new Set(['tetramm', 'rbd9103'])
+
+
 interface CardHolderProps {
   isRunning: boolean
   timer: number
@@ -167,8 +183,10 @@ export function CardHolder({
   const [isConnectedCurrent, setIsConnectedCurrent] = useState(false)
   const [ipCurrent, setIpCurrent] = useState<string>('')
   const [portCurrent, setPortCurrent] = useState<string>('')
-  const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
-  const [currentModuleName, setCurrentModuleName] = useState<string>('TetrAMM')
+  // null until the server has said which module is configured. Defaulting to a
+  // device would flash that device's card at someone using a different one.
+  const [currentModuleType, setCurrentModuleType] = useState<string | null>(null)
+  const [currentModuleName, setCurrentModuleName] = useState<string>('')
   // Device settings as the server reports them. The address differs by module:
   // the TetrAMM has ip + port, the RBD 9103 has a serial port and no ip at all.
   const [currentModuleInfo, setCurrentModuleInfo] = useState<{
@@ -334,7 +352,7 @@ export function CardHolder({
         setPortCurrent(port)
         setIsConnectedCurrent(isConnected)
         setCurrentModuleType(moduleType.module_type)
-        setCurrentModuleName(moduleType.module_type === 'rbd9103' ? 'RBD 9103' : 'TetrAMM')
+        setCurrentModuleName(CURRENT_MODULE_LABELS[moduleType.module_type] ?? moduleType.module_type)
         if (moduleSettings) setCurrentModuleInfo(moduleSettings)
       } catch (error) {
         console.error('Failed to fetch initial current device data:', error)
@@ -927,8 +945,14 @@ export function CardHolder({
         {/* Picoammeter card — the settings that change how the reading behaves,
             so a number that looks wrong can be explained without opening
             Settings: which input is integrated, the range, and how much
-            averaging sits between the beam and the value on screen. */}
-        {settings.showStatus && currentEnabled && (() => {
+            averaging sits between the beam and the value on screen.
+
+            Only for an actual picoammeter. When the current is read from a
+            monitored Graphite metric there is no device here to describe, and
+            the card was showing that case as a TetrAMM. */}
+        {settings.showStatus && currentEnabled
+          && currentModuleType !== null
+          && PICOAMMETER_MODULES.has(currentModuleType) && (() => {
           const deviceSettings = currentModuleInfo?.settings ?? {}
           const isTetramm = currentModuleType === 'tetramm'
           // Two rows only — where the device is, and the setting that decides

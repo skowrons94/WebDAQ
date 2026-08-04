@@ -85,7 +85,9 @@ export function DAQState({
   const { toast } = useToast()
   const currentEnabled = useVisualizationStore((state) => state.settings.currentEnabled !== false)
   const [showParametersDialog, setShowParametersDialog] = useState(false)
-  const [currentModuleType, setCurrentModuleType] = useState<string>('tetramm')
+  // null until the server answers: defaulting to a module briefly shows that
+  // module's fields to someone using a different one.
+  const [currentModuleType, setCurrentModuleType] = useState<string | null>(null)
   const [autoRestartEnabled, setAutoRestartEnabled] = useState(false)
   const [autoRestartDelay, setAutoRestartDelay] = useState(30)
   // What is in the box while it is being typed in, kept apart from the run
