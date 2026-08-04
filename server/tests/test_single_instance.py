@@ -10,6 +10,7 @@ that is still running. The guard exists to make that impossible, so these tests
 are about the decision, not the message.
 """
 
+import json
 import os
 import socket
 import tempfile
@@ -123,6 +124,162 @@ class RefusalTests(unittest.TestCase):
             message = single_instance.refuse_if_already_running(5001, self.pid_file)
         self.assertIsNotNone(message)
         self.assertIn('5001', message)
+
+
+class ReclaimTests(unittest.TestCase):
+    """
+    A leftover backend is cleared automatically; the two cases that are not ours
+    to decide are not. The operators who start this server are running an
+    experiment, so "go and run a script" is not an outcome.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.pid_file = os.path.join(self.tmp.name, 'daq-server.pid')
+        self.settings = os.path.join(self.tmp.name, 'settings.json')
+        self.stopped = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_settings(self, running):
+        with open(self.settings, 'w') as f:
+            json.dump({'running': running, 'run': 852}, f)
+
+    def reclaim(self, holders, webdaq=True, force=False, stops=True, free_after=True):
+        """Run ensure_sole_instance against a synthetic port-holder situation."""
+        def fake_stop(pid, timeout=None):
+            self.stopped.append(pid)
+            return stops
+        with mock.patch.object(single_instance, 'pids_listening_on', return_value=holders), \
+             mock.patch.object(single_instance, '_is_webdaq_process', return_value=webdaq), \
+             mock.patch.object(single_instance, 'stop_process', side_effect=fake_stop), \
+             mock.patch.object(single_instance, 'port_in_use', return_value=not free_after), \
+             mock.patch.object(single_instance, '_describe', side_effect=lambda p: f'pid {p}'):
+            return single_instance.ensure_sole_instance(
+                5001, self.pid_file, force=force, settings_file=self.settings)
+
+    def test_a_clean_machine_starts(self):
+        self.assertIsNone(self.reclaim([]))
+        self.assertEqual(self.stopped, [])
+
+    def test_a_leftover_backend_is_stopped_and_the_server_starts(self):
+        self.assertIsNone(self.reclaim([4242]))
+        self.assertEqual(self.stopped, [4242])
+
+    def test_every_leftover_backend_is_stopped(self):
+        self.assertIsNone(self.reclaim([4242, 4243]))
+        self.assertEqual(sorted(self.stopped), [4242, 4243])
+
+    def test_a_run_in_progress_is_not_thrown_away(self):
+        self.write_settings(True)
+        message = self.reclaim([4242])
+        self.assertIsNotNone(message)
+        self.assertIn('taking data', message)
+        self.assertEqual(self.stopped, [])          # nothing was killed
+
+    def test_a_run_in_progress_can_be_overridden_deliberately(self):
+        self.write_settings(True)
+        self.assertIsNone(self.reclaim([4242], force=True))
+        self.assertEqual(self.stopped, [4242])
+
+    def test_a_stopped_run_is_no_obstacle(self):
+        self.write_settings(False)
+        self.assertIsNone(self.reclaim([4242]))
+        self.assertEqual(self.stopped, [4242])
+
+    def test_a_foreign_process_is_never_killed(self):
+        message = self.reclaim([4242], webdaq=False)
+        self.assertIsNotNone(message)
+        self.assertIn('not a WebDAQ backend', message)
+        self.assertEqual(self.stopped, [])
+
+    def test_a_backend_that_will_not_die_is_reported(self):
+        message = self.reclaim([4242], stops=False)
+        self.assertIsNotNone(message)
+        self.assertIn('would not stop', message)
+
+    def test_a_port_still_held_after_the_kill_is_reported(self):
+        message = self.reclaim([4242], free_after=False)
+        self.assertIsNotNone(message)
+        self.assertIn('still not', message)
+
+    def test_an_unidentifiable_holder_is_left_alone(self):
+        # /proc told us nothing, but the port is taken: killing blind is not an
+        # option, so this is the one case that still needs a human.
+        with mock.patch.object(single_instance, 'pids_listening_on', return_value=[]), \
+             mock.patch.object(single_instance, 'port_in_use', return_value=True):
+            message = single_instance.ensure_sole_instance(
+                5001, self.pid_file, settings_file=self.settings)
+        self.assertIsNotNone(message)
+        self.assertIn('could not be identified', message)
+
+    def test_a_stale_pid_file_naming_a_stopped_backend_is_removed(self):
+        with open(self.pid_file, 'w') as f:
+            f.write('4242')
+        self.assertIsNone(self.reclaim([4242]))
+        self.assertFalse(os.path.exists(self.pid_file))
+
+    def test_a_backend_known_only_from_the_pid_file_is_stopped(self):
+        # Its listening socket was not visible, but the pid file names it.
+        with open(self.pid_file, 'w') as f:
+            f.write('4242')
+        with mock.patch.object(single_instance, 'pids_listening_on', return_value=[]), \
+             mock.patch.object(single_instance, '_is_webdaq_process', return_value=True), \
+             mock.patch.object(single_instance.os, 'kill', return_value=None), \
+             mock.patch.object(single_instance, 'stop_process',
+                               side_effect=lambda pid, timeout=None: self.stopped.append(pid) or True), \
+             mock.patch.object(single_instance, 'port_in_use', return_value=False):
+            message = single_instance.ensure_sole_instance(
+                5001, self.pid_file, settings_file=self.settings)
+        self.assertIsNone(message)
+        self.assertEqual(self.stopped, [4242])
+
+
+class AcquisitionFlagTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, 'settings.json')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_running_experiment_is_reported(self):
+        with open(self.path, 'w') as f:
+            json.dump({'running': True}, f)
+        self.assertTrue(single_instance.acquisition_in_progress(self.path))
+
+    def test_a_stopped_experiment_is_not(self):
+        with open(self.path, 'w') as f:
+            json.dump({'running': False}, f)
+        self.assertFalse(single_instance.acquisition_in_progress(self.path))
+
+    def test_a_missing_file_never_blocks_a_start(self):
+        self.assertFalse(single_instance.acquisition_in_progress(self.path))
+
+    def test_a_corrupt_file_never_blocks_a_start(self):
+        with open(self.path, 'w') as f:
+            f.write('{not json')
+        self.assertFalse(single_instance.acquisition_in_progress(self.path))
+
+
+class PortHolderTests(unittest.TestCase):
+    def test_our_own_listening_socket_is_found(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(('127.0.0.1', 0))
+        server.listen(1)
+        port = server.getsockname()[1]
+        try:
+            self.assertIn(os.getpid(), single_instance.pids_listening_on(port))
+        finally:
+            server.close()
+
+    def test_a_free_port_has_no_holder(self):
+        probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        probe.bind(('127.0.0.1', 0))
+        port = probe.getsockname()[1]
+        probe.close()
+        self.assertEqual(single_instance.pids_listening_on(port), [])
 
 
 class PidFileOwnershipTests(unittest.TestCase):

@@ -10,11 +10,18 @@ import logging
 # to happen above these imports, not in __main__ below, because `app =
 # create_app()` runs at import time.
 if __name__ == '__main__':
-    from app.utils.single_instance import refuse_if_already_running
+    from app.utils.single_instance import ensure_sole_instance
 
-    _conflict = refuse_if_already_running()
+    # A backend left behind by a crash or a restart is cleaned up here rather
+    # than being reported to the operator as a problem to go and solve: the
+    # people who start this server are running an experiment, not maintaining
+    # it. Only a run in progress, or a port held by something that is not ours,
+    # still stops the launch.
+    _force = (os.environ.get('WEBDAQ_FORCE_RESTART', '').lower() in ('1', 'true', 'yes')
+              or '--force' in sys.argv)
+    _conflict = ensure_sole_instance(force=_force)
     if _conflict:
-        print(f"Refusing to start.\n\n{_conflict}", file=sys.stderr)
+        print(f"Cannot start the WebDAQ backend.\n\n{_conflict}", file=sys.stderr)
         sys.exit(1)
 
 from waitress import serve
