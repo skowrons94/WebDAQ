@@ -1,0 +1,429 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>How WebDAQ works &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Server Architecture Reference" href="server-architecture.html" />
+    <link rel="prev" title="Directory Structure" href="directory-structure.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">How WebDAQ works</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-data-path">1. The data path</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#starting-from-nothing">2. Starting from nothing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-the-boards">3. Adding the boards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-a-run-is">4. What a run is</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#if-a-board-fails-mid-run">If a board fails mid-run</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#changing-settings-while-running">5. Changing settings while running</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-stored-and-where">6. What is stored, and where</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#monitoring">7. Monitoring</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#after-the-run">8. After the run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#interfaces">9. Interfaces</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">How WebDAQ works</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/details.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="how-webdaq-works">
+<h1>How WebDAQ works<a class="headerlink" href="#how-webdaq-works" title="Link to this heading"></a></h1>
+<p>This chapter explains what the system does when you use it — where the data
+goes, what a run consists of, what is stored and what survives a restart. It is
+about behaviour, not code; for the code, see the
+<a class="reference internal" href="server-architecture.html"><span class="std std-doc">Server Architecture Guide</span></a>.</p>
+<hr class="docutils" />
+<section id="the-data-path">
+<h2>1. The data path<a class="headerlink" href="#the-data-path" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>CAEN digitizers  ──►  CaenDAQ (in process)  ──►  data/run&lt;N&gt;/*.caendat
+                             │
+                             ├──►  live spectra and waveforms  ──►  browser
+                             └──►  rates  ──►  Graphite  ──►  Grafana
+</pre></div>
+</div>
+<p>Acquisition runs <strong>inside the DAQ server process</strong>. The boards are opened, read,
+decoded and written to disk by <a class="reference external" href="https://github.com/skowrons94/CaenDAQ">CaenDAQ</a>,
+a C++ library bound into Python. There is no separate acquisition process, no
+container to start, and no network hop between the boards and the file.</p>
+<p>This matters in practice:</p>
+<ul class="simple">
+<li><p><strong>Nothing to start or restart separately.</strong> Pressing <em>Start</em> is the whole
+operation.</p></li>
+<li><p><strong>Online monitoring costs nothing extra.</strong> The spectra you see are the ones
+CaenDAQ is already accumulating in C++ as it decodes; the server takes a
+snapshot on demand. No second copy of the data stream, and no monitoring
+process to fall behind.</p></li>
+<li><p><strong>If the web interface dies, the run does not.</strong> The frontend is a separate
+process that only talks to the server over HTTP. Closing the browser, reloading
+the page, or restarting the frontend has no effect on a run in progress.</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Earlier versions ran acquisition as XDAQ inside a Docker container, with a TCP
+“spy” socket for monitoring. That is gone. The <strong>file format</strong> is unchanged —
+<code class="docutils literal notranslate"><span class="pre">.caendat</span></code> files keep the exact XDAQ header layout on purpose, so runs from any
+version of WebDAQ convert with the same <a class="reference external" href="https://github.com/skowrons94/RUReader">RUReader</a>.</p>
+</div>
+</section>
+<hr class="docutils" />
+<section id="starting-from-nothing">
+<h2>2. Starting from nothing<a class="headerlink" href="#starting-from-nothing" title="Link to this heading"></a></h2>
+<p>You do not create a database, a user, or a directory layout by hand.</p>
+<ol class="arabic simple">
+<li><p>Run <code class="docutils literal notranslate"><span class="pre">LunaDAQ</span></code> and open <code class="docutils literal notranslate"><span class="pre">http://localhost:3000</span></code>.</p></li>
+<li><p>Click <strong>Start an Experiment</strong> and choose a working directory.</p></li>
+<li><p>The DAQ server is launched <em>in that directory</em> and creates what it needs:
+<code class="docutils literal notranslate"><span class="pre">conf/</span></code>, <code class="docutils literal notranslate"><span class="pre">calib/</span></code>, <code class="docutils literal notranslate"><span class="pre">data/</span></code>, an <code class="docutils literal notranslate"><span class="pre">app.db</span></code> database and a default user.</p></li>
+</ol>
+<p><strong>The working directory is the experiment.</strong> Everything the server reads and
+writes is relative to it — board configurations, calibrations, run data, the
+histogram dashboard, the accumulated charge. Two working directories are two
+independent experiments that happen to share an installation. Starting the
+server from a different directory gives you a different setup, not a broken one.</p>
+<p>This is worth knowing when something looks “missing”: a dashboard with no
+histograms, or a board list that is empty, usually means the server was started
+somewhere other than where you configured it.</p>
+</section>
+<hr class="docutils" />
+<section id="adding-the-boards">
+<h2>3. Adding the boards<a class="headerlink" href="#adding-the-boards" title="Link to this heading"></a></h2>
+<p>Boards are discovered, not typed in. <strong>Board</strong> page → <strong>Scan</strong>.</p>
+<p>The scan walks the connection types the CAEN drivers support — USB, optical
+(CONET/A4818) and VME — and reports what answers. Add a board and WebDAQ reads
+its full register set from the hardware and stores it as one JSON file per board
+in <code class="docutils literal notranslate"><span class="pre">conf/</span></code>, named after the model and link (<code class="docutils literal notranslate"><span class="pre">V1730_0.json</span></code>).</p>
+<p>From then on that file <em>is</em> the board’s configuration. It is written when you
+change a setting in the UI, read when the server starts, and copied into the run
+directory when a run begins, so every run carries the settings it was taken with.</p>
+<p>Board settings — thresholds, trapezoid parameters, PSD gates, coincidence
+windows — are covered in <a class="reference internal" href="caen-settings.html"><span class="std std-doc">CAEN digitizers</span></a>.</p>
+</section>
+<hr class="docutils" />
+<section id="what-a-run-is">
+<h2>4. What a run is<a class="headerlink" href="#what-a-run-is" title="Link to this heading"></a></h2>
+<p>Pressing <strong>Start</strong> does this, in order:</p>
+<ol class="arabic simple">
+<li><p>Freezes the current board configurations and copies them into <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/</span></code>.</p></li>
+<li><p>Hands the open digitizers to CaenDAQ, which arms them and starts them
+together using the boards’ own synchronised start.</p></li>
+<li><p>Opens <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/</span></code> and begins writing <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> files.</p></li>
+<li><p>Switches on everything that follows the run: charge integration, the rate
+collector that publishes to Graphite, the stats recorder, and any run-linked
+Grafana alerts.</p></li>
+</ol>
+<p>Pressing <strong>Stop</strong> unwinds it, and additionally writes the things that describe
+the run: its accumulated charge, its ROI counts, its metadata row, and the
+logbook entry if you asked for one.</p>
+<p><strong>Run numbering</strong> increments automatically when data saving is on. You can set
+the number by hand from the status card — click it — which is what you want
+after a spoiled series.</p>
+<p><strong>Data saving off</strong> is a real mode, not a mistake: the run proceeds, spectra and
+rates update, charge integrates, and nothing is written to disk. Use it for
+tuning.</p>
+<section id="if-a-board-fails-mid-run">
+<h3>If a board fails mid-run<a class="headerlink" href="#if-a-board-fails-mid-run" title="Link to this heading"></a></h3>
+<p>With <strong>auto-restart</strong> enabled, a board that stops responding causes the run to be
+stopped, flagged <code class="docutils literal notranslate"><span class="pre">bad</span></code> in the logbook with an explanatory note, and a new run
+started automatically. A Telegram message is sent if notifications are
+configured. The intent is that a night shift loses one run rather than the rest
+of the night.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="changing-settings-while-running">
+<h2>5. Changing settings while running<a class="headerlink" href="#changing-settings-while-running" title="Link to this heading"></a></h2>
+<p>Some settings can move during a run and some cannot, and WebDAQ enforces the
+difference rather than letting you find out the hard way.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>During a run</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Thresholds, trapezoid parameters, PSD gates</p></td>
+<td><p><strong>Yes</strong> — see <a class="reference internal" href="caen-settings.html"><span class="std std-doc">online tuning</span></a></p></td>
+</tr>
+<tr class="row-odd"><td><p>Rebinning, log scale, ROIs, dashboard layout</p></td>
+<td><p><strong>Yes</strong> — display only</p></td>
+</tr>
+<tr class="row-even"><td><p>Rate sampling cadence</p></td>
+<td><p>Yes, applied from the next run</p></td>
+</tr>
+<tr class="row-odd"><td><p>Beam current module and its settings</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p>Adding or removing a board, sync mode</p></td>
+<td><p>No — stop the run first</p></td>
+</tr>
+<tr class="row-odd"><td><p>Run number, data saving</p></td>
+<td><p>No</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Online tuning</strong> is the useful one: open the tuner, change a threshold, and
+watch the trace and the spectrum react. Only the registers that are safe to write
+while the board is armed are sent; the rest are stored and applied at the next
+run. This turns filter tuning from a stop-change-start loop into something you
+do while watching the peak.</p>
+</section>
+<hr class="docutils" />
+<section id="what-is-stored-and-where">
+<h2>6. What is stored, and where<a class="headerlink" href="#what-is-stored-and-where" title="Link to this heading"></a></h2>
+<p>Everything is under the working directory.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>What</p></th>
+<th class="head"><p>Survives restart</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/&lt;board&gt;.json</span></code></p></td>
+<td><p>One file per board: its full register configuration</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code></p></td>
+<td><p>Run number, data saving, size limits, sync mode</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/histograms.json</span></code></p></td>
+<td><p>The histogram dashboard: which spectra, their ROIs, zooms, layout</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/current.json</span></code></p></td>
+<td><p>Beam current module, its settings, lifetime accumulated charge</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/stats.json</span></code></p></td>
+<td><p>Graphite server, metric subtree, monitored metrics, sampling cadence</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/telegram_settings.json</span></code>, <code class="docutils literal notranslate"><span class="pre">conf/elog_settings.json</span></code></p></td>
+<td><p>Notification and logbook credentials</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calib/&lt;board&gt;.cal</span></code></p></td>
+<td><p>Per-channel energy calibration</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">app.db</span></code></p></td>
+<td><p>Run metadata, users</p></td>
+<td><p>Yes</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/</span></code></p></td>
+<td><p>The run itself — see below</p></td>
+<td><p>Yes</p></td>
+</tr>
+</tbody>
+</table>
+<p>A run directory contains:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Written</p></th>
+<th class="head"><p>Contents</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">*.caendat</span></code></p></td>
+<td><p>during</p></td>
+<td><p>The data. Split across files when the size limit is reached.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&lt;board&gt;.json</span></code></p></td>
+<td><p>at start</p></td>
+<td><p>The board configurations this run was taken with.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">current.txt</span></code></p></td>
+<td><p>during</p></td>
+<td><p>Beam current, one row per sample.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stats.csv</span></code></p></td>
+<td><p>during</p></td>
+<td><p>The monitored Graphite metrics, sampled on the rate cadence.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">roi.json</span></code></p></td>
+<td><p>at stop</p></td>
+<td><p>Every defined ROI, its bounds, and its final counts.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">metadata.json</span></code></p></td>
+<td><p>at stop</p></td>
+<td><p>The run’s FAIR metadata record.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The point of the per-run copies is that a run is <strong>self-describing</strong>: months
+later, the ROOT file, the settings it was taken with, the charge it collected and
+the regions it was analysed with are all in one folder.</p>
+</section>
+<hr class="docutils" />
+<section id="monitoring">
+<h2>7. Monitoring<a class="headerlink" href="#monitoring" title="Link to this heading"></a></h2>
+<p>Three different things, often confused:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>Answers</p></th>
+<th class="head"><p>Lives</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Spectra and waveforms</strong></p></td>
+<td><p>“What is this detector doing right now?”</p></td>
+<td><p>In memory, from CaenDAQ. Not stored.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Rates</strong> (event, pile-up, lost, saturation)</p></td>
+<td><p>“Is the DAQ keeping up?”</p></td>
+<td><p>Published to Graphite every cadence tick; also <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Slow control</strong> (beam current, accelerator values)</p></td>
+<td><p>“What are the beam conditions?”</p></td>
+<td><p>Graphite, plus <code class="docutils literal notranslate"><span class="pre">current.txt</span></code> and <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Spectra are live and disposable — they reset when a run starts. Rates and slow
+control are archived in Graphite, which is what makes it possible to ask what the
+beam was doing three days ago. See
+<a class="reference internal" href="monitoring-and-alerts.html"><span class="std std-doc">Monitoring and alerts</span></a>.</p>
+</section>
+<hr class="docutils" />
+<section id="after-the-run">
+<h2>8. After the run<a class="headerlink" href="#after-the-run" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">.caendat</span></code> is a raw format. To analyse a run, convert it to ROOT with
+<a class="reference external" href="https://github.com/skowrons94/RUReader">RUReader</a>, which WebDAQ installs and
+drives from the conversion tab: pick a run, pick the options, convert. Point it
+at the run <em>directory</em> and a run split across several files converts into one
+ROOT file.</p>
+<p><code class="docutils literal notranslate"><span class="pre">scripts/check_run_integrity.py</span></code> verifies a run’s files without converting them —
+useful when a run was interrupted and you want to know how much of it is good.</p>
+</section>
+<hr class="docutils" />
+<section id="interfaces">
+<h2>9. Interfaces<a class="headerlink" href="#interfaces" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Web</strong></p></td>
+<td><p>The main interface. Any browser on the network; see the README for reaching it from another PC.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Mobile</strong></p></td>
+<td><p>A React Native app for run status, spectra and logbook entries from a phone.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>REST API</strong></p></td>
+<td><p>Everything the browser does is an HTTP call the server serves, so scripting a run is a matter of calling the same endpoints. JWT-authenticated. See the <a class="reference internal" href="server-architecture.html"><span class="std std-doc">Server Architecture Guide</span></a>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The frontend has no privileged path into the DAQ — it is one API client among
+several, which is why a browser crash cannot take a run with it.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="directory-structure.html" class="btn btn-neutral float-left" title="Directory Structure" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="server-architecture.html" class="btn btn-neutral float-right" title="Server Architecture Reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

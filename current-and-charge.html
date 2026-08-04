@@ -1,0 +1,432 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Beam current and accumulated charge &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Monitoring: Graphite, Grafana, alerts and notifications" href="monitoring-and-alerts.html" />
+    <link rel="prev" title="Spectra, ROIs and the histogram dashboard" href="histograms-and-rois.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Beam current and accumulated charge</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-two-charges-and-why-they-differ">1. The two charges, and why they differ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tetramm">2. TetrAMM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#rbd-9103">3. RBD 9103</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#monitored-value-a-graphite-metric">4. Monitored value (a Graphite metric)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-current-plot">5. The current plot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-recorded">6. What is recorded</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checks-that-catch-most-problems">7. Checks that catch most problems</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Beam current and accumulated charge</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/current-and-charge.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="beam-current-and-accumulated-charge">
+<h1>Beam current and accumulated charge<a class="headerlink" href="#beam-current-and-accumulated-charge" title="Link to this heading"></a></h1>
+<p>WebDAQ reads the beam current from one of three sources — a <strong>TetrAMM</strong>, an
+<strong>RBD 9103</strong>, or a <strong>monitored value</strong> already published to Graphite — and
+integrates it into two separate numbers. Both appear on the dashboard in the
+<em>Beam &amp; Charge</em> card, and both end up in the run record.</p>
+<p>Whichever source you pick behaves identically everywhere else: the same plot, the
+same <code class="docutils literal notranslate"><span class="pre">current.txt</span></code>, the same accumulated charge. Choose it in
+Settings → Current Measurement Module.</p>
+<hr class="docutils" />
+<section id="the-two-charges-and-why-they-differ">
+<h2>1. The two charges, and why they differ<a class="headerlink" href="#the-two-charges-and-why-they-differ" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Figure</p></th>
+<th class="head"><p>Integrates</p></th>
+<th class="head"><p>Reset</p></th>
+<th class="head"><p>Use</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>This run</strong></p></td>
+<td><p>only while a run is in progress</p></td>
+<td><p>at every run start</p></td>
+<td><p>Normalisation for the online analysis: counts per unit charge for <em>this</em> measurement.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Total</strong></p></td>
+<td><p>always, run or no run</p></td>
+<td><p>only when you press reset</p></td>
+<td><p>How much beam this target has seen, so you know how old it is.</p></td>
+</tr>
+</tbody>
+</table>
+<p>That is the whole design. The run figure must cover the run and nothing else,
+or a cross section comes out wrong; the total must not skip the beam delivered
+while you were setting up, or it stops being a target history.</p>
+<p>The run figure follows the DAQ’s own run state, not the browser. If you close
+the tab, if the run is stopped by the auto-restart, or if the run saves no data,
+the charge is still integrated for exactly the length of the run. It is written
+into the run’s metadata when the run ends.</p>
+<p>A small dot next to <em>This run</em> on the dashboard card shows whether it is
+integrating: green during a run, grey between runs. A number that is not moving
+between runs is correct behaviour, not a stalled readout.</p>
+</section>
+<hr class="docutils" />
+<section id="tetramm">
+<h2>2. TetrAMM<a class="headerlink" href="#tetramm" title="Link to this heading"></a></h2>
+<p>Four-channel picoammeter on Ethernet. Settings → Current Module.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Where</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>IP address</p></td>
+<td><p>Settings → Current Module</p></td>
+<td><p>Factory default is <code class="docutils literal notranslate"><span class="pre">169.254.145.10</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Port</p></td>
+<td><p>same</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">10001</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>Charge channel</p></td>
+<td><p>same</p></td>
+<td><p>Which of the four inputs is integrated into the charge. The others are still recorded.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Device parameters live in <code class="docutils literal notranslate"><span class="pre">conf/tetram.json</span></code> and are pushed to the instrument at
+initialisation:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">CHN</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">4</span></code></p></td>
+<td><p>Number of channels read out (1–4). Reading fewer channels is faster.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">RNG</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">AUTO</span></code></p></td>
+<td><p>Measurement range. <code class="docutils literal notranslate"><span class="pre">AUTO</span></code> follows the current; fix it if you want a constant noise floor.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">NRSAMP</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1000</span></code></p></td>
+<td><p>Samples averaged per reported value. Higher = quieter and slower.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ASCII</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">ON</span></code></p></td>
+<td><p>Output format.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">TRG</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">OFF</span></code></p></td>
+<td><p>External trigger mode.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">NAQ</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">1</span></code></p></td>
+<td><p>Acquisitions per trigger.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Wiring.</strong> The TetrAMM is a current <em>sink</em>: connect the Faraday cup (or the
+target insulated from ground) to a channel input, and keep the cable short and
+screened. A floating or noisy input shows as a current that follows nothing —
+check with the beam off first; a well-connected channel reads a few pA.</p>
+<p><strong>If it does not connect.</strong> The TetrAMM answers on its own subnet. From the DAQ
+machine, <code class="docutils literal notranslate"><span class="pre">ping</span> <span class="pre">169.254.145.10</span></code> must work before WebDAQ can. A link-local address
+means the PC needs an interface on <code class="docutils literal notranslate"><span class="pre">169.254.x.x</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="rbd-9103">
+<h2>3. RBD 9103<a class="headerlink" href="#rbd-9103" title="Link to this heading"></a></h2>
+<p>Single-channel picoammeter on USB (a serial port). Settings → Current Module.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Where</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Serial port</p></td>
+<td><p>Settings → Current Module</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/dev/ttyUSB0</span></code> on Linux. The page lists the ports it can see.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Baud rate</p></td>
+<td><p>same</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">57600</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>High-speed mode</p></td>
+<td><p>same</p></td>
+<td><p>Faster sampling, more noise per sample.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Device parameters live in <code class="docutils literal notranslate"><span class="pre">conf/rbd9103.json</span></code> and are sent as the instrument’s
+own command codes:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Parameter</p></th>
+<th class="head"><p>Default</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">range</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">R0</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">R0</span></code> is autorange; <code class="docutils literal notranslate"><span class="pre">R1</span></code>…<code class="docutils literal notranslate"><span class="pre">R7</span></code> fix a range (20 nA, 200 nA, …). Fix the range when the current is stable and you want a constant response time.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">filter</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">F032</span></code></p></td>
+<td><p>Rolling average over 32 samples. <code class="docutils literal notranslate"><span class="pre">F000</span></code> disables it. More averaging = quieter reading, slower response to a beam trip.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">input_mode</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">G0</span></code></p></td>
+<td><p>Normal input.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">bias</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">B0</span></code></p></td>
+<td><p>Internal bias off.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sample_rate</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">I1000</span></code></p></td>
+<td><p>Sampling interval in ms.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Choosing the filter.</strong> The filter is the trade between seeing a beam trip
+quickly and having a stable number. <code class="docutils literal notranslate"><span class="pre">F032</span></code> at 1000 ms sampling means the reading
+follows the beam over ~30 s. For tuning the accelerator, drop it; for a long
+run, keep it.</p>
+</section>
+<hr class="docutils" />
+<section id="monitored-value-a-graphite-metric">
+<h2>4. Monitored value (a Graphite metric)<a class="headerlink" href="#monitored-value-a-graphite-metric" title="Link to this heading"></a></h2>
+<p>Not every setup has a picoammeter on the target. If the accelerator already
+publishes its own beam current to the laboratory’s Graphite server, WebDAQ can
+use that number directly. Settings → Current Measurement Module → <strong>Monitored
+value</strong>.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Metric path</p></td>
+<td><p>The Graphite path, e.g. <code class="docutils literal notranslate"><span class="pre">accelerator.beam_current</span></code>. Use <strong>Search</strong> to pick it from the tree rather than typing it.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Metric unit</p></td>
+<td><p>The unit the metric is published in — nA, µA, mA or A. Everything downstream works in µA; <strong>getting this wrong scales the accumulated charge by the same factor.</strong></p></td>
+</tr>
+<tr class="row-even"><td><p>Poll interval</p></td>
+<td><p>How often Graphite is asked. Polling faster than the value is published adds load without adding samples.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The module is read-only: it does not configure the accelerator, it just follows
+the number. The charge is integrated by the trapezoid rule using the metric’s own
+timestamps, not wall-clock, so a poll that returns three archived points
+contributes the charge of those three points.</p>
+<p><strong>What it refuses to integrate.</strong> A monitored value is not a dedicated
+instrument, and it fails in ways a picoammeter does not:</p>
+<ul class="simple">
+<li><p><strong>Gaps.</strong> If Graphite is unreachable for ten minutes, those ten minutes count
+as unmeasured and contribute nothing. The alternative — assuming the current
+held — would invent charge that was never delivered.</p></li>
+<li><p><strong>NaN and negative readings</strong> are dropped. A NaN would poison the running total
+irrecoverably; a negative reading, which is what an unplugged or
+wrongly-wired readout produces, would silently subtract charge that really was
+delivered. Zero is kept, because beam off is a real measurement.</p></li>
+</ul>
+<p><strong>Connected</strong> on this module means <em>the metric is arriving</em>, not that the
+Graphite server answers. A reachable server publishing nothing for this path
+reads as disconnected, which is the honest answer — otherwise a run could start
+against a dead number.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Two different Graphite endpoints are involved and they are easy to confuse. The
+<strong>Carbon</strong> ingest (port 2003, Settings → Current Module) is where WebDAQ <em>sends</em>
+measured current. The <strong>render API</strong> (Settings → Stats page) is where it <em>reads</em>
+values back — including this module and the long-run history behind the current
+plot. A monitored value that never arrives is usually the render API pointing at
+port 2003.</p>
+</div>
+</section>
+<hr class="docutils" />
+<section id="the-current-plot">
+<h2>5. The current plot<a class="headerlink" href="#the-current-plot" title="Link to this heading"></a></h2>
+<p>The dashboard plots the beam current from the start of the run. Two behaviours
+are worth understanding:</p>
+<ul class="simple">
+<li><p><strong>The plot is binned, not thinned.</strong> However long the run, the server reduces
+the window to a fixed number of points before sending it, so a three-day run
+costs the browser the same as a three-minute one. Each point carries the mean
+<em>and</em> the extremes of its time bin, drawn as a shaded band — so a two-second
+beam trip that a plain average would smooth away stays visible even when one
+bin spans seven minutes. The averaging window is shown next to the plot
+whenever it exceeds a couple of seconds.</p></li>
+<li><p><strong>It refreshes at the rate it can meaningfully change.</strong> A short window updates
+every second; a multi-day run updates every fifteen. A long run therefore makes
+the dashboard lighter, not heavier.</p></li>
+</ul>
+<p>When the run is stopped the plot shows a rolling window instead — 30 s to 5 min,
+selectable above the plot.</p>
+<p>For a run longer than the in-memory buffer (roughly fourteen hours), the history
+is fetched from Graphite, which is why the plot is complete even if you open the
+dashboard on the third day of a run.</p>
+</section>
+<hr class="docutils" />
+<section id="what-is-recorded">
+<h2>6. What is recorded<a class="headerlink" href="#what-is-recorded" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Written when</p></th>
+<th class="head"><p>Contents</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/current.txt</span></code></p></td>
+<td><p>during a run with data saving on</p></td>
+<td><p>Time and current, one row per sample.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Run metadata (database)</p></td>
+<td><p>at run stop</p></td>
+<td><p>The run’s accumulated charge, alongside target, voltages and notes.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/stats.csv</span></code></p></td>
+<td><p>during a run</p></td>
+<td><p>The current as a Graphite metric, if you added it on the Stats page.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The <code class="docutils literal notranslate"><span class="pre">current.txt</span></code> file is written only when data saving is enabled. The charge
+integration is not: it follows the run itself, so a no-save run still reports its
+charge.</p>
+</section>
+<hr class="docutils" />
+<section id="checks-that-catch-most-problems">
+<h2>7. Checks that catch most problems<a class="headerlink" href="#checks-that-catch-most-problems" title="Link to this heading"></a></h2>
+<ol class="arabic simple">
+<li><p><strong>Beam off, current near zero?</strong> If not, the input is floating or picking up
+noise. Nothing downstream will be right until this is.</p></li>
+<li><p><strong>Beam on, current follows the accelerator?</strong> Compare against the accelerator’s
+own reading in Grafana. A constant factor means a wrong range or a split
+current path; a lag means too much filtering.</p></li>
+<li><p><strong>Between runs, does <em>This run</em> stay still while <em>Total</em> climbs?</strong> That is the
+expected behaviour. If <em>This run</em> moves between runs, the DAQ still thinks a
+run is in progress — check the run state on the dashboard.</p></li>
+<li><p><strong>After a run, does the logbook entry show a charge?</strong> It is written at run
+stop. Zero means the picoammeter was disconnected or the current was zero for
+the whole run.</p></li>
+</ol>
+<p>When you change the target, clear the lifetime figure with <strong>Reset Total Charge</strong>
+in the run control bar on the dashboard. Nothing else clears it — not a restart,
+not a new run — and the new value is written to <code class="docutils literal notranslate"><span class="pre">conf/current.json</span></code> straight
+away, so the old total does not come back.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="histograms-and-rois.html" class="btn btn-neutral float-left" title="Spectra, ROIs and the histogram dashboard" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="monitoring-and-alerts.html" class="btn btn-neutral float-right" title="Monitoring: Graphite, Grafana, alerts and notifications" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

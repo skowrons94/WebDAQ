@@ -1,0 +1,212 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebDAQ — data acquisition for the LUNA experiment &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="LunaDAQ Installation Guide" href="installation.html" />
+    <link rel="prev" title="Welcome to LunaDAQ’s documentation!" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">WebDAQ — data acquisition for the LUNA experiment</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#where-to-start">Where to start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#key-capabilities">Key capabilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#support">Support</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">WebDAQ — data acquisition for the LUNA experiment</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/welcome.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="webdaq-data-acquisition-for-the-luna-experiment">
+<h1>WebDAQ — data acquisition for the LUNA experiment<a class="headerlink" href="#webdaq-data-acquisition-for-the-luna-experiment" title="Link to this heading"></a></h1>
+<p><img alt="GitHub commit activity" src="https://img.shields.io/github/commit-activity/m/skowrons94/WebDAQ" /> <img alt="GitHub Release" src="https://img.shields.io/github/v/release/skowrons94/WebDAQ?include_prereleases" /> <img alt="Static Badge" src="https://img.shields.io/badge/Documentation-up-green?logo=Github&link=https%3A%2F%2Fskowrons94.github.io%2FWebDAQ%2Findex.html">
+<a class="reference internal" href="#LICENSE"><span class="xref myst"><img alt="Project License" src="https://img.shields.io/badge/License-MIT-blue.svg" /></span></a></p>
+<p><img alt="Dashboard" src="_images/dashboard.png" /></p>
+<p>Run control for CAEN digitizers, in a browser. Configure the boards, tune the
+filters against a live spectrum, take runs, watch the rates and the beam current,
+and write the shift entry — from the same interface, on the DAQ machine or from
+any PC on the network.</p>
+<p>Acquisition runs <strong>in process</strong>: the boards are read, decoded and written by
+<a class="reference external" href="https://github.com/skowrons94/CaenDAQ">CaenDAQ</a>, a C++ library bound into the
+Python server. There is no XDAQ, no Docker container and no separate monitoring
+process.</p>
+<section id="where-to-start">
+<h2>Where to start<a class="headerlink" href="#where-to-start" title="Link to this heading"></a></h2>
+<p><strong>New here?</strong> Read <a class="reference internal" href="example-session.html"><span class="std std-doc">A complete session</span></a> — one run from a cold
+machine to a written logbook entry.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Section</p></th>
+<th class="head"><p>Read it for</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><a class="reference internal" href="installation.html"><span class="std std-doc">Installation</span></a></p></td>
+<td><p>Getting it onto a machine.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="example-session.html"><span class="std std-doc">A complete session</span></a></p></td>
+<td><p>The whole workflow, end to end.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="details.html"><span class="std std-doc">How WebDAQ works</span></a></p></td>
+<td><p>What happens when you press Start; what is stored and where; what can be changed during a run.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="usage.html"><span class="std std-doc">User guide</span></a></p></td>
+<td><p>Screen-by-screen reference.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="caen-settings.html"><span class="std std-doc">CAEN digitizers</span></a></p></td>
+<td><p>Scanning and adding boards, thresholds and trapezoid settings, PSD gates, multi-board synchronisation, online tuning.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="histograms-and-rois.html"><span class="std std-doc">Spectra and ROIs</span></a></p></td>
+<td><p>The histogram dashboard, regions of interest, and the per-run <code class="docutils literal notranslate"><span class="pre">roi.json</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="current-and-charge.html"><span class="std std-doc">Beam current and charge</span></a></p></td>
+<td><p>TetrAMM, RBD 9103, a monitored Graphite value, and what the two accumulated charges mean.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="monitoring-and-alerts.html"><span class="std std-doc">Monitoring and alerts</span></a></p></td>
+<td><p>Graphite, Grafana, the Stats page, <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, run-linked alerts, Telegram.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="elog.html"><span class="std std-doc">ELOG</span></a></p></td>
+<td><p>Reading and writing the collaboration logbook from run control.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="directory-structure.html"><span class="std std-doc">Directory structure</span></a></p></td>
+<td><p>What lives where in the repository and in a working directory.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="server-architecture.html"><span class="std std-doc">Server architecture</span></a></p></td>
+<td><p>Technical reference for developers.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="troubleshooting.html"><span class="std std-doc">Troubleshooting</span></a></p></td>
+<td><p>When something does not work.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="key-capabilities">
+<h2>Key capabilities<a class="headerlink" href="#key-capabilities" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>In-process acquisition</strong> of multiple CAEN digitizers into one synchronised
+<code class="docutils literal notranslate"><span class="pre">.caendat</span></code> file per run</p></li>
+<li><p><strong>Online tuning</strong> of thresholds, gates and trapezoid parameters while the run
+is going</p></li>
+<li><p><strong>Live spectra, waveforms and PSD plots</strong>, with server-side regions of interest
+recorded into each run</p></li>
+<li><p><strong>Beam current and accumulated charge</strong> from a picoammeter or from a monitored
+accelerator value</p></li>
+<li><p><strong>Rates and slow control</strong> archived to Graphite, with Grafana alerts tied to
+the run</p></li>
+<li><p><strong>FAIR-compliant run metadata</strong>, ELOG logbook entries and Telegram alerts</p></li>
+</ul>
+</section>
+<section id="support">
+<h2>Support<a class="headerlink" href="#support" title="Link to this heading"></a></h2>
+<p>For technical support or feature requests:</p>
+<ul class="simple">
+<li><p>Jakub Skowroński: <a class="reference external" href="mailto:jakub&#46;skowronski&#37;&#52;&#48;pd&#46;infn&#46;it">jakub<span>&#46;</span>skowronski<span>&#64;</span>pd<span>&#46;</span>infn<span>&#46;</span>it</a></p></li>
+<li><p>Alessandro Compagnucci: <a class="reference external" href="mailto:alessandro&#46;compagnucci&#37;&#52;&#48;gssi&#46;it">alessandro<span>&#46;</span>compagnucci<span>&#64;</span>gssi<span>&#46;</span>it</a></p></li>
+<li><p>Riccardo Gesuè: <a class="reference external" href="mailto:gesue&#46;riccardo&#37;&#52;&#48;gssi&#46;it">gesue<span>&#46;</span>riccardo<span>&#64;</span>gssi<span>&#46;</span>it</a></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Welcome to LunaDAQ’s documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="installation.html" class="btn btn-neutral float-right" title="LunaDAQ Installation Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

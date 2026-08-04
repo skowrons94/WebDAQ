@@ -1,0 +1,278 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>A complete session, start to finish &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="User Guide" href="usage.html" />
+    <link rel="prev" title="LunaDAQ Installation Guide" href="installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">A complete session, start to finish</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#start-the-application">1. Start the application</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#check-the-hardware">2. Check the hardware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#tune-a-channel">3. Tune a channel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#take-a-run">4. Take a run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-the-run-leaves-behind">5. What the run leaves behind</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#write-it-down">6. Write it down</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#without-hardware">7. Without hardware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#after-changing-the-code">8. After changing the code</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">A complete session, start to finish</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/example-session.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="a-complete-session-start-to-finish">
+<h1>A complete session, start to finish<a class="headerlink" href="#a-complete-session-start-to-finish" title="Link to this heading"></a></h1>
+<p>One run from a cold machine to a written logbook entry. Follow it once and the
+rest of the documentation is reference material.</p>
+<hr class="docutils" />
+<section id="start-the-application">
+<h2>1. Start the application<a class="headerlink" href="#start-the-application" title="Link to this heading"></a></h2>
+<p>Two processes: the <strong>web app</strong> (port 3000) and the <strong>DAQ server</strong> (port 5001).
+The web app runs all the time; the DAQ server is started for a working directory
+from the interface.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>LunaDAQ<span class="w">                 </span><span class="c1"># start the web app</span>
+LunaDAQ<span class="w"> </span>status<span class="w">          </span><span class="c1"># what is running on which port</span>
+LunaDAQ<span class="w"> </span>stop<span class="w">            </span><span class="c1"># stop both, including after a crash</span>
+LunaDAQ<span class="w"> </span>restart<span class="w">         </span><span class="c1"># stop both, start the web app again</span>
+LunaDAQ<span class="w"> </span>backend<span class="w">         </span><span class="c1"># start the DAQ server in this terminal, without the UI</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">stop</span></code> asks each process to exit and forces it only if it refuses; a port held by
+an unrelated program is reported and left alone. Use it when a start fails with
+<em>address already in use</em>.</p>
+<p>Open <code class="docutils literal notranslate"><span class="pre">http://localhost:3000</span></code> (or the DAQ machine’s address from another PC) and
+log in. Then press <strong>Start an Experiment</strong>, choose the working directory for this
+campaign, and the DAQ server is launched there. That directory is where <code class="docutils literal notranslate"><span class="pre">conf/</span></code>,
+<code class="docutils literal notranslate"><span class="pre">calib/</span></code> and <code class="docutils literal notranslate"><span class="pre">data/</span></code> are created — everything below is relative to it.</p>
+</section>
+<hr class="docutils" />
+<section id="check-the-hardware">
+<h2>2. Check the hardware<a class="headerlink" href="#check-the-hardware" title="Link to this heading"></a></h2>
+<p><strong>Boards.</strong> Settings → Boards. Every configured board has a card showing its
+model, DPP firmware, link and live connection state. Green means the server has
+the board open and ready.</p>
+<p>If a board is missing, press <strong>Scan for boards</strong>, let it probe the links, and add
+what it finds. See <a class="reference internal" href="caen-settings.html"><span class="std std-doc">CAEN digitizers</span></a> for the scan options and
+for the VME range.</p>
+<p><strong>Picoammeter.</strong> Settings → Current Module. Pick TetrAMM or RBD 9103 and check it
+connects. With the beam off the reading should be near zero; if it is not, fix
+that before anything else (<a class="reference internal" href="current-and-charge.html"><span class="std std-doc">Beam current and charge</span></a>).</p>
+<p><strong>Metrics.</strong> Settings, or the Stats page. The light next to the title must be
+green — that is the Graphite server answering. Add the metrics this campaign
+needs (terminal voltage, beam current, board rates) with a name and a unit each;
+they become the columns of every run’s <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>.</p>
+</section>
+<hr class="docutils" />
+<section id="tune-a-channel">
+<h2>3. Tune a channel<a class="headerlink" href="#tune-a-channel" title="Link to this heading"></a></h2>
+<p>Tuner page. Pick the board and the channel.</p>
+<ol class="arabic simple">
+<li><p>Press <strong>Start</strong> — the tuner starts an acquisition with data saving switched
+off, so nothing you do here lands in the data.</p></li>
+<li><p>Turn <strong>Online</strong> on. Changes now go to the board immediately as well as to the
+configuration.</p></li>
+<li><p>Look at the waveform. Set the input polarity and the DC offset until the pulse
+sits inside the window with the baseline visible and no clipping.</p></li>
+<li><p>Set the trigger threshold: lower it until the rate runs away on noise, then
+put it 20–30 % above that point.</p></li>
+<li><p>For DPP-PHA, set the decay time until the trapezoid’s flat top is flat, then
+the rise time and flat top for the resolution you need at your rate. For
+DPP-PSD, set the gate offset and the two gates over the pulse.</p></li>
+<li><p>Watch the spectrum on the right while you do it. Fine gain moves the peaks
+into the histogram range.</p></li>
+<li><p>Press <strong>Stop</strong>.</p></li>
+</ol>
+<p>Fields marked <em>next run</em> are saved to the configuration but not written to a live
+board — record length and anything else that changes the shape of the readout.
+They take effect the next time a run starts.</p>
+<p>The details of every filter are in <a class="reference internal" href="caen-settings.html"><span class="std std-doc">CAEN digitizers</span></a>.</p>
+</section>
+<hr class="docutils" />
+<section id="take-a-run">
+<h2>4. Take a run<a class="headerlink" href="#take-a-run" title="Link to this heading"></a></h2>
+<p>Dashboard.</p>
+<ol class="arabic simple">
+<li><p>Fill in the run metadata: target, terminal voltage, probe voltage, run type.
+It is stored with the run and is what makes the data findable later.</p></li>
+<li><p>Check <strong>Save data</strong> is on (the tuner leaves it off).</p></li>
+<li><p>Press <strong>Start</strong>. In order, WebDAQ then: applies the save settings, starts the
+current acquisition and the stats collection, configures every board from its
+JSON file, arms the synchronised boards, fires the chain from the master, and
+starts the readout.</p></li>
+<li><p>Watch:</p>
+<ul class="simple">
+<li><p><strong>Run control</strong> — run number, elapsed time, state.</p></li>
+<li><p><strong>Board cards</strong> — connection, waveform switch, failure flags.</p></li>
+<li><p><strong>Beam &amp; Charge</strong> — live current, the charge for this run (integrating,
+green dot) and the lifetime total.</p></li>
+<li><p><strong>Histograms / waveforms</strong> — per board and channel.</p></li>
+<li><p><strong>Stats</strong> — the metrics you selected.</p></li>
+</ul>
+</li>
+<li><p>Press <strong>Stop</strong> when done. The run’s charge is written into its record, the
+stats file is closed, and auto-managed Grafana alerts are silenced again.</p></li>
+</ol>
+<p>If a board fails mid-run, a Telegram message goes out (once per run) and, if
+auto-restart is enabled, the run is restarted after the configured delay.</p>
+</section>
+<hr class="docutils" />
+<section id="what-the-run-leaves-behind">
+<h2>5. What the run leaves behind<a class="headerlink" href="#what-the-run-leaves-behind" title="Link to this heading"></a></h2>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>data/run1276/
+├── run1276_0.caendat      raw data, one file per board set, rotated by size
+├── current.txt            beam current samples
+├── stats.csv              the Graphite metrics, one row per second
+└── metadata.json          run number, times, boards, firmware, file list
+</pre></div>
+</div>
+<p>plus a row in the run database — target, voltages, notes, accumulated charge —
+which is what Logbook → Runs shows.</p>
+<p><code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> is plain CSV with a commented header:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="n">stats</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s1">&#39;data/run1276/stats.csv&#39;</span><span class="p">,</span> <span class="n">comment</span><span class="o">=</span><span class="s1">&#39;#&#39;</span><span class="p">)</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">columns</span>          <span class="c1"># [&#39;Time [s]&#39;, &#39;Terminal Voltage [kV]&#39;, &#39;Board 0 rate [counts/s]&#39;]</span>
+</pre></div>
+</div>
+</section>
+<hr class="docutils" />
+<section id="write-it-down">
+<h2>6. Write it down<a class="headerlink" href="#write-it-down" title="Link to this heading"></a></h2>
+<p>Logbook → ELOG → <strong>New entry</strong>. What happened, what you changed, what the
+spectrum looked like, which run numbers. Attach a screenshot if it makes the
+point faster than a paragraph. Reply to the shift’s first entry to keep a thread
+together.</p>
+<p>The run record already holds the numbers. The logbook is for the reasons.</p>
+</section>
+<hr class="docutils" />
+<section id="without-hardware">
+<h2>7. Without hardware<a class="headerlink" href="#without-hardware" title="Link to this heading"></a></h2>
+<p>Everything above works on a laptop with no CAEN boards and no picoammeter:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+<span class="nv">TEST_FLAG</span><span class="o">=</span>True<span class="w"> </span>python<span class="w"> </span>main.py
+</pre></div>
+</div>
+<p>Test mode substitutes a simulated digitizer and a simulated picoammeter: boards
+can be scanned, added and tuned, runs produce data files, and the charge
+integrates. Use it to try a procedure or to reproduce a problem before touching
+the real setup.</p>
+</section>
+<hr class="docutils" />
+<section id="after-changing-the-code">
+<h2>8. After changing the code<a class="headerlink" href="#after-changing-the-code" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+./tests/run_tests.sh<span class="w">            </span><span class="c1"># the server test suite, no hardware needed</span>
+<span class="nb">cd</span><span class="w"> </span>../frontend
+npx<span class="w"> </span>tsc<span class="w"> </span>--noEmit<span class="w">                </span><span class="c1"># type check</span>
+npm<span class="w"> </span>run<span class="w"> </span>build<span class="w">                   </span><span class="c1"># required before npm run start picks up changes</span>
+</pre></div>
+</div>
+<p>The test suite runs in its own scratch directory and never touches a real
+<code class="docutils literal notranslate"><span class="pre">conf/</span></code> or <code class="docutils literal notranslate"><span class="pre">data/</span></code>. <code class="docutils literal notranslate"><span class="pre">server/tests/README.md</span></code> says what each file covers.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="installation.html" class="btn btn-neutral float-left" title="LunaDAQ Installation Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="usage.html" class="btn btn-neutral float-right" title="User Guide" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

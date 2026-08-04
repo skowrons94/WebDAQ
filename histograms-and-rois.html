@@ -1,0 +1,328 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spectra, ROIs and the histogram dashboard &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Beam current and accumulated charge" href="current-and-charge.html" />
+    <link rel="prev" title="CAEN digitizers: settings, filters and synchronisation" href="caen-settings.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Spectra, ROIs and the histogram dashboard</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-dashboard-belongs-to-the-experiment-not-to-your-browser">1. The dashboard belongs to the experiment, not to your browser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-a-spectrum">2. Adding a spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#regions-of-interest">3. Regions of interest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#zoom-rebinning-and-display">4. Zoom, rebinning and display</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-recorded-with-the-run">5. What is recorded with the run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#waveforms-and-psd">6. Waveforms and PSD</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#when-something-looks-wrong">7. When something looks wrong</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Spectra, ROIs and the histogram dashboard</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/histograms-and-rois.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="spectra-rois-and-the-histogram-dashboard">
+<h1>Spectra, ROIs and the histogram dashboard<a class="headerlink" href="#spectra-rois-and-the-histogram-dashboard" title="Link to this heading"></a></h1>
+<p>The Histograms page is where you watch what the detectors are doing during a run:
+one card per board and channel, each with its own regions of interest and their
+live counts.</p>
+<hr class="docutils" />
+<section id="the-dashboard-belongs-to-the-experiment-not-to-your-browser">
+<h2>1. The dashboard belongs to the experiment, not to your browser<a class="headerlink" href="#the-dashboard-belongs-to-the-experiment-not-to-your-browser" title="Link to this heading"></a></h2>
+<p>Everything on this page — which spectra are shown, what they are called, their
+ROIs, their zooms, the layout, the rebinning — is stored <strong>on the DAQ server</strong>,
+in <code class="docutils literal notranslate"><span class="pre">conf/histograms.json</span></code> in the working directory.</p>
+<p>That has three consequences worth knowing:</p>
+<ul class="simple">
+<li><p><strong>It survives a restart.</strong> Restart the server, or the machine, and the
+dashboard comes back as you left it.</p></li>
+<li><p><strong>Everyone sees the same dashboard.</strong> Open it from the control room PC and
+from a laptop and you are looking at one configuration, not two. Add an ROI on
+one and it is there on the other after its next refresh.</p></li>
+<li><p><strong>The server knows your ROIs</strong>, which is what lets it record them with the run
+(§5) and integrate them without the browser asking region by region.</p></li>
+</ul>
+<p>The file is written every time you change something — atomically, so an
+interrupted write cannot corrupt it — and read once when the page loads. Simply
+watching the spectra does not write to it.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Before v4.0 this configuration lived in the web server’s <code class="docutils literal notranslate"><span class="pre">cache/</span></code> folder and in
+each browser’s local storage. If you are upgrading, your existing histograms and
+ROIs are imported automatically the first time the DAQ server starts, and the old
+files are left untouched.</p>
+</div>
+</section>
+<hr class="docutils" />
+<section id="adding-a-spectrum">
+<h2>2. Adding a spectrum<a class="headerlink" href="#adding-a-spectrum" title="Link to this heading"></a></h2>
+<p><strong>Add Histogram</strong> → pick a board and a channel.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Board / Channel</p></td>
+<td><p>Which spectrum to show. The board list comes from what you have added on the Board page.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Label</p></td>
+<td><p>A name of your own — <em>“Ge clover”</em>, <em>“BGO 3”</em>. Leave it empty for <code class="docutils literal notranslate"><span class="pre">Board</span> <span class="pre">0</span> <span class="pre">-</span> <span class="pre">Channel</span> <span class="pre">1</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>Size</p></td>
+<td><p>Card height: small, medium, large.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Visible</p></td>
+<td><p>Hide a card without losing its ROIs. Hidden spectra are not fetched, so hiding is also how you make a crowded dashboard lighter.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Cards can be dragged into whatever order you want; the order is stored with
+everything else.</p>
+</section>
+<hr class="docutils" />
+<section id="regions-of-interest">
+<h2>3. Regions of interest<a class="headerlink" href="#regions-of-interest" title="Link to this heading"></a></h2>
+<p>An ROI is a named energy window on one spectrum. Add one with the <strong>+</strong> on a
+card, or click an existing one in the card’s legend to edit it.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Name</p></td>
+<td><p>What it is — <em>“511 keV”</em>, <em>“1332 keV”</em>. This is what appears in the legend and in <code class="docutils literal notranslate"><span class="pre">roi.json</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Low / High</p></td>
+<td><p>The window, <strong>in the units of the x axis</strong>. If the channel is calibrated, these are keV; if not, they are ADC channels.</p></td>
+</tr>
+<tr class="row-even"><td><p>Colour</p></td>
+<td><p>Chosen from the ROOT palette, so the shaded overlay on the spectrum matches the legend exactly.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Enabled</p></td>
+<td><p>Switches the region off without deleting it — no overlay, no counts, no cost.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The counts next to each ROI in the legend are the integral over the window,
+refreshed on the dashboard’s update interval. The overlay on the spectrum is the
+same bins, filled in the ROI’s colour, so what you see shaded is exactly what is
+being counted.</p>
+<p><strong>Bounds follow the calibration.</strong> If you calibrate a channel after defining its
+ROIs, the ROIs stay where they were put in axis units — which is what you want if
+you entered them in keV, and not if you entered them in channels. Check them
+after a calibration change.</p>
+</section>
+<hr class="docutils" />
+<section id="zoom-rebinning-and-display">
+<h2>4. Zoom, rebinning and display<a class="headerlink" href="#zoom-rebinning-and-display" title="Link to this heading"></a></h2>
+<p><strong>Zoom</strong> is per histogram and is remembered. Zoom into a peak, go to the logbook,
+come back, and the spectrum is still zoomed the way you left it — including after
+a server restart. It is deliberately <em>not</em> pushed to other people’s screens: a
+colleague zooming during your measurement will not move your view. <strong>Reset Zoom</strong>
+clears them all.</p>
+<p><strong>Rebinning</strong> applies to every spectrum on the page and is done on the server
+before the spectrum is sent. It affects the ROI integrals too, which is the
+point — what you count is what you see. Raise it when the statistics are thin and
+the spectrum looks like noise.</p>
+<p><strong>Log scale</strong>, <strong>labels</strong>, <strong>ROI overlays</strong> and <strong>integrals</strong> are display
+switches. <strong>Update interval</strong> is how often the page refreshes; <strong>Auto-update</strong>
+turns refreshing off entirely, which is what you want if you are studying a
+spectrum and do not want it moving under you.</p>
+<p><strong>Grid columns</strong> and the small/medium/large card sizes control the layout. On a
+control-room screen, three columns of medium cards is usually the readable limit.</p>
+</section>
+<hr class="docutils" />
+<section id="what-is-recorded-with-the-run">
+<h2>5. What is recorded with the run<a class="headerlink" href="#what-is-recorded-with-the-run" title="Link to this heading"></a></h2>
+<p>When a run stops, WebDAQ writes <strong><code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/roi.json</span></code></strong> containing every
+defined ROI and its final counts:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;run_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">412</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;written_at&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-08-03T18:22:41+02:00&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;rebin_factor&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;histograms&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">    </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;hist_dc27c5376e17&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;boardId&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;0&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;channel&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Ge clover&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;rois&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="p">{</span>
+<span class="w">          </span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;roi_fc7ddde2dbec&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1332 keV&quot;</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;low&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1300.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;high&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">1360.0</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;color&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;#00ff00&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;background&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">&quot;gross&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">18422.0</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;net&quot;</span><span class="p">:</span><span class="w"> </span><span class="mf">18422.0</span>
+<span class="w">        </span><span class="p">}</span>
+<span class="w">      </span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">]</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Points worth noting:</p>
+<ul class="simple">
+<li><p>It records <strong>every ROI you have defined</strong>, including ones that were hidden or
+switched off in the browser. The file describes the setup, not somebody’s view.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">rebin_factor</span></code> is stored because the counts depend on it.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">gross</span></code>, <code class="docutils literal notranslate"><span class="pre">background</span></code> and <code class="docutils literal notranslate"><span class="pre">net</span></code> are separate fields. There is no background
+estimation yet, so <code class="docutils literal notranslate"><span class="pre">background</span></code> is <code class="docutils literal notranslate"><span class="pre">null</span></code> and <code class="docutils literal notranslate"><span class="pre">net</span></code> equals <code class="docutils literal notranslate"><span class="pre">gross</span></code>. When an
+estimator is added, existing files stay readable and analysis code reading
+<code class="docutils literal notranslate"><span class="pre">net</span></code> keeps working.</p></li>
+</ul>
+<p>Together with <code class="docutils literal notranslate"><span class="pre">metadata.json</span></code>, the board configurations and <code class="docutils literal notranslate"><span class="pre">current.txt</span></code>, this
+makes the run folder self-describing: the counts, the regions they came from, the
+settings, and the charge to normalise by.</p>
+</section>
+<hr class="docutils" />
+<section id="waveforms-and-psd">
+<h2>6. Waveforms and PSD<a class="headerlink" href="#waveforms-and-psd" title="Link to this heading"></a></h2>
+<p>Two related pages, with the same idea and separate controls:</p>
+<ul class="simple">
+<li><p><strong>Waveforms</strong> show the digitised trace for a channel, which is what you look at
+when setting a trigger threshold or a trapezoid rise time. Traces have to be
+enabled per board, because transporting them costs bandwidth that would
+otherwise go to data.</p></li>
+<li><p><strong>PSD</strong> shows the two-dimensional charge-comparison plot for pulse-shape
+discrimination, used to separate neutrons from gammas in organic scintillators.</p></li>
+</ul>
+<p>Both select boards and channels independently of the histogram dashboard.</p>
+</section>
+<hr class="docutils" />
+<section id="when-something-looks-wrong">
+<h2>7. When something looks wrong<a class="headerlink" href="#when-something-looks-wrong" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>Usual cause</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>A spectrum is empty</p></td>
+<td><p>The channel is not enabled on the board, or its threshold is above the signal. Check the trace first.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Counts do not move</p></td>
+<td><p>Auto-update is off, or the run is not running, or the ROI is disabled.</p></td>
+</tr>
+<tr class="row-even"><td><p>ROI counts look far too high</p></td>
+<td><p>Rebinning changed, or the ROI is in channels while the axis is now in keV.</p></td>
+</tr>
+<tr class="row-odd"><td><p>The dashboard is empty after an upgrade</p></td>
+<td><p>The server was started in a different working directory — the dashboard lives in <code class="docutils literal notranslate"><span class="pre">conf/histograms.json</span></code> under it.</p></td>
+</tr>
+<tr class="row-even"><td><p>The page is slow</p></td>
+<td><p>Too many visible cards, or too short an update interval. Hide what you are not watching; hidden cards are not fetched.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="caen-settings.html" class="btn btn-neutral float-left" title="CAEN digitizers: settings, filters and synchronisation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="current-and-charge.html" class="btn btn-neutral float-right" title="Beam current and accumulated charge" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

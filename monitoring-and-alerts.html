@@ -1,0 +1,347 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monitoring: Graphite, Grafana, alerts and notifications &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="The ELOG logbook" href="elog.html" />
+    <link rel="prev" title="Beam current and accumulated charge" href="current-and-charge.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Monitoring: Graphite, Grafana, alerts and notifications</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#why-a-time-series-database-at-all">1. Why a time-series database at all</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#what-webdaq-pushes">What WebDAQ pushes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#graphite-time-syntax">Graphite time syntax</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#the-stats-page">2. The Stats page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-run-s-stats-file">3. The run’s stats file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#grafana">4. Grafana</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#alerts-tied-to-the-run">Alerts tied to the run</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#telegram-notifications">5. Telegram notifications</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-to-check-when-a-number-is-missing">6. What to check when a number is missing</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Monitoring: Graphite, Grafana, alerts and notifications</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/monitoring-and-alerts.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="monitoring-graphite-grafana-alerts-and-notifications">
+<h1>Monitoring: Graphite, Grafana, alerts and notifications<a class="headerlink" href="#monitoring-graphite-grafana-alerts-and-notifications" title="Link to this heading"></a></h1>
+<p>Four different things watch the experiment, and they are easy to confuse. In
+short:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Tool</p></th>
+<th class="head"><p>What it is</p></th>
+<th class="head"><p>What it does here</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Graphite</strong></p></td>
+<td><p>A time-series database with an HTTP API</p></td>
+<td><p>Stores every number anyone measures: beam current, terminal voltage, board rates. WebDAQ writes to it and reads from it.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Grafana</strong></p></td>
+<td><p>A dashboard and alerting server</p></td>
+<td><p>Draws those numbers as plots on the wall screen, and raises alerts when one leaves its range.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>WebDAQ Stats page</strong></p></td>
+<td><p>Part of this application</p></td>
+<td><p>Shows the current value of the metrics <em>you</em> selected, and copies them into each run’s <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Telegram / ELOG</strong></p></td>
+<td><p>Messaging and the logbook</p></td>
+<td><p>Tell a person that something happened.</p></td>
+</tr>
+</tbody>
+</table>
+<hr class="docutils" />
+<section id="why-a-time-series-database-at-all">
+<h2>1. Why a time-series database at all<a class="headerlink" href="#why-a-time-series-database-at-all" title="Link to this heading"></a></h2>
+<p>The accelerator, the target, the picoammeter and the digitizers each produce
+numbers continuously. Storing them inside the DAQ would mean every consumer —
+plots, alerts, run files, shift reports — reading a different file in a different
+format, and nothing at all being available from another machine.</p>
+<p>Graphite solves exactly that. A metric is a dotted name with a value and a
+timestamp:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">accelerator</span><span class="o">.</span><span class="n">terminal_voltage</span>   <span class="mf">3.412</span>   <span class="mi">1785191160</span>
+<span class="n">daq</span><span class="o">.</span><span class="n">rate1</span>                      <span class="mi">12874</span>   <span class="mi">1785191160</span>
+</pre></div>
+</div>
+<p>Anything can write one (<code class="docutils literal notranslate"><span class="pre">carbon</span></code>, the ingestion side, listens on TCP 2003), and
+anything can read it back over HTTP. The DAQ does not have to know who wants the
+number, and the analysis does not have to know which program produced it.</p>
+<p>At LUNA the server is <code class="docutils literal notranslate"><span class="pre">lunaserver</span></code>. Its metric tree looks like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>accelerator.charge              ancillary.rates
+accelerator.column_current      daq.rate1 … rate3
+accelerator.extraction_voltage  Germanium…
+accelerator.terminal_voltage    12c12c.tetram…
+</pre></div>
+</div>
+<section id="what-webdaq-pushes">
+<h3>What WebDAQ pushes<a class="headerlink" href="#what-webdaq-pushes" title="Link to this heading"></a></h3>
+<ul class="simple">
+<li><p><strong>Board rates</strong> — events, pile-up, saturation, lost counts and file write rate
+per board and channel, pushed by the acquisition every second during a run.</p></li>
+<li><p><strong>Beam current</strong> — every sample from the TetrAMM or the RBD 9103.</p></li>
+</ul>
+<p>Both go to Carbon on port 2003 of the host configured in Settings; the Stats page
+and Grafana read them back over HTTP (port 80 or 8080, depending on the install).</p>
+</section>
+<section id="graphite-time-syntax">
+<h3>Graphite time syntax<a class="headerlink" href="#graphite-time-syntax" title="Link to this heading"></a></h3>
+<p>Ranges are relative: <code class="docutils literal notranslate"><span class="pre">-10s</span></code>, <code class="docutils literal notranslate"><span class="pre">-30min</span></code>, <code class="docutils literal notranslate"><span class="pre">-6h</span></code>, <code class="docutils literal notranslate"><span class="pre">-1d</span></code>. <strong>The minute unit is <code class="docutils literal notranslate"><span class="pre">min</span></code></strong>
+— <code class="docutils literal notranslate"><span class="pre">-30m</span></code> is rejected with <em>“Invalid offset unit ‘m’”</em>. It is the mistake everyone
+makes once.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="the-stats-page">
+<h2>2. The Stats page<a class="headerlink" href="#the-stats-page" title="Link to this heading"></a></h2>
+<p>Settings a shift crew actually needs: which numbers to watch, what to call them,
+and what they are measured in.</p>
+<p><strong>The light</strong> next to the title is the state of the Graphite server. Green means
+it answered a query for its metric tree; red means it did not, and every metric
+on the page will read <code class="docutils literal notranslate"><span class="pre">N/A</span></code> until it does. Grey is the check in flight. The light
+distinguishes a dead server from metrics that simply have no data — without it
+they look identical.</p>
+<p><strong>Adding a metric.</strong> Press <em>Add metric</em> and browse the tree: open <code class="docutils literal notranslate"><span class="pre">accelerator</span></code>,
+pick <code class="docutils literal notranslate"><span class="pre">terminal_voltage</span></code>. Or type a word in the search box to find it anywhere in
+the tree. Then give it:</p>
+<ul class="simple">
+<li><p>a <strong>name</strong> — what the card and the CSV column will be called (“Terminal
+Voltage”), and</p></li>
+<li><p>a <strong>unit</strong> — kV, uA, counts/s. Optional, but it is what makes a column
+readable a year later.</p></li>
+</ul>
+<p>Both can be changed afterwards with the pencil on the card.</p>
+<p><strong>On each card</strong>: the latest value with its unit, the time of that reading, and a
+30-minute trend line so you can see whether it is rising, falling or flat. The
+eye hides a metric without deleting it; the bin removes it.</p>
+</section>
+<hr class="docutils" />
+<section id="the-run-s-stats-file">
+<h2>3. The run’s stats file<a class="headerlink" href="#the-run-s-stats-file" title="Link to this heading"></a></h2>
+<p>While a run with data saving is in progress, every enabled metric is sampled once
+a second and written to <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/stats.csv</span></code>:</p>
+<div class="highlight-csv notranslate"><div class="highlight"><pre><span></span># LUNA DAQ statistics
+# Run number: 1276
+# Start time: 2026-07-28T01:09:00
+# Format: CSV. The first column is the elapsed acquisition time in seconds;
+# the rest are the metrics below, in this order. Missing samples are 0.
+#
+# Metric: Terminal Voltage | unit: kV | source: accelerator.terminal_voltage
+# Metric: Board 0 rate | unit: counts/s | source: daq.rate1
+#
+Time [s],Terminal Voltage [kV],Board 0 rate [counts/s]
+0.001,3.412,12874
+1.005,3.411,12903
+</pre></div>
+</div>
+<p>Points worth knowing:</p>
+<ul class="simple">
+<li><p>It is plain CSV. The metadata is in <code class="docutils literal notranslate"><span class="pre">#</span></code> comment lines that every reader can
+skip: <code class="docutils literal notranslate"><span class="pre">pandas.read_csv('stats.csv',</span> <span class="pre">comment='#')</span></code> gives you the table directly.</p></li>
+<li><p>Each column heading carries the name and unit you chose, and every metric is
+listed above with its Graphite path, so a column can always be traced back to
+its source.</p></li>
+<li><p>The set of columns is frozen when the run starts. Adding a metric mid-run does
+not shift the columns under the rows already written; it appears in the next
+run.</p></li>
+<li><p>A missing sample is written as <code class="docutils literal notranslate"><span class="pre">0</span></code>. Graphite has ingestion lag, so a gap does
+not mean the instrument failed.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="grafana">
+<h2>4. Grafana<a class="headerlink" href="#grafana" title="Link to this heading"></a></h2>
+<p>Grafana reads the same Graphite data and does two things WebDAQ deliberately does
+not: long-term plots on the control-room screen, and alerting.</p>
+<p>Use Grafana for: “how did the terminal voltage behave over the last three days”,
+“is the board rate drifting”, “email/notify me when the current drops below X”.
+Use the WebDAQ Stats page for: “what is the beam current <em>right now</em>, and put it
+in this run’s file”.</p>
+<section id="alerts-tied-to-the-run">
+<h3>Alerts tied to the run<a class="headerlink" href="#alerts-tied-to-the-run" title="Link to this heading"></a></h3>
+<p>The <strong>Alerts</strong> page lists the alert rules from Grafana and lets you mark rules as
+<em>auto-managed</em>. An auto-managed rule is:</p>
+<ul class="simple">
+<li><p><strong>activated</strong> when a run starts, and</p></li>
+<li><p><strong>silenced</strong> when the run stops.</p></li>
+</ul>
+<p>That solves the standard annoyance: a “beam current too low” rule that is right
+during a run and pure noise while you are setting up. Mark the rules that only
+make sense during data taking; leave the rest under Grafana’s own control.</p>
+<p>Grafana is reached through a proxy inside the frontend (<code class="docutils literal notranslate"><span class="pre">/api/grafana/...</span></code>),
+which points at <code class="docutils literal notranslate"><span class="pre">http://lunaserver:3000</span></code> by default. Change the host — and add a
+service-account token if your Grafana requires authentication — in
+<code class="docutils literal notranslate"><span class="pre">frontend/src/app/api/grafana/[...path]/route.ts</span></code>, then rebuild the frontend.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="telegram-notifications">
+<h2>5. Telegram notifications<a class="headerlink" href="#telegram-notifications" title="Link to this heading"></a></h2>
+<p>Settings → Notifications. WebDAQ sends a Telegram message when a <strong>board fails
+during a run</strong> — the acquisition sees the board-fail flag in the data stream and
+reports it once per run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>⚠️ LUNA DAQ Board Failure Alert
+
+Run Number: 1276
+Board ID: 0
+Failure Type: board fail flag
+Time: 2026-07-28 01:31:07
+
+🔄 Auto-restart is enabled. Run will restart in 30 seconds.
+</pre></div>
+</div>
+<p>Setting it up:</p>
+<ol class="arabic simple">
+<li><p>Talk to <code class="docutils literal notranslate"><span class="pre">&#64;BotFather</span></code> in Telegram, create a bot, copy the token.</p></li>
+<li><p>Add the bot to the group that should receive the alerts, or message it
+directly.</p></li>
+<li><p>Get the chat ID (<code class="docutils literal notranslate"><span class="pre">https://api.telegram.org/bot&lt;token&gt;/getUpdates</span></code> shows it
+after one message).</p></li>
+<li><p>Enter both in Settings → Notifications and press <em>Test</em> — a test message
+arrives immediately if the token and the chat ID are right.</p></li>
+</ol>
+<p>The token is stored in <code class="docutils literal notranslate"><span class="pre">conf/telegram_settings.json</span></code> on the DAQ machine. Anyone
+holding it can post as the bot, so use a bot created for this purpose.</p>
+<p>Auto-restart, configured on the same page, is what the message refers to: when a
+board fails, the run is stopped and started again after the delay, so a night
+shift does not lose hours to a board that hiccupped.</p>
+</section>
+<hr class="docutils" />
+<section id="what-to-check-when-a-number-is-missing">
+<h2>6. What to check when a number is missing<a class="headerlink" href="#what-to-check-when-a-number-is-missing" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>Look at</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Every metric reads <code class="docutils literal notranslate"><span class="pre">N/A</span></code>, light is red</p></td>
+<td><p>Graphite host and port in Settings; <code class="docutils literal notranslate"><span class="pre">curl</span> <span class="pre">http://&lt;host&gt;/metrics/find?query=*</span></code> from the DAQ machine.</p></td>
+</tr>
+<tr class="row-odd"><td><p>One metric reads <code class="docutils literal notranslate"><span class="pre">N/A</span></code>, others fine</p></td>
+<td><p>Its path. Re-add it with the browser — a renamed metric keeps the old path in your configuration.</p></td>
+</tr>
+<tr class="row-even"><td><p>Light is green but the card is empty</p></td>
+<td><p>Nothing is writing that metric. Check the source instrument, not WebDAQ.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> has all-zero columns</p></td>
+<td><p>Same as above: the metrics were unreachable <em>during that run</em>. The header still tells you which they were.</p></td>
+</tr>
+<tr class="row-even"><td><p>Grafana plots but WebDAQ does not</p></td>
+<td><p>Different port. Grafana often reads Graphite on 80 while the Stats page is configured for 8080, or the other way round.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="current-and-charge.html" class="btn btn-neutral float-left" title="Beam current and accumulated charge" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="elog.html" class="btn btn-neutral float-right" title="The ELOG logbook" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
