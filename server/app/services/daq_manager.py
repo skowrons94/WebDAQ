@@ -1047,22 +1047,27 @@ class DAQManager:
         During a run this is driven by caendaq's board-FAIL counter (bit 26 of the
         aggregate header). A board that fails even once stays flagged for the rest
         of the run (the flag is reset at run start). No board is polled directly.
+
+        Read-only: self.board_status belongs to the monitoring thread, which alerts
+        on the OK -> failed transition. Recording the failure here first would hide
+        that transition, and no Telegram alert or auto-restart would follow.
         """
+        status = {bid: dict(st) for bid, st in self.board_status.items()}
         try:
             from .caen_acquisition import get_caen_acquisition
             acq = get_caen_acquisition(self.test_flag)
             if acq.is_running():
                 for bid, h in acq.board_health().items():
-                    prev = self.board_status.get(bid, {})
+                    prev = status.get(bid, {})
                     failures = int(h.get('failures', 0))
-                    self.board_status[bid] = {
+                    status[bid] = {
                         'failed': bool(h.get('failed')) or bool(prev.get('failed')),
                         'failures': failures,
                         'last_value': failures,  # kept for frontend compatibility
                     }
         except Exception as e:
             self.logger.debug(f"get_board_status caendaq merge failed: {e}")
-        return self.board_status.copy()
+        return status
 
     def get_auto_restart_enabled(self) -> bool:
         """
