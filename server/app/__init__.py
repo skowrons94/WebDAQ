@@ -59,7 +59,7 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     CORS(app)
 
-    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog
+    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog, grafana
     app.register_blueprint(auth.bp)
     app.register_blueprint(experiment.bp)
     app.register_blueprint(stats.bp)
@@ -71,6 +71,8 @@ def create_app(config_class=Config):
     app.register_blueprint(data.bp)
     # PSI ELOG logbook (reading and posting entries).
     app.register_blueprint(elog.bp)
+    # Grafana alert rules (the Alerts page and run-linked alerts).
+    app.register_blueprint(grafana.bp)
 
     app.after_request(_compress_response)
 

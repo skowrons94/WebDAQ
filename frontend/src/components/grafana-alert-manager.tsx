@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { Bell, BellOff, Check, ExternalLink, Pencil, RefreshCw, Shield, X, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,8 +18,8 @@ import {
   setAlertPauseState,
   updateAlertThreshold,
   extractThreshold,
-  GRAFANA_URL,
 } from '@/lib/grafana-api'
+import { getGrafanaSettings } from '@/lib/api'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
 import useRunControlStore from '@/store/run-control-store'
 
@@ -46,6 +47,7 @@ export default function GrafanaAlertManager() {
   const [pendingActions, setPendingActions] = useState<string[]>([])
   const [editingUid, setEditingUid] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState<string>('')
+  const [grafanaUrl, setGrafanaUrl] = useState<string>('')
 
   // ─── Load alerts ───────────────────────────────────────────────────────────
   const loadAlerts = useCallback(async (isRefresh = false) => {
@@ -75,6 +77,13 @@ export default function GrafanaAlertManager() {
   useEffect(() => {
     loadAlerts()
   }, [loadAlerts])
+
+  // The Grafana address is configured on the server; only needed for the link.
+  useEffect(() => {
+    getGrafanaSettings()
+      .then((s) => setGrafanaUrl(s.url || ''))
+      .catch(() => setGrafanaUrl(''))
+  }, [])
 
   // ─── Toggle pause state ────────────────────────────────────────────────────
   const handleTogglePause = async (uid: string, currentlyPaused: boolean) => {
@@ -190,11 +199,13 @@ export default function GrafanaAlertManager() {
               >
                 <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
               </Button>
-              <Button variant="outline" size="icon" asChild title="Open Grafana">
-                <a href={`${GRAFANA_URL}/alerting/list`} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
+              {grafanaUrl && (
+                <Button variant="outline" size="icon" asChild title="Open Grafana">
+                  <a href={`${grafanaUrl}/alerting/list`} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -301,9 +312,14 @@ export default function GrafanaAlertManager() {
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <p className="text-lg font-bold text-destructive">Connection Error</p>
             <p className="text-sm text-muted-foreground">{error}</p>
-            <Button onClick={() => loadAlerts()} variant="outline" size="sm">
-              Retry
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={() => loadAlerts()} variant="outline" size="sm">
+                Retry
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings?view=grafana">Grafana settings</Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : filteredAlerts.length === 0 ? (

@@ -16,6 +16,7 @@ import { VisualizationSettings } from '@/components/visualization-settings';
 import { CurrentModuleSettings } from '@/components/current-module-settings';
 import { TelegramSettings } from '@/components/telegram-settings';
 import { ElogSettings } from '@/components/elog/elog-settings';
+import { GrafanaSettings } from '@/components/grafana-settings';
 
 const queryClient = new QueryClient()
 
@@ -37,7 +38,7 @@ export default function SettingsPage() {
     // Suspense boundary around useSearchParams.
     useEffect(() => {
         const view = new URLSearchParams(window.location.search).get('view');
-        if (view && ['appearance', 'boards', 'current', 'notifications', 'elog'].includes(view)) {
+        if (view && ['appearance', 'boards', 'current', 'notifications', 'elog', 'grafana'].includes(view)) {
             setActiveView(view);
         }
     }, []);
@@ -63,6 +64,8 @@ export default function SettingsPage() {
                 return <TelegramSettings />;
             case 'elog':
                 return <ElogSettings />;
+            case 'grafana':
+                return <GrafanaSettings />;
             default:
                 return (
                     < VisualizationSettings />
@@ -106,6 +109,13 @@ export default function SettingsPage() {
                                 onClick={() => setActiveView('elog')}
                             >
                                 ELOG
+                            </Link>
+                            <Link
+                                href="#"
+                                className={`font-semibold ${activeView === 'grafana' ? 'text-primary' : ''}`}
+                                onClick={() => setActiveView('grafana')}
+                            >
+                                Grafana
                             </Link>
                             <Link
                                 href="#"

@@ -818,6 +818,22 @@ export const setElogSettings = (settings: {
 export const testElogConnection = () =>
     api.post('/elog/test').then(res => res.data as { success: boolean; message: string });
 
+export type GrafanaSettings = {
+    url: string;
+    api_key: string;           // masked by the server, never the real one
+    configured: boolean;
+};
+
+export const getGrafanaSettings = () =>
+    api.get('/grafana/settings').then(res => res.data as GrafanaSettings);
+
+export const setGrafanaSettings = (settings: {
+    url?: string; api_key?: string; clear_api_key?: boolean;
+}) => api.post('/grafana/settings', settings).then(res => res.data);
+
+export const testGrafanaConnection = () =>
+    api.post('/grafana/test').then(res => res.data as { success: boolean; message: string });
+
 export const getElogEntries = (params: { limit?: number; offset?: number; search?: string } = {}) =>
     api.get('/elog/entries', { params }).then(res => res.data as ElogEntryList);
 

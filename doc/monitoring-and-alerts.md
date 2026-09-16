@@ -142,10 +142,12 @@ That solves the standard annoyance: a "beam current too low" rule that is right
 during a run and pure noise while you are setting up. Mark the rules that only
 make sense during data taking; leave the rest under Grafana's own control.
 
-Grafana is reached through a proxy inside the frontend (`/api/grafana/...`),
-which points at `http://lunaserver:3000` by default. Change the host — and add a
-service-account token if your Grafana requires authentication — in
-`frontend/src/app/api/grafana/[...path]/route.ts`, then rebuild the frontend.
+The WebDAQ server talks to Grafana on the page's behalf, so the address must be
+reachable from the server machine. Set it in **Settings → Grafana** (default
+`http://lunaserver:3000`), together with a service-account token if your Grafana
+requires authentication; the token needs permission to read and edit alert rules.
+Both are stored in `conf/grafana_settings.json` and the token is never sent to the
+browser. **Test connection** reports how many alert rules the server can see.
 
 ---
 

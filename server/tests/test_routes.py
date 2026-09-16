@@ -34,7 +34,8 @@ class RouteTestCase(unittest.TestCase):
 
 class AuthenticationTests(RouteTestCase):
     def test_endpoints_require_a_token(self):
-        for url in ('/digitizer/scan', '/digitizer/boards', '/elog/entries',
+        for url in ('/digitizer/scan', '/digitizer/boards', '/elog/entries', '/grafana/settings',
+                    '/grafana/alert-rules',
                     '/stats/paths', '/stats/connection'):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 401, f'{url} is unauthenticated')

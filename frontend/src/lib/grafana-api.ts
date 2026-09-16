@@ -1,31 +1,33 @@
-// ─── Grafana Configuration (used for external links only) ────────────────────
-export const GRAFANA_URL = "http://lunaserver:3000"
+import axios from 'axios'
+import api from '@/lib/api'
 
-// All API calls go through the Next.js proxy at /api/grafana to avoid CORS.
-const grafanaFetch = async (path: string, options: RequestInit = {}) => {
-  // Strip leading slash so we can build /api/grafana/<path>
-  const proxyPath = path.startsWith('/') ? path.slice(1) : path
-  const res = await fetch(`/api/grafana/${proxyPath}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers as Record<string, string>),
-    },
-  })
-  if (!res.ok) throw new Error(`Grafana API error: ${res.status}`)
-  return res.json()
+// Grafana is reached through the WebDAQ server (/grafana/...), which holds the
+// Grafana address and service-account token — see Settings → Grafana.
+const grafanaFetch = async (path: string, options: { method?: 'GET' | 'PUT'; body?: unknown } = {}) => {
+  try {
+    const res = await api.request({
+      url: `/grafana${path}`,
+      method: options.method ?? 'GET',
+      data: options.body,
+    })
+    return res.data
+  } catch (e: unknown) {
+    // Surface the server's explanation (unreachable, token rejected, …).
+    if (axios.isAxiosError(e) && e.response?.data?.error) throw new Error(e.response.data.error)
+    throw e
+  }
 }
 
 // ─── Alert rule helpers ───────────────────────────────────────────────────────
 export const fetchAlertRules = () =>
-  grafanaFetch("/api/v1/provisioning/alert-rules")
+  grafanaFetch("/alert-rules")
 
 export const setAlertPauseState = async (ruleUid: string, isPaused: boolean) => {
-  const rule = await grafanaFetch(`/api/v1/provisioning/alert-rules/${ruleUid}`)
+  const rule = await grafanaFetch(`/alert-rules/${ruleUid}`)
   rule.isPaused = isPaused
-  return grafanaFetch(`/api/v1/provisioning/alert-rules/${ruleUid}`, {
+  return grafanaFetch(`/alert-rules/${ruleUid}`, {
     method: "PUT",
-    body: JSON.stringify(rule),
+    body: rule,
   })
 }
 
@@ -51,7 +53,7 @@ export function extractThreshold(rule: any): number | null {
  * to `threshold`, then PUTs the rule back.
  */
 export const updateAlertThreshold = async (ruleUid: string, threshold: number) => {
-  const rule = await grafanaFetch(`/api/v1/provisioning/alert-rules/${ruleUid}`)
+  const rule = await grafanaFetch(`/alert-rules/${ruleUid}`)
   let updated = false
   for (const q of rule.data || []) {
     for (const cond of q.model?.conditions || []) {
@@ -62,9 +64,9 @@ export const updateAlertThreshold = async (ruleUid: string, threshold: number) =
     }
   }
   if (!updated) throw new Error('No editable threshold found in this rule')
-  return grafanaFetch(`/api/v1/provisioning/alert-rules/${ruleUid}`, {
+  return grafanaFetch(`/alert-rules/${ruleUid}`, {
     method: 'PUT',
-    body: JSON.stringify(rule),
+    body: rule,
   })
 }
 
