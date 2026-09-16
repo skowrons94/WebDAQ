@@ -72,9 +72,10 @@ class DAQManager:
         self.monitor_thread = None
         self.monitor_stop_event = threading.Event()
 
-        # Auto-restart on board failure settings
-        self.auto_restart_enabled = False
-        self.auto_restart_delay = 30  # seconds to wait before restarting
+        # Auto-restart on board failure settings, kept in conf/settings.json so a
+        # server restart does not silently switch the protection off.
+        self.auto_restart_enabled = bool(self.daq_state.get('auto_restart_enabled', False))
+        self.auto_restart_delay = max(5, int(self.daq_state.get('auto_restart_delay', 30)))
         self.restart_pending = False  # Flag to indicate restart is in progress
         self.last_restart_info = None  # Info about the last auto-restart event
         self.restart_callback = None  # Callback function to trigger restart
@@ -1000,7 +1001,11 @@ class DAQManager:
         except Exception as e:
             self.logger.error(f"Error in restart callback: {e}")
         finally:
-            self.restart_pending = False
+            # When the new run started, start_board_monitoring already cleared the
+            # flag, and it may be set again by a failure in that run; only a
+            # restart that did not get a run going is still ours to clear.
+            if not (self.monitor_thread and self.monitor_thread.is_alive()):
+                self.restart_pending = False
     
     def start_board_monitoring(self) -> None:
         """
@@ -1018,6 +1023,11 @@ class DAQManager:
 
         # Reset Telegram notification flag for new run
         self.reset_telegram_notification_flag()
+
+        # A new run is being watched, so any restart that led here is over. Left
+        # set until the restart thread finished, it blocked a restart for a board
+        # failing again in the new run's first moments.
+        self.restart_pending = False
 
         # Start monitoring thread
         self.monitor_stop_event.clear()
@@ -1085,7 +1095,9 @@ class DAQManager:
         Args:
             enabled: Enable/disable auto-restart on board failure
         """
-        self.auto_restart_enabled = enabled
+        self.auto_restart_enabled = bool(enabled)
+        self.daq_state['auto_restart_enabled'] = self.auto_restart_enabled
+        self._update_project()
         self.logger.info(f"Auto-restart on failure set to {enabled}")
 
     def get_auto_restart_delay(self) -> int:
@@ -1104,7 +1116,9 @@ class DAQManager:
         Args:
             delay: Delay in seconds before auto-restart (minimum 5 seconds)
         """
-        self.auto_restart_delay = max(5, delay)
+        self.auto_restart_delay = max(5, int(delay))
+        self.daq_state['auto_restart_delay'] = self.auto_restart_delay
+        self._update_project()
         self.logger.info(f"Auto-restart delay set to {self.auto_restart_delay} seconds")
 
     def register_restart_callback(self, callback) -> None:

@@ -35,10 +35,67 @@ def set_flask_app(app):
     daq_mgr.flask_app = app
 
 
+# Operator-entered run parameters that stay true across an automatic restart:
+# the beam, target and settings did not change because a board failed.
+CARRIED_OVER_FIELDS = ('target_name', 'terminal_voltage', 'probe_voltage', 'run_type')
+
+
+def record_run_start(run_number, boards, user_id=None, notes=None, carry_over=None):
+    """
+    Create or reset a run's metadata row when the run starts, with the hardware
+    and software provenance captured from the open boards. Needs an application
+    context. Never raises: a thin record must not stop a run.
+
+    carry_over: {field: value} for CARRIED_OVER_FIELDS, from the run it continues.
+    """
+    # Hardware + software provenance, captured now that the boards are open
+    # and configured, so the record describes the run as it actually ran.
+    try:
+        boards_snapshot = caen_acq.board_info_all()
+        versions_snapshot = caen_acq.software_versions()
+    except Exception as e:
+        logger.error(f"Could not capture acquisition provenance: {e}", exc_info=True)
+        boards_snapshot, versions_snapshot = [], {}
+    sync_mode = caen_acq.sync_mode(boards)
+
+    try:
+        run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
+        if not run_metadata:
+            run_metadata = RunMetadata(
+                run_number=run_number,
+                start_time=datetime.now(),
+                user_id=user_id
+            )
+            db.session.add(run_metadata)
+        else:
+            run_metadata.start_time = datetime.now()
+            run_metadata.end_time = None
+        for field, value in (carry_over or {}).items():
+            setattr(run_metadata, field, value)
+        if notes:
+            run_metadata.notes = notes
+        run_metadata.set_board_info(boards_snapshot)
+        run_metadata.set_software_versions(versions_snapshot)
+        run_metadata.sync_mode = sync_mode
+        db.session.commit()
+        sync_run_metadata_file(run_metadata)
+    except Exception as e:
+        # Non-fatal: the run itself is fine, but say why the record is thin.
+        logger.error(f"Could not record run {run_number} metadata: {e}", exc_info=True)
+        db.session.rollback()
+
+
 def perform_auto_restart(board_id: str, failure_type: str) -> None:
     """
     Perform auto-restart when board failure is detected.
     This function is called from a dedicated restart thread (not the monitoring thread).
+
+    A run started from the browser is more than the acquisition: the browser
+    also points the beam-current recording and stats.csv at the run and fills in
+    its target and voltages. No browser takes part here, so this does all of it,
+    or the new run's current, charge and stats would land in the failed run.
+    Grafana's run-linked alerts are left alone: they are active for the failed
+    run and stay correct, active, for the one that replaces it.
 
     Args:
         board_id: ID of the failed board
@@ -52,11 +109,28 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
         logger.error("Flask app reference not set on daq_manager - cannot auto-restart")
         return
 
+    # Imported here: route modules import each other only at call time.
+    from . import current as current_routes
+    from .stats import stats_manager
+
     # We need to create an app context since this runs in a background thread
     with app.app_context():
         try:
             current_run_number = daq_mgr.get_run_number()
             save_data = daq_mgr.get_save_data()
+            was_recording_current = current_routes.is_recording_run()
+            was_collecting_stats = bool(stats_manager.collecting)
+
+            carry_over, user_id = {}, None
+            try:
+                old = RunMetadata.query.filter_by(run_number=current_run_number).first()
+                if old:
+                    carry_over = {f: getattr(old, f) for f in CARRIED_OVER_FIELDS
+                                  if getattr(old, f) is not None}
+                    user_id = old.user_id
+            except Exception as e:
+                logger.error(f"Could not read run {current_run_number} metadata: {e}")
+                db.session.rollback()
 
             # Stop monitoring, spy and acquisition
             daq_mgr.stop_board_monitoring()
@@ -84,6 +158,7 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
                         logger.info(f"Updated metadata for run {current_run_number} with auto-restart note")
                 except Exception as e:
                     logger.error(f"Error updating run metadata: {e}")
+                    db.session.rollback()
 
             # Increment run number for next run
             if save_data:
@@ -91,6 +166,17 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
 
             # Set not running state
             daq_mgr.set_running_state(False)
+
+            # Close the failed run's current recording (storing its charge) and
+            # stats.csv, as the Stop button does.
+            if was_recording_current:
+                try:
+                    current_routes.stop_run_recording()
+                except Exception as e:
+                    logger.error(f"Could not stop the current recording of run {current_run_number}: {e}")
+                    db.session.rollback()
+            if was_collecting_stats:
+                stats_manager.stop_run()
 
             logger.info(f"Run {current_run_number} stopped. Preparing to start new run...")
 
@@ -106,6 +192,15 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
                 logger.error("Failed to prepare run start during auto-restart")
                 return
 
+            # Point the current recording and stats.csv at the new run before the
+            # acquisition starts, in the order the Start button uses.
+            if was_recording_current:
+                message, status = current_routes.start_run_recording(new_run_number)
+                if status != 200:
+                    logger.error(f"Current recording for run {new_run_number} did not start: {message}")
+            if was_collecting_stats and not stats_manager.start_run(new_run_number):
+                logger.error(f"stats.csv for run {new_run_number} did not start")
+
             boards = daq_mgr.get_boards()
             save = daq_mgr.get_save_data()
             out_dir = f"data/run{new_run_number}"
@@ -117,6 +212,14 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
                or not caen_acq.start():
                 logger.error("Failed to start acquisition during auto-restart")
                 daq_mgr.reacquire_digitizers()
+                # No run follows: do not leave a recording open for it.
+                if was_recording_current and current_routes.is_recording_run():
+                    try:
+                        current_routes.stop_run_recording()
+                    except Exception as e:
+                        logger.error(f"Could not stop the current recording: {e}")
+                if was_collecting_stats and stats_manager.collecting:
+                    stats_manager.stop_run()
                 return
 
             # Set running state, enable the spy + board monitoring
@@ -124,26 +227,17 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
             spy_mgr.start_spy(daq_mgr.get_state())
             daq_mgr.start_board_monitoring()
 
-            # Add new run to database
-            if save_data:
-                try:
-                    run_metadata = RunMetadata.query.filter_by(run_number=new_run_number).first()
-                    if not run_metadata:
-                        run_metadata = RunMetadata(
-                            run_number=new_run_number,
-                            start_time=datetime.now(),
-                            notes=f"[AUTO-RESTART] Automatically started after {failure_type} on board {board_id} in run {current_run_number}"
-                        )
-                        db.session.add(run_metadata)
-                    db.session.commit()
-                    sync_run_metadata_file(run_metadata)
-                except Exception as e:
-                    logger.error(f"Error creating new run metadata: {e}")
+            # Add new run to database, continuing the failed run's parameters
+            if save:
+                record_run_start(
+                    new_run_number, boards, user_id=user_id, carry_over=carry_over,
+                    notes=(f"[AUTO-RESTART] Automatically started after {failure_type} "
+                           f"on board {board_id} in run {current_run_number}"))
 
             logger.info(f"Auto-restart complete. New run {new_run_number} started.")
 
         except Exception as e:
-            logger.error(f"Error during auto-restart: {e}")
+            logger.error(f"Error during auto-restart: {e}", exc_info=True)
 
 
 # Register the restart callback with the DAQ manager
@@ -188,37 +282,7 @@ def start_run():
 
     # Add run to database if saving data
     if daq_mgr.get_save_data():
-        run_number = daq_mgr.get_run_number()
-        # Hardware + software provenance, captured now that the boards are open
-        # and configured, so the record describes the run as it actually ran.
-        try:
-            boards_snapshot = caen_acq.board_info_all()
-            versions_snapshot = caen_acq.software_versions()
-        except Exception as e:
-            logger.error(f"Could not capture acquisition provenance: {e}", exc_info=True)
-            boards_snapshot, versions_snapshot = [], {}
-        sync_mode = caen_acq.sync_mode(boards)
-
-        try:
-            run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
-            if not run_metadata:
-                run_metadata = RunMetadata(
-                    run_number=run_number,
-                    start_time=datetime.now(),
-                    user_id=get_current_user()
-                )
-                db.session.add(run_metadata)
-            else:
-                run_metadata.start_time = datetime.now()
-                run_metadata.end_time = None
-            run_metadata.set_board_info(boards_snapshot)
-            run_metadata.set_software_versions(versions_snapshot)
-            run_metadata.sync_mode = sync_mode
-            db.session.commit()
-            sync_run_metadata_file(run_metadata)
-        except Exception as e:
-            # Non-fatal: the run itself is fine, but say why the record is thin.
-            logger.error(f"Could not record run {run_number} metadata: {e}", exc_info=True)
+        record_run_start(daq_mgr.get_run_number(), boards, user_id=get_current_user())
 
     return jsonify({'message': 'Run started successfully!'}), 200
 

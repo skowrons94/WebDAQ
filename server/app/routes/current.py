@@ -245,22 +245,27 @@ def is_connected():
     return jsonify(False)
 
 # Start acquisition thread
-@bp.route('/current/start/<run_number>', methods=['GET'])
-@jwt_required_custom
-def start_acquisition(run_number):
+def start_run_recording(run_number):
+    """
+    Point the current recording at a run: reset its charge and, when data is
+    saved, write the readings into data/run<N>/. Returns (message, HTTP status).
+
+    Shared by /current/start and the auto-restart, which has to move the
+    recording to the new run without a browser.
+    """
     global running, current_accumulating_run_number
-    if( not controller.is_connected() ):
-        return jsonify({"message": "TetrAMM not connected"}), 200
-    
+    if controller is None or not controller.is_connected():
+        return "TetrAMM not connected", 200
+
     # Reset accumulated charge for this new run. Whether it *integrates* is not
     # decided here — that follows the DAQ run state (see _on_run_state_changed),
     # so charge is never counted before the run actually starts.
     controller.reset_accumulated_charge()
     current_accumulating_run_number = int(run_number)
     run = int(run_number)
-    
+
     if( not controller.is_acquiring ):
-        return jsonify({"message": "Can not start TetrAMM. Device not initialized"}), 400
+        return "Can not start TetrAMM. Device not initialized", 400
 
     # Only save data if save data is enabled in DAQ settings
     if daq_mgr.get_save_data():
@@ -270,14 +275,17 @@ def start_acquisition(run_number):
     else:
         controller.set_save_data(False, "./")
     running = True
-    return jsonify({"message": "Acquisition started"}), 200
+    return "Acquisition started", 200
 
-@bp.route('/current/stop', methods=['POST'])
-@jwt_required_custom
-def stop_acquisition():
+
+def stop_run_recording():
+    """
+    Stop writing current readings to the run and store its charge. Returns
+    (message, HTTP status). Needs an application context (it writes the DB).
+    """
     global running, current_accumulating_run_number
-    if( not controller.is_connected() ):
-        return jsonify({"message": "TetrAMM not connected"}), 200
+    if controller is None or not controller.is_connected():
+        return "TetrAMM not connected", 200
     controller.set_save_data(False, "./")
     running = False
     run_number = current_accumulating_run_number
@@ -286,7 +294,25 @@ def stop_acquisition():
         run_metadata.accumulated_charge = controller.get_accumulated_charge()
         db.session.commit()
         sync_run_metadata_file(run_metadata)
-    return jsonify({"message": "Acquisition stopped"}), 200
+    return "Acquisition stopped", 200
+
+
+def is_recording_run() -> bool:
+    """Whether the current readings are being recorded for a run."""
+    return running
+
+
+@bp.route('/current/start/<run_number>', methods=['GET'])
+@jwt_required_custom
+def start_acquisition(run_number):
+    message, status = start_run_recording(run_number)
+    return jsonify({"message": message}), status
+
+@bp.route('/current/stop', methods=['POST'])
+@jwt_required_custom
+def stop_acquisition():
+    message, status = stop_run_recording()
+    return jsonify({"message": message}), status
 
 @bp.route('/current/set/<settings>/<value>', methods=['GET'])
 @jwt_required_custom

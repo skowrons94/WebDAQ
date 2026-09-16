@@ -109,9 +109,12 @@ tuning.
 
 With **auto-restart** enabled, a board that stops responding causes the run to be
 stopped, flagged `bad` in the logbook with an explanatory note, and a new run
-started automatically. A Telegram message is sent if notifications are
-configured. The intent is that a night shift loses one run rather than the rest
-of the night.
+started automatically. The new run continues the failed one: its beam-current
+file, charge and `stats.csv` are its own, and it carries over the target, the
+terminal and probe voltages and the run type. Run-linked Grafana alerts stay
+active. A Telegram message is sent if notifications are configured. The setting
+and its delay are kept in `conf/settings.json`, so they survive a server restart.
+The intent is that a night shift loses one run rather than the rest of the night.
 
 ---
 
