@@ -59,6 +59,15 @@ class BoardFailureAlertTests(unittest.TestCase):
         self.mgr.send_board_failure_notification.assert_called_once()
         self.assertEqual(self.mgr.send_board_failure_notification.call_args[0][0], '0')
 
+    def test_alert_describes_the_fail_flag_not_a_register_code(self):
+        self._run_monitor_once()
+
+        failure_type = self.mgr.send_board_failure_notification.call_args[0][1]
+        self.assertEqual(failure_type, 'Board FAIL flag (3 data blocks)')
+
+    def test_failure_wording_for_a_single_block(self):
+        self.assertEqual(self.mgr._get_failure_type_string(1), 'Board FAIL flag (1 data block)')
+
     def test_alert_sent_once_per_failure(self):
         self._run_monitor_once()
         self.mgr.get_board_status()

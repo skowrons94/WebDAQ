@@ -378,7 +378,7 @@ export function DAQState({
                 <Label htmlFor="autoRestart">Auto-Restart on Board Failure</Label>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
-                When enabled, if a board reports &quot;Generic Failure&quot; or &quot;PLL Lock&quot; error,
+                When enabled, if a board sets its FAIL flag during a run (for example a full buffer or a lost link),
                 the run will automatically stop and restart with the next run number.
               </p>
 

@@ -915,22 +915,21 @@ class DAQManager:
 
         self.logger.info("Board monitoring thread stopped")
 
-    def _get_failure_type_string(self, failure_value: int) -> str:
+    def _get_failure_type_string(self, failures: int) -> str:
         """
-        Convert failure register value to human-readable string.
+        Describe a board failure for the Telegram alert and the run notes.
+
+        caendaq reports only how many data blocks (board aggregates) carried the
+        board's FAIL flag (bit 26) — typically a full internal buffer or a lost
+        link. There is no failure register behind it, so the count is all there
+        is to say; it used to be decoded as register bits, giving labels such as
+        "Board Error (0x2)" that meant nothing.
 
         Args:
-            failure_value: The register value indicating the failure type
-
-        Returns:
-            Human-readable failure type string
+            failures: Number of aggregates with the FAIL flag so far this run
         """
-        if failure_value & 0x04:  # Bit 2 indicates PLL Lock Loss
-            return "PLL Lock Loss"
-        elif failure_value & 0x01:  # Bit 0 indicates Generic Failure
-            return "Generic Failure"
-        else:
-            return f"Board Error (0x{failure_value:X})"
+        blocks = "data block" if failures == 1 else "data blocks"
+        return f"Board FAIL flag ({failures} {blocks})"
 
     def _handle_auto_restart(self, board_id: str, failure_value: int) -> None:
         """

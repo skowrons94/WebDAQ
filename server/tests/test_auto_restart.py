@@ -117,7 +117,7 @@ class AutoRestartTests(unittest.TestCase):
             return row
 
     def test_restart_starts_the_next_run(self):
-        experiment.perform_auto_restart('0', 'Generic Failure')
+        experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
         self.assertTrue(self.daq_mgr.is_running())
         self.assertEqual(self.daq_mgr.get_run_number(), NEW_RUN)
@@ -125,7 +125,7 @@ class AutoRestartTests(unittest.TestCase):
         self.assertEqual(self.caen.configure.call_args[0][1], NEW_RUN)
 
     def test_current_recording_moves_to_the_new_run(self):
-        experiment.perform_auto_restart('0', 'Generic Failure')
+        experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
         self.assertEqual(self.controller.set_save_data.call_args_list, [
             mock.call(False, './'),
@@ -135,7 +135,7 @@ class AutoRestartTests(unittest.TestCase):
         self.assertEqual(current_routes.current_accumulating_run_number, NEW_RUN)
 
     def test_each_run_keeps_its_own_charge(self):
-        experiment.perform_auto_restart('0', 'Generic Failure')
+        experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
         self.assertEqual(self.run_meta(OLD_RUN).accumulated_charge, 5.0)
 
         # The new run is later stopped with 7 µC.
@@ -147,13 +147,13 @@ class AutoRestartTests(unittest.TestCase):
         self.assertEqual(self.run_meta(OLD_RUN).accumulated_charge, 5.0)
 
     def test_stats_move_to_the_new_run(self):
-        experiment.perform_auto_restart('0', 'Generic Failure')
+        experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
         self.assertEqual(self.stats.stops, 1)
         self.assertEqual(self.stats.started, [NEW_RUN])
 
     def test_new_run_continues_the_failed_runs_parameters(self):
-        experiment.perform_auto_restart('0', 'Generic Failure')
+        experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
         old, new = self.run_meta(OLD_RUN), self.run_meta(NEW_RUN)
         self.assertEqual(old.flag, 'bad')
@@ -168,7 +168,7 @@ class AutoRestartTests(unittest.TestCase):
     def test_nothing_is_started_that_was_not_running(self):
         self.stats.collecting = False
         with mock.patch.object(current_routes, 'running', False):
-            experiment.perform_auto_restart('0', 'Generic Failure')
+            experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
         self.assertEqual(self.stats.started, [])
         self.controller.set_save_data.assert_not_called()
@@ -176,7 +176,7 @@ class AutoRestartTests(unittest.TestCase):
     def test_a_failed_restart_leaves_no_recording_open(self):
         self.caen.start.return_value = False
 
-        experiment.perform_auto_restart('0', 'Generic Failure')
+        experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
         self.assertFalse(self.daq_mgr.is_running())
         self.assertFalse(current_routes.is_recording_run())
@@ -240,13 +240,13 @@ class RestartPendingTests(unittest.TestCase):
             self.mgr.restart_pending = True
 
         self.mgr.restart_callback = restart
-        self.mgr._execute_restart_callback('0', 'Generic Failure')
+        self.mgr._execute_restart_callback('0', 'Board FAIL flag (2 data blocks)')
         self.assertTrue(self.mgr.restart_pending)
 
     def test_restart_that_started_no_run_clears_the_flag(self):
         self.mgr.restart_pending = True
         self.mgr.restart_callback = lambda board_id, failure_type: None
-        self.mgr._execute_restart_callback('0', 'Generic Failure')
+        self.mgr._execute_restart_callback('0', 'Board FAIL flag (2 data blocks)')
         self.assertFalse(self.mgr.restart_pending)
 
 

@@ -303,7 +303,7 @@ export function TelegramSettings() {
         <div className="rounded-lg bg-muted p-4 text-sm">
           <h4 className="font-medium mb-2">How it works:</h4>
           <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-            <li>Notifications are sent when a board reports &quot;Generic Failure&quot; or &quot;PLL Lock&quot; error</li>
+            <li>Notifications are sent when a board sets its FAIL flag during a run (for example a full buffer or a lost link)</li>
             <li>Only one notification is sent per run, even if multiple failures occur</li>
             <li>If auto-restart is enabled, the notification will indicate that a restart is in progress</li>
             <li>A new notification will be sent if failure occurs in a subsequent run</li>

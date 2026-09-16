@@ -162,7 +162,7 @@ reports it once per run:
 
 Run Number: 1276
 Board ID: 0
-Failure Type: board fail flag
+Failure Type: Board FAIL flag (2 data blocks)
 Time: 2026-07-28 01:31:07
 
 🔄 Auto-restart is enabled. Run will restart in 30 seconds.

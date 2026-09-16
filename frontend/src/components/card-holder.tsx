@@ -1025,18 +1025,10 @@ export function CardHolder({
           } else if (isRunning) {
             // If running, maintain current status - don't update to "Ready"
             if (!isOk) {
-              if( status.last_value.toString(16).toUpperCase() === "10") {
-                displayText = "PLL Lock Lost";
-                displayColor = "text-red-600";
-              }
-              else if( status.last_value.toString(16).toUpperCase() === "1") {
-                displayText = "Connection Error";
-                displayColor = "text-red-600";
-              }
-              else {
-                displayText = "Generic Failure";
-                displayColor = "text-red-600";
-              }
+              // The server reports only that the board set its FAIL flag, and in
+              // how many data blocks — there is no failure type to decode.
+              displayText = "Board Failure";
+              displayColor = "text-red-600";
             } else {
               displayText = "Running";
               displayColor = "text-green-600";
