@@ -160,11 +160,26 @@ def _on_run_state_changed(running: bool) -> None:
     or a run that saves no data all leave the figure correct. The lifetime total
     is untouched: it keeps counting so it can show how much beam the target has
     seen, run or no run.
+
+    Storing the figure is a separate question from measuring it: only a run that
+    saves data has a metadata row to store it in.
     """
+    global current_accumulating_run_number
     if controller is None:
         return
     try:
         if running:
+            # Which run this charge belongs to is taken from the DAQ, at the
+            # moment the run starts. It used to be left to /current/start, which
+            # the dashboard calls only when data is being saved: a run started
+            # with saving off therefore kept the PREVIOUS run's number here and,
+            # on stop, wrote its own charge over that run's record. A 12 h run
+            # was once left reading 100 uC.
+            #
+            # A run that saves nothing has no metadata row to write to, so it
+            # claims no run number and stores nothing.
+            current_accumulating_run_number = (
+                daq_mgr.get_run_number() if daq_mgr.get_save_data() else 0)
             controller.reset_accumulated_charge()
             controller.set_accumulating(True)
         else:
@@ -174,6 +189,8 @@ def _on_run_state_changed(running: bool) -> None:
             # is gone by the time it ends.
             _persist_run_charge(current_accumulating_run_number,
                                 controller.get_accumulated_charge())
+            # Nothing owns the charge until the next run starts.
+            current_accumulating_run_number = 0
     except Exception as e:
         print(f"Warning: could not update charge accumulation for run state {running}: {e}")
 
@@ -195,8 +212,11 @@ def _persist_run_charge(run_number: int, charge: float) -> None:
 
 
 daq_mgr.add_run_state_listener(_on_run_state_changed)
-# A server restarted mid-run must not sit there with the integration switched off.
+# A server restarted mid-run must not sit there with the integration switched off,
+# and must know which run the charge it is about to integrate belongs to.
 if controller is not None and daq_mgr.is_running():
+    if daq_mgr.get_save_data():
+        current_accumulating_run_number = daq_mgr.get_run_number()
     controller.set_accumulating(True)
 
 
