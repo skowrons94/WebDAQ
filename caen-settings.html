@@ -1,0 +1,701 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CAEN digitizers: settings, filters and synchronisation &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Spectra, ROIs and the histogram dashboard" href="histograms-and-rois.html" />
+    <link rel="prev" title="User Guide" href="usage.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">CAEN digitizers: settings, filters and synchronisation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#adding-a-board">1. Adding a board</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-signal-chain">2. The signal chain</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#analogue-input">2.1 Analogue input</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#trigger">2.2 Trigger</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#energy-the-trapezoidal-filter-dpp-pha">2.3 Energy: the trapezoidal filter (DPP-PHA)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#energy-charge-integration-dpp-psd">2.4 Energy: charge integration (DPP-PSD)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#time-units">2.5 Time units</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#waveforms">2.6 Waveforms</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#two-worked-examples">3. Two worked examples</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#hpge-detector-dpp-pha-low-rate-best-resolution">HPGe detector, DPP-PHA, low rate, best resolution</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#plastic-or-liquid-scintillator-dpp-psd-high-rate">Plastic or liquid scintillator, DPP-PSD, high rate</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#synchronising-several-boards">4. Synchronising several boards</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#how-a-run-starts-a-chain">How a run starts a chain</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#cabling">Cabling</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#tuning-while-the-beam-is-on">5. Tuning while the beam is on</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#where-the-settings-live">6. Where the settings live</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">CAEN digitizers: settings, filters and synchronisation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/caen-settings.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="caen-digitizers-settings-filters-and-synchronisation">
+<h1>CAEN digitizers: settings, filters and synchronisation<a class="headerlink" href="#caen-digitizers-settings-filters-and-synchronisation" title="Link to this heading"></a></h1>
+<p>This chapter covers what the digitizer does with a detector pulse, which
+register controls which part of that, how to set them from WebDAQ, and how to
+make several boards share one time origin.</p>
+<p>Everything here is per board. A board is identified by the <strong>board ID</strong> you gave
+it when adding it; that ID names its configuration file (<code class="docutils literal notranslate"><span class="pre">conf/&lt;model&gt;_&lt;id&gt;.json</span></code>),
+labels its data inside the run file, and decides which board is the master of a
+synchronised chain.</p>
+<hr class="docutils" />
+<section id="adding-a-board">
+<h2>1. Adding a board<a class="headerlink" href="#adding-a-board" title="Link to this heading"></a></h2>
+<p>Settings → Boards.</p>
+<p><strong>Scan first.</strong> Press <em>Scan for boards</em>. The server probes the links the way
+CoMPASS does — it opens each candidate, asks the board what it is, and closes it
+again — then lists what answered: model, serial number, channel count, ADC bits
+and firmware. Press <em>Use these settings</em> on a result and the add form is filled
+in for you. Check the ID and the DPP firmware, then press <em>Add Board</em>.</p>
+<p>What the scan covers, from <em>Options</em>:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Link</p></th>
+<th class="head"><p>What is probed</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>USB</p></td>
+<td><p>Link 0…N, node 0. Desktop boards (DT5720, DT5724, DT5781).</p></td>
+</tr>
+<tr class="row-odd"><td><p>Optical (CONET)</p></td>
+<td><p>Link 0…3 × node 0…7. Follows a daisy chain of boards on one A2818/A3818.</p></td>
+</tr>
+<tr class="row-even"><td><p>A4818</p></td>
+<td><p>The adapter’s PID, taken from the USB bus; type it in if it is not detected.</p></td>
+</tr>
+<tr class="row-odd"><td><p>VME</p></td>
+<td><p>A range of base addresses through a V1718/V2718 bridge. Off by default.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The VME range is limited to 1024 addresses. A board’s base address comes from
+two rotary switches that set bits 31…16, so only multiples of <code class="docutils literal notranslate"><span class="pre">0x10000</span></code> can hold
+a board — scanning <code class="docutils literal notranslate"><span class="pre">0x32000000</span></code>–<code class="docutils literal notranslate"><span class="pre">0x32FF0000</span></code> in steps of <code class="docutils literal notranslate"><span class="pre">0x10000</span></code> is 256 probes
+and takes seconds. Keep the range near the addresses you actually use: a probe
+reads the configuration ROM at every address it tries.</p>
+<p>Two things the scan will not do: it refuses to run while a run is in progress
+(during a run the boards belong to the acquisition), and it reports a board that
+is already added rather than probing it again.</p>
+<p><strong>Adding by hand</strong> works too — fill in ID, VME address (<code class="docutils literal notranslate"><span class="pre">0</span></code> for USB/desktop),
+link type, link number and DPP firmware. Get one field wrong and the board will
+not open; the scan exists so you do not have to guess.</p>
+<p>When a board is added, WebDAQ reads every acquisition register out of it and
+writes them to <code class="docutils literal notranslate"><span class="pre">conf/&lt;model&gt;_&lt;id&gt;.json</span></code>. That file is the source of truth from
+then on: the dashboard displays it, the tuner edits it, and the acquisition
+replays it into the board at the start of every run.</p>
+</section>
+<hr class="docutils" />
+<section id="the-signal-chain">
+<h2>2. The signal chain<a class="headerlink" href="#the-signal-chain" title="Link to this heading"></a></h2>
+<p>A pulse from your preamplifier goes through these stages inside the board:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>detector → preamp → [ analogue input: DC offset, dynamic range, polarity ]
+                  → ADC
+                  → [ trigger filter: RC-CR2 (PHA) or CFD/leading edge (PSD) ]
+                  → [ energy filter: trapezoid (PHA) or gated charge integration (PSD) ]
+                  → histogram + optional waveform
+</pre></div>
+</div>
+<p>You set up the stages in that order. Getting the analogue input wrong makes
+every later stage impossible to tune.</p>
+<section id="analogue-input">
+<h3>2.1 Analogue input<a class="headerlink" href="#analogue-input" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Register</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Input polarity</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n80</span></code> bit 16 (“Invert Input”)</p></td>
+<td><p>Set it when the preamp delivers <strong>negative</strong> pulses. Get this wrong and nothing triggers.</p></td>
+</tr>
+<tr class="row-odd"><td><p>DC offset</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n98</span></code></p></td>
+<td><p>Moves the baseline inside the ADC range. The tuner shows it in %.</p></td>
+</tr>
+<tr class="row-even"><td><p>Input dynamic range</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n28</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0</span></code> = 2 Vpp, <code class="docutils literal notranslate"><span class="pre">1</span></code> = 0.5 Vpp on x725/x730. The smaller range gives finer ADC steps for small pulses.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Set the DC offset from the <em>direction</em> of the pulses: positive pulses need the
+baseline near the bottom of the range (10–20 %), negative pulses near the top
+(80–90 %). Watch the waveform in the Tuner while you change it — the trace must
+sit inside the window with the full pulse amplitude visible and no clipping at
+either rail.</p>
+</section>
+<section id="trigger">
+<h3>2.2 Trigger<a class="headerlink" href="#trigger" title="Link to this heading"></a></h3>
+<p>The trigger decides <em>when</em> an event exists. It runs on a filtered copy of the
+input, not the raw samples, so its threshold is in counts of the filtered
+signal, not millivolts.</p>
+<p><strong>DPP-PHA</strong> uses an RC-CR² filter:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Register</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Trigger Threshold</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n6C</span></code></p></td>
+<td><p>Level the filtered signal must cross.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Input Rise Time</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n58</span></code></p></td>
+<td><p>Rise time of your preamp signal; the trigger filter is matched to it.</p></td>
+</tr>
+<tr class="row-even"><td><p>RC-CR2 Smoothing Factor</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n54</span></code></p></td>
+<td><p>Number of samples averaged in the trigger filter. More smoothing = less noise, slower response.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Trigger Hold-Off Width</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n74</span></code></p></td>
+<td><p>Dead time after a trigger before the next one is accepted. Use it to stop one pulse triggering several times.</p></td>
+</tr>
+<tr class="row-even"><td><p>Rise Time Validation Window</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n70</span></code></p></td>
+<td><p>Rejects triggers whose rise time does not match a real pulse.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>DPP-PSD</strong> triggers on a leading edge or a CFD:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Register</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Trigger Threshold</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n60</span></code></p></td>
+<td><p>Level above baseline that starts an event.</p></td>
+</tr>
+<tr class="row-odd"><td><p>CFD Settings</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n3C</span></code></p></td>
+<td><p>Delay and fraction of the constant-fraction discriminator, when CFD timing is enabled in <code class="docutils literal notranslate"><span class="pre">0x1n80</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>Trigger Hold-Off Width</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n74</span></code></p></td>
+<td><p>Same meaning as for PHA.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>How to set a threshold.</strong> Put the board in a quiet state (beam off, source
+off if you can), open the Tuner on the channel, and lower the threshold until
+the trigger rate climbs steeply — that is the noise floor. Then set the
+threshold roughly 20–30 % above it. Check the rate again with the source on: it
+should follow the source, not the noise.</p>
+</section>
+<section id="energy-the-trapezoidal-filter-dpp-pha">
+<h3>2.3 Energy: the trapezoidal filter (DPP-PHA)<a class="headerlink" href="#energy-the-trapezoidal-filter-dpp-pha" title="Link to this heading"></a></h3>
+<p>A preamplifier pulse is a fast step followed by a slow exponential decay. The
+trapezoidal filter turns that step into a trapezoid whose height is proportional
+to the deposited energy, and averages away noise while doing it.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>preamp     ___/‾‾‾‾‾-.__          trapezoid      ___/‾‾‾‾‾\___
+signal    /            ‾‾‾--.__                 /  k   m   \
+                                               rise  flat  fall
+</pre></div>
+</div>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Register</p></th>
+<th class="head"><p>What it does</p></th>
+<th class="head"><p>How to choose it</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Trapezoid Rise Time</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n5C</span></code></p></td>
+<td><p>Length of the rising edge — this is the noise-averaging time.</p></td>
+<td><p>Longer = better resolution, worse pile-up at high rate. HPGe: 3–6 µs. Silicon/scintillator at rate: 0.5–2 µs.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Trapezoid Flat Top</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n60</span></code></p></td>
+<td><p>Length of the flat part.</p></td>
+<td><p>Must be longer than the spread in charge collection time, otherwise large events lose amplitude (ballistic deficit). HPGe: ~1 µs. Fast detectors: 100–300 ns.</p></td>
+</tr>
+<tr class="row-even"><td><p>Peaking Time</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n64</span></code></p></td>
+<td><p>Where inside the flat top the height is sampled.</p></td>
+<td><p>~80 % of the flat top. It must be shorter than the flat top.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Decay Time</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n68</span></code></p></td>
+<td><p>Compensates the preamp decay (pole-zero cancellation).</p></td>
+<td><p><strong>Set it to your preamplifier’s decay constant.</strong> Too short and the flat top droops downwards; too long and it slopes up. Tune it by watching the trapezoid trace until the top is flat.</p></td>
+</tr>
+<tr class="row-even"><td><p>Peak Hold-Off</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n78</span></code></p></td>
+<td><p>Pile-up rejection window around the peak.</p></td>
+<td><p>Roughly rise + flat top.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Fine Gain</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1nC4</span></code></p></td>
+<td><p>Digital gain on the trapezoid height.</p></td>
+<td><p>Use it to move the spectrum into the histogram range without touching the analogue chain.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The order that works: polarity and DC offset → decay time (flat top actually
+flat) → rise time and flat top (resolution) → peaking time → fine gain (spectrum
+in range) → threshold and hold-off (rate right).</p>
+<p><strong>Resolution against rate.</strong> The rise time is the trade. Doubling it improves
+the signal-to-noise of the energy measurement but doubles the time the filter is
+busy, so pile-up starts at half the rate. Set it as long as your rate allows,
+not as long as possible.</p>
+</section>
+<section id="energy-charge-integration-dpp-psd">
+<h3>2.4 Energy: charge integration (DPP-PSD)<a class="headerlink" href="#energy-charge-integration-dpp-psd" title="Link to this heading"></a></h3>
+<p>DPP-PSD integrates the pulse over two windows and reports both charges. The
+ratio separates particle types in a scintillator, since a slow component that
+differs between particles shows up in the long gate but not the short one.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Register</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Short Gate</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n54</span></code></p></td>
+<td><p>Integration window over the fast part of the pulse.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Long Gate</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n58</span></code></p></td>
+<td><p>Integration window over the whole pulse.</p></td>
+</tr>
+<tr class="row-even"><td><p>Gate Offset</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n5C</span></code></p></td>
+<td><p>How far <strong>before</strong> the trigger the gates open — enough to include the leading edge and a bit of baseline.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Threshold for the PSD</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n78</span></code></p></td>
+<td><p>Minimum charge for a PSD value to be computed.</p></td>
+</tr>
+<tr class="row-even"><td><p>Fixed Baseline</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n64</span></code></p></td>
+<td><p>Used when the automatic baseline is disabled in <code class="docutils literal notranslate"><span class="pre">0x1n80</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Charge Zero Suppression</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n44</span></code></p></td>
+<td><p>Drops events below a charge threshold.</p></td>
+</tr>
+<tr class="row-even"><td><p>PUR-GAP Threshold</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n7C</span></code></p></td>
+<td><p>Pile-up rejection sensitivity.</p></td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal notranslate"><span class="pre">PSD</span> <span class="pre">=</span> <span class="pre">(Q_long</span> <span class="pre">−</span> <span class="pre">Q_short)</span> <span class="pre">/</span> <span class="pre">Q_long</span></code>. Set the short gate to cover the fast
+component only, and the long gate to cover the full tail. Check on the waveform
+that the gates sit where you think they do — the gate offset is the setting that
+is most often wrong.</p>
+</section>
+<section id="time-units">
+<h3>2.5 Time units<a class="headerlink" href="#time-units" title="Link to this heading"></a></h3>
+<p>The DPP time registers count in the board’s DPP clock, not in samples:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Model</p></th>
+<th class="head"><p>ADC</p></th>
+<th class="head"><p>One register step</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>x730 (V1730, DT5730)</p></td>
+<td><p>500 MS/s</p></td>
+<td><p>8 ns</p></td>
+</tr>
+<tr class="row-odd"><td><p>x725 (V1725, DT5725)</p></td>
+<td><p>250 MS/s</p></td>
+<td><p>16 ns</p></td>
+</tr>
+<tr class="row-even"><td><p>x724 (V1724, DT5724)</p></td>
+<td><p>100 MS/s</p></td>
+<td><p>10 ns</p></td>
+</tr>
+</tbody>
+</table>
+<p>The Tuner converts for you: it shows time settings in ns and writes back the
+register value. Trapezoid Rise Time = 3 µs on a V1730 means 375 in the register.</p>
+</section>
+<section id="waveforms">
+<h3>2.6 Waveforms<a class="headerlink" href="#waveforms" title="Link to this heading"></a></h3>
+<p>Waveforms are for tuning, not for physics data — they multiply the data volume.
+Enable them per board on the dashboard card, use them to check polarity, offset,
+gates and the trapezoid shape, then switch them off before a production run.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Register</p></th>
+<th class="head"><p>What it does</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Record Length</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n20</span></code></p></td>
+<td><p>Number of samples in the saved trace.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Pre Trigger</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x1n38</span></code></p></td>
+<td><p>How much of the trace is <em>before</em> the trigger. Leave enough to see the baseline.</p></td>
+</tr>
+<tr class="row-even"><td><p>Dual trace, trace 1/2, digital probe</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">0x8000</span></code></p></td>
+<td><p>Which internal signals the trace shows — input, RC-CR², trapezoid, baseline, threshold, peaking, pile-up, trigger hold-off.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The Tuner’s trace selectors are the fastest way to see what a filter is doing:
+draw the trapezoid over the input and the shape of the decay-time error is
+obvious.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="two-worked-examples">
+<h2>3. Two worked examples<a class="headerlink" href="#two-worked-examples" title="Link to this heading"></a></h2>
+<section id="hpge-detector-dpp-pha-low-rate-best-resolution">
+<h3>HPGe detector, DPP-PHA, low rate, best resolution<a class="headerlink" href="#hpge-detector-dpp-pha-low-rate-best-resolution" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Why</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Input polarity</p></td>
+<td><p>as the preamp</p></td>
+<td><p>Ge preamps are usually positive; check the trace.</p></td>
+</tr>
+<tr class="row-odd"><td><p>DC offset</p></td>
+<td><p>15 %</p></td>
+<td><p>Positive pulses, baseline near the bottom.</p></td>
+</tr>
+<tr class="row-even"><td><p>Input dynamic range</p></td>
+<td><p>2 Vpp</p></td>
+<td><p>Full range for the whole energy span.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Decay Time</p></td>
+<td><p>preamp τ, typically 45–50 µs</p></td>
+<td><p>Flat top actually flat.</p></td>
+</tr>
+<tr class="row-even"><td><p>Trapezoid Rise Time</p></td>
+<td><p>6 µs</p></td>
+<td><p>Rate is low; take the resolution.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Trapezoid Flat Top</p></td>
+<td><p>1 µs</p></td>
+<td><p>Covers the charge collection spread in a large crystal.</p></td>
+</tr>
+<tr class="row-even"><td><p>Peaking Time</p></td>
+<td><p>800 ns</p></td>
+<td><p>80 % of the flat top.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Trigger Threshold</p></td>
+<td><p>just above noise</p></td>
+<td><p>Set it as described above.</p></td>
+</tr>
+<tr class="row-even"><td><p>Trigger Hold-Off</p></td>
+<td><p>~10 µs</p></td>
+<td><p>Longer than rise + flat top, so one pulse triggers once.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Record Length / Pre Trigger</p></td>
+<td><p>1 µs of trace, 30 % before the trigger, while tuning</p></td>
+<td><p>Then switch waveforms off.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="plastic-or-liquid-scintillator-dpp-psd-high-rate">
+<h3>Plastic or liquid scintillator, DPP-PSD, high rate<a class="headerlink" href="#plastic-or-liquid-scintillator-dpp-psd-high-rate" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Value</p></th>
+<th class="head"><p>Why</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Input polarity</p></td>
+<td><p>inverted</p></td>
+<td><p>PMT pulses are negative.</p></td>
+</tr>
+<tr class="row-odd"><td><p>DC offset</p></td>
+<td><p>85 %</p></td>
+<td><p>Negative pulses, baseline near the top.</p></td>
+</tr>
+<tr class="row-even"><td><p>Input dynamic range</p></td>
+<td><p>0.5 Vpp</p></td>
+<td><p>Small pulses, finer steps.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Gate Offset</p></td>
+<td><p>30–50 ns before the trigger</p></td>
+<td><p>Include the leading edge and some baseline.</p></td>
+</tr>
+<tr class="row-even"><td><p>Short Gate</p></td>
+<td><p>30–60 ns</p></td>
+<td><p>Fast component only.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Long Gate</p></td>
+<td><p>300–500 ns</p></td>
+<td><p>Full tail.</p></td>
+</tr>
+<tr class="row-even"><td><p>Trigger Hold-Off</p></td>
+<td><p>200–500 ns</p></td>
+<td><p>Short, to keep the rate capability.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Threshold for the PSD</p></td>
+<td><p>above the noise charge</p></td>
+<td><p>Keeps the PSD plot clean.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Both tables are starting points. Take a spectrum, look at it, change one setting
+at a time.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="synchronising-several-boards">
+<h2>4. Synchronising several boards<a class="headerlink" href="#synchronising-several-boards" title="Link to this heading"></a></h2>
+<p>There is no “sync” switch in WebDAQ. Whether a board joins the chain is decided
+by that board’s own <strong>Acquisition Control</strong> register (<code class="docutils literal notranslate"><span class="pre">0x8100</span></code>), bits [1:0],
+which you edit in the CAEN dashboard:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Value</p></th>
+<th class="head"><p>Start mode</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>0</p></td>
+<td><p>SW controlled</p></td>
+<td><p>The board starts on the software command. It is <strong>not</strong> in the chain.</p></td>
+</tr>
+<tr class="row-odd"><td><p>1</p></td>
+<td><p>S-IN / GPI</p></td>
+<td><p>Armed; runs while the S-IN (VME) or GPI (desktop) input is asserted.</p></td>
+</tr>
+<tr class="row-even"><td><p>2</p></td>
+<td><p>First trigger</p></td>
+<td><p>Armed; starts on the first rising edge on TRG-IN.</p></td>
+</tr>
+<tr class="row-odd"><td><p>3</p></td>
+<td><p>LVDS</p></td>
+<td><p>Armed; driven by the LVDS RUN signal (VME only).</p></td>
+</tr>
+</tbody>
+</table>
+<p>A board in any mode other than 0 is <strong>armed</strong> instead of started, and then waits.</p>
+<section id="how-a-run-starts-a-chain">
+<h3>How a run starts a chain<a class="headerlink" href="#how-a-run-starts-a-chain" title="Link to this heading"></a></h3>
+<ol class="arabic simple">
+<li><p>Every board is opened and configured from its JSON file.</p></li>
+<li><p>Boards with start mode ≠ 0 are armed. Their readout threads are already
+running, so nothing is missed when the start arrives.</p></li>
+<li><p>The <strong>master</strong> — the board whose register ID is 0, otherwise the first
+synchronised board — fires a software trigger.</p></li>
+<li><p>That pulse leaves the master on TRG-OUT, enters the next board’s TRG-IN,
+which starts it and passes the pulse on, and so on down the chain.</p></li>
+</ol>
+<p>All boards therefore share one time origin, and timestamps can be compared
+across boards.</p>
+</section>
+<section id="cabling">
+<h3>Cabling<a class="headerlink" href="#cabling" title="Link to this heading"></a></h3>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>   board 0 (master)        board 1              board 2
+   start mode = 2          start mode = 2       start mode = 2
+   TRG-OUT ───────────────&gt; TRG-IN
+                           TRG-OUT ───────────&gt; TRG-IN
+</pre></div>
+</div>
+<p>Use equal-length cables where the propagation delay matters, and remember the
+chain adds a small fixed delay per hop. <code class="docutils literal notranslate"><span class="pre">Run/Start/Stop</span> <span class="pre">Delay</span></code> (<code class="docutils literal notranslate"><span class="pre">0x8170</span></code>) exists
+to compensate it: give the earlier boards a delay so every board starts at the
+same instant.</p>
+<p>Leave a board in SW controlled mode to keep it out of the chain. It will start
+on its own and its timestamps will not be comparable with the rest — which is
+fine for a monitor detector, and wrong for coincidences.</p>
+<p>The dashboard reads <code class="docutils literal notranslate"><span class="pre">0x8100</span></code> back from each board and shows the resulting roles,
+so check there after changing the mode: exactly one master, everyone else
+synchronised.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="tuning-while-the-beam-is-on">
+<h2>5. Tuning while the beam is on<a class="headerlink" href="#tuning-while-the-beam-is-on" title="Link to this heading"></a></h2>
+<p>Settings changed in the Tuner normally go into the JSON file and reach the board
+at the next run start. That is safe, and slow: to see the effect of a threshold
+you would stop, edit, start.</p>
+<p>Switch <strong>Online</strong> on in the Tuner and each change is <em>also</em> written straight to
+the board. With a run in progress, the spectrum and the trace react immediately.</p>
+<p>Not every register may be changed on a live board. WebDAQ keeps a list of the
+ones that may:</p>
+<ul class="simple">
+<li><p><strong>Written live</strong> — thresholds, gates, shaping and trapezoid times, decay time,
+DC offset, fine gain, hold-offs, veto width, and the trace/probe selection.
+Anything that changes how a channel processes a pulse.</p></li>
+<li><p><strong>Saved for the next run</strong> — record length, pre-trigger, the aggregate
+organisation, the channel enable mask, acquisition control, board
+configuration, board ID. These describe the <em>shape</em> of the readout: changing
+one underneath a running acquisition produces buffers the decoder cannot read.</p></li>
+</ul>
+<p>Each field in the Tuner is marked <strong>live</strong> or <strong>next run</strong> while Online is on, so
+you know before you type. Everything is saved to the JSON either way — the
+configuration and the board never drift apart.</p>
+<p>A register that is not on the list is refused by default. That is deliberate: a
+new register added to the dump later cannot silently become live-writable.</p>
+<p><strong>Requirements.</strong> Online writes during a run go through <code class="docutils literal notranslate"><span class="pre">caendaq</span></code>, which needs
+the register API — rebuild it (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">server/native/caendaq</span></code>) if the tuner
+reports that the installed module has none.</p>
+</section>
+<hr class="docutils" />
+<section id="where-the-settings-live">
+<h2>6. Where the settings live<a class="headerlink" href="#where-the-settings-live" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Contains</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code></p></td>
+<td><p>The board list: ID, model, link, VME address, DPP firmware, channel count.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/&lt;model&gt;_&lt;id&gt;.json</span></code></p></td>
+<td><p>Every acquisition register of that board, with address, channel and value.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calib/&lt;model&gt;_&lt;id&gt;.cal</span></code></p></td>
+<td><p>Two calibration coefficients per channel (offset, gain) for the energy axis.</p></td>
+</tr>
+</tbody>
+</table>
+<p>If a board is listed in <code class="docutils literal notranslate"><span class="pre">settings.json</span></code> but its register file is missing, the
+server rebuilds it at startup — reading the registers back from the board, or
+generating defaults in test mode. A board that cannot be reached is reported in
+the log; the Tuner and the CAEN dashboard will have nothing to show until it is.</p>
+<p>To start from scratch on one board: remove it in Settings → Boards, then add it
+again. Its register file is rewritten from what the hardware reports.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="usage.html" class="btn btn-neutral float-left" title="User Guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="histograms-and-rois.html" class="btn btn-neutral float-right" title="Spectra, ROIs and the histogram dashboard" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

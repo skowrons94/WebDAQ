@@ -1,0 +1,267 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>The ELOG logbook &mdash; LunaDAQ 1.0 documentation</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=f2a433a1"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Directory Structure" href="directory-structure.html" />
+    <link rel="prev" title="Monitoring: Graphite, Grafana, alerts and notifications" href="monitoring-and-alerts.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            LunaDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">LunaDAQ Installation Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User Guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">The ELOG logbook</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#setting-it-up">1. Setting it up</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#accounts-and-attribution">Accounts and attribution</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#reading">2. Reading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#writing">3. Writing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-worth-writing">4. What is worth writing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#when-it-does-not-work">5. When it does not work</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server Architecture Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting Guide</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">LunaDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">The ELOG logbook</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/elog.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="the-elog-logbook">
+<h1>The ELOG logbook<a class="headerlink" href="#the-elog-logbook" title="Link to this heading"></a></h1>
+<p>WebDAQ can read and write the collaboration’s ELOG logbook, so a shift entry does
+not mean leaving run control. It is the same logbook you open in a browser — the
+entries are identical, whichever way you write them.</p>
+<p>There are two logbooks in the interface and they are not the same thing:</p>
+<ul class="simple">
+<li><p><strong>Logbook → Runs</strong> — WebDAQ’s own run record: run number, times, target,
+voltages, accumulated charge, notes. Generated by the DAQ.</p></li>
+<li><p><strong>Logbook → ELOG</strong> — the collaboration’s ELOG server. Written by people.</p></li>
+</ul>
+<hr class="docutils" />
+<section id="setting-it-up">
+<h2>1. Setting it up<a class="headerlink" href="#setting-it-up" title="Link to this heading"></a></h2>
+<p>Settings → ELOG.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Field</p></th>
+<th class="head"><p>What to put in</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Logbook URL</p></td>
+<td><p>The full address as it appears in the browser, e.g. <code class="docutils literal notranslate"><span class="pre">https://elog.hzdr.de/B10_alpha/</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Username / Password</p></td>
+<td><p>One shared account for the DAQ machine. Leave empty if the logbook needs no login.</p></td>
+</tr>
+<tr class="row-even"><td><p>Default attributes</p></td>
+<td><p>Fields filled into every entry — for instance <code class="docutils literal notranslate"><span class="pre">Category:</span> <span class="pre">Shift</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Allow WebDAQ to post entries</p></td>
+<td><p>Reading works without it; posting does not. Off until you turn it on.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Press <strong>Test connection</strong>. It reports the last entry number in the logbook if
+everything is right, and says what is wrong if not — a wrong password and an
+unreachable host give different messages.</p>
+<p><strong>Requirement:</strong> the server needs PSI’s <code class="docutils literal notranslate"><span class="pre">py_elog</span></code> package. It is not on PyPI —
+<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">py_elog</span></code> cannot work. Install it from PSI’s conda channel:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>conda<span class="w"> </span>activate<span class="w"> </span>luna
+conda<span class="w"> </span>install<span class="w"> </span>-c<span class="w"> </span>paulscherrerinstitute<span class="w"> </span>elog
+</pre></div>
+</div>
+<p>The Settings page says so explicitly when the package is missing.</p>
+<section id="accounts-and-attribution">
+<h3>Accounts and attribution<a class="headerlink" href="#accounts-and-attribution" title="Link to this heading"></a></h3>
+<p>Authentication and attribution are separate in ELOG. The shared account
+authenticates the connection; the <strong>Author</strong> attribute signs the entry, and
+WebDAQ fills it with the username of whoever is logged into WebDAQ. Entries
+therefore carry a real name even though one account posts them all.</p>
+<p>Use an account created for the DAQ, with write access to the one logbook. The
+password is stored in <code class="docutils literal notranslate"><span class="pre">conf/elog_settings.json</span></code> in plain text — the same
+arrangement as the Telegram token — so it should not be anybody’s personal
+account.</p>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">py_elog</span></code> does not verify TLS certificates. Traffic to an <code class="docutils literal notranslate"><span class="pre">https://</span></code>
+logbook is encrypted but the certificate is not checked.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="reading">
+<h2>2. Reading<a class="headerlink" href="#reading" title="Link to this heading"></a></h2>
+<p>Logbook → ELOG.</p>
+<p>The list shows the most recent entries: subject, author, date, type, and a paper
+clip with the number of attachments. Click one to read it on the right, with all
+its attributes, its full text and its attachments — pictures inline, everything
+else as a download. Attachments come through the WebDAQ server, because your
+browser has no session on the ELOG machine.</p>
+<p><strong>Search</strong> matches text in the entries. Clear the box to go back to the list.
+The list loads twenty entries at a time; <em>Load more</em> fetches the next twenty.</p>
+<p>Reading does not need the <em>Allow posting</em> switch.</p>
+</section>
+<hr class="docutils" />
+<section id="writing">
+<h2>3. Writing<a class="headerlink" href="#writing" title="Link to this heading"></a></h2>
+<p><strong>New entry</strong> opens the composer. The attribute fields are the ones your logbook
+actually uses — WebDAQ learns them from recent entries, since ELOG has no API
+that reports a logbook’s configuration. For the LUNA B10 logbook that means
+Author, Category, Beam type, Beam energy, Target, List mode run number and
+Subject.</p>
+<ul class="simple">
+<li><p>Author is filled with your WebDAQ user; change it if you are writing for
+someone else.</p></li>
+<li><p>Attach files with the file picker — screenshots of a spectrum, a plot, a photo
+of the setup.</p></li>
+<li><p><strong>Reply</strong> on an open entry threads the new one under it, keeping the shift’s
+attributes and prefixing the subject with <code class="docutils literal notranslate"><span class="pre">Re:</span></code>.</p></li>
+</ul>
+<p>Entries are posted as plain text. An entry that was written elsewhere in HTML is
+shown as text here — the words are all there, the formatting is not.</p>
+</section>
+<hr class="docutils" />
+<section id="what-is-worth-writing">
+<h2>4. What is worth writing<a class="headerlink" href="#what-is-worth-writing" title="Link to this heading"></a></h2>
+<p>WebDAQ does not post anything by itself: nothing appears in the logbook unless a
+person writes it. The run record in Logbook → Runs already holds run numbers,
+times, charge and notes, so the ELOG entry is for what the DAQ cannot know:</p>
+<ul class="simple">
+<li><p>what you changed and why — target, threshold, geometry, gas pressure;</p></li>
+<li><p>what went wrong, what you did about it, and whether it worked;</p></li>
+<li><p>the state of the accelerator at the start and the end of the shift;</p></li>
+<li><p>a screenshot when a spectrum looks different from yesterday.</p></li>
+</ul>
+<p>Reference the run numbers. The run record holds the numbers; the logbook holds
+the reasons.</p>
+</section>
+<hr class="docutils" />
+<section id="when-it-does-not-work">
+<h2>5. When it does not work<a class="headerlink" href="#when-it-does-not-work" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Message</p></th>
+<th class="head"><p>Cause</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>“The py_elog package is not installed”</p></td>
+<td><p>Either it really is not installed — use the conda command above — or the server is running in the wrong environment. Check with <code class="docutils literal notranslate"><span class="pre">lsof</span> <span class="pre">-ti</span> <span class="pre">tcp:5001</span> <span class="pre">-sTCP:LISTEN</span> <span class="pre">|</span> <span class="pre">xargs</span> <span class="pre">ps</span> <span class="pre">-o</span> <span class="pre">command=</span></code>: the interpreter must be <code class="docutils literal notranslate"><span class="pre">…/envs/luna/bin/python</span></code>. See <a class="reference internal" href="troubleshooting.html#the-server-runs-in-the-wrong-conda-environment"><span class="std std-ref">Troubleshooting</span></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>“check the ELOG user and password”</p></td>
+<td><p>Wrong credentials, or the account has no access to that logbook.</p></td>
+</tr>
+<tr class="row-even"><td><p>“the ELOG server did not answer in time”</p></td>
+<td><p>The logbook is unreachable — check the VPN. Every call gives up after 10 seconds so the DAQ is never held up by it.</p></td>
+</tr>
+<tr class="row-odd"><td><p>“ELOG rejected the entry”</p></td>
+<td><p>A required attribute is missing or has a value the logbook does not allow. The message repeats what ELOG said.</p></td>
+</tr>
+<tr class="row-even"><td><p>“ELOG posting is switched off”</p></td>
+<td><p>Turn on <em>Allow WebDAQ to post entries</em> in Settings → ELOG.</p></td>
+</tr>
+<tr class="row-odd"><td><p>“That attachment does not belong to the configured ELOG server”</p></td>
+<td><p>The attachment proxy only fetches from the configured host.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="monitoring-and-alerts.html" class="btn btn-neutral float-left" title="Monitoring: Graphite, Grafana, alerts and notifications" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="directory-structure.html" class="btn btn-neutral float-right" title="Directory Structure" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright AC and JS.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
