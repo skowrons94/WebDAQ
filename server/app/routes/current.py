@@ -191,6 +191,11 @@ def _on_run_state_changed(running: bool) -> None:
                                 controller.get_accumulated_charge())
             # Nothing owns the charge until the next run starts.
             current_accumulating_run_number = 0
+            # The readings stop belonging to the run with it. Leaving this to
+            # /current/stop let a stop issued while the monitor was unreachable
+            # keep the log open, and later readings were appended to the
+            # finished run's current.txt.
+            controller.set_save_data(False, "./")
     except Exception as e:
         print(f"Warning: could not update charge accumulation for run state {running}: {e}")
 
@@ -304,10 +309,15 @@ def stop_run_recording():
     (message, HTTP status). Needs an application context (it writes the DB).
     """
     global running, current_accumulating_run_number
-    if controller is None or not controller.is_connected():
+    if controller is None:
         return "TetrAMM not connected", 200
+    # Close the log before anything that needs the device: closing it only
+    # clears a flag, and a monitor that is unreachable at stop must not leave
+    # it open for the readings that follow its reconnection.
     controller.set_save_data(False, "./")
     running = False
+    if not controller.is_connected():
+        return "TetrAMM not connected", 200
     run_number = current_accumulating_run_number
     run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
     if run_metadata:

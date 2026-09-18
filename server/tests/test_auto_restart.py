@@ -127,10 +127,12 @@ class AutoRestartTests(unittest.TestCase):
     def test_current_recording_moves_to_the_new_run(self):
         experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
-        self.assertEqual(self.controller.set_save_data.call_args_list, [
-            mock.call(False, './'),
-            mock.call(True, f'./data/run{NEW_RUN}/'),
-        ])
+        # The failed run's log is closed (by the stop and by the run-state
+        # listener; closing twice is harmless) and only the new run's is opened.
+        calls = self.controller.set_save_data.call_args_list
+        self.assertEqual(calls[-1], mock.call(True, f'./data/run{NEW_RUN}/'))
+        self.assertTrue(calls[:-1])
+        self.assertTrue(all(c == mock.call(False, './') for c in calls[:-1]))
         self.assertTrue(current_routes.is_recording_run())
         self.assertEqual(current_routes.current_accumulating_run_number, NEW_RUN)
 
@@ -171,7 +173,9 @@ class AutoRestartTests(unittest.TestCase):
             experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 
         self.assertEqual(self.stats.started, [])
-        self.controller.set_save_data.assert_not_called()
+        # Closing the failed run's log is fine; opening one is not.
+        for c in self.controller.set_save_data.call_args_list:
+            self.assertEqual(c, mock.call(False, './'))
 
     def test_a_failed_restart_leaves_no_recording_open(self):
         self.caen.start.return_value = False

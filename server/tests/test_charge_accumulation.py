@@ -148,9 +148,12 @@ class RunOwnershipTests(unittest.TestCase):
     class FakeController:
         def __init__(self):
             self.charge, self.accumulating = 0.0, False
+            self.saving, self.connected = False, True
         def reset_accumulated_charge(self):   self.charge = 0.0
         def set_accumulating(self, on):       self.accumulating = bool(on)
         def get_accumulated_charge(self):     return self.charge
+        def set_save_data(self, on, folder=''): self.saving = bool(on and folder)
+        def is_connected(self):               return self.connected
 
     def setUp(self):
         from app.routes import current as current_routes
@@ -203,3 +206,23 @@ class RunOwnershipTests(unittest.TestCase):
         self.run_cycle(900, save=True, charge=10.0)
         self.run_cycle(901, save=True, charge=20.0)
         self.assertEqual(self.stored, [(900, 10.0), (901, 20.0)])
+
+    def test_the_end_of_a_run_closes_the_current_log(self):
+        # The log must follow the run even when no browser calls /current/stop.
+        self.daq.run_number, self.daq.save = 852, True
+        self.mod._on_run_state_changed(True)
+        self.controller.saving = True             # /current/start opened data/run852/
+        self.mod._on_run_state_changed(False)
+        self.assertFalse(self.controller.saving)
+
+    def test_a_stop_with_the_monitor_unreachable_still_closes_the_log(self):
+        # Run 852: a stop that found the monitor disconnected left the log
+        # open, and the readings after its reconnection went into the finished
+        # run's current.txt.
+        was_running = self.mod.running
+        self.addCleanup(setattr, self.mod, "running", was_running)
+        self.controller.saving, self.controller.connected = True, False
+        message, status = self.mod.stop_run_recording()
+        self.assertFalse(self.controller.saving)
+        self.assertFalse(self.mod.running)
+        self.assertEqual(status, 200)
