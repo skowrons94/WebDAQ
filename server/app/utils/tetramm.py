@@ -96,6 +96,7 @@ class TetrAMMController:
         
         # Charge accumulation tracking
         self.accumulated_charge = 0.0  # This run only; reset when a run starts
+        self._log_failed = False       # current.txt is unwritable; do not spam the log
         self.total_accumulated_charge = 0.0  # Always increases
         self.previous_time = 0.0
         self.accumulating = False  # True while a run is in progress
@@ -632,7 +633,29 @@ class TetrAMMController:
                 f.write('\n')
                 
         except Exception as e:
-            self.logger.error(f"Failed to log measurement to file: {e}")
+            # One failure per sample means an error line per sample: a run whose
+            # directory had been removed logged 413 of these and grew the log by
+            # 1 MB/h, while recording no current at all and telling nobody.
+            #
+            # A missing directory is worth one attempt to recreate — the run may
+            # simply have been cleaned up underneath us. If that does not work,
+            # stop writing: the readings are already lost, and a silent recorder
+            # is better than a log nobody can read. Sampling and the charge
+            # integration are untouched.
+            if not self._log_failed:
+                self._log_failed = True
+                self.logger.error(f"Failed to log measurement to file: {e}")
+                try:
+                    os.makedirs(self.save_folder, exist_ok=True)
+                    self.logger.warning(
+                        f"Recreated the missing current-log directory {self.save_folder}")
+                    self._log_failed = False
+                    return
+                except Exception as retry_error:
+                    self.logger.error(
+                        f"Could not recreate {self.save_folder} ({retry_error}); "
+                        f"current logging is switched OFF until the next run starts")
+                    self.save_data = False
     
     def set_save_data(self, enable_save: bool, save_folder: str = '') -> None:
         """
@@ -643,6 +666,7 @@ class TetrAMMController:
             save_folder: Directory to save data files
         """
         with self.buffer_lock:
+            self._log_failed = False       # a fresh destination deserves a fresh try
             if enable_save and save_folder:
                 try:
                     # Ensure save directory exists

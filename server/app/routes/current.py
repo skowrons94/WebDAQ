@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import numpy as np
 import time
 
@@ -18,6 +19,8 @@ from ..models.run_metadata import RunMetadata
 from ..utils.jwt_utils import jwt_required_custom
 
 bp = Blueprint('current', __name__)
+
+logger = logging.getLogger(__name__)
 
 #TEST_FLAG = True
 TEST_FLAG = os.getenv('TEST_FLAG', False)
@@ -289,8 +292,21 @@ def start_run_recording(run_number):
     current_accumulating_run_number = int(run_number)
     run = int(run_number)
 
-    if( not controller.is_acquiring ):
-        return "Can not start TetrAMM. Device not initialized", 400
+    # A current module that is connected but not sampling used to be a 400 here,
+    # which the dashboard turned into an aborted run: it awaits this call BEFORE
+    # starting the DAQ, so a 4xx meant the acquisition never started at all and
+    # the operator saw only "Failed to start the run". Beam time was lost to a
+    # monitor. Try to bring it back, and if that fails say so WITHOUT failing the
+    # request — the run matters more than its current log.
+    if not controller.is_acquiring:
+        logger.warning("Current module is connected but not sampling; re-initialising it")
+        try:
+            controller.initialize()
+        except Exception as e:
+            logger.error(f"Could not re-initialise the current module: {e}")
+        if not controller.is_acquiring:
+            return ("The current module is connected but not sampling, so this run "
+                    "records no beam current. The run itself is unaffected."), 200
 
     # Only save data if save data is enabled in DAQ settings
     if daq_mgr.get_save_data():

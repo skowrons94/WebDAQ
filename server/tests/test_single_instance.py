@@ -313,3 +313,69 @@ class PidFileOwnershipTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class PortProbeSemanticsTests(unittest.TestCase):
+    """
+    The probe must agree with the bind waitress actually performs.
+
+    Probing without SO_REUSEADDR is stricter than waitress, which sets it. The
+    connections a just-killed server leaves in TIME_WAIT then make the probe
+    fail while waitress would have started fine — and with no LISTEN socket left
+    to name, the operator was told only that the holder "could not be
+    identified". That happened on the DAQ.
+    """
+
+    def test_the_probe_sets_SO_REUSEADDR_like_waitress(self):
+        seen = {}
+        real = socket.socket
+
+        class Probe(real):
+            def setsockopt(self, level, option, value):
+                if (level, option) == (socket.SOL_SOCKET, socket.SO_REUSEADDR):
+                    seen['reuse'] = value
+                return real.setsockopt(self, level, option, value)
+
+        with mock.patch.object(single_instance.socket, 'socket', Probe):
+            single_instance.port_in_use(0)
+        self.assertEqual(seen.get('reuse'), 1)
+
+    def test_a_listening_port_is_still_reported_busy(self):
+        server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server.bind(('0.0.0.0', 0)); server.listen(1)
+        port = server.getsockname()[1]
+        try:
+            self.assertTrue(single_instance.port_in_use(port))
+        finally:
+            server.close()
+        self.assertFalse(single_instance.port_in_use(port))
+
+
+class SettlingPortTests(unittest.TestCase):
+    """A port that will not bind while nothing listens on it is on its way out."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.pid_file = os.path.join(self.tmp.name, 'daq-server.pid')
+        self.settings = os.path.join(self.tmp.name, 'settings.json')
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_port_still_settling_is_waited_out_rather_than_refused(self):
+        # Busy on the first look, free a moment later: the previous server's
+        # sockets were closing. Starting must go ahead.
+        with mock.patch.object(single_instance, 'pids_listening_on', return_value=[]), \
+             mock.patch.object(single_instance, 'port_in_use', side_effect=[True, False]):
+            message = single_instance.ensure_sole_instance(
+                5001, self.pid_file, settings_file=self.settings)
+        self.assertIsNone(message)
+
+    def test_a_port_held_by_an_unidentifiable_process_is_still_refused(self):
+        with mock.patch.object(single_instance, 'pids_listening_on', return_value=[]), \
+             mock.patch.object(single_instance, 'port_in_use', return_value=True), \
+             mock.patch.object(single_instance, '_wait_for_free_port', return_value=False):
+            message = single_instance.ensure_sole_instance(
+                5001, self.pid_file, settings_file=self.settings)
+        self.assertIsNotNone(message)
+        self.assertIn('could not be identified', message)

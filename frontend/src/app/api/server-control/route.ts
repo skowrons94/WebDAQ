@@ -210,6 +210,26 @@ async function isServerRunning(): Promise<boolean> {
     return false
 }
 
+// Roll server.log over when it gets big, keeping the previous generations, so a
+// long-running server cannot fill the disk and a restart never destroys history.
+const LOG_MAX_BYTES = 32 * 1024 * 1024
+const LOG_KEEP = 3
+
+function rollLogIfLarge(logPath: string) {
+    try {
+        if (!fsSync.existsSync(logPath)) return
+        if (fsSync.statSync(logPath).size < LOG_MAX_BYTES) return
+        // server.log.2 -> .3, .1 -> .2, server.log -> .1
+        try { fsSync.unlinkSync(`${logPath}.${LOG_KEEP}`) } catch { /* not there */ }
+        for (let i = LOG_KEEP - 1; i >= 1; i--) {
+            try { fsSync.renameSync(`${logPath}.${i}`, `${logPath}.${i + 1}`) } catch { /* not there */ }
+        }
+        fsSync.renameSync(logPath, `${logPath}.1`)
+    } catch {
+        // Rolling is a convenience: never let it stop the server starting.
+    }
+}
+
 // Read the last LOG_TAIL_BYTES of the server log. We avoid loading huge files
 // fully so tailing stays cheap even after a long-running measurement.
 async function tailLog(absDir: string): Promise<{ content: string; size: number }> {
@@ -667,10 +687,18 @@ export async function POST(request: Request) {
             // Use mock boards (no hardware) when running for debugging.
             if (testMode) env.TEST_FLAG = 'True'
 
-            // Truncate log on each new launch and inherit the FD into the child
-            // so it keeps writing even after a Next.js HMR reload.
+            // Keep the log across launches and inherit the FD into the child so it
+            // keeps writing even after a Next.js HMR reload.
+            //
+            // This used to truncate on every launch. A backend that refuses to
+            // start writes its reason here and then, on the next attempt, wipes
+            // the very history someone is trying to read: the log of a four-hour
+            // incident was once replaced by a two-line refusal. It is appended to
+            // now, and rolled over once it gets large so it cannot grow forever
+            // (nothing rotates it — an error logged per sample reached 1 MB/h).
             const logPath = path.join(absDir, LOG_FILENAME)
-            const logFd = fsSync.openSync(logPath, 'w')
+            rollLogIfLarge(logPath)
+            const logFd = fsSync.openSync(logPath, 'a')
             try {
                 const launcher = pythonCommand()
                 const proc = spawn(

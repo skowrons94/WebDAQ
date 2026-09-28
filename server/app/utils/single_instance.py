@@ -111,17 +111,22 @@ def running_server_pid(pid_file: str = PID_FILE) -> Optional[int]:
 
 def port_in_use(port: int = DEFAULT_PORT) -> bool:
     """
-    Whether something already holds the backend's port.
+    Whether the backend's port cannot be bound.
 
-    Catches a running server whose pid file was lost. A test bind rather than a
-    connect: a connect would also succeed against something that is merely
-    listening on the same port for other reasons, and would race with a server
-    that is starting up.
+    A test bind rather than a connect: a connect would also succeed against
+    something that is merely listening on the same port for other reasons, and
+    would race with a server that is starting up.
+
+    SO_REUSEADDR is set because waitress sets it too (wasyncore.py). Probing
+    without it is STRICTER than the real bind: the connections a just-killed
+    server leaves in TIME_WAIT make a plain bind fail while waitress would have
+    started fine. That is not hypothetical — it refused a restart, and because
+    no LISTEN socket was left to name, the operator was told only that the
+    holder "could not be identified".
     """
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        # Deliberately NOT SO_REUSEADDR: we want this to fail exactly when
-        # waitress's own bind would fail.
+        probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         probe.bind(('0.0.0.0', port))
         return False
     except OSError as e:
@@ -327,13 +332,21 @@ def ensure_sole_instance(port: int = DEFAULT_PORT,
     if not blockers:
         if not port_in_use(port):
             return None
+        # The port will not bind, yet nothing is listening on it. That is a
+        # socket on its way out — the previous server has gone and the kernel is
+        # still holding its connections. Give it a moment rather than refusing a
+        # start that is about to succeed.
+        if not pids_listening_on(port) and _wait_for_free_port(port, timeout=10.0):
+            logger.info(f"Port {port} was still settling from a previous server; it is free now")
+            return None
         # Something holds the port but /proc would not say who — an unprivileged
         # view of another user's process, typically. Killing blind is not an
         # option, so this is one case that still needs a human.
         return (
-            f"Port {port} is in use, but the process holding it could not be "
-            f"identified, so it was left alone.\n"
-            f"server/scripts/kill-server.sh will find it by port.")
+            f"Port {port} is in use by a process that could not be identified, "
+            f"so it was left alone.\n"
+            f"Check it with 'ss -tanlp | grep {port}', or use "
+            f"server/scripts/kill-server.sh to clear it by port.")
 
     if acquisition_in_progress(settings_file) and not force:
         return (

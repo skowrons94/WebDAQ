@@ -167,9 +167,13 @@ export function RunControlButtons({
       await startRunProcess()
     } catch (error) {
       console.error('Failed to start run:', error)
+      const serverMessage =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast({
         title: 'Error',
-        description: 'Failed to start the run. Please check all parameters and try again.',
+        description: serverMessage
+          ? `Failed to start the run: ${serverMessage}`
+          : 'Failed to start the run. Please check all parameters and try again.',
         variant: 'destructive',
       })
     }
@@ -206,11 +210,28 @@ export function RunControlButtons({
 
       // Start current measurement if data saving is enabled and current
       // acquisition has not been disabled in the settings.
+      //
+      // Neither of these may stop the run. They used to be awaited bare, so a
+      // picoammeter that was connected but not sampling answered 4xx, threw,
+      // and the DAQ was never started at all — the operator saw only "Failed to
+      // start the run" and lost beam time to a monitor. A run without its
+      // current log or its stats.csv is worth far more than no run.
+      const sideEffects: string[] = []
       if (saveData) {
         if (currentEnabled) {
-          await startAcquisitionCurrent(String(runNumber))
+          try {
+            await startAcquisitionCurrent(String(runNumber))
+          } catch (error) {
+            console.error('Current recording did not start:', error)
+            sideEffects.push('beam current is not being recorded')
+          }
         }
-        await startStatsRun(runNumber)
+        try {
+          await startStatsRun(runNumber)
+        } catch (error) {
+          console.error('stats.csv did not start:', error)
+          sideEffects.push('stats.csv is not being written')
+        }
       }
 
       // (The dashboard takes its own reference for "since run start" from the
@@ -236,14 +257,21 @@ export function RunControlButtons({
       autoManageUids.forEach((uid) => unpauseAlertNonBlocking(uid))
 
       toast({
-        title: 'Run Started',
-        description: `Run ${runNumber} started successfully with all parameters set.`,
+        title: sideEffects.length ? 'Run Started (with warnings)' : 'Run Started',
+        description: sideEffects.length
+          ? `Run ${runNumber} is acquiring, but ${sideEffects.join(' and ')}.`
+          : `Run ${runNumber} started successfully with all parameters set.`,
+        variant: sideEffects.length ? 'destructive' : undefined,
       })
     } catch (error) {
       console.error('Failed to start run:', error)
+      const serverMessage =
+        (error as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast({
         title: 'Error',
-        description: 'Failed to start the run. Please check all parameters and try again.',
+        description: serverMessage
+          ? `Failed to start the run: ${serverMessage}`
+          : 'Failed to start the run. Please check all parameters and try again.',
         variant: 'destructive',
       })
     }
