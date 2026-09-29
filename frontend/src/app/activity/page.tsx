@@ -4,9 +4,9 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import useAuthStore from '@/store/auth-store'
 import { Layout } from '@/components/dashboard-layout'
-import BoardHealth from '@/components/board-health'
+import ActivityLog from '@/components/activity-log'
 
-export default function BoardHealthPage() {
+export default function ActivityPage() {
   const token = useAuthStore((state) => state.token)
   const router = useRouter()
 
@@ -20,8 +20,8 @@ export default function BoardHealthPage() {
 
   return (
     <Layout>
-      <div className="max-w-6xl mx-auto py-4">
-        <BoardHealth />
+      <div className="mx-auto max-w-5xl py-4">
+        <ActivityLog />
       </div>
     </Layout>
   )

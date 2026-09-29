@@ -38,6 +38,8 @@ class AuthenticationTests(RouteTestCase):
                     '/grafana/alert-rules',
                     '/notifications/transports', '/notifications/rules',
                     '/notifications/status', '/experiment/board_diagnostics',
+                    '/notifications/events', '/notifications/events/summary',
+                    '/recovery/actions',
                     '/stats/paths', '/stats/connection'):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 401, f'{url} is unauthenticated')
@@ -293,6 +295,139 @@ class NotificationRouteTests(RouteTestCase):
         self.assertFalse(body['running'])
         self.assertEqual(body['boards'], {})
         self.assertIn('fail_meaning', body)
+
+
+class ActivityRouteTests(RouteTestCase):
+    """The bell in the header and the history page talk to these."""
+
+    def test_the_history_and_its_summary_are_served_together(self):
+        response = self.get('/notifications/events')
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertIn('events', body)
+        for key in ('unseen', 'total', 'undelivered', 'latest'):
+            self.assertIn(key, body['summary'])
+
+    def test_the_summary_alone_is_cheap_to_poll(self):
+        response = self.get('/notifications/events/summary')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('unseen', response.get_json())
+
+    def test_events_can_be_marked_seen_and_cleared(self):
+        from app.services.alert_log import get_alert_log
+        log = get_alert_log()
+        log.record('alert', 'something happened', ['a detail'],
+                   deliveries={'telegram': False})
+        self.assertGreaterEqual(self.get('/notifications/events/summary')
+                                .get_json()['unseen'], 1)
+
+        marked = self.post('/notifications/events/seen')
+        self.assertEqual(marked.status_code, 200)
+        self.assertEqual(marked.get_json()['summary']['unseen'], 0)
+
+        cleared = self.client.delete('/notifications/events', headers=self.auth)
+        self.assertEqual(cleared.status_code, 200)
+        self.assertEqual(self.get('/notifications/events').get_json()['events'], [])
+
+    def test_plausible_but_wrong_json_is_refused_not_a_500(self):
+        # A script or a hand-written curl gets a reason, not a crash — and never a
+        # 401/422, which the browser reads as its own session expiring.
+        cases = [
+            ('/notifications/rules', [1, 2]),
+            ('/notifications/rules', 'a rule'),
+        ]
+        for url, body in cases:
+            response = self.client.post(url, headers=self.auth, json=body)
+            self.assertEqual(response.status_code, 400, f'{url} with {body!r}')
+
+        created = self.post('/notifications/rules', {'type': 'board_failure'})
+        rule_id = created.get_json()['rule']['id']
+        for body in ({'params': 'nope'}, {'transports': 5}):
+            response = self.client.put(f'/notifications/rules/{rule_id}',
+                                       headers=self.auth, json=body)
+            self.assertEqual(response.status_code, 400, f'PUT with {body!r}')
+        self.client.delete(f'/notifications/rules/{rule_id}', headers=self.auth)
+
+    def test_a_numeric_chat_id_is_accepted_and_the_switch_is_not_half_applied(self):
+        response = self.post('/notifications/transports/telegram',
+                             {'enabled': False, 'chat_id': -1001234567890})
+        self.assertEqual(response.status_code, 200)
+        settings = response.get_json()['settings']
+        self.assertEqual(settings['chat_id'], '-1001234567890')
+        self.assertIs(settings['enabled'], False)
+
+    def test_an_enabled_flag_given_as_a_string_is_still_a_boolean(self):
+        response = self.post('/notifications/transports/telegram', {'enabled': 'false'})
+        self.assertIs(response.get_json()['settings']['enabled'], True)  # non-empty string
+        self.post('/notifications/transports/telegram', {'enabled': False})
+
+    def test_marking_an_empty_list_marks_nothing(self):
+        from app.services.alert_log import get_alert_log
+        log = get_alert_log()
+        log.mark_seen()
+        log.record('alert', 'something', ['detail'])
+
+        response = self.post('/notifications/events/seen', {'ids': []})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()['marked'], 0)
+        self.assertEqual(response.get_json()['summary']['unseen'], 1)
+        log.mark_seen()
+
+    def test_an_alert_with_no_destination_counts_as_undelivered(self):
+        from app.services.alert_log import get_alert_log
+        log = get_alert_log()
+        log.mark_seen()
+        log.record('alert', 'nobody asked to hear this', ['detail'], deliveries={})
+
+        summary = self.get('/notifications/events/summary').get_json()
+        self.assertEqual(summary['undelivered'], 1)
+        log.mark_seen()
+
+    def test_a_bad_id_list_is_refused(self):
+        for ids in ('not-a-list', [{}], [1, 2]):
+            response = self.post('/notifications/events/seen', {'ids': ids})
+            self.assertEqual(response.status_code, 400, f'ids={ids!r}')
+
+    def test_the_watcher_can_be_started_and_stopped_from_the_page(self):
+        # A backend started without main.py would otherwise watch nothing, with no
+        # way out of it from the UI.
+        started = self.post('/notifications/watcher', {'action': 'start'})
+        self.assertEqual(started.status_code, 200)
+        self.assertTrue(started.get_json()['status']['watching'])
+
+        stopped = self.post('/notifications/watcher', {'action': 'stop'})
+        self.assertEqual(stopped.status_code, 200)
+        self.assertFalse(stopped.get_json()['status']['watching'])
+
+    def test_a_nonsense_watcher_action_is_refused(self):
+        response = self.post('/notifications/watcher', {'action': 'hibernate'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_recovery_actions_are_listed_with_their_state(self):
+        response = self.get('/recovery/actions')
+        self.assertEqual(response.status_code, 200)
+        actions = response.get_json()['actions']
+        self.assertTrue(actions)
+        names = {a['name'] for a in actions}
+        self.assertEqual(names, {'boards', 'acquisition', 'current', 'stats', 'graphite'})
+        for action in actions:
+            for key in ('label', 'description', 'ok', 'detail', 'enabled'):
+                self.assertIn(key, action)
+
+    def test_an_unknown_recovery_action_is_refused(self):
+        response = self.post('/recovery/actions/make-coffee')
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('Unknown recovery action', response.get_json()['message'])
+
+    def test_a_recovery_action_answers_in_words(self):
+        # Graphite is not reachable from the test environment: it must say so
+        # rather than fail the request.
+        response = self.post('/recovery/actions/graphite')
+        self.assertIn(response.status_code, (200, 400))
+        body = response.get_json()
+        self.assertIn('success', body)
+        self.assertTrue(body['message'])
 
 
 class StatsRouteTests(RouteTestCase):

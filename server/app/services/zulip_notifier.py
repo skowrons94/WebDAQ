@@ -100,25 +100,29 @@ class ZulipNotifier:
                      bot_email: Optional[str] = None, api_key: Optional[str] = None,
                      stream: Optional[str] = None, topic: Optional[str] = None,
                      clear_api_key: bool = False) -> None:
-        if enabled is not None:
-            self.enabled = bool(enabled)
+        # Everything is read and converted before anything is stored: a value that
+        # failed halfway used to leave the switch on in memory and off in the file.
+        new_enabled = self.enabled if enabled is None else bool(enabled)
+        new_site = self.site
         if site is not None:
-            site = site.strip().rstrip('/')
-            if site and not re.match(r'^https?://', site):
-                site = 'https://' + site
-            self.site = site
-        if bot_email is not None:
-            self.bot_email = bot_email.strip()
+            new_site = str(site).strip().rstrip('/')
+            if new_site and not re.match(r'^https?://', new_site):
+                new_site = 'https://' + new_site
+        new_email = self.bot_email if bot_email is None else str(bot_email).strip()
         # An empty key means "leave it alone": the getter only ever returns a
         # mask, so the settings form cannot round-trip the real one.
+        new_key = self.api_key
         if clear_api_key:
-            self.api_key = ''
+            new_key = ''
         elif api_key:
-            self.api_key = api_key.strip()
-        if stream is not None:
-            self.stream = stream.strip()
+            new_key = str(api_key).strip()
+        new_stream = self.stream if stream is None else str(stream).strip()
+        new_topic = self.topic
         if topic is not None:
-            self.topic = topic.strip() or DEFAULT_TOPIC
+            new_topic = str(topic).strip() or DEFAULT_TOPIC
+
+        self.enabled, self.site, self.bot_email = new_enabled, new_site, new_email
+        self.api_key, self.stream, self.topic = new_key, new_stream, new_topic
         self._save()
         self.logger.info(f"Zulip settings updated: enabled={self.enabled}, site={self.site}")
 
@@ -186,6 +190,11 @@ class ZulipNotifier:
                 ['Zulip notifications are working correctly.']))
         finally:
             self.enabled = original
+        if ok and not original:
+            return {'success': True,
+                    'message': f'Test message sent to #{self.stream} > {self.topic} — but '
+                               'Zulip is switched off, so no alert will be delivered '
+                               'until you enable it above.'}
         if ok:
             return {'success': True,
                     'message': f'Test message sent to #{self.stream} > {self.topic}'}

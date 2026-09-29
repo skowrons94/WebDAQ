@@ -28,7 +28,8 @@ from any version convert with the same
 | **Monitoring** | Per-channel spectra, waveforms and PSD plots; event, pile-up, lost and saturation rates per channel; beam current and accumulated charge. |
 | **Spectra & ROIs** | Named regions of interest with live counts, defined once on the server: the same dashboard on every screen, restored after a restart, and written into each run as `roi.json`. |
 | **Slow control** | Beam current from a TetrAMM, an RBD 9103, or a value the accelerator already publishes to Graphite — plus any other metric, recorded into each run's `stats.csv`. |
-| **Bookkeeping** | Run metadata for FAIR-compliant conversion, the collaboration's PSI ELOG logbook, Telegram alerts on board failure, and Grafana alert rules tied to the run. |
+| **Bookkeeping** | Run metadata for FAIR-compliant conversion, the collaboration's PSI ELOG logbook, and Grafana alert rules tied to the run. |
+| **Watching** | Per-board readout counters, alerts on board failure, a board that stops producing data, beam current or any Graphite value — to Telegram or Zulip — with a history of what happened and the recovery next to it. |
 
 **Stack** — Flask + SQLAlchemy on the server, React/Next.js in the browser,
 CaenDAQ (C++/pybind11) for acquisition, ROOT for histograms, Graphite and
@@ -122,7 +123,7 @@ Everything is in `doc/`, and builds with Sphinx (`cd doc && make html`).
 | [CAEN digitizers](doc/caen-settings.md) | Scanning and adding boards, trigger and trapezoid settings, PSD gates, worked examples for HPGe and scintillators, multi-board synchronisation, online tuning. |
 | [Spectra and ROIs](doc/histograms-and-rois.md) | The histogram dashboard, regions of interest, and the per-run `roi.json`. |
 | [Beam current and charge](doc/current-and-charge.md) | TetrAMM, RBD 9103 and monitored-metric settings, and what the two accumulated charges mean. |
-| [Monitoring and alerts](doc/monitoring-and-alerts.md) | What Graphite and Grafana each do, the Stats page, `stats.csv`, run-linked alerts, Telegram. |
+| [Monitoring and alerts](doc/monitoring-and-alerts.md) | What Graphite and Grafana each do, the Stats page, `stats.csv`, run-linked alerts, Telegram and Zulip, Board Health, the alert history and recovery. |
 | [ELOG](doc/elog.md) | Reading and writing the collaboration logbook from run control. |
 | [User guide](doc/usage.md) | Screen-by-screen reference. |
 | [Directory structure](doc/directory-structure.md) | What lives where, in the repository and in a working directory. |

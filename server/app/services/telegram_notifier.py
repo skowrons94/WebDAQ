@@ -81,16 +81,18 @@ class TelegramNotifier:
 
     def set_settings(self, enabled: bool = None, bot_token: str = None,
                      chat_id: str = None, clear_bot_token: bool = False) -> None:
-        if enabled is not None:
-            self.enabled = enabled
-        # An empty token means "leave it alone": the getter only ever returns a
-        # mask, so the settings form cannot round-trip the real one.
+        # Everything is read and converted before anything is stored: a value that
+        # failed halfway used to leave the switch on in memory and off in the file.
+        new_enabled = self.enabled if enabled is None else bool(enabled)
+        new_token = self.bot_token
         if clear_bot_token:
-            self.bot_token = ''
+            new_token = ''
         elif bot_token:
-            self.bot_token = bot_token.strip()
-        if chat_id is not None:
-            self.chat_id = chat_id.strip()
+            # A chat id or token can arrive as a number from a script.
+            new_token = str(bot_token).strip()
+        new_chat = self.chat_id if chat_id is None else str(chat_id).strip()
+
+        self.enabled, self.bot_token, self.chat_id = new_enabled, new_token, new_chat
         self._save()
         self.logger.info(f"Telegram settings updated: enabled={self.enabled}")
 
@@ -128,32 +130,24 @@ class TelegramNotifier:
             return {'success': False, 'message': 'Bot token or chat ID not configured'}
         original = self.enabled
         self.enabled = True
-        ok = self.send_message(
-            "🔬 <b>WebDAQ Test Message</b>\n\nTelegram notifications are working correctly!")
-        self.enabled = original
-        return ({'success': True, 'message': 'Test message sent successfully'} if ok else
-                {'success': False, 'message': 'Failed to send test message. Check bot token and chat ID.'})
+        try:
+            ok = self.send_message(
+                "🔬 <b>WebDAQ Test Message</b>\n\n"
+                "Telegram notifications are working correctly!")
+        finally:
+            self.enabled = original
+        if not ok:
+            return {'success': False,
+                    'message': 'Failed to send test message. Check bot token and chat ID.'}
+        if not original:
+            # It went out because the test forces it. Saying only "sent" would let
+            # someone finish the setup with the switch off and no alerts at all.
+            return {'success': True,
+                    'message': 'Test message sent — but Telegram is switched off, so no '
+                               'alert will be delivered until you enable it above.'}
+        return {'success': True, 'message': 'Test message sent successfully'}
 
     def reset_notification_flag(self) -> None:
+        """Kept for the DAQ manager's run-start call; de-duplication now belongs
+        to the alert rules, which know about boards, runs and destinations."""
         self.notification_sent = False
-
-    def send_board_failure(self, board_id: str, failure_type: str, run_number: int,
-                           auto_restart_enabled: bool, auto_restart_delay: int) -> bool:
-        """Send a board-failure alert (once per run)."""
-        if self.notification_sent:
-            return False
-        message = (
-            f"⚠️ <b>LUNA DAQ Board Failure Alert</b>\n\n"
-            f"<b>Run Number:</b> {run_number}\n"
-            f"<b>Board ID:</b> {board_id}\n"
-            f"<b>Failure Type:</b> {failure_type}\n"
-            f"<b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-        )
-        if auto_restart_enabled:
-            message += f"🔄 Auto-restart is enabled. Run will restart in {auto_restart_delay} seconds."
-        else:
-            message += "⏹️ Auto-restart is disabled. Manual intervention required."
-        if self.send_message(message):
-            self.notification_sent = True
-            return True
-        return False

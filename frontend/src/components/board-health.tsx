@@ -68,6 +68,8 @@ export default function BoardHealth() {
   const [names, setNames] = useState<Record<string, string>>({})
   const [rows, setRows] = useState<BoardRow[]>([])
   const [error, setError] = useState<string | null>(null)
+  // The last poll failed: the counters below are the last known ones.
+  const [stale, setStale] = useState(false)
   const [loading, setLoading] = useState(true)
 
   // The previous poll, to turn cumulative counters into rates, and the moment
@@ -90,6 +92,7 @@ export default function BoardHealth() {
       const data = await getBoardDiagnostics()
       const now = Date.now()
       setError(null)
+      setStale(false)
       setDiagnostics(data)
 
       if (!data.running) {
@@ -133,9 +136,22 @@ export default function BoardHealth() {
           stalledFor,
         }
       })
+      // Forget boards that are no longer reported, so one that comes back is not
+      // rated against a reading from before it disappeared.
+      const present = new Set(Object.keys(data.boards))
+      for (const key of Object.keys(previous.current)) {
+        if (!present.has(key)) delete previous.current[key]
+      }
+      for (const key of Object.keys(lastProgress.current)) {
+        if (!present.has(key)) delete lastProgress.current[key]
+      }
       setRows(next.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Could not read the board counters')
+      setStale(true)
+      // Whatever is on screen is now history: rates computed against a failed
+      // poll would be wrong, and a frozen number reads as a live one.
+      previous.current = {}
     } finally {
       setLoading(false)
     }
@@ -151,32 +167,23 @@ export default function BoardHealth() {
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <HeartPulse className="h-5 w-5" />
-              </div>
-              <div>
-                <CardTitle className="text-xl">Board Health</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  What each board has read, written and lost during this run
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={running ? 'default' : 'secondary'} className="gap-1.5">
-                {running ? <Activity className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
-                {running ? 'Run in progress' : 'No run'}
-              </Badge>
-              <Button variant="outline" size="icon" onClick={poll} title="Refresh now">
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-      </Card>
+      {/* A compact status row: the tab already names the view, so the header
+          only carries what changes — whether a run is in progress. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <HeartPulse className="h-4 w-4" />
+          What each board has read, written and lost during this run
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant={running ? 'default' : 'secondary'} className="gap-1.5">
+            {running ? <Activity className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+            {running ? 'Run in progress' : 'No run'}
+          </Badge>
+          <Button variant="outline" size="icon" onClick={poll} title="Refresh now">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
 
       {error && (
         <Card className="border-destructive">
@@ -199,7 +206,9 @@ export default function BoardHealth() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {rows.map((row) => {
-            const stalled = row.stalledFor !== null && row.stalledFor >= STALL_AFTER_S
+            const unknown = row.counters.buffers_read === null
+            const stalled = !unknown && row.stalledFor !== null
+              && row.stalledFor >= STALL_AFTER_S
             const dropped = row.counters.blocks_dropped ?? 0
             const commErrors = row.counters.comm_errors ?? 0
             const failed = row.counters.failed
@@ -224,6 +233,17 @@ export default function BoardHealth() {
                         <AlertTriangle className="h-3 w-3" />
                         FAIL flag
                       </Badge>
+                    ) : stale ? (
+                      <Badge variant="outline" className="gap-1"
+                             title="The last request failed — these are the last known counters">
+                        <Pause className="h-3 w-3" />
+                        No answer
+                      </Badge>
+                    ) : unknown ? (
+                      <Badge variant="outline" className="gap-1"
+                             title="This CaenDAQ build does not report the data-block counter">
+                        Not reported
+                      </Badge>
                     ) : stalled ? (
                       <Badge className="gap-1 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
                         <Pause className="h-3 w-3" />
@@ -240,11 +260,11 @@ export default function BoardHealth() {
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <Counter label="Data blocks" value={formatCount(row.counters.buffers_read)}
-                             rate={formatRate(row.buffersPerSecond, '/s')} />
+                             rate={stale ? '—' : formatRate(row.buffersPerSecond, '/s')} />
                     <Counter label="Events decoded" value={formatCount(row.counters.events_decoded)}
-                             rate={formatRate(row.eventsPerSecond, '/s')} />
+                             rate={stale ? '—' : formatRate(row.eventsPerSecond, '/s')} />
                     <Counter label="Read from board" value={formatBytes(row.counters.bytes_read)}
-                             rate={row.bytesPerSecond === null ? '—'
+                             rate={stale || row.bytesPerSecond === null ? '—'
                                : `${formatBytes(row.bytesPerSecond)}/s`} />
                     <Counter label="Sent to file" value={formatBytes(row.counters.bytes_written)} />
                   </div>

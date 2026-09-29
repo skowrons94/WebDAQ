@@ -104,32 +104,45 @@ def read_stats(run_number: int) -> Dict[str, Any]:
     stats.csv carries a commented preamble naming each metric, then one row per
     sample. Only columns that actually varied are worth reporting, so each is
     summarised by min/mean/max and constant-zero ones are flagged as not read.
+
+    A run whose statistics were restarted mid-run (Activity -> Recovery) has its
+    earlier rows in stats.csv.part1, part2, … Every piece is read, oldest first,
+    so the report describes the whole run rather than the slice after the restart.
     """
-    path = os.path.join(run_data.run_dir(run_number), STATS_FILE)
+    run_dir = run_data.run_dir(run_number)
     out: Dict[str, Any] = {"available": False, "metrics": [], "n_samples": 0}
-    if not os.path.isfile(path):
+    paths = _stats_pieces(run_dir)
+    if not paths:
         return out
 
     header: List[str] = []
     rows: List[List[float]] = []
-    try:
-        with open(path, "r") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                parts = next(csv.reader([line]))
-                if not header:
-                    # The first non-comment line names the columns.
-                    header = [p.strip() for p in parts]
-                    continue
-                try:
-                    rows.append([float(p) for p in parts])
-                except ValueError:
-                    continue
-    except OSError as e:
-        logger.warning(f"Could not read {path}: {e}")
-        return out
+    for path in paths:
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    parts = next(csv.reader([line]))
+                    columns = [p.strip() for p in parts]
+                    if not header:
+                        # The first non-comment line names the columns.
+                        header = columns
+                        continue
+                    # A later piece repeats the header: skip it rather than
+                    # trying to read the column titles as numbers.
+                    if columns == header:
+                        continue
+                    try:
+                        rows.append([float(p) for p in parts])
+                    except ValueError:
+                        continue
+        except OSError as e:
+            logger.warning(f"Could not read {path}: {e}")
+            continue
+    if len(paths) > 1:
+        out["pieces"] = [os.path.basename(p) for p in paths]
 
     if not header or not rows:
         return out
@@ -150,6 +163,26 @@ def read_stats(run_number: int) -> Dict[str, Any]:
             "recorded": any(v != 0 for v in values),
         })
     return out
+
+
+def _stats_pieces(run_dir: str) -> List[str]:
+    """Every part of the run's statistics, oldest first.
+
+    stats.csv.partN is what a mid-run restart of the statistics leaves behind; the
+    report has to read those too, or it would describe only the last slice of the
+    run and call the metrics from before the restart "not recorded".
+    """
+    parts = []
+    for name in os.listdir(run_dir) if os.path.isdir(run_dir) else []:
+        if name.startswith(STATS_FILE + ".part"):
+            suffix = name[len(STATS_FILE) + len(".part"):]
+            if suffix.isdigit():
+                parts.append((int(suffix), os.path.join(run_dir, name)))
+    ordered = [path for _, path in sorted(parts)]
+    current = os.path.join(run_dir, STATS_FILE)
+    if os.path.isfile(current):
+        ordered.append(current)
+    return ordered
 
 
 def read_rois(run_number: int) -> Dict[str, Any]:

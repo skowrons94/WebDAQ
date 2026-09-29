@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import {
     AlertTriangle,
+    HeartPulse,
     AudioWaveform,
     BarChart3,
     BellRing,
@@ -45,6 +46,8 @@ import { Button } from "@/components/ui/button"
 import useAuthStore from '@/store/auth-store'
 import { useRouter } from 'next/navigation'
 import { ModeToggle } from '@/components/ui/mode-toggle'
+import { NotificationBell } from '@/components/notification-bell'
+import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { ServerStatus } from '@/components/server-status'
 import { RunStatusIndicator } from '@/components/run-status-indicator'
@@ -57,7 +60,7 @@ const NAV_ITEMS = [
     { href: "/stats", label: "Stats" },
     { href: "/DAQ", label: "DAQ" },
     { href: "/tuner", label: "Tuner" },
-    { href: "/health", label: "Board Health" },
+    { href: "/activity", label: "Activity" },
     { href: "/alerts", label: "Alerts" },
     { href: "/settings", label: "Settings" },
 ]
@@ -65,6 +68,7 @@ const NAV_ITEMS = [
 export function Layout({ children }: { children: React.ReactNode }) {
     const clearToken = useAuthStore((state) => state.clearToken)
     const router = useRouter()
+    const setDashboardTab = useDashboardTabStore((state) => state.setTab)
     const pathname = usePathname()
     const [open, setOpen] = useState(false)
 
@@ -79,6 +83,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     }
 
     // Navigate from the command palette and close it.
+    const goToTab = (tab: string) => {
+        setDashboardTab(tab)
+        setOpen(false)
+        router.push('/dashboard')
+    }
+
     const go = (href: string) => {
         setOpen(false)
         router.push(href)
@@ -171,6 +181,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     <LineChart className="mr-2 h-4 w-4" />
                                     <span>Stats</span>
                                 </CommandItem>
+                                <CommandItem onSelect={() => go('/activity')}>
+                                    <BellRing className="mr-2 h-4 w-4" />
+                                    <span>Activity &amp; recovery</span>
+                                </CommandItem>
                                 <CommandItem onSelect={() => go('/alerts')}>
                                     <AlertTriangle className="mr-2 h-4 w-4" />
                                     <span>Alerts</span>
@@ -178,11 +192,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             </CommandGroup>
                             <CommandSeparator />
                             <CommandGroup heading="Visualization">
-                                <CommandItem onSelect={() => go('/dashboard?tab=histograms')}>
+                                <CommandItem onSelect={() => goToTab('histograms')}>
                                     <BarChart3 className="mr-2 h-4 w-4" />
                                     <span>Histograms</span>
                                 </CommandItem>
-                                <CommandItem onSelect={() => go('/dashboard?tab=waveforms')}>
+                                <CommandItem onSelect={() => goToTab('health')}>
+                                    <HeartPulse className="mr-2 h-4 w-4" />
+                                    <span>Board Health</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => goToTab('waveforms')}>
                                     <AudioWaveform className="mr-2 h-4 w-4" />
                                     <span>Waveforms</span>
                                 </CommandItem>
@@ -214,6 +232,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </CommandDialog>
                     <RunStatusIndicator />
                     <ServerStatus />
+                    {/* What the DAQ did while nobody was watching. */}
+                    <NotificationBell />
                     <ModeToggle />
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>

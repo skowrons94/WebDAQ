@@ -19,7 +19,7 @@ import {
 import { useToast } from '@/components/ui/use-toast'
 import {
   addAlertRule, deleteAlertRule, getAlertRules, getNotificationTransports,
-  setNotificationSettings, setTelegramTransport, setZulipTransport,
+  setAlertWatcher, setNotificationSettings, setTelegramTransport, setZulipTransport,
   testNotificationTransport, updateAlertRule,
   type AlertRule, type AlertRuleType, type AlertStatus, type TransportSettings,
 } from '@/lib/api'
@@ -278,9 +278,18 @@ export function NotificationSettings() {
                 clears again. Pick which destinations carry it.
               </CardDescription>
             </div>
-            <Badge variant={status?.watching ? 'default' : 'outline'}>
-              {status?.watching ? 'Watching' : 'Watcher stopped'}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant={status?.watching ? 'default' : 'destructive'}>
+                {status?.watching ? 'Watching' : 'Not watching'}
+              </Badge>
+              {!status?.watching && (
+                <Button size="sm" variant="outline" disabled={busy !== null}
+                        onClick={() => act('watcher', () => setAlertWatcher('start'),
+                                          'Watching for alerts')}>
+                  Start watching
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -290,6 +299,38 @@ export function NotificationSettings() {
                       () => setNotificationSettings({ notify_recovery: checked }))} />
             <Label>Also send a message when a condition clears</Label>
           </div>
+
+          {status?.load_error && (
+            <p className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
+              {status.load_error}
+            </p>
+          )}
+
+          {(status?.rejected_rules?.length ?? 0) > 0 && (
+            <div className="rounded-md border border-amber-500/60 bg-amber-500/5 p-3 text-sm">
+              <p className="font-medium">
+                {status!.rejected_rules!.length} saved alert
+                {status!.rejected_rules!.length === 1 ? '' : 's'} could not be read, and
+                {status!.rejected_rules!.length === 1 ? ' is' : ' are'} not being watched:
+              </p>
+              <ul className="mt-1 list-inside list-disc text-xs text-muted-foreground">
+                {status!.rejected_rules!.map((rejected, i) => (
+                  <li key={i}>{rejected.reason}</li>
+                ))}
+              </ul>
+              <p className="mt-1 text-xs text-muted-foreground">
+                They are still in conf/alerts.json — fix them there, or add them again here.
+              </p>
+            </div>
+          )}
+
+          {!status?.watching && (
+            <p className="rounded-md border border-destructive/50 bg-destructive/5 p-3 text-sm">
+              Nothing is being watched, so no alert can be raised — whatever the rules
+              below say. This normally means the server was started without its
+              watcher; press <span className="font-medium">Start watching</span> above.
+            </p>
+          )}
 
           {rules.length === 0 && (
             <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
@@ -301,6 +342,9 @@ export function NotificationSettings() {
             {rules.map((rule) => (
               <RuleCard key={rule.id} rule={rule} busy={busy !== null}
                         alerting={ruleStatus(rule.id)?.alerting ?? false}
+                        notReady={ruleStatus(rule.id)?.transports_not_ready ?? []}
+                        unmeasured={ruleStatus(rule.id)?.unmeasured ?? false}
+                        unmeasuredFor={ruleStatus(rule.id)?.unmeasured_for ?? null}
                         onChange={(changes) => act(`rule-${rule.id}`,
                           () => updateAlertRule(rule.id, changes))}
                         onDelete={() => act(`delete-${rule.id}`,
@@ -337,6 +381,39 @@ export function NotificationSettings() {
   )
 }
 
+/**
+ * A number the server owns: shows the stored value, lets it be typed, and never
+ * writes an empty box as 0 — a threshold of zero is an alert that never fires or
+ * never stops.
+ */
+function NumberField({ value, draft, setDraft, field, onCommit, min, step }: {
+  value: number
+  draft: string | undefined
+  setDraft: React.Dispatch<React.SetStateAction<Record<string, string | undefined>>>
+  field: string
+  onCommit: (value: number) => void
+  min?: number
+  step?: string
+}) {
+  return (
+    <Input
+      type="number"
+      min={min}
+      step={step}
+      value={draft ?? String(value)}
+      onChange={(e) => setDraft((d) => ({ ...d, [field]: e.target.value }))}
+      onBlur={(e) => {
+        const text = e.target.value.trim()
+        setDraft((d) => ({ ...d, [field]: undefined }))
+        const parsed = Number(text)
+        // An empty or unreadable box means "leave it alone", not zero.
+        if (text === '' || Number.isNaN(parsed) || parsed === value) return
+        onCommit(parsed)
+      }}
+    />
+  )
+}
+
 function Result({ result }: { result?: TestResult | null }) {
   if (!result) return null
   return (
@@ -348,15 +425,22 @@ function Result({ result }: { result?: TestResult | null }) {
   )
 }
 
-function RuleCard({ rule, alerting, busy, onChange, onDelete }: {
+function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
+                   onChange, onDelete }: {
   rule: AlertRule
   alerting: boolean
+  notReady: string[]
+  unmeasured: boolean
+  unmeasuredFor: number | null
   busy: boolean
   onChange: (changes: Partial<AlertRule>) => void
   onDelete: () => void
 }) {
   const params = rule.params
   const transports = rule.transports
+  // While a field is being typed in, the draft wins; once it is committed the
+  // server's own value (which it may have clamped) is what shows.
+  const [draft, setDraft] = useState<Record<string, string | undefined>>({})
 
   const toggleTransport = (name: string, on: boolean) => {
     const next = on ? [...transports, name] : transports.filter((t) => t !== name)
@@ -381,6 +465,20 @@ function RuleCard({ rule, alerting, busy, onChange, onDelete }: {
             <p className="text-xs text-muted-foreground">{rule.type}</p>
           </div>
           {alerting && <Badge variant="destructive">Alerting now</Badge>}
+          {rule.enabled && unmeasured && !alerting && (
+            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                   title="This alert is watching, but it has had nothing to read — an unreachable Graphite server, a monitor that stopped, or a counter this CaenDAQ build does not report. That is not the same as everything being fine.">
+              nothing to measure{unmeasuredFor ? ` for ${unmeasuredFor} s` : ''}
+            </Badge>
+          )}
+          {rule.enabled && notReady.length === rule.transports.length && (
+            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+                   title={rule.transports.length
+                     ? `${notReady.join(' and ')} ${notReady.length === 1 ? 'is' : 'are'} off or not configured`
+                     : 'This alert has no destination'}>
+              reaches nobody
+            </Badge>
+          )}
         </div>
         <Button variant="ghost" size="sm" className="text-destructive" disabled={busy}
                 onClick={onDelete}>
@@ -392,10 +490,16 @@ function RuleCard({ rule, alerting, busy, onChange, onDelete }: {
         {hasMetric && (
           <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
             <Label className="text-xs">Graphite metric</Label>
-            <Input defaultValue={String(params.metric ?? '')}
+            <Input value={draft.metric ?? String(params.metric ?? '')}
                    placeholder="luna.terminal_voltage"
-                   onBlur={(e) => e.target.value !== params.metric
-                     && onChange({ params: { ...params, metric: e.target.value } })} />
+                   onChange={(e) => setDraft((d) => ({ ...d, metric: e.target.value }))}
+                   onBlur={(e) => {
+                     const value = e.target.value.trim()
+                     setDraft((d) => ({ ...d, metric: undefined }))
+                     if (value && value !== params.metric) {
+                       onChange({ params: { ...params, metric: value } })
+                     }
+                   }} />
           </div>
         )}
         {hasThreshold && (
@@ -415,9 +519,10 @@ function RuleCard({ rule, alerting, busy, onChange, onDelete }: {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Threshold</Label>
-              <Input type="number" step="any" defaultValue={String(params.threshold ?? 0)}
-                     onBlur={(e) => Number(e.target.value) !== Number(params.threshold)
-                       && onChange({ params: { ...params, threshold: Number(e.target.value) } })} />
+              <NumberField value={Number(params.threshold ?? 0)} step="any"
+                           draft={draft.threshold} setDraft={setDraft} field="threshold"
+                           onCommit={(value) =>
+                             onChange({ params: { ...params, threshold: value } })} />
             </div>
           </>
         )}
@@ -426,17 +531,19 @@ function RuleCard({ rule, alerting, busy, onChange, onDelete }: {
             <Label className="text-xs">
               {rule.type === 'stalled_buffers' ? 'No data for (s)' : 'Held for (s)'}
             </Label>
-            <Input type="number" min={0} defaultValue={String(params.seconds ?? 0)}
-                   onBlur={(e) => Number(e.target.value) !== Number(params.seconds)
-                     && onChange({ params: { ...params, seconds: Number(e.target.value) } })} />
+            <NumberField value={Number(params.seconds ?? 0)} min={0}
+                         draft={draft.seconds} setDraft={setDraft} field="seconds"
+                         onCommit={(value) =>
+                           onChange({ params: { ...params, seconds: value } })} />
           </div>
         )}
         {hasPoll && (
           <div className="space-y-1.5">
             <Label className="text-xs">Check every (s)</Label>
-            <Input type="number" min={5} defaultValue={String(params.poll_seconds ?? 30)}
-                   onBlur={(e) => Number(e.target.value) !== Number(params.poll_seconds)
-                     && onChange({ params: { ...params, poll_seconds: Number(e.target.value) } })} />
+            <NumberField value={Number(params.poll_seconds ?? 30)} min={5}
+                         draft={draft.poll_seconds} setDraft={setDraft} field="poll_seconds"
+                         onCommit={(value) =>
+                           onChange({ params: { ...params, poll_seconds: value } })} />
           </div>
         )}
       </div>

@@ -125,6 +125,19 @@ export interface SyncChainEntry {
     role: 'master' | 'slave' | 'independent'
     /** Reasons this board's start signal would not propagate; empty when fine. */
     problems: string[]
+    /** Position in the chain, master first. Absent for an independent board. */
+    chain_position?: number
+    /**
+     * What this board actually needs for the chain to start — the master makes
+     * its own trigger, so it needs no TRG-IN → TRG-OUT, and the last board drives
+     * nothing at all.
+     */
+    needs?: {
+        start_mode_first_trigger: boolean
+        trg_out_trigger: boolean
+        sw_trigger_to_trg_out: boolean
+        ext_trigger_to_trg_out: boolean
+    }
 }
 
 export interface SyncSettings {
@@ -135,6 +148,14 @@ export interface SyncSettings {
     applicable: boolean
     /** The register the dashboard edits to change any of this. */
     register: string
+    /** The board that fires the software trigger, when there is a chain. */
+    master_board_id?: string | number | null
+    /**
+     * Whether the master was read from the hardware ('board register id') or
+     * assumed from the configuration ('configured id') — the latter is a guess,
+     * and the two differ when a board's register id is not its link number.
+     */
+    master_from?: 'board register id' | 'configured id' | 'none'
 }
 
 export const getSyncSettings = (): Promise<SyncSettings> =>
@@ -892,9 +913,19 @@ export type AlertRuleType = {
 export type AlertStatus = {
     watching: boolean;
     notify_recovery: boolean;
+    transports_ready?: Record<string, boolean>;
+    /** Rules the server could not understand, kept rather than dropped silently. */
+    rejected_rules?: { rule: unknown; reason: string }[];
+    load_error?: string;
     rules: {
         id: string;
         alerting: boolean;
+        /** False when every destination of this rule is off or unconfigured. */
+        deliverable: boolean;
+        transports_not_ready: string[];
+        /** True when the rule has had nothing to measure (no reading, no metric). */
+        unmeasured: boolean;
+        unmeasured_for: number | null;
         subjects: Record<string, {
             latched: boolean;
             value: number | string | null;
@@ -939,6 +970,70 @@ export const setNotificationSettings = (settings: { notify_recovery?: boolean })
 
 export const getAlertStatus = () =>
     api.get('/notifications/status').then(res => res.data as AlertStatus);
+
+export const setAlertWatcher = (action: 'start' | 'stop') =>
+    api.post('/notifications/watcher', { action })
+        .then(res => res.data as { message: string; status: AlertStatus });
+
+// ─── What happened while nobody was looking ──────────────────────────────────
+export type AlertEvent = {
+    id: string;
+    at: number;                       // epoch seconds
+    kind: 'alert' | 'recovery' | 'info';
+    title: string;
+    lines: string[];
+    rule_id: string;
+    rule_type: string;
+    subject: string;
+    run_number: number | null;
+    deliveries: Record<string, boolean>;
+    seen: boolean;
+};
+
+export type AlertEventSummary = {
+    unseen: number;
+    total: number;
+    latest: AlertEvent | null;
+    undelivered: number;              // unseen events that reached nobody
+};
+
+export const getAlertEvents = (params: { limit?: number; kind?: string; unseen?: boolean } = {}) =>
+    api.get('/notifications/events', { params }).then(res => res.data as {
+        events: AlertEvent[]; summary: AlertEventSummary;
+    });
+
+export const getAlertEventSummary = () =>
+    api.get('/notifications/events/summary').then(res => res.data as AlertEventSummary);
+
+export const markAlertEventsSeen = (ids?: string[]) =>
+    api.post('/notifications/events/seen', ids ? { ids } : {})
+        .then(res => res.data as { marked: number; summary: AlertEventSummary });
+
+export const clearAlertEvents = () =>
+    api.delete('/notifications/events').then(res => res.data as { removed: number });
+
+// ─── Recovery: the fix offered next to the problem ───────────────────────────
+export type RecoveryAction = {
+    name: string;
+    label: string;
+    description: string;
+    ok: boolean;                      // whether that subsystem looks healthy now
+    detail: string;
+    enabled: boolean;                 // false while a run makes it unsafe
+    blocked_reason: string;
+};
+
+export const getRecoveryActions = () =>
+    api.get('/recovery/actions').then(res => res.data as { actions: RecoveryAction[] });
+
+export const runRecoveryAction = (name: string) =>
+    api.post(`/recovery/actions/${name}`)
+        .then(res => res.data as { success: boolean; message: string })
+        .catch((e) => {
+            const data = e?.response?.data;
+            if (data && typeof data.message === 'string') return data as { success: boolean; message: string };
+            throw e;
+        });
 
 export const getElogEntries = (params: { limit?: number; offset?: number; search?: string } = {}) =>
     api.get('/elog/entries', { params }).then(res => res.data as ElogEntryList);

@@ -594,6 +594,13 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
             ? "Boards set to start on the first trigger are chained together, so they share one time origin and their timestamps are directly comparable."
             : "Every board starts on its own software command, so each one counts time from a different origin — timestamps are NOT comparable across boards. Set the boards to start on the first trigger to correlate events between them."}
         </p>
+        {chained && sync.master_from === "configured id" && (
+          <p className="text-xs text-muted-foreground mt-1 max-w-3xl">
+            The master below is assumed from the board configuration. CaenDAQ picks it by
+            the board&apos;s own register id, which is only readable while the boards are
+            open — start a run to have this checked against the hardware.
+          </p>
+        )}
       </CardHeader>
 
       <CardContent className="space-y-5">
@@ -625,7 +632,11 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                 </div>
                 <div className="text-xs text-muted-foreground mt-0.5">
                   {entry.role === "master"
-                    ? "Fires the software trigger that starts the chain."
+                    ? (entry.needs?.sw_trigger_to_trg_out
+                        ? "Armed, then started by its own software trigger, which also "
+                          + "leaves TRG-OUT to start the rest of the chain."
+                        : "Armed, then started by its own software trigger. No other "
+                          + "board follows it, so nothing has to leave TRG-OUT.")
                     : entry.role === "slave"
                     ? "Armed, then started by the trigger arriving on TRG-IN."
                     : "Starts by itself, outside the chain."}
@@ -700,9 +711,17 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                     <Label htmlFor={`sw-${entry.board_id}`} className="text-xs">
                       SW trigger → TRG-OUT
                     </Label>
+                    {entry.needs && (
+                      <span className={`text-[10px] ${
+                        entry.needs.sw_trigger_to_trg_out && !entry.sw_trigger_to_trg_out
+                          ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
+                        {!entry.needs.sw_trigger_to_trg_out ? "not needed here"
+                          : entry.sw_trigger_to_trg_out ? "needed — on" : "needed — off"}
+                      </span>
+                    )}
                     <InfoTooltip
                       side="bottom"
-                      text="Puts the software trigger on the TRG-OUT connector (0x8110 bit 31). The master needs this: without it, the trigger that starts the chain never leaves the board."
+                      text="Puts the software trigger on the TRG-OUT connector (0x8110 bit 31). Only the master needs this, and only when other boards follow it: without it, the trigger that starts the chain never leaves the board."
                     />
                   </div>
 
@@ -716,9 +735,17 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                     <Label htmlFor={`ext-${entry.board_id}`} className="text-xs">
                       TRG-IN → TRG-OUT
                     </Label>
+                    {entry.needs && (
+                      <span className={`text-[10px] ${
+                        entry.needs.ext_trigger_to_trg_out && !entry.ext_trigger_to_trg_out
+                          ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
+                        {!entry.needs.ext_trigger_to_trg_out ? "not needed here"
+                          : entry.ext_trigger_to_trg_out ? "needed — on" : "needed — off"}
+                      </span>
+                    )}
                     <InfoTooltip
                       side="bottom"
-                      text="Forwards the trigger arriving on TRG-IN straight back out (0x8110 bit 30), so the start walks to the next board. Every board except the last one in the chain needs this."
+                      text="Forwards a trigger arriving on TRG-IN straight back out (0x8110 bit 30), so the start walks to the next board. Boards in the middle of the chain need it. The master does not — no trigger arrives on its TRG-IN, it makes its own — and neither does the last board, which has nobody to pass it to."
                     />
                   </div>
                 </div>

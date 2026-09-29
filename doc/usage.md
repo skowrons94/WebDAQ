@@ -6,7 +6,7 @@ settings behind a screen, see:
 
 * [CAEN digitizers](caen-settings.md) — boards, trigger and energy filters, synchronisation, online tuning
 * [Beam current and charge](current-and-charge.md) — TetrAMM and RBD 9103
-* [Monitoring and alerts](monitoring-and-alerts.md) — Graphite, Grafana, Telegram
+* [Monitoring and alerts](monitoring-and-alerts.md) — Graphite, Grafana, Telegram and Zulip, Board Health, alert history and recovery
 * [ELOG](elog.md) — the collaboration logbook
 
 ---

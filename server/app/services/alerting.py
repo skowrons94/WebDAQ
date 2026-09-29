@@ -30,6 +30,7 @@ import os
 import threading
 import time
 import uuid
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -79,6 +80,14 @@ RULE_DEFAULTS: Dict[str, Dict[str, Any]] = {
 
 _MIN_SECONDS = 0
 _MIN_POLL_S = 5
+
+# The same subject of the same rule is not announced twice inside this window, so
+# a value sitting exactly on its threshold cannot flood the chat or the history.
+_MIN_RE_ALERT_S = 60.0
+
+# A current monitor that has produced nothing for this long is treated as unknown
+# rather than as reading its last value.
+_STALE_AFTER_S = 30.0
 
 
 class AlertConfigError(ValueError):
@@ -136,6 +145,14 @@ def _live_run_number() -> Optional[int]:
 def _live_beam_current() -> Optional[float]:
     """The latest beam current in µA, or None when there is nothing to read.
 
+    "Nothing to read" covers the case that matters during a campaign: a monitor
+    that is still *connected* but has stopped producing samples — a dead reader
+    thread, an instrument left in a menu, a Graphite metric that stopped arriving.
+    Its last reading would otherwise sit there looking like a measurement, and a
+    beam-current rule would happily keep quiet (or stay latched) on a number from
+    an hour ago. A timestamped sample is used when the controller offers one, so
+    silence reads as unknown rather than as good news.
+
     The current module can be swapped at runtime, so the controller is looked up
     through the module rather than held.
     """
@@ -144,10 +161,21 @@ def _live_beam_current() -> Optional[float]:
         controller = current_routes.controller
         if controller is None or not controller.is_connected():
             return None
-        data = controller.get_data()
-        if isinstance(data, dict):   # multi-channel (TetrAMM): the charge channel
-            data = data.get(str(controller.get_charge_channel()))
-        value = float(data)
+        value = None
+        history = None
+        if hasattr(controller, 'get_history'):
+            history = controller.get_history(since=time.time() - _STALE_AFTER_S,
+                                             max_points=64)
+            if history:
+                value = history[-1][1]
+        if value is None:
+            if history is not None:
+                return None          # connected, but nothing recent to report
+            data = controller.get_data()
+            if isinstance(data, dict):  # multi-channel (TetrAMM): charge channel
+                data = data.get(str(controller.get_charge_channel()))
+            value = data
+        value = float(value)
     except Exception as e:
         logger.debug(f"alerting: no beam current: {e}")
         return None
@@ -181,11 +209,18 @@ class AlertManager:
         self._transports = transports          # None -> resolved lazily (real ones)
         self.clock = clock
         self.rules: List[Dict[str, Any]] = []
+        # Rules the file held but that could not be understood, and why — shown on
+        # the settings page instead of disappearing.
+        self.rejected_rules: List[Dict[str, Any]] = []
+        self.load_error = ''
         self.notify_recovery = True
         # Rule state, keyed by (rule id, subject): subject is a board id for
         # board-scoped rules and '' for the rest.
         self.state: Dict[str, Dict[str, Any]] = {}
-        self._lock = threading.Lock()
+        # Reentrant: the rule state is written by the watcher thread and by the
+        # board monitor, and read by every settings request. Held only for the
+        # dictionary work — never across a network send.
+        self._lock = threading.RLock()
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
         self._load()
@@ -207,12 +242,35 @@ class AlertManager:
             try:
                 with open(_CONFIG_FILE, 'r') as f:
                     conf = json.load(f)
-                self.rules = [self._normalise(r) for r in conf.get('rules', [])]
+                # One unreadable rule must not cost the others: keep every rule
+                # that makes sense and report the rest, rather than silently
+                # falling back to the defaults and losing a shift's work.
+                self.rules, self.rejected_rules = [], []
+                for raw in conf.get('rules', []):
+                    try:
+                        self.rules.append(self._normalise(raw))
+                    except AlertConfigError as e:
+                        self.rejected_rules.append({'rule': raw, 'reason': str(e)})
+                        self.logger.error(f"Ignoring an alert rule: {e}")
                 self.notify_recovery = bool(conf.get('notify_recovery', True))
-                self.logger.info(f"Loaded {len(self.rules)} alert rule(s)")
+                self.logger.info(f"Loaded {len(self.rules)} alert rule(s)"
+                                 + (f", {len(self.rejected_rules)} ignored"
+                                    if self.rejected_rules else ""))
                 return
             except Exception as e:
+                # Do not quietly replace the operator's rules with the defaults:
+                # keep the unreadable file so it can be looked at (or fixed).
                 self.logger.error(f"Error loading alert rules: {e}")
+                stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+                backup = f"{_CONFIG_FILE}.unreadable-{stamp}"
+                try:
+                    os.replace(_CONFIG_FILE, backup)
+                    self.logger.error(f"Kept the unreadable rules as {backup}")
+                    self.load_error = (f"The alert rules could not be read and were "
+                                       f"replaced by the default rule. The file is kept "
+                                       f"as {backup}.")
+                except OSError as move_error:
+                    self.logger.error(f"Could not keep the unreadable rules: {move_error}")
         # First start: keep doing what WebDAQ did before rules existed — tell
         # Telegram about board failures — so an upgrade changes nothing silently.
         self.rules = [self._normalise({
@@ -256,8 +314,16 @@ class AlertManager:
         }
 
         params = dict(defaults['params'])
-        params.update({k: v for k, v in (rule.get('params') or {}).items()
-                       if k in defaults['params']})
+        given = rule.get('params') or {}
+        unknown_params = [k for k in given if k not in defaults['params']]
+        if unknown_params:
+            # Silently dropping these let a rule be "saved" with a threshold the
+            # operator never chose.
+            raise AlertConfigError(
+                f"{RULE_DEFAULTS[kind]['name']} has no setting called "
+                f"'{unknown_params[0]}'. It takes: "
+                f"{', '.join(sorted(defaults['params'])) or 'no settings'}.")
+        params.update({k: v for k, v in given.items() if k in defaults['params']})
 
         if 'comparison' in params:
             if params['comparison'] not in COMPARISONS:
@@ -334,36 +400,75 @@ class AlertManager:
             self._save()
 
     def _forget(self, rule_id: str) -> None:
-        for key in [k for k in self.state if k.startswith(f"{rule_id}:")]:
-            del self.state[key]
+        with self._lock:
+            for key in [k for k in self.state if k.startswith(f"{rule_id}:")]:
+                del self.state[key]
 
     # -------------------------------------------------------------------- status
+    def ready_transports(self) -> Dict[str, bool]:
+        """Which transports could actually deliver right now (on and configured)."""
+        ready = {}
+        for name, transport in self.transports().items():
+            try:
+                ready[name] = bool(getattr(transport, 'enabled', False)) and \
+                    bool(transport.is_configured())
+            except Exception:
+                ready[name] = False
+        return ready
+
     def get_status(self) -> Dict[str, Any]:
         """What each rule currently thinks, for the settings page."""
+        ready = self.ready_transports()
         with self._lock:
             rules = []
             for rule in self.rules:
-                subjects = {k.split(':', 1)[1]: v for k, v in self.state.items()
+                subjects = {k.split(':', 1)[1]: dict(v) for k, v in self.state.items()
                             if k.startswith(f"{rule['id']}:")}
+                unmeasured = [s.get('unmeasured_since') for s in subjects.values()
+                              if s.get('unmeasured_since')]
                 rules.append({
                     'id': rule['id'],
                     'alerting': any(s.get('latched') for s in subjects.values()),
+                    # True when every subject of this rule has had nothing to
+                    # measure: an unreachable Graphite, a monitor that stopped, a
+                    # counter this caendaq build does not report.
+                    'unmeasured': bool(unmeasured) and len(unmeasured) == len(subjects),
+                    'unmeasured_for': (int(self.clock() - min(unmeasured))
+                                       if unmeasured else None),
+                    # An enabled rule whose destinations are all off or
+                    # unconfigured watches faithfully and tells nobody.
+                    'deliverable': any(ready.get(t) for t in rule['transports']),
+                    'transports_not_ready': [t for t in rule['transports']
+                                             if not ready.get(t)],
                     'subjects': {name: {'latched': bool(s.get('latched')),
                                         'value': s.get('value'),
                                         'last_fired': s.get('last_fired')}
                                  for name, s in subjects.items()},
                 })
             return {'rules': rules, 'notify_recovery': self.notify_recovery,
-                    'watching': self.is_watching()}
+                    'watching': self.is_watching(),
+                    'transports_ready': ready,
+                    # Rules the file held that could not be understood, so they do
+                    # not simply vanish from the page.
+                    'rejected_rules': list(self.rejected_rules),
+                    'load_error': self.load_error}
+
+    # What a new run invalidates: these watch counters that restart with the run.
+    RUN_SCOPED_TYPES = (BOARD_FAILURE, STALLED_BUFFERS)
 
     def reset_run_state(self) -> None:
-        """Forget every verdict, at the start of a run.
+        """Forget the verdicts that belong to the previous run.
 
-        Board counters restart with the run, so a failure or a stall from the
-        previous run must not keep the next one's alert suppressed.
+        Board counters restart with the run, so a failure or a stall from the last
+        run must not keep the next one's alert suppressed. A beam current or a
+        Graphite value knows nothing about runs: clearing those as well sent one
+        duplicate message per run all night, which is how a channel gets ignored.
         """
         with self._lock:
-            self.state.clear()
+            run_scoped = {rule['id'] for rule in self.rules
+                          if rule['type'] in self.RUN_SCOPED_TYPES}
+            for key in [k for k in self.state if k.split(':', 1)[0] in run_scoped]:
+                del self.state[key]
 
     # ------------------------------------------------------------------ delivery
     def _send(self, rule: Dict[str, Any], title: str, lines: List[str]) -> Dict[str, bool]:
@@ -387,6 +492,29 @@ class AlertManager:
                                 f"{', '.join(rule['transports']) or 'none'})")
         return results
 
+    def _record(self, kind: str, rule: Dict[str, Any], subject: str, title: str,
+                lines: List[str], results: Dict[str, bool]) -> None:
+        """Keep the event, so a shift arriving later can read what happened."""
+        self._record_event(kind, title, lines, rule_id=rule['id'],
+                           rule_type=rule['type'], subject=subject, results=results)
+
+    def _record_event(self, kind: str, title: str, lines: List[str], rule_id: str,
+                      rule_type: str, subject: str, results: Dict[str, bool]) -> None:
+        try:
+            from .alert_log import get_alert_log
+            run = None
+            try:
+                run = self.sources.run_number() if self.sources.is_running() else None
+            except Exception:
+                run = None
+            get_alert_log().record(kind, title, lines, rule_id=rule_id,
+                                   rule_type=rule_type, subject=subject,
+                                   run_number=run, deliveries=results,
+                                   at=self.clock())
+        except Exception as e:
+            # Recording must never cost an alert.
+            self.logger.error(f"Could not log the alert '{title}': {e}")
+
     # ---------------------------------------------------------------- evaluation
     def evaluate(self) -> List[Dict[str, Any]]:
         """One pass over every enabled rule. Returns the alerts sent, for tests."""
@@ -395,6 +523,10 @@ class AlertManager:
         sent: List[Dict[str, Any]] = []
         with self._lock:
             rules = list(self.rules)
+        # Local measurements first. A Graphite query can take its whole 10 s
+        # deadline, and the pass is one thread: putting the remote rules last
+        # keeps a sick Graphite from delaying a board-stall alert by that much.
+        rules.sort(key=lambda r: r['type'] == GRAPHITE_METRIC)
         for rule in rules:
             if not rule.get('enabled'):
                 continue
@@ -435,9 +567,15 @@ class AlertManager:
         return True
 
     def _state_for(self, rule: Dict[str, Any], subject: str) -> Dict[str, Any]:
-        return self.state.setdefault(f"{rule['id']}:{subject}",
-                                     {'latched': False, 'since': None, 'value': None,
-                                      'last_fired': None})
+        with self._lock:
+            return self.state.setdefault(f"{rule['id']}:{subject}",
+                                         {'latched': False, 'since': None, 'value': None,
+                                          'last_fired': None})
+
+    def _subject_states(self, rule_id: str) -> List[Dict[str, Any]]:
+        """The state entries of one rule, as a snapshot safe to walk."""
+        with self._lock:
+            return [v for k, v in self.state.items() if k.startswith(f"{rule_id}:")]
 
     def _run_line(self, running: bool) -> str:
         run = self.sources.run_number()
@@ -446,10 +584,19 @@ class AlertManager:
         return 'No run is active'
 
     def _fire(self, rule: Dict[str, Any], subject: str, title: str,
-              lines: List[str], now: float, value: Any = None) -> Dict[str, Any]:
+              lines: List[str], now: float, value: Any = None) -> Optional[Dict[str, Any]]:
         state = self._state_for(rule, subject)
+        last = state.get('last_fired')
+        if last is not None and (now - float(last)) < _MIN_RE_ALERT_S:
+            # A condition flapping around its threshold would otherwise send a
+            # message every tick and roll the night's history out of the log.
+            state.update({'latched': True, 'value': value})
+            self.logger.info(f"Alert '{title}' held back: the same subject alerted "
+                             f"{int(now - float(last))} s ago")
+            return None
         state.update({'latched': True, 'last_fired': now, 'value': value})
         results = self._send(rule, title, lines)
+        self._record('alert', rule, subject, title, lines, results)
         return {'rule': rule['id'], 'type': rule['type'], 'subject': subject,
                 'title': title, 'lines': lines, 'recovery': False, 'results': results}
 
@@ -461,6 +608,7 @@ class AlertManager:
         if not (was_latched and self.notify_recovery):
             return []
         results = self._send(rule, title, lines)
+        self._record('recovery', rule, subject, title, lines, results)
         return [{'rule': rule['id'], 'type': rule['type'], 'subject': subject,
                  'title': title, 'lines': lines, 'recovery': True, 'results': results}]
 
@@ -477,18 +625,30 @@ class AlertManager:
         with self._lock:
             rules = [r for r in self.rules
                      if r['enabled'] and r['type'] == BOARD_FAILURE]
-        sent = []
+        lines = [f"Board {board_id}: {failure_type}",
+                 f"Run: {run_number}" if run_number is not None
+                 else self._run_line(bool(self.sources.is_running())),
+                 'The data from that point may be incomplete.']
+        lines.extend(extra_lines or [])
+
+        sent, considered = [], False
         for rule in rules:
             state = self._state_for(rule, str(board_id))
             if state['latched']:
+                considered = True
                 continue
-            lines = [f"Board {board_id}: {failure_type}",
-                     f"Run: {run_number}" if run_number is not None
-                     else self._run_line(bool(self.sources.is_running())),
-                     'The data from that point may be incomplete.']
-            lines.extend(extra_lines or [])
-            sent.append(self._fire(rule, str(board_id), rule['name'], lines,
-                                   now, failure_type))
+            considered = True
+            alert = self._fire(rule, str(board_id), rule['name'], lines,
+                               now, failure_type)
+            if alert:
+                sent.append(alert)
+        if not considered:
+            # Nobody asked to be told — but a board raising its FAIL flag is the
+            # event this whole system exists for, and a shift reading the history
+            # in the morning must find it there.
+            self._record_event('alert', 'Board failure (no alert configured)', lines,
+                               rule_id='', rule_type=BOARD_FAILURE,
+                               subject=str(board_id), results={})
         return sent
 
     def has_enabled_rule(self, kind: str) -> bool:
@@ -500,16 +660,50 @@ class AlertManager:
         seconds = rule['params']['seconds']
         if not running:
             # Between runs there is nothing to produce: forget the watch, quietly.
-            for key in [k for k in self.state if k.startswith(f"{rule['id']}:")]:
-                self.state[key].update({'latched': False, 'since': None, 'seen': None})
+            for state in self._subject_states(rule['id']):
+                state.update({'latched': False, 'since': None, 'seen': None})
             return []
+        diagnostics = self.sources.board_diagnostics() or {}
         sent = []
-        for board_id, diag in (self.sources.board_diagnostics() or {}).items():
+        if not diagnostics:
+            # The run is active and the acquisition reports no board at all: the
+            # whole readout has gone, not one board.
+            state = self._state_for(rule, '')
+            state['since'] = state.get('since') or now
+            missing_for = now - float(state['since'])
+            if missing_for >= seconds and not state['latched']:
+                alert = self._fire(
+                    rule, '', 'No board is producing data',
+                    [f"A run is active but no board has reported a counter for "
+                     f"{int(missing_for)} s",
+                     self._run_line(running),
+                     'The acquisition may have stopped without stopping the run — '
+                     'check the DAQ and server.log.'],
+                    now, None)
+                if alert:
+                    sent.append(alert)
+            return sent
+        # The readout is back: clear the "no board at all" verdict.
+        whole = self._state_for(rule, '')
+        if whole.get('latched'):
+            sent.extend(self._clear(
+                rule, '', 'Boards are reporting again',
+                ['The acquisition is reporting board counters again',
+                 self._run_line(running)], now, None))
+        else:
+            whole['since'] = None
+        for board_id, diag in diagnostics.items():
             buffers = diag.get('buffers_read')
             if buffers is None:
+                # This caendaq build does not report the counter: say so rather
+                # than leaving the board looking watched.
+                state = self._state_for(rule, board_id)
+                state['unmeasured_since'] = state.get('unmeasured_since') or now
                 continue
             state = self._state_for(rule, board_id)
             state['value'] = buffers
+            state['measured_at'] = now
+            state['unmeasured_since'] = None
             if state.get('seen') != buffers:
                 # Progress: note the new count and the moment we saw it move.
                 previous = state.get('seen')
@@ -523,7 +717,7 @@ class AlertManager:
                 continue
             stalled_for = now - float(state.get('since') or now)
             if stalled_for >= seconds and not state['latched']:
-                sent.append(self._fire(
+                alert = self._fire(
                     rule, board_id, 'Board stopped producing data',
                     [f"Board {board_id} has read no new data block for "
                      f"{int(stalled_for)} s",
@@ -531,7 +725,9 @@ class AlertManager:
                      self._run_line(running),
                      'The FAIL flag was not raised — check the board, the link '
                      'and the trigger.'],
-                    now, buffers))
+                    now, buffers)
+                if alert:
+                    sent.append(alert)
         return sent
 
     # --- a value against a threshold ------------------------------------------
@@ -543,9 +739,16 @@ class AlertManager:
             state.update({'latched': False, 'since': None})
             return []
         if value is None:
-            return []                      # unknown: leave the verdict alone
+            # Unknown: leave the verdict alone, but remember that we could not
+            # measure, so the settings page can say "nothing to measure" instead
+            # of showing this rule as healthy.
+            state = self._state_for(rule, '')
+            state['unmeasured_since'] = state.get('unmeasured_since') or now
+            return []
         state = self._state_for(rule, '')
         state['value'] = value
+        state['measured_at'] = now
+        state['unmeasured_since'] = None
         threshold, comparison = params['threshold'], params['comparison']
         breached = value < threshold if comparison == 'below' else value > threshold
         shown = f"{value:g}{(' ' + unit) if unit else ''}"
@@ -565,15 +768,23 @@ class AlertManager:
         if params['seconds']:
             lines.append(f"It has been {comparison} the limit for {int(held_for)} s")
         lines.append(self._run_line(running))
-        return [self._fire(rule, '', rule['name'], lines, now, value)]
+        alert = self._fire(rule, '', rule['name'], lines, now, value)
+        return [alert] if alert else []
 
     # ------------------------------------------------------------------- watcher
     def is_watching(self) -> bool:
         return bool(self._thread and self._thread.is_alive())
 
     def start(self, interval: float = DEFAULT_TICK_S) -> None:
-        if self.is_watching():
+        # A thread that is still alive but told to stop is not watching: starting
+        # used to no-op here and report success, leaving nothing evaluating rules.
+        if self.is_watching() and not self._stop.is_set():
             return
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+            if self._thread.is_alive():
+                self.logger.warning("The previous alert watcher is still finishing a "
+                                    "pass; starting a new one alongside it")
         self._stop.clear()
         self._thread = threading.Thread(target=self._watch, args=(interval,),
                                        name='alert-watcher', daemon=True)
@@ -584,6 +795,11 @@ class AlertManager:
         self._stop.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
+            if self._thread.is_alive():
+                # Say so: a pass stuck in a 10 s send is not "stopped".
+                self.logger.warning("The alert watcher is still finishing a pass; it "
+                                    "will stop when that returns")
+                return
         self.logger.info("Alert watcher stopped")
 
     def _watch(self, interval: float) -> None:

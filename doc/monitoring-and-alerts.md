@@ -194,16 +194,22 @@ Two rules keep the messages worth reading:
 Rules live in `conf/alerts.json`. A DAQ machine that has never had rules starts
 with the one WebDAQ always had: board failures to Telegram.
 
+A rule only works while the server is *watching*: the badge at the top of the
+panel says so, and offers **Start watching** when it is not (a backend started
+without `main.py` has no watcher). A rule whose destinations are all switched off
+is marked **reaches nobody** rather than looking armed.
+
 Auto-restart, configured under Run Control, is what a board-failure message refers
 to: the run is stopped and started again after the delay, so a night shift does
 not lose hours to a board that hiccupped.
 
 ---
 
-## 5a. The Board Health page
+## 6. The Board Health tab
 
-**Board Health** in the navigation shows what each board has actually done during
-this run, which is the question that follows "is it failed?":
+**Board Health**, a tab on the Dashboard next to Overview, shows what each board
+has actually done during this run, which is the question that follows "is it
+failed?":
 
 * **Data blocks** read from the board, and events decoded from them, each with its
   current rate.
@@ -219,7 +225,42 @@ counter.
 
 ---
 
-## 6. What to check when a number is missing
+## 7. What happened while nobody was looking
+
+A message is gone once it is read, so every alert and every recovery is also
+written on the server, in `conf/alert_log.json` (the most recent 500, kept across
+restarts).
+
+* The **bell** in the header carries the unread count. It turns amber when
+  something reached nobody — a wrong token, a network outage, both destinations
+  off.
+* **Activity** in the navigation is the full history: time, what happened, which
+  board or value, which run, and which destinations actually received it. Filter
+  by problems, recoveries or actions.
+
+This is the page to open after a night shift, or after finding the DAQ stopped:
+it answers "what happened at 03:00" without anyone having to have been awake.
+
+### Recovery
+
+The same page carries the fixes, each showing whether that part is healthy right
+now:
+
+| Action | Use it when |
+|---|---|
+| **Reopen the boards** | a board reads as disconnected after a link glitch (not during a run) |
+| **Reset the acquisition** | a run failed or the boards are wedged (not during a run) |
+| **Reconnect the current monitor** | the beam current reads as disconnected, or stops updating |
+| **Restart the statistics** | `stats.csv` stopped being written mid-run. What was already collected is kept as `stats.csv.part1` |
+| **Re-check Graphite** | after a Graphite outage, to clear the "unavailable" state it leaves behind |
+
+Nothing here runs by itself, and an action that would cost data is refused while a
+run is in progress and says so. Auto-restart remains the one thing that acts
+unattended, and only when switched on.
+
+---
+
+## 8. What to check when a number is missing
 
 | Symptom | Look at |
 |---------|---------|

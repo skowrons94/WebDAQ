@@ -29,7 +29,7 @@ machine to a written logbook entry.
 | [CAEN digitizers](caen-settings.md) | Scanning and adding boards, thresholds and trapezoid settings, PSD gates, multi-board synchronisation, online tuning. |
 | [Spectra and ROIs](histograms-and-rois.md) | The histogram dashboard, regions of interest, and the per-run `roi.json`. |
 | [Beam current and charge](current-and-charge.md) | TetrAMM, RBD 9103, a monitored Graphite value, and what the two accumulated charges mean. |
-| [Monitoring and alerts](monitoring-and-alerts.md) | Graphite, Grafana, the Stats page, `stats.csv`, run-linked alerts, Telegram. |
+| [Monitoring and alerts](monitoring-and-alerts.md) | Graphite, Grafana, the Stats page, `stats.csv`, run-linked alerts, Telegram and Zulip, Board Health, the alert history and recovery. |
 | [ELOG](elog.md) | Reading and writing the collaboration logbook from run control. |
 | [Directory structure](directory-structure.md) | What lives where in the repository and in a working directory. |
 | [Server architecture](server-architecture.md) | Technical reference for developers. |

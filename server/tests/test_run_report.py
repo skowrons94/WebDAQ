@@ -229,3 +229,57 @@ class AttributeMappingTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class StatsInPiecesTests(unittest.TestCase):
+    """A run whose statistics were restarted mid-run still reports the whole run."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix='webdaq-report-pieces-')
+        self.cwd = os.getcwd()
+        os.chdir(self.tmp)
+        self.run_dir = os.path.join('data', 'run5')
+        os.makedirs(self.run_dir, exist_ok=True)
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write(self, name, rows):
+        with open(os.path.join(self.run_dir, name), 'w') as f:
+            f.write("# LUNA DAQ statistics\n# Run number: 5\n#\n")
+            f.write("Time [s],Terminal Voltage [kV]\n")
+            for row in rows:
+                f.write(f"{row[0]},{row[1]}\n")
+
+    def test_every_piece_is_read_oldest_first(self):
+        self.write('stats.csv.part1', [(0, 380.0), (1, 381.0)])
+        self.write('stats.csv', [(0, 400.0), (1, 402.0)])
+
+        stats = run_report.read_stats(5)
+
+        self.assertTrue(stats['available'])
+        self.assertEqual(stats['n_samples'], 4)
+        metric = stats['metrics'][0]
+        self.assertEqual(metric['min'], 380.0)
+        self.assertEqual(metric['max'], 402.0)
+        self.assertTrue(metric['recorded'])
+        self.assertEqual(stats['pieces'], ['stats.csv.part1', 'stats.csv'])
+
+    def test_metrics_recorded_only_before_a_restart_are_not_called_unrecorded(self):
+        # The pre-restart rows used to be invisible, so a metric that stopped
+        # being written was reported as never recorded at all.
+        self.write('stats.csv.part1', [(0, 380.0), (1, 381.0)])
+        self.write('stats.csv', [(0, 0.0), (1, 0.0)])
+
+        metric = run_report.read_stats(5)['metrics'][0]
+
+        self.assertTrue(metric['recorded'])
+        self.assertEqual(metric['min'], 0.0)
+        self.assertEqual(metric['max'], 381.0)
+
+    def test_a_run_with_one_file_is_unchanged(self):
+        self.write('stats.csv', [(0, 400.0)])
+        stats = run_report.read_stats(5)
+        self.assertEqual(stats['n_samples'], 1)
+        self.assertNotIn('pieces', stats)

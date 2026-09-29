@@ -90,6 +90,21 @@ class RuleConfigTests(AlertTestCase):
                           for r in fresh.get_rules()],
                          [(BOARD_FAILURE, ['telegram'], True)])
 
+    def test_unreadable_rules_are_kept_rather_than_replaced(self):
+        self.rule(BEAM_CURRENT, threshold=5.0)
+        with open(os.path.join(self.tmp, 'conf', 'alerts.json'), 'w') as f:
+            f.write('{ this is not json')
+
+        fresh = AlertManager(sources=self.sources,
+                             transports={'telegram': self.telegram})
+
+        # It falls back to the default rule, but the operator's file is still there.
+        self.assertEqual([r['type'] for r in fresh.get_rules()], [BOARD_FAILURE])
+        import glob
+        self.assertTrue(glob.glob(os.path.join(self.tmp, 'conf',
+                                               'alerts.json.unreadable-*')),
+                        'the unreadable file was not kept')
+
     def test_rules_survive_a_restart(self):
         self.rule(BEAM_CURRENT, threshold=5.0, comparison='below',
                   transports=['telegram', 'zulip'])
@@ -305,7 +320,16 @@ class BeamCurrentTests(AlertTestCase):
         self.assertIn('back in range', self.telegram.messages[1])
         self.assertEqual(self.tick(2.0), [])     # nothing more to say
 
-        self.current = 2.0                       # a second episode does alert
+        # A second episode inside the quiet window is held back rather than
+        # sending a near-duplicate...
+        self.current = 2.0
+        self.tick()
+        self.assertEqual(self.tick(40.0), [])
+
+        # ...and a later one is announced again.
+        self.current = 50.0
+        self.tick(30.0)
+        self.current = 2.0
         self.tick()
         self.assertEqual(len(self.tick(40.0)), 1)
 
@@ -390,6 +414,275 @@ class GraphiteMetricTests(AlertTestCase):
 
         self.assertEqual(len(sent), 2)
         self.assertEqual(len(self.telegram.messages), 2)
+
+
+class ThingsBreakingTests(AlertTestCase):
+    """What a shift actually meets: a board, a monitor or Graphite giving up."""
+
+    def test_the_settings_page_survives_alerts_arriving_while_it_reads(self):
+        # The state is written by the watcher and by the board monitor while every
+        # settings poll reads it: an unguarded dict raised "changed size during
+        # iteration" and 500'd the page.
+        import threading
+        self.rule(BOARD_FAILURE)
+        errors = []
+        stop = threading.Event()
+
+        def hammer():
+            n = 0
+            while not stop.is_set():
+                try:
+                    self.mgr.board_failure(f"board{n % 50}", 'Board FAIL flag', 42)
+                    self.mgr.get_status()
+                except Exception as e:                  # noqa: BLE001 - that is the test
+                    errors.append(e)
+                n += 1
+
+        threads = [threading.Thread(target=hammer) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for _ in range(200):
+            try:
+                self.mgr.get_status()
+            except Exception as e:                      # noqa: BLE001
+                errors.append(e)
+        stop.set()
+        for t in threads:
+            t.join(timeout=5)
+
+        self.assertEqual(errors, [])
+
+    def test_a_rule_with_no_working_destination_says_so(self):
+        # Enabled, watching, and telling nobody: the page has to show that.
+        self.telegram.enabled = False
+        self.telegram.is_configured = lambda: True
+        self.zulip.enabled = True
+        self.zulip.is_configured = lambda: False
+        rule = self.rule(BEAM_CURRENT, threshold=5.0, transports=['telegram', 'zulip'])
+
+        status = self.mgr.get_status()['rules'][0]
+
+        self.assertEqual(status['id'], rule['id'])
+        self.assertFalse(status['deliverable'])
+        self.assertEqual(sorted(status['transports_not_ready']), ['telegram', 'zulip'])
+
+    def test_a_rule_with_one_working_destination_is_deliverable(self):
+        self.telegram.enabled = True
+        self.telegram.is_configured = lambda: True
+        self.zulip.enabled = False
+        self.zulip.is_configured = lambda: False
+        self.rule(BOARD_FAILURE, transports=['telegram', 'zulip'])
+
+        status = self.mgr.get_status()['rules'][0]
+
+        self.assertTrue(status['deliverable'])
+        self.assertEqual(status['transports_not_ready'], ['zulip'])
+
+    def test_local_rules_are_evaluated_before_graphite_ones(self):
+        # One thread does the pass; a Graphite server that accepts and then stalls
+        # must not delay noticing that a board stopped reading.
+        order = []
+        self.rule(GRAPHITE_METRIC, metric='luna.slow', seconds=0, poll_seconds=5)
+        self.rule(STALLED_BUFFERS, seconds=0)
+        self.diagnostics = {'0': {'buffers_read': 10, 'board_failures': 0}}
+        self.sources.metric_value = lambda path: (order.append('graphite'), None)[1]
+        original = self.sources.board_diagnostics
+        self.sources.board_diagnostics = lambda: (order.append('boards'), original())[1]
+
+        self.tick()
+
+        self.assertEqual(order[0], 'boards')
+
+    def test_a_board_that_vanishes_mid_run_is_not_reported_as_recovered(self):
+        self.rule(STALLED_BUFFERS, seconds=5)
+        self.diagnostics = {'0': {'buffers_read': 100, 'board_failures': 0}}
+        self.tick()
+        self.tick(10.0)                      # stalled -> alert
+        self.assertEqual(len(self.telegram.messages), 1)
+
+        # caendaq stops reporting the board at all (run torn down, module gone).
+        self.diagnostics = {}
+        self.assertEqual(self.tick(10.0), [])
+        self.assertEqual(len(self.telegram.messages), 1)
+
+    def test_a_transport_that_raises_does_not_stop_the_other(self):
+        def explode(message):
+            raise RuntimeError('socket closed')
+        self.telegram.send_message = explode
+        self.rule(BOARD_FAILURE, transports=['telegram', 'zulip'])
+
+        sent = self.mgr.board_failure('0', 'Board FAIL flag', 42)
+
+        self.assertEqual(sent[0]['results'], {'telegram': False, 'zulip': True})
+        self.assertEqual(len(self.zulip.messages), 1)
+
+
+class BeamCurrentSourceTests(unittest.TestCase):
+    """Reading the current monitor, including when it has quietly stopped."""
+
+    def source(self, controller):
+        from app.routes import current as current_routes
+        from app.services.alerting import _live_beam_current
+        with mock.patch.object(current_routes, 'controller', controller):
+            return _live_beam_current()
+
+    def controller(self, history=None, data=5.0, connected=True, with_history=True):
+        c = mock.MagicMock()
+        c.is_connected.return_value = connected
+        c.get_data.return_value = data
+        c.get_charge_channel.return_value = 0
+        if with_history:
+            c.get_history.return_value = history if history is not None else []
+        else:
+            del c.get_history
+        return c
+
+    def test_a_recent_sample_is_used(self):
+        import time
+        now = time.time()
+        self.assertEqual(self.source(self.controller(history=[[now - 1, 12.5]])), 12.5)
+
+    def test_a_monitor_with_nothing_recent_reads_unknown(self):
+        # Connected, but the readings stopped: its last value is not a measurement.
+        self.assertIsNone(self.source(self.controller(history=[])))
+
+    def test_a_disconnected_monitor_reads_unknown(self):
+        self.assertIsNone(self.source(self.controller(connected=False)))
+
+    def test_a_controller_without_history_falls_back_to_the_latest_value(self):
+        self.assertEqual(self.source(self.controller(data=7.0, with_history=False)), 7.0)
+
+    def test_a_multi_channel_monitor_uses_its_charge_channel(self):
+        c = self.controller(data={'0': 3.0, '1': 9.0}, with_history=False)
+        self.assertEqual(self.source(c), 3.0)
+
+    def test_nan_reads_unknown(self):
+        self.assertIsNone(self.source(self.controller(data=float('nan'),
+                                                      with_history=False)))
+
+    def test_no_monitor_at_all_reads_unknown(self):
+        self.assertIsNone(self.source(None))
+
+
+class NothingIsLostTests(AlertTestCase):
+    """The failures a shift would only discover from missing data."""
+
+    def test_one_bad_rule_does_not_cost_the_others(self):
+        self.rule(BEAM_CURRENT, threshold=5.0)
+        self.rule(BOARD_FAILURE)
+        stored = json.load(open(os.path.join(self.tmp, 'conf', 'alerts.json')))
+        stored['rules'].insert(1, {'type': 'graphite_metric', 'params': {'metric': ''}})
+        with open(os.path.join(self.tmp, 'conf', 'alerts.json'), 'w') as f:
+            json.dump(stored, f)
+
+        fresh = AlertManager(sources=self.sources,
+                            transports={'telegram': self.telegram})
+
+        self.assertEqual([r['type'] for r in fresh.get_rules()],
+                         [BEAM_CURRENT, BOARD_FAILURE])
+        rejected = fresh.get_status()['rejected_rules']
+        self.assertEqual(len(rejected), 1)
+        self.assertIn('metric path', rejected[0]['reason'])
+
+    def test_a_board_failure_is_recorded_even_with_no_rule_for_it(self):
+        from app.services import alert_log as module
+        module._log = None
+        self.addCleanup(setattr, module, '_log', None)
+        log = module.get_alert_log()
+
+        self.assertEqual(self.mgr.board_failure('2', 'Board FAIL flag (1 data block)', 9), [])
+
+        event = log.list_events()[0]
+        self.assertEqual(event['kind'], 'alert')
+        self.assertEqual(event['subject'], '2')
+        self.assertIn('no alert configured', event['title'])
+
+    def test_a_run_start_does_not_re_announce_a_standing_current_problem(self):
+        # 40 runs a night would otherwise send 40 identical messages.
+        self.rule(BEAM_CURRENT, threshold=10.0, seconds=0)
+        self.current = 1.0
+        self.assertEqual(len(self.tick()), 1)
+
+        self.mgr.reset_run_state()               # what a run start does
+        self.assertEqual(self.tick(120.0), [])
+        self.assertEqual(len(self.telegram.messages), 1)
+
+    def test_a_run_start_does_re_arm_the_board_rules(self):
+        self.rule(BOARD_FAILURE)
+        self.mgr.board_failure('0', 'Board FAIL flag', 1)
+        self.mgr.reset_run_state()
+        self.mgr.board_failure('0', 'Board FAIL flag', 2)
+
+        self.assertEqual(len(self.telegram.messages), 2)
+
+    def test_a_flapping_condition_cannot_flood_the_history(self):
+        self.rule(STALLED_BUFFERS, seconds=0)
+        self.diagnostics = {'0': {'buffers_read': 100, 'board_failures': 0}}
+
+        # A board producing one block every 6 s, watched every 2 s.
+        for step in range(12):
+            if step % 3 == 0:
+                self.diagnostics['0']['buffers_read'] += 1
+            self.tick(2.0)
+
+        alerts = [m for m in self.telegram.messages if 'stopped producing' in m]
+        self.assertEqual(len(alerts), 1, f"one alert per minute, got {len(alerts)}")
+
+    def test_a_run_with_no_board_reporting_at_all_is_reported(self):
+        # The acquisition died without stopping the run: the case the stall rule
+        # could not see, because it walked an empty board list.
+        self.rule(STALLED_BUFFERS, seconds=10)
+        self.diagnostics = {}
+
+        self.assertEqual(self.tick(), [])
+        sent = self.tick(15.0)
+
+        self.assertEqual(len(sent), 1)
+        self.assertIn('no board has reported', self.telegram.messages[0])
+
+        # And it clears when the readout comes back.
+        self.diagnostics = {'0': {'buffers_read': 5, 'board_failures': 0}}
+        recovery = self.tick(2.0)
+        self.assertTrue(recovery and recovery[0]['recovery'])
+
+    def test_a_rule_that_cannot_measure_says_so(self):
+        self.rule(BEAM_CURRENT, threshold=10.0, seconds=0)
+        self.current = None
+
+        self.tick()
+        self.tick(30.0)
+        status = self.mgr.get_status()['rules'][0]
+
+        self.assertTrue(status['unmeasured'])
+        self.assertGreaterEqual(status['unmeasured_for'], 30)
+        self.assertFalse(status['alerting'])
+
+    def test_a_rule_that_can_measure_is_not_flagged_unmeasured(self):
+        self.rule(BEAM_CURRENT, threshold=10.0, seconds=0)
+        self.current = 50.0
+
+        self.tick()
+
+        self.assertFalse(self.mgr.get_status()['rules'][0]['unmeasured'])
+
+
+class WatcherRestartTests(AlertTestCase):
+    def test_starting_after_a_stop_that_timed_out_really_starts(self):
+        # Stop while a pass is stuck, then Start: the page used to report
+        # "watching" while nothing evaluated any rule again.
+        import threading, time as real_time
+        release = threading.Event()
+        self.mgr.evaluate = lambda: release.wait(3.0)
+
+        self.mgr.start(interval=0.01)
+        real_time.sleep(0.05)
+        self.mgr._stop.set()                 # a stop whose join would time out
+        self.mgr.start(interval=0.01)
+
+        self.assertFalse(self.mgr._stop.is_set())
+        self.assertTrue(self.mgr.is_watching())
+        release.set()
+        self.mgr.stop()
 
 
 class WatcherTests(AlertTestCase):

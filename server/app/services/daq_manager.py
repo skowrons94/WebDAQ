@@ -60,9 +60,24 @@ class DAQManager:
         """
         self.logger = logging.getLogger(__name__ + '.DAQManager')
         self.test_flag = test_flag
+        # One writer at a time for conf/settings.json (see _update_project).
+        self._state_file_lock = threading.Lock()
         
         # Initialize DAQ state
         self.daq_state = self._load_or_create_state()
+
+        # Acquisition runs inside this process, so a fresh manager means nothing is
+        # acquiring — whatever the file says. A 'running' left behind by a crash or
+        # a restart used to make the server claim a run was in progress: recovery
+        # refused to reopen the boards, the stall alert watched an empty board list,
+        # and the charge was filed against a run that had ended.
+        if self.daq_state.get('running'):
+            self.logger.warning(
+                "conf/settings.json says a run was in progress, but the acquisition "
+                "cannot survive a restart — clearing that flag. Run "
+                f"{self.daq_state.get('run')} ended when the server stopped.")
+            self.daq_state['running'] = False
+            self.daq_state['start_time'] = None
         
         # Initialize digitizer container for persistent connections
         self.digitizer_container = DigitizerContainer(test_flag=test_flag)
@@ -134,7 +149,17 @@ class DAQManager:
                 self.logger.info("Loaded existing DAQ state")
                 return state
             except Exception as e:
+                # Do not overwrite it with defaults and lose the board
+                # configuration: keep the file so it can be repaired.
                 self.logger.error(f"Error loading DAQ state: {e}")
+                stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+                try:
+                    os.replace(settings_file, f"{settings_file}.unreadable-{stamp}")
+                    self.logger.error(f"Kept the unreadable settings as "
+                                      f"{settings_file}.unreadable-{stamp}")
+                except OSError as move_error:
+                    self.logger.error(f"Could not keep the unreadable settings: "
+                                      f"{move_error}")
         
         # Create default state
         default_state = {
@@ -157,10 +182,21 @@ class DAQManager:
         return default_state
     
     def _update_project(self) -> None:
-        """Persist the DAQ state to conf/settings.json."""
+        """Persist the DAQ state to conf/settings.json.
+
+        Written to a temporary file and moved into place, under a lock: this is
+        called from request threads and from background threads (the auto-restart,
+        the run-state listeners), and two interleaved writes used to leave invalid
+        JSON — which the next start read as "no boards configured", replacing the
+        board configuration with an empty one.
+        """
+        path = 'conf/settings.json'
         try:
-            with open('conf/settings.json', 'w') as f:
-                json.dump(self.daq_state, f, indent=4)
+            with self._state_file_lock:
+                tmp = path + '.tmp'
+                with open(tmp, 'w') as f:
+                    json.dump(self.daq_state, f, indent=4)
+                os.replace(tmp, path)
             self.logger.debug("Project configuration updated")
         except Exception as e:
             self.logger.error(f"Error updating project: {e}")
@@ -1012,8 +1048,20 @@ class DAQManager:
         Should be called when a run starts.
         """
         if self.monitor_thread and self.monitor_thread.is_alive():
-            self.logger.warning("Board monitoring thread already running")
-            return
+            # It should have been stopped with the last run. A thread wedged in a
+            # CAEN read survives its 5 s join, and returning here used to leave the
+            # new run with no monitoring thread at all — no failure detection, no
+            # alert, no auto-restart — with the previous run's flags still set.
+            self.logger.warning(
+                "The board monitor from the previous run is still finishing; asking "
+                "it to stop and starting a fresh one for this run")
+            self.monitor_stop_event.set()
+            self.monitor_thread.join(timeout=2.0)
+            if self.monitor_thread.is_alive():
+                self.logger.warning(
+                    "The previous board monitor has not exited; the new one starts "
+                    "alongside it (it will exit on its next pass)")
+            self.monitor_thread = None
 
         # Reset all board statuses
         for board in self.daq_state['boards']:

@@ -14,6 +14,7 @@ from ..services.caen_acquisition import get_caen_acquisition
 from ..services.run_metadata_snapshot import sync_run_metadata_file
 # Module-level helpers that read synchronisation straight from the board configs.
 from ..services import caen_acquisition
+from ..services import sync_chain
 
 logger = logging.getLogger(__name__)
 
@@ -500,78 +501,12 @@ def get_file_size_limit():
 @bp.route("/experiment/get_sync_settings", methods=['GET'])
 @jwt_required_custom
 def get_sync_settings():
-    boards = daq_mgr.get_boards()
+    """How the boards are synchronised, and what would stop the chain starting.
 
-    chain = []
-    synced = []
-    for board in boards:
-        acq = caen_acquisition.acquisition_control_of(board)
-        fpio = caen_acquisition.front_panel_io_of(board)
-        trg_out = caen_acquisition.trg_out_mask_of(board)
-        mode = acq & 0x3
-        entry = {
-            'board_id': board['id'],
-            'name': board['name'],
-            'start_mode': mode,
-            'start_mode_name': caen_acquisition.START_MODE_NAMES.get(mode, 'unknown'),
-            'synchronised': mode != caen_acquisition.START_MODE_SW,
-            # PLL reference clock (0x8100 bit[6]): 0 = internal 50 MHz oscillator,
-            # 1 = external CLK-IN. Boards sharing a clock stay phase-aligned for
-            # the whole run, which synchronising the START alone does not give.
-            'clock_source': (acq >> 6) & 0x1,
-            'acquisition_control': acq,
-            # ── What actually reaches the cable ──
-            # 0x811C[17:16]: 0 = Trigger (per 0x8110), 1 = motherboard probe,
-            # 2 = channel probe, 3 = S-IN/GPI propagation. Must be 0 to chain.
-            'trg_out_mode': (fpio >> 16) & 0x3,
-            'front_panel_io_control': fpio,
-            # 0x8110[31] software trigger -> TRG-OUT (the master needs this, or
-            # its SendSWTrigger never leaves the board).
-            'sw_trigger_to_trg_out': (trg_out >> 31) & 0x1,
-            # 0x8110[30] external TRG-IN -> TRG-OUT (a board needs this to pass
-            # the start on to the next one in the chain).
-            'ext_trigger_to_trg_out': (trg_out >> 30) & 0x1,
-            'trg_out_mask': trg_out,
-            'role': 'independent',   # replaced below for the chained boards
-        }
-        chain.append(entry)
-        if entry['synchronised']:
-            synced.append(entry)
-
-    # The master fires the software trigger that starts the chain: board register
-    # id 0 by CAEN convention, else the first synchronised board. Mirrors
-    # Daq::masterIndex() on the caendaq side.
-    if synced:
-        master = next((e for e in synced if str(e['board_id']) == '0'), synced[0])
-        for entry in synced:
-            entry['role'] = 'master' if entry is master else 'slave'
-
-    # A chain can be perfectly armed and still never start, because the start
-    # pulse never reaches the cable. Check the propagation path explicitly
-    # rather than leaving the operator to discover it from an empty run.
-    for i, entry in enumerate(synced):
-        problems = []
-        if entry['trg_out_mode'] != 0:
-            problems.append(
-                "TRG-OUT is not set to carry the trigger, so nothing reaches the next board")
-        if entry['role'] == 'master' and not entry['sw_trigger_to_trg_out']:
-            problems.append(
-                "the software trigger is not routed to TRG-OUT, so the chain will never start")
-        # Every board except the last one has to pass the start along.
-        if i < len(synced) - 1 and not entry['ext_trigger_to_trg_out']:
-            problems.append(
-                "TRG-IN is not routed to TRG-OUT, so boards after this one will not start")
-        entry['problems'] = problems
-
-    return jsonify({
-        'mode': 'daisy-chain' if synced else 'independent',
-        'chain': chain,
-        'synchronised_count': len(synced),
-        # A single board has nothing to chain to.
-        'applicable': len(boards) > 1,
-        # The register the dashboard edits to change any of this.
-        'register': 'reg_8100',
-    })
+    The chain model and its checks live in services/sync_chain.py, next to the
+    explanation of how caendaq starts a synchronised run.
+    """
+    return jsonify(sync_chain.chain_status(daq_mgr.get_boards()))
 
 
 @bp.route("/experiment/board_info", methods=['GET'])
