@@ -638,6 +638,18 @@ def get_stats():
     file write rate) from the caendaq statistics collector."""
     return jsonify(caen_acq.stats()), 200
 
+@bp.route('/experiment/board_diagnostics', methods=['GET'])
+@jwt_required_custom
+def get_board_diagnostics():
+    """Every readout counter caendaq keeps per board this run (buffers, bytes,
+    dropped blocks, comm errors, decoded events, FAIL aggregates), for the Board
+    Health page. Empty between runs, since the counters live with the run."""
+    return jsonify({
+        'running': caen_acq.is_running(),
+        'boards': caen_acq.board_diagnostics(),
+        'fail_meaning': caen_acq.board_fail_meaning(),
+    }), 200
+
 @bp.route('/experiment/reset', methods=['POST'])
 @jwt_required_custom
 def reset():

@@ -36,6 +36,8 @@ class AuthenticationTests(RouteTestCase):
     def test_endpoints_require_a_token(self):
         for url in ('/digitizer/scan', '/digitizer/boards', '/elog/entries', '/grafana/settings',
                     '/grafana/alert-rules',
+                    '/notifications/transports', '/notifications/rules',
+                    '/notifications/status', '/experiment/board_diagnostics',
                     '/stats/paths', '/stats/connection'):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 401, f'{url} is unauthenticated')
@@ -222,6 +224,75 @@ class ElogRouteTests(RouteTestCase):
     def test_a_foreign_attachment_host_is_refused(self):
         response = self.get('/elog/attachment?url=https://evil.example.com/x.png')
         self.assertEqual(response.status_code, 502)
+
+
+class NotificationRouteTests(RouteTestCase):
+    """The screens in Settings -> Notifications talk to these."""
+
+    def test_transports_are_listed_with_their_secrets_masked(self):
+        response = self.get('/notifications/transports')
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertIn('telegram', body)
+        self.assertIn('zulip', body)
+        for transport in body.values():
+            self.assertIn('configured', transport)
+
+    def test_a_zulip_key_is_stored_but_never_returned(self):
+        response = self.post('/notifications/transports/zulip', {
+            'site': 'chat.example.org', 'bot_email': 'bot@example.org',
+            'api_key': 'super-secret', 'stream': 'LUNA DAQ'})
+        self.assertEqual(response.status_code, 200)
+        settings = response.get_json()['settings']
+        self.assertEqual(settings['site'], 'https://chat.example.org')
+        self.assertNotIn('super-secret', json.dumps(settings))
+
+    def test_testing_an_unknown_transport_is_refused(self):
+        response = self.post('/notifications/transports/carrier-pigeon/test')
+        self.assertEqual(response.status_code, 400)
+
+    def test_rules_round_trip_through_the_api(self):
+        created = self.post('/notifications/rules', {
+            'type': 'beam_current', 'transports': ['telegram'],
+            'params': {'comparison': 'below', 'threshold': 5, 'seconds': 10}})
+        self.assertEqual(created.status_code, 201)
+        rule_id = created.get_json()['rule']['id']
+
+        listed = self.get('/notifications/rules')
+        self.assertEqual(listed.status_code, 200)
+        body = listed.get_json()
+        self.assertIn(rule_id, [r['id'] for r in body['rules']])
+        self.assertTrue(body['types'])          # the UI offers these
+        self.assertIn('rules', body['status'])
+
+        updated = self.client.put(f'/notifications/rules/{rule_id}', headers=self.auth,
+                                  json={'params': {'threshold': 8}})
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.get_json()['rule']['params']['threshold'], 8.0)
+
+        deleted = self.client.delete(f'/notifications/rules/{rule_id}', headers=self.auth)
+        self.assertEqual(deleted.status_code, 200)
+        self.assertNotIn(rule_id, [r['id'] for r in
+                                   self.get('/notifications/rules').get_json()['rules']])
+
+    def test_a_rule_the_operator_has_to_fix_is_refused_with_a_reason(self):
+        response = self.post('/notifications/rules',
+                             {'type': 'graphite_metric', 'params': {'metric': ''}})
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('metric path', response.get_json()['error'])
+
+    def test_editing_a_rule_that_does_not_exist_is_refused(self):
+        response = self.client.put('/notifications/rules/nope', headers=self.auth,
+                                   json={'enabled': False})
+        self.assertEqual(response.status_code, 400)
+
+    def test_board_diagnostics_are_empty_between_runs(self):
+        response = self.get('/experiment/board_diagnostics')
+        self.assertEqual(response.status_code, 200)
+        body = response.get_json()
+        self.assertFalse(body['running'])
+        self.assertEqual(body['boards'], {})
+        self.assertIn('fail_meaning', body)
 
 
 class StatsRouteTests(RouteTestCase):

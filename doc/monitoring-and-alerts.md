@@ -151,39 +151,71 @@ browser. **Test connection** reports how many alert rules the server can see.
 
 ---
 
-## 5. Telegram notifications
+## 5. Alerts: Telegram and Zulip
 
-Settings → Notifications. WebDAQ sends a Telegram message when a **board fails
-during a run** — the acquisition sees the board-fail flag in the data stream and
-reports it once per run:
+Settings → Notifications, in two halves: **where** a message can go, and **what**
+is worth sending one.
 
-```
-⚠️ LUNA DAQ Board Failure Alert
+### Destinations
 
-Run Number: 1276
-Board ID: 0
-Failure Type: Board FAIL flag (2 data blocks)
-Time: 2026-07-28 01:31:07
+| | What to enter | Stored in |
+|---|---|---|
+| **Telegram** | Bot token (from `@BotFather`) and chat ID. The chat ID shows up in `https://api.telegram.org/bot<token>/getUpdates` after one message to the bot. | `conf/telegram_settings.json` |
+| **Zulip** | Organisation URL, bot email, bot API key, stream and topic. Every alert lands in that one topic, so they stay together in a readable thread. | `conf/zulip_settings.json` |
 
-🔄 Auto-restart is enabled. Run will restart in 30 seconds.
-```
+*Test message* sends one immediately, so a wrong token is found now rather than
+during the failure it was meant to report. Both secrets stay on the DAQ machine
+and are never sent to the browser; anyone holding one can post as the bot, so use
+an account created for this.
 
-Setting it up:
+### Alerts
 
-1. Talk to `@BotFather` in Telegram, create a bot, copy the token.
-2. Add the bot to the group that should receive the alerts, or message it
-   directly.
-3. Get the chat ID (`https://api.telegram.org/bot<token>/getUpdates` shows it
-   after one message).
-4. Enter both in Settings → Notifications and press *Test* — a test message
-   arrives immediately if the token and the chat ID are right.
+Each alert is a rule: what to watch, when it counts as wrong, and which
+destinations carry it. A rule can go to Telegram, to Zulip, or to both, so a board
+failure can wake the whole shift while a beam-current dip only reaches one group.
 
-The token is stored in `conf/telegram_settings.json` on the DAQ machine. Anyone
-holding it can post as the bot, so use a bot created for this purpose.
+| Alert | Fires when | Settings |
+|---|---|---|
+| **Board failure** | A board sets its FAIL flag during a run. | — (once per board per run) |
+| **Board stopped producing data** | A board reads no new data block for N seconds during a run, whether or not it raised the FAIL flag. | seconds |
+| **Beam current** | The current read by the current monitor stays below (or above) a threshold. | threshold, direction, how long it must hold, only during a run |
+| **Graphite metric** | A monitored value — terminal voltage, pressure, anything in Graphite — stays outside its range. Add one rule per metric. | metric path, threshold, direction, how long, how often to check |
 
-Auto-restart, configured on the same page, is what the message refers to: when a
-board fails, the run is stopped and started again after the delay, so a night
-shift does not lose hours to a board that hiccupped.
+Two rules keep the messages worth reading:
+
+* **One message per episode.** A rule fires when its condition starts and stays
+  quiet until it clears. A current sitting just below its threshold is one
+  message, not one every two seconds. When it clears, a short "back in range"
+  message follows, which can be switched off.
+* **Unknown is not wrong.** A Graphite server that cannot be reached, or a current
+  monitor that is disconnected, leaves every rule exactly as it was. A hole in the
+  monitoring never invents an alert, and never silently clears a real one.
+
+Rules live in `conf/alerts.json`. A DAQ machine that has never had rules starts
+with the one WebDAQ always had: board failures to Telegram.
+
+Auto-restart, configured under Run Control, is what a board-failure message refers
+to: the run is stopped and started again after the delay, so a night shift does
+not lose hours to a board that hiccupped.
+
+---
+
+## 5a. The Board Health page
+
+**Board Health** in the navigation shows what each board has actually done during
+this run, which is the question that follows "is it failed?":
+
+* **Data blocks** read from the board, and events decoded from them, each with its
+  current rate.
+* **Bytes** read from the board and handed to the file writer.
+* **FAIL blocks**, **dropped** blocks (the write queue was full — that is lost
+  data) and **read errors**, highlighted when they are not zero.
+* A board that has read nothing for ten seconds is marked, which is the same
+  condition the "board stopped producing data" alert watches, with your own delay.
+
+Every counter belongs to the run: they start at zero when a run starts and are
+gone when it ends. A dash means the installed CaenDAQ build does not report that
+counter.
 
 ---
 

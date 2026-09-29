@@ -526,6 +526,56 @@ class CaenAcquisition:
         candidates = boards if boards is not None else self._boards
         return "daisy-chain" if any(is_synchronised(b) for b in candidates) else "independent"
 
+    # Per-board readout counters caendaq keeps for the run, in the order the
+    # Board Health page shows them. A build without one of these (the module is
+    # versioned separately from the server) simply reports None for it.
+    _DIAGNOSTIC_COUNTERS = (
+        "buffers_read",       # data blocks read from the board
+        "bytes_read",         # bytes read from the board
+        "bytes_written",      # bytes accepted by the write queue
+        "blocks_dropped",     # blocks the write queue refused (full) — lost data
+        "comm_errors",        # CAEN read errors
+        "events_decoded",     # events decoded out of those buffers
+        "board_failures",     # aggregates carrying the board's FAIL flag
+    )
+
+    def board_diagnostics(self) -> Dict[str, Dict[str, Any]]:
+        """Every readout counter caendaq keeps for each board this run, keyed by
+        WebDAQ board id, for the Board Health page and the stall watch:
+
+            {board_id: {'buffers_read': int|None, ..., 'failed': bool}}
+
+        All counters are cumulative for the run (a fresh caendaq.DAQ is built at
+        every start) and empty outside a run. A counter missing from the installed
+        caendaq build reads None rather than failing the whole request.
+        """
+        if self.daq is None or not self._running:
+            return {}
+        out: Dict[str, Dict[str, Any]] = {}
+        for i, b in enumerate(self._boards):
+            counters: Dict[str, Any] = {}
+            for name in self._DIAGNOSTIC_COUNTERS:
+                reader = getattr(self.daq, name, None)
+                if reader is None:
+                    counters[name] = None
+                    continue
+                try:
+                    counters[name] = int(reader(i))
+                except Exception as e:
+                    self.logger.debug(f"board_diagnostics {name} board {i}: {e}")
+                    counters[name] = None
+            counters["failed"] = bool(counters.get("board_failures") or 0)
+            out[str(b["id"])] = counters
+        return out
+
+    def board_fail_meaning(self) -> str:
+        """caendaq's own explanation of the board-FAIL flag, for the UI to show
+        next to a failure. Empty when the module cannot tell us."""
+        try:
+            return str(self._caendaq.board_fail_meaning())
+        except Exception:
+            return ""
+
     def board_health(self) -> Dict[str, Dict[str, Any]]:
         """Per-board failure status during a run, keyed by WebDAQ board id:
         {board_id: {'failed': bool, 'failures': int}}. Empty if no run is active.

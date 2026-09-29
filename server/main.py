@@ -225,6 +225,13 @@ def cleanup_on_shutdown(signum=None, frame=None):
         except Exception as e:
             logger.warning(f"Error during DAQ cleanup: {e}")
         
+        # Stop the alert watcher
+        try:
+            from app.services.alerting import get_alert_manager
+            get_alert_manager().stop()
+        except Exception as e:
+            logger.debug(f"alert watcher stop: {e}")
+
         # Stop tetramm current acquisition and close socket
         try:
             from app.routes.current import controller
@@ -293,6 +300,15 @@ if __name__ == '__main__':
 
     _write_pid_file()
     threading.Thread(target=_launcher_watchdog, daemon=True).start()
+
+    # Watch what the alert rules ask to be watched (beam current, Graphite values,
+    # boards that stop producing data). Started here rather than in create_app so
+    # that importing the app — tests, `flask` commands — measures nothing.
+    try:
+        from app.services.alerting import get_alert_manager
+        get_alert_manager().start()
+    except Exception as e:
+        logger.error(f"Could not start the alert watcher: {e}")
 
     logger.info(f"Starting WebDAQ server (pid {os.getpid()}) with clean shutdown + launcher watchdog...")
     logger.info("Press CTRL+C for clean shutdown")

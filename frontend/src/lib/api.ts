@@ -834,6 +834,112 @@ export const setGrafanaSettings = (settings: {
 export const testGrafanaConnection = () =>
     api.post('/grafana/test').then(res => res.data as { success: boolean; message: string });
 
+// ─── Board health ────────────────────────────────────────────────────────────
+// Every readout counter caendaq keeps per board for the run. Counters are
+// cumulative and reset at each run start; null means the installed caendaq build
+// does not report that one.
+export type BoardCounters = {
+    buffers_read: number | null;
+    bytes_read: number | null;
+    bytes_written: number | null;
+    blocks_dropped: number | null;
+    comm_errors: number | null;
+    events_decoded: number | null;
+    board_failures: number | null;
+    failed: boolean;
+};
+
+export type BoardDiagnostics = {
+    running: boolean;
+    boards: Record<string, BoardCounters>;
+    fail_meaning: string;
+};
+
+export const getBoardDiagnostics = () =>
+    api.get('/experiment/board_diagnostics').then(res => res.data as BoardDiagnostics);
+
+// ─── Notifications: transports and alert rules ───────────────────────────────
+export type TransportSettings = {
+    enabled: boolean;
+    configured: boolean;
+    // Telegram
+    bot_token?: string;        // masked by the server, never the real one
+    chat_id?: string;
+    // Zulip
+    site?: string;
+    bot_email?: string;
+    api_key?: string;          // masked by the server, never the real one
+    stream?: string;
+    topic?: string;
+};
+
+export type AlertRule = {
+    id: string;
+    type: 'board_failure' | 'stalled_buffers' | 'beam_current' | 'graphite_metric';
+    name: string;
+    enabled: boolean;
+    transports: string[];
+    params: Record<string, string | number | boolean>;
+};
+
+export type AlertRuleType = {
+    type: AlertRule['type'];
+    name: string;
+    description: string;
+    params: Record<string, string | number | boolean>;
+};
+
+export type AlertStatus = {
+    watching: boolean;
+    notify_recovery: boolean;
+    rules: {
+        id: string;
+        alerting: boolean;
+        subjects: Record<string, {
+            latched: boolean;
+            value: number | string | null;
+            last_fired: number | null;
+        }>;
+    }[];
+};
+
+export const getNotificationTransports = () =>
+    api.get('/notifications/transports')
+        .then(res => res.data as { telegram: TransportSettings; zulip: TransportSettings });
+
+export const setTelegramTransport = (settings: {
+    enabled?: boolean; bot_token?: string; chat_id?: string; clear_bot_token?: boolean;
+}) => api.post('/notifications/transports/telegram', settings).then(res => res.data);
+
+export const setZulipTransport = (settings: {
+    enabled?: boolean; site?: string; bot_email?: string; api_key?: string;
+    stream?: string; topic?: string; clear_api_key?: boolean;
+}) => api.post('/notifications/transports/zulip', settings).then(res => res.data);
+
+export const testNotificationTransport = (transport: 'telegram' | 'zulip') =>
+    api.post(`/notifications/transports/${transport}/test`)
+        .then(res => res.data as { success: boolean; message: string });
+
+export const getAlertRules = () =>
+    api.get('/notifications/rules').then(res => res.data as {
+        rules: AlertRule[]; types: AlertRuleType[]; status: AlertStatus;
+    });
+
+export const addAlertRule = (rule: Partial<AlertRule>) =>
+    api.post('/notifications/rules', rule).then(res => res.data as { rule: AlertRule });
+
+export const updateAlertRule = (id: string, changes: Partial<AlertRule>) =>
+    api.put(`/notifications/rules/${id}`, changes).then(res => res.data as { rule: AlertRule });
+
+export const deleteAlertRule = (id: string) =>
+    api.delete(`/notifications/rules/${id}`).then(res => res.data);
+
+export const setNotificationSettings = (settings: { notify_recovery?: boolean }) =>
+    api.post('/notifications/settings', settings).then(res => res.data);
+
+export const getAlertStatus = () =>
+    api.get('/notifications/status').then(res => res.data as AlertStatus);
+
 export const getElogEntries = (params: { limit?: number; offset?: number; search?: string } = {}) =>
     api.get('/elog/entries', { params }).then(res => res.data as ElogEntryList);
 

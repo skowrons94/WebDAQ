@@ -17,10 +17,18 @@ from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
+
+def _escape(text: str) -> str:
+    """Telegram parses the message as HTML, so a stray '<' would break it."""
+    return (str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;'))
+
 _SETTINGS_FILE = 'conf/telegram_settings.json'
 
 
 class TelegramNotifier:
+    name = 'telegram'
+    label = 'Telegram'
+
     def __init__(self):
         self.logger = logging.getLogger(__name__ + '.TelegramNotifier')
         self.enabled = False
@@ -47,6 +55,7 @@ class TelegramNotifier:
 
     def _save(self) -> None:
         try:
+            os.makedirs(os.path.dirname(_SETTINGS_FILE), exist_ok=True)
             with open(_SETTINGS_FILE, 'w') as f:
                 json.dump({'enabled': self.enabled, 'bot_token': self.bot_token,
                            'chat_id': self.chat_id}, f, indent=4)
@@ -59,23 +68,37 @@ class TelegramNotifier:
             return '*' * len(token) if token else ''
         return token[:10] + '*' * (len(token) - 15) + token[-5:]
 
+    def is_configured(self) -> bool:
+        return bool(self.bot_token and self.chat_id)
+
     def get_settings(self) -> Dict[str, Any]:
         return {
             'enabled': self.enabled,
             'bot_token': self._mask_token(self.bot_token),
             'chat_id': self.chat_id,
-            'configured': bool(self.bot_token and self.chat_id),
+            'configured': self.is_configured(),
         }
 
-    def set_settings(self, enabled: bool = None, bot_token: str = None, chat_id: str = None) -> None:
+    def set_settings(self, enabled: bool = None, bot_token: str = None,
+                     chat_id: str = None, clear_bot_token: bool = False) -> None:
         if enabled is not None:
             self.enabled = enabled
-        if bot_token is not None:
-            self.bot_token = bot_token
+        # An empty token means "leave it alone": the getter only ever returns a
+        # mask, so the settings form cannot round-trip the real one.
+        if clear_bot_token:
+            self.bot_token = ''
+        elif bot_token:
+            self.bot_token = bot_token.strip()
         if chat_id is not None:
-            self.chat_id = chat_id
+            self.chat_id = chat_id.strip()
         self._save()
         self.logger.info(f"Telegram settings updated: enabled={self.enabled}")
+
+    def format(self, title: str, lines) -> str:
+        """Render an alert as the HTML subset Telegram accepts."""
+        body = '\n'.join(_escape(line) for line in lines if line)
+        head = f"<b>{_escape(title)}</b>"
+        return f"{head}\n\n{body}" if body else head
 
     # --------------------------------------------------------------- delivery
     def send_message(self, message: str) -> bool:

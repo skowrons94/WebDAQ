@@ -57,6 +57,7 @@ const NAV_ITEMS = [
     { href: "/stats", label: "Stats" },
     { href: "/DAQ", label: "DAQ" },
     { href: "/tuner", label: "Tuner" },
+    { href: "/health", label: "Board Health" },
     { href: "/alerts", label: "Alerts" },
     { href: "/settings", label: "Settings" },
 ]

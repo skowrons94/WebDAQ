@@ -14,7 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
 import { VisualizationSettings } from '@/components/visualization-settings';
 import { CurrentModuleSettings } from '@/components/current-module-settings';
-import { TelegramSettings } from '@/components/telegram-settings';
+import { NotificationSettings } from '@/components/notification-settings';
 import { ElogSettings } from '@/components/elog/elog-settings';
 import { GrafanaSettings } from '@/components/grafana-settings';
 
@@ -61,7 +61,7 @@ export default function SettingsPage() {
             case 'current':
                 return <CurrentModuleSettings />;
             case 'notifications':
-                return <TelegramSettings />;
+                return <NotificationSettings />;
             case 'elog':
                 return <ElogSettings />;
             case 'grafana':

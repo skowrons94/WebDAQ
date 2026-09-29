@@ -1023,6 +1023,14 @@ class DAQManager:
         # Reset Telegram notification flag for new run
         self.reset_telegram_notification_flag()
 
+        # Board counters restart with the run, so the alert rules must forget
+        # last run's failures and stalls or they would stay silent.
+        try:
+            from .alerting import get_alert_manager
+            get_alert_manager().reset_run_state()
+        except Exception as e:
+            self.logger.debug(f"Could not reset the alert rules: {e}")
+
         # A new run is being watched, so any restart that led here is over. Left
         # set until the restart thread finished, it blocked a restart for a board
         # failing again in the new run's first moments.
@@ -1164,10 +1172,30 @@ class DAQManager:
     def reset_telegram_notification_flag(self) -> None:
         self.telegram.reset_notification_flag()
 
-    def send_board_failure_notification(self, board_id: str, failure_type: str, run_number: int) -> bool:
-        return self.telegram.send_board_failure(
-            board_id, failure_type, run_number,
-            self.auto_restart_enabled, self.auto_restart_delay)
+    def send_board_failure_notification(self, board_id: str, failure_type: str,
+                                        run_number: int) -> bool:
+        """Raise the board-failure alert through the configured rules.
+
+        The rules decide who hears about it (Telegram, Zulip, both, nobody) and
+        keep it to one message per board per run; this only reports the failure.
+        """
+        if self.auto_restart_enabled:
+            tail = [f"Auto-restart is enabled: the run restarts in "
+                    f"{self.auto_restart_delay} s."]
+        else:
+            tail = ['Auto-restart is disabled — manual intervention required.']
+        try:
+            from .alerting import get_alert_manager
+            sent = get_alert_manager().board_failure(
+                board_id, failure_type, run_number, extra_lines=tail)
+        except Exception as e:
+            self.logger.error(f"Could not raise the board-failure alert: {e}")
+            return False
+        if not sent:
+            self.logger.info(
+                "Board failure raised no notification: no enabled board-failure "
+                "rule (Settings -> Notifications)")
+        return any(any(a['results'].values()) for a in sent)
 
     def _board_held_by_acquisition(self, board_id: str) -> bool:
         """Whether caendaq currently holds this board open for the running acquisition.
