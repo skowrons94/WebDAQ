@@ -121,7 +121,7 @@ export function NotificationBell() {
               </Button>
             )}
             <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" asChild>
-              <Link href="/activity">History</Link>
+              <Link href="/troubleshoot">History</Link>
             </Button>
           </div>
         </div>

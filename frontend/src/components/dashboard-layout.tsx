@@ -60,7 +60,7 @@ const NAV_ITEMS = [
     { href: "/stats", label: "Stats" },
     { href: "/DAQ", label: "DAQ" },
     { href: "/tuner", label: "Tuner" },
-    { href: "/activity", label: "Activity" },
+    { href: "/troubleshoot", label: "Troubleshoot" },
     { href: "/alerts", label: "Alerts" },
     { href: "/settings", label: "Settings" },
 ]
@@ -181,9 +181,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     <LineChart className="mr-2 h-4 w-4" />
                                     <span>Stats</span>
                                 </CommandItem>
-                                <CommandItem onSelect={() => go('/activity')}>
+                                <CommandItem onSelect={() => go('/troubleshoot')}>
                                     <BellRing className="mr-2 h-4 w-4" />
-                                    <span>Activity &amp; recovery</span>
+                                    <span>Troubleshoot &amp; recovery</span>
                                 </CommandItem>
                                 <CommandItem onSelect={() => go('/alerts')}>
                                     <AlertTriangle className="mr-2 h-4 w-4" />

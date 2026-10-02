@@ -110,7 +110,7 @@ tuning.
 A board failure raises whatever alerts are configured for it (Settings →
 Notifications, Telegram and/or Zulip), the **Board Health** tab shows the board's
 counters — blocks read, dropped blocks, read errors — for the run, and the
-**Activity** page keeps the event with the fixes offered next to it.
+**Troubleshoot** page keeps the event with the fixes offered next to it.
 
 With **auto-restart** enabled, a board that stops responding causes the run to be
 stopped, flagged `bad` in the logbook with an explanatory note, and a new run

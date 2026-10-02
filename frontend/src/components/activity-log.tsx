@@ -19,7 +19,7 @@ import {
 } from '@/lib/api'
 
 /**
- * Activity & recovery — what happened, and what to press about it.
+ * Troubleshoot — what happened, and what to press about it.
  *
  * The history is the whole point of writing alerts down: a shift that starts at
  * 08:00 can read 03:00, including whether the message actually reached anybody.

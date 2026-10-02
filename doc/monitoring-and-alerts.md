@@ -234,7 +234,7 @@ restarts).
 * The **bell** in the header carries the unread count. It turns amber when
   something reached nobody — a wrong token, a network outage, both destinations
   off.
-* **Activity** in the navigation is the full history: time, what happened, which
+* **Troubleshoot** in the navigation is the full history: time, what happened, which
   board or value, which run, and which destinations actually received it. Filter
   by problems, recoveries or actions.
 
