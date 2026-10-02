@@ -1,446 +1,343 @@
-# User Guide
+# User guide
 
-Screen-by-screen reference for the LunaDAQ interface. For a run followed from
-start to finish, read [A complete session](example-session.md) first; for the
-settings behind a screen, see:
+Every page, what it shows and what you can change from it. For the workflow of a
+single run from start to logbook entry, read [A complete
+session](example-session.md) first; this chapter is the reference you come back
+to.
 
-* [CAEN digitizers](caen-settings.md) — boards, trigger and energy filters, synchronisation, online tuning
-* [Beam current and charge](current-and-charge.md) — TetrAMM and RBD 9103
-* [Monitoring and alerts](monitoring-and-alerts.md) — Graphite, Grafana, Telegram and Zulip, Board Health, alert history and recovery
-* [ELOG](elog.md) — the collaboration logbook
+The navigation is the same on every page: **Dashboard, Logbook, Stats, DAQ,
+Tuner, Troubleshoot, Alerts, Settings**. The header carries four things worth
+knowing about:
+
+* the **run status** — *Running* with an elapsed clock, *Stopped*, or *CAEN
+  Error* when a board raised its FAIL flag during this run;
+* the **DAQ Server** badge, which starts and stops the server itself and shows
+  its log;
+* the **bell**, which counts alerts nobody has looked at yet and turns amber when
+  something was raised that reached nobody;
+* **Search**, a command palette that jumps to any page, any dashboard tab or any
+  settings section.
+
+Logging in is per browser, and the session does not expire on its own. If it is
+cleared you are told plainly that the run is unaffected: the DAQ server keeps
+taking data with nobody logged in.
 
 ---
 
-## Table of Contents
+## 1. Dashboard
 
-1. [Getting Started](#getting-started)
-2. [Dashboard Overview](#dashboard-overview)
-3. [Starting and Stopping Runs](#starting-and-stopping-runs)
-4. [Monitoring Data](#monitoring-data)
-5. [Managing Run Metadata](#managing-run-metadata)
-6. [Board Configuration](#board-configuration)
-7. [Settings and Customization](#settings-and-customization)
+Six tabs: **Overview**, **Board Health**, **Data Rates**, **Histograms**,
+**Waveforms** and **PSD**. The last three can be switched off in Settings →
+Appearance, and the tab strip follows.
+
+### 1.1 Overview — taking the run
+
+**System status** is the band of cards at the top. Drag the handle beneath it to
+show one row more or less; the height is remembered per browser.
+
+| Card | What it tells you |
+|---|---|
+| **Run Status** | The run number, *Running* or *Stopped*, how long ago it started (or how long the last one lasted), the file write rate, and a **Save** switch. While the DAQ is stopped the run number is a button that opens *Next run*, where you set the number the next run will take. |
+| **DAQ Status** | Four lines — data saving, waveforms, current, stats — each with a tick or a cross, so you can see at a glance what this run will actually record. |
+| **Picoammeter** | Only for a real device: connected or not, whether it is sampling, its address and range. A monitored Graphite value has no device card, because it has no device. |
+| **Board *n*** | One per board: *Ready*, *Running*, *Board Failure* or *Disconnected*, the firmware and channel count, and a waveform switch (locked while a run is going). |
+| **ROIs** and **Metrics** | The regions of interest you defined, with live integrals, and the Graphite values you selected on the Stats page. |
+
+**Run Setup & Control** is where a run begins. Fill in **Run Name**, **Run Type**
+(long run, scan, background, calibration), **TV (kV)** and **PV (kV)** — all four
+are pre-filled from the last run, and all four are locked while a run is in
+progress. Then **Start Run**.
+
+If the directory for that run number already exists, WebDAQ asks before using it
+again rather than quietly overwriting. If the run number is not set at all, it
+refuses and says so.
+
+A run starts even when something next to it fails: if the current module or the
+statistics cannot be started, the run still starts and the toast names what is
+missing — *"Run 1276 is acquiring, but beam current is not being recorded"*. A
+run without its current log is worth more than no run.
+
+The **Maintenance** section underneath holds the things you need rarely: connect
+the current module, refresh the board connections (not while running), and reset
+the acquisition. **Reset total charge** clears the lifetime charge counter and is
+deliberately outside that section, because it is a bookkeeping action rather than
+a repair.
+
+**Acquisition setup** shows what this run will do — saving on or off, the file
+size limit, the auto-restart delay — and **Adjust** opens the dialog where those
+are set, including **Auto-Restart on Board Failure** and its delay.
+
+**Beam Control** plots the current on target with the charge beside it: *This run*
+(with a dot that says whether it is integrating) and *Lifetime total*. While a
+run is going the plot covers the run from its start; while stopped you can pick a
+30 s to 5 min window. The **Position** button moves the panel to one of four
+places on the Overview.
+
+### 1.2 Board Health — what the boards are actually doing
+
+One card per board with the readout counters CaenDAQ keeps for the run: **data
+blocks** read, **events decoded**, **bytes read** and **bytes sent to file**, each
+with its rate, and then the three numbers that matter when something is wrong:
+
+| Counter | Read it as |
+|---|---|
+| **FAIL blocks** | The board could not sustain the readout for that block — a full buffer or a lost link. Data from that point may be incomplete. |
+| **Dropped** | Blocks the write queue refused because it was full. **This is lost data** and should always be zero. |
+| **Read errors** | CAEN read errors on the link. |
+
+The badge on each card is the quick answer: *Reading*, *No data for n s*, *FAIL
+flag*, *No answer* (the last request to the server failed, so the numbers are the
+last known ones) or *Not reported* (this CaenDAQ build does not publish that
+counter). A dash in a counter means the same thing.
+
+Every counter belongs to the run. They start at zero when a run starts and are
+gone when it ends, which is why the tab says so plainly between runs instead of
+showing zeros.
+
+### 1.3 Data Rates — counts per second, per channel
+
+A tile per board with its total event rate, then four tiles for the selected
+board — **Events**, **Pile-ups**, **Lost events**, **Saturations** — and the
+write rate for the board and for all boards together. Pile-up, lost and
+saturation turn amber when they are not zero.
+
+The plot shows one metric for up to six channels of one board. Two controls sit
+above it:
+
+* **Plot** — the sampling cadence, from 0.5 s to 60 s. This is not a display
+  setting: one CaenDAQ tick samples the counters, differences them and publishes
+  them, so the same number sets the refresh rate, the averaging window and the
+  resolution of what reaches Graphite. Changing it starts the trace over.
+* **Rate shown** — which of the four rates is drawn. All four are recorded, so
+  switching keeps the history you already have.
+
+A badge reads *Running*, *Stopped* or *No answer*. A run that stops leaves its
+trace on screen; a run that starts clears it.
+
+### 1.4 Histograms, Waveforms and PSD
+
+The histogram dashboard is covered in [Spectra and
+ROIs](histograms-and-rois.md): which spectra are shown, their ROIs, zoom,
+rebinning and the per-run `roi.json`. It belongs to the experiment rather than to
+your browser — the layout lives on the DAQ server, so every screen in the control
+room shows the same thing.
+
+**Waveforms** and **PSD** are tabs on the same dashboard. Waveforms also carries
+the board-configuration controls that decide what the board digitises into a
+trace — dual trace, what trace 1 and trace 2 carry, and the digital probe. Those
+go to the board immediately, so treat them as a setup activity rather than
+something to touch mid-measurement.
 
 ---
 
-## Getting Started
+## 2. Logbook
 
-### Logging In
+Two logbooks live here: the run metadata WebDAQ records itself (**Runs**) and the
+collaboration's ELOG (**ELOG**).
 
-1. Open your web browser and navigate to the LunaDAQ frontend URL (typically `http://localhost:3000` or the configured server address).
-2. Enter your username and password on the login screen.
-3. Click **Login** to access the dashboard.
+### 2.1 Runs
+
+A table of every run, newest first. Search covers run numbers, targets, notes and
+voltages; the type and flag filters narrow it; **Columns** chooses what is shown
+and **Export CSV** writes out exactly the rows you have filtered to.
+
+Two columns are editable in place: the **Flag** (good, unknown, bad) and the
+**Notes**. **Actions → Edit entry…** corrects the run name, voltages and type of
+a run already taken — useful when a shift realises the target was mistyped.
+
+The run number is a link to the run's own page.
+
+### 2.2 One run
+
+Six tabs, reading the database and the run directory together:
+
+* **Overview** — the notes, the timeline, the run conditions, the data products
+  with their sizes, and the acquisition provenance (which WebDAQ, which CaenDAQ,
+  which platform, and whether the data came from real boards or from the mock).
+* **Notes** — a Markdown editor with a preview. It warns you before leaving with
+  an unsaved draft.
+* **Beam Current** — `current.txt` plotted, with the charge integrated over every
+  sample rather than over the drawn points.
+* **Stats** — one plot per monitored metric from `stats.csv`, each labelled with
+  the name and unit you gave it on the Stats page.
+* **Boards** — the register dump each board ran with, copied into the run
+  directory at start. This is what makes the run reproducible.
+* **Convert** — RUReader, offering only the options the installed converter
+  advertises. See [Run data and conversion](run-data.md).
+
+A run still in progress is marked *in progress* and its duration reads *still in
+progress*; nothing on the page pretends the run is finished.
+
+### 2.3 ELOG
+
+Read and write the collaboration logbook without leaving run control: the entry
+list with search, the reading pane with attachments, and a composer whose fields
+come from the logbook's own form definition, so required attributes are required
+here too.
+
+**Write up a run** fills a new entry from the run's own record — timing, beam
+current, ROIs, board configuration — and tells you if some of that was missing.
+Everything stays editable before you post. See [ELOG](elog.md).
+
+---
+
+## 3. Stats
+
+The Graphite values this experiment watches. Each card is one metric, with its
+latest value, a sparkline, and buttons to rename it, stop reading it or remove it.
+*N/A* means no reading came back; the light at the top says whether Graphite is
+answering at all, so "server down" never looks like "metric with no data".
+
+**Add metric** browses the metric tree or searches it by name, which beats typing
+a path from memory. The **name and unit** you give a metric are not cosmetic:
+they become the column heading in every run's `stats.csv`.
+
+The **Graphite server** card holds the host, the port and the **metric prefix**
+for this experiment. Give each campaign its own subtree — `ancillary.rates.12c12c`
+— and no campaign ever shares a series with another. A live run picks up a change
+at its next stats interval.
+
+---
+
+## 4. DAQ
+
+Three tabs: **Configuration**, **Calibration** and **Hardware Info**.
+
+### 4.1 Configuration
+
+**Board Settings** is the whole register set of one board, grouped by function and
+in the order the signal is processed. **Advanced** shows every register rather
+than the tuned ones; **Binary** shows bit fields. Registers carry their CAEN
+manual description, and values are shown in the units you think in — per cent for
+the DC offset, nanoseconds for the time registers.
+
+Writes on this tab go to the board immediately and are not blocked while a run is
+in progress. That is deliberate — it is the same dashboard used to set a board up
+— but it means this is not the place to experiment during a measurement. Use the
+[Tuner](#5-tuner), which knows which registers are safe to move while the boards
+are acquiring.
+
+**Synchronization** is the daisy chain: which board is master, which are slaves,
+what each board's TRG-OUT carries, and whether the start pulse can actually walk
+the cable. Each switch is annotated *needed — on*, *needed — off* or *not needed
+here* for that board's position in the chain, and anything that would stop the
+chain starting is listed with a ⚠ next to the board that causes it. The page also
+draws the cable order and the start sequence. [CAEN
+digitizers](caen-settings.md#4-synchronising-several-boards) explains the
+mechanism.
+
+### 4.2 Calibration
+
+Two numbers per channel, `A` and `B`, applied to the energy axis of the spectra.
+They are stored per board and channel in `calib/` and are read again whenever the
+file changes.
+
+### 4.3 Hardware Info
+
+What the boards report about themselves — model, serial number, firmware, DPP
+licence, connection, and the acquisition registers as actually programmed — plus
+the software versions recorded with every run. The CAEN API only answers while
+the digitizers are open, so this page is populated during a run and says so when
+there is none.
+
+---
+
+## 5. Tuner
+
+The place to change thresholds and shaping with beam on target. The page starts
+acquisition with **data saving switched off**, so nothing you do here lands in a
+run directory; a yellow badge reminds you that the Tuner is holding the run.
+
+The **Online** switch decides where a change goes:
+
+| Online | While a run is going | Effect |
+|---|---|---|
+| on | yes | Registers that are safe to move are written to the board as you save them. Each field is marked *live* or *next run*, so you know before you touch it. |
+| on | no | Written to the board anyway — the next run applies the whole configuration regardless. |
+| off | either | Saved to the board's configuration only, and applied at the next run. |
+
+The allowlist of live-writable registers comes from the server per firmware and
+channel, and a write the board refuses is reported as *saved, not sent to the
+board* with the reason. The configuration and the hardware therefore cannot drift
+apart: the save always happens, and you are told whether the board took it.
+
+Beneath the controls are a waveform panel (with the trace and digital-probe
+selectors) and the energy spectrum of the channel you are tuning.
+
+---
+
+## 6. Troubleshoot
+
+The page to open when something looks wrong, and the one to read the morning
+after. It has two halves: **Recovery** at the top and **History** below.
+[Troubleshooting](troubleshooting.md) is the chapter that goes with it.
+
+**Recovery** lists five actions, each with its current state — whether that part
+of the system answers right now — and a **Run** button. Nothing here runs by
+itself. An action that would cost data while a run is in progress is refused
+before you press it, with the reason on the page.
+
+**History** is every alert and recovery, newest first, kept on the server across
+restarts. Filter it by *Everything*, *Problems*, *Recoveries* or *Actions*. Each
+row carries the board or value it was about, the run it belonged to, and which
+destinations received it — including the badge **reached nobody**, which is the
+one you want to notice. *Mark all read* clears the bell.
+
+---
+
+## 7. Alerts
+
+The Grafana alert rules, managed from here so you do not have to open Grafana
+during a shift: pause or activate a rule, edit its threshold, and mark rules as
+**auto-managed** with the ⚡ button.
+
+An auto-managed rule is activated when a run starts and silenced when it stops,
+which is the answer to a "beam current too low" rule that is right during a run
+and pure noise while you are setting up. The marks are stored per browser, so set
+them on the control-room screen.
+
+This page talks to Grafana through the DAQ server; the address and token are in
+Settings → Grafana.
+
+---
+
+## 8. Settings
+
+Six sections. Everything except **Appearance** is stored on the DAQ server and is
+therefore the same for everyone.
+
+| Section | What it holds |
+|---|---|
+| **Boards** | The configured digitizers with their live status, a **Scan** that probes the links and lists what answers, and the form to add a board. Scan fills the form rather than adding the board — the ID and the firmware choice stay yours. |
+| **Current Module** | Which source the beam current comes from — TetrAMM, RBD 9103 or a monitored Graphite value — and its settings. Also the Carbon address the measured current is *pushed* to, which is not the same as the Graphite server the Stats page *reads*. |
+| **Notifications** | Telegram and Zulip credentials, and the alert rules. See [Monitoring and alerts](monitoring-and-alerts.md). |
+| **ELOG** | The logbook URL, the shared account, default attributes, and whether WebDAQ may post at all. |
+| **Grafana** | The Grafana address and a service-account token. The DAQ server makes those requests, so the address has to be reachable from the server machine. |
+| **Appearance** | Theme, which dashboard tabs and cards are shown, and whether current acquisition is enabled at all. Browser-local. |
 
 ```{note}
-User accounts must be created by an administrator using the command line:
-`flask --app server create-user`
-```
-
-### First-Time Setup
-
-Before your first acquisition, ensure:
-
-1. **Boards are configured**: Go to **Settings > Boards** to add your CAEN digitizer boards
-2. **Current monitor is connected**: If using TetrAMM or RBD9103, configure in **Settings**
-3. **Graphite metrics are set up**: If monitoring slow-control data, add metric paths in **Settings > Metrics**
-
----
-
-## Dashboard Overview
-
-The Dashboard is your central control center with multiple tabs for different functions.
-
-### Overview Tab
-
-The main tab displays a comprehensive summary of your acquisition status.
-
-#### Card View
-
-The card view shows key information at a glance:
-
-| Card | Description |
-|------|-------------|
-| **Run Status** | Current run number and acquisition state (Running/Stopped) |
-| **Current Readings** | Real-time current from TetrAMM/RBD9103 (if configured) |
-| **Accumulated Charge** | Charge accumulated in current run and total since last reset |
-| **Data Bandwidth** | File writing speed and output bandwidth |
-| **ROI Counts** | Counts in user-defined Regions of Interest |
-| **Metrics** | Slow-control values from Graphite (configurable) |
-
-#### Experiment Controls Panel
-
-The control panel provides:
-
-- **Start/Stop buttons**: Begin or end data acquisition
-- **Metadata input fields**: Enter run information before starting
-- **Current control**: Monitor and control current acquisition settings
-
-#### Acquisition Parameters Panel
-
-Configure acquisition settings:
-
-| Setting | Description |
-|---------|-------------|
-| **Run Number** | Current run number (auto-increments by default) |
-| **Auto-increment** | Automatically increase run number after each run |
-| **Save Data** | Enable/disable writing data to disk |
-| **Save Waveforms** | Include waveform data in saved files |
-| **Limit File Size** | Enable maximum file size limits |
-| **File Size Limit** | Maximum file size in MB |
-
-### Stats Tab
-
-Displays time-series charts for slow-control metrics from the Graphite database.
-
-```{note}
-This feature requires a configured Graphite server connection.
-```
-
-### Histogram Tab
-
-View all energy spectra from each acquisition channel in real-time.
-
-**Key Features:**
-
-- **Layout Toggle**: Switch between grid view and list view using the toggle in the top right
-- **Scale Selection**: Choose linear or logarithmic scale for all histograms
-- **ROI Configuration**: Click the gear icon next to each channel to set up Regions of Interest
-
-**Interacting with Histograms:**
-
-1. **Zoom**: Click and drag to zoom into a region
-2. **Pan**: Right-click and drag to pan across the spectrum
-3. **Reset**: Double-click to reset the view
-4. **ROI Highlight**: Configured ROIs are highlighted on the histogram
-
-### Waveform Tab
-
-Monitor waveform data for each acquisition channel. This tab functions similarly to the Histogram tab but displays pulse waveforms instead of energy spectra.
-
-```{important}
-Waveform acquisition must be enabled in the Acquisition Parameters panel for this tab to show data.
+`conf/telegram_settings.json`, `conf/zulip_settings.json`,
+`conf/elog_settings.json` and `conf/grafana_settings.json` hold credentials in
+plain text on the DAQ machine. The interface never shows them again once saved —
+it masks them — but the files themselves are readable by anyone with an account
+on that machine, so do not copy a working directory between sites without
+emptying them.
 ```
 
 ---
 
-## Starting and Stopping Runs
-
-### Before Starting a Run
-
-1. **Verify board connections**: Check that all boards show "Connected" status in the card view
-2. **Enter run metadata**:
-   - **Target Name**: Sample or target being measured
-   - **Run Type**: Type of measurement (e.g., "long run", "background", "calibration")
-   - **Terminal Voltage (TV)**: Accelerator terminal voltage (for LUNA-400)
-   - **Probe Voltage (PV)**: Probe voltage setting (for LUNA-400)
-
-```{warning}
-If metadata values haven't changed since the last run, a warning will appear. Review the values to ensure they are correct for the new run.
-```
-
-3. **Configure acquisition settings**:
-   - Verify run number is correct
-   - Check that "Save Data" is enabled if you want to record data
-   - Enable "Save Waveforms" if waveform data is needed
-
-### Starting Acquisition
-
-1. Click the **Start** button in the Experiment Controls panel
-2. The system will:
-   - Create a new run directory (if saving) and copy the board configurations into it
-   - Arm the boards and start them together on their synchronised start
-   - Begin writing `.caendat` files
-   - Switch on charge integration, the rate collector and any run-linked alerts
-3. The run status indicator will change to "Running"
-
-### During Acquisition
-
-While the run is active:
-
-- Monitor histograms in the **Histogram** tab
-- Watch waveforms in the **Waveform** tab (if enabled)
-- Check current readings and accumulated charge in the card view
-- View real-time metrics from Graphite
-
-### Stopping Acquisition
-
-1. Click the **Stop** button in the Experiment Controls panel
-2. The system will:
-   - Stop the acquisition and release the boards
-   - Save run metadata to the database
-   - Write `metadata.json` and `roi.json` to the run directory
-   - Update the accumulated charge from current readings
-3. The run status indicator will change to "Stopped"
-
-### Run Directory Structure
-
-When data saving is enabled, each run creates a directory:
-
-```
-data/
-└── runN/
-    ├── BoardName_ID.dat      # Raw data files
-    ├── BoardName_ID.json     # Board configuration snapshot
-    ├── BoardName_ID.cal      # Calibration snapshot
-    └── metadata.json         # Run metadata
-```
-
----
-
-## Monitoring Data
-
-### Real-Time Histograms
-
-The Histogram tab provides live visualization of acquired spectra.
-
-#### Setting Up a Region of Interest (ROI)
-
-1. Navigate to the **Histogram** tab
-2. Click the **gear icon** next to the channel header you want to configure
-3. Enter the ROI boundaries:
-   - **ROI Min**: Lower bin number
-   - **ROI Max**: Upper bin number
-4. Click **Save**
-
-The ROI will be highlighted on the histogram, and counts within the ROI will appear in the Overview tab.
-
-#### Understanding Histogram Types
-
-| Type | Description | Board Type |
-|------|-------------|------------|
-| **Energy** | Energy spectrum from trapezoidal filter | DPP-PHA |
-| **QLong** | Long gate charge integral | DPP-PSD |
-| **QShort** | Short gate charge integral | DPP-PSD |
-| **PSD** | Pulse Shape Discrimination 2D plot | DPP-PSD |
-
-### Waveform Monitoring
-
-Enable waveform recording to view individual pulses:
-
-1. Go to the **Overview** tab
-2. In Acquisition Parameters, enable **Save Waveforms**
-3. Switch to the **Waveform** tab
-4. Waveforms will update in real-time during acquisition
-
-```{note}
-Waveform recording increases data volume and file sizes significantly.
-```
-
-### Current Monitoring
-
-If a current monitor (TetrAMM or RBD9103) is configured:
-
-- **Real-time current**: Displayed in the card view
-- **Accumulated charge**: Updated continuously during acquisition
-- **Total accumulated**: Cumulative charge across multiple runs
-
-To reset the total accumulated charge:
-1. Use the API endpoint `/current/reset_total_accumulated`
-2. Or configure through the settings panel
-
----
-
-## Managing Run Metadata
-
-### Logbook Panel
-
-The Logbook panel provides a table view of all recorded runs.
-
-**Features:**
-
-| Feature | Description |
-|---------|-------------|
-| **Filter by Target** | Use the input field to filter runs by target name |
-| **Column Selection** | Click the columns button to show/hide columns |
-| **Edit Run Info** | Click the menu icon (three dots) to edit run metadata |
-| **Export Data** | Click **Download CSV** to export the database |
-
-### Editing Run Information
-
-To modify a run's metadata after acquisition:
-
-1. Go to the **Logbook** panel
-2. Find the run you want to edit
-3. Click the **menu icon** (three dots) on the right
-4. Select the field to edit:
-   - Target Name
-   - Run Type
-   - Terminal Voltage
-   - Probe Voltage
-   - Notes
-   - Quality Flag (good/unknown/bad)
-5. Make your changes and save
-
-### Quality Flags
-
-Mark runs with quality flags to indicate data quality:
-
-| Flag | Description |
-|------|-------------|
-| **Good** | Run data is valid and suitable for analysis |
-| **Unknown** | Data quality has not been evaluated |
-| **Bad** | Run has issues and should be excluded from analysis |
-
-### Adding Notes
-
-Add notes to document run conditions or observations:
-
-1. In the Logbook, find the run
-2. Click the edit menu
-3. Select "Edit Notes"
-4. Enter your notes (supports multiple lines)
-5. Save changes
-
----
-
-## Board Configuration
-
-### Adding a New Board
-
-1. Go to **Settings > Boards**
-2. Click **Add Board**
-3. Enter the connection parameters:
-   - **Link Type**: USB (0), Optical (1), or A4818 (5)
-   - **Link Number**: Physical port number
-   - **VME Address**: VME base address (for VME boards)
-4. Click **Connect**
-
-The system will:
-- Attempt to connect to the board
-- Read board information (model, serial, channels)
-- Query current register configuration
-- Create configuration files
-
-### Removing a Board
-
-1. Go to **Settings > Boards**
-2. Find the board to remove
-3. Click the **Remove** button
-4. Confirm the removal
-
-```{warning}
-Removing a board deletes its configuration files. Back up configurations before removing.
-```
-
-### Modifying Board Configuration
-
-To change board registers:
-
-1. Go to the **DAQ Configuration** panel (Board icon in navigation)
-2. Select the board from the dropdown
-3. Modify register values:
-   - **Trigger Threshold**: Trigger level in ADC counts
-   - **DC Offset**: Baseline offset
-   - **Trapezoid Settings**: Rise time, flat top, decay time
-   - **Pre-trigger**: Samples before trigger
-4. Changes are applied immediately to the board
-
-### Energy Calibration
-
-Set energy calibration coefficients for each channel:
-
-1. Go to the **DAQ Configuration** panel
-2. Select the board and channel
-3. Enter calibration coefficients:
-   - **a (slope)**: Energy per bin
-   - **b (offset)**: Energy offset
-
-The calibration converts bin numbers to energy:
-```
-Energy = a × bin + b
-```
-
----
-
-## Settings and Customization
-
-### Appearance Settings
-
-| Setting | Description |
-|---------|-------------|
-| **Dark Mode** | Toggle between light and dark themes |
-| **Visible Metrics** | Select which metrics appear in the card view |
-| **Visible Tabs** | Show/hide dashboard tabs |
-
-### Boards Settings
-
-Manage digitizer board connections (see Board Configuration section).
-
-### Metrics Settings
-
-Configure Graphite metrics to display in the Overview tab:
-
-1. Go to **Settings > Metrics**
-2. Click **Add Metric**
-3. Enter:
-   - **Path**: Graphite metric path (e.g., `accelerator.terminal_voltage`)
-   - **Alias**: Display name (e.g., "Terminal V")
-   - **Refresh Rate**: Update interval in seconds
-   - **Multiplier**: Scale factor for display (e.g., 0.001 to convert mV to V)
-4. Click **Save**
-
-To remove a metric, click the **Delete** button next to it.
-
----
-
-## Quick Reference
-
-### Keyboard Shortcuts (Frontend)
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+S` / `Cmd+S` | Start/Stop acquisition (when focused on control panel) |
-| `Esc` | Close modal dialogs |
-
-### Common Tasks
-
-| Task | Steps |
-|------|-------|
-| **Start a run** | Enter metadata → Click Start |
-| **Stop a run** | Click Stop → Verify metadata saved |
-| **Check connectivity** | Settings → Boards → Refresh |
-| **View spectrum** | Histogram tab → Select channel |
-| **Set ROI** | Histogram tab → Gear icon → Enter range |
-| **Export data** | Logbook → Download CSV |
-| **Add metric** | Settings → Metrics → Add |
-
-### Status Indicators
-
-| Indicator | Meaning |
-|-----------|---------|
-| **Green** | System operational / Connected |
-| **Yellow** | Warning / Partial connectivity |
-| **Red** | Error / Disconnected |
-| **Blue** | Acquisition running |
-| **Gray** | Inactive / Idle |
-
----
-
-## Best Practices
-
-### Before Long Runs
-
-1. **Verify all boards** are connected and responding
-2. **Check disk space** on the data storage volume
-3. **Enable file size limits** if disk space is limited
-4. **Document target** and experimental conditions in metadata
-5. **Test with a short run** before starting long acquisitions
-
-### Data Management
-
-1. **Back up data regularly** to external storage
-2. **Use quality flags** to mark problematic runs
-3. **Add notes** about unusual conditions or observations
-4. **Export logbook** periodically for offline records
-
-### Troubleshooting During Runs
-
-If issues occur during acquisition:
-
-1. **Check the card view** for error indicators
-2. **Verify board connectivity** in Settings
-3. **Monitor bandwidth** - low bandwidth may indicate disk issues
-4. **Check the file write bandwidth** on the status card — a stall points at the disk
-5. **Review server logs** for detailed error messages
-
-See the [Troubleshooting Guide](troubleshooting.md) for common issues and solutions.
+## 9. What is refused, and when
+
+A short list of the places WebDAQ says no, so the refusal is not a surprise:
+
+| Action | Refused when |
+|---|---|
+| Start a run | No run number set; a run is already going; no boards configured. |
+| Overwrite a run directory | Always asked first. |
+| Change the run number, saving, the size limit, the run name, type or voltages | While a run is in progress. |
+| Refresh the board connections | While a run is in progress. |
+| Reopen the boards, reset the acquisition | While a run is in progress (from Troubleshoot). |
+| Scan for boards | While a run is in progress. |
+| Switch the current module | While the current module is acquiring. |
+| Restart the statistics | With no run active, or when the run saves no data, or when the existing `stats.csv` cannot be moved aside. |
+| Write a register to a live board | When it is not on the firmware's safe list — it is saved to the configuration and applied at the next run instead. |

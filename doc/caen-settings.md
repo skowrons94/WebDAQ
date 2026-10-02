@@ -273,9 +273,27 @@ Leave a board in SW controlled mode to keep it out of the chain. It will start
 on its own and its timestamps will not be comparable with the rest — which is
 fine for a monitor detector, and wrong for coincidences.
 
-The dashboard reads `0x8100` back from each board and shows the resulting roles,
-so check there after changing the mode: exactly one master, everyone else
-synchronised.
+The dashboard reads the registers back from each board and does the checking for
+you. It shows the role of every board, the order the cable has to run in, the
+start sequence, and — per board — whether each required switch is actually set:
+*needed — on*, *needed — off* or *not needed here*.
+
+What each position requires is not the same, which is where the time goes when a
+chain does not start:
+
+| Board | Needs |
+|---|---|
+| The master | **On first trigger** mode, and its software trigger routed to TRG-OUT (0x8110 bit 31) when any board follows it. It does **not** need TRG-IN → TRG-OUT: no trigger arrives on its TRG-IN, it makes its own. |
+| A board in the middle | TRG-IN → TRG-OUT (0x8110 bit 30), so the pulse walks on, and TRG-OUT carrying the trigger rather than a probe (0x811C[17:16] = 0). |
+| The last board | Nothing on its TRG-OUT. The chain ends there. |
+
+Anything missing is listed with a ⚠ against the board that causes it, in words
+rather than register numbers — *"the software trigger is not routed to TRG-OUT, so
+the boards after this one will never start"*.
+
+The master itself is identified from the board register ids the hardware reports,
+which is how CaenDAQ picks it. Those are only readable while the boards are open,
+so between runs the panel says the master is assumed from the configuration.
 
 ---
 
@@ -316,7 +334,7 @@ reports that the installed module has none.
 
 | File | Contains |
 |------|----------|
-| `conf/settings.json` | The board list: ID, model, link, VME address, DPP firmware, channel count. |
+| `conf/settings.json` | The board list — ID, model, link, VME address, DPP firmware, channel count — plus the run number, data saving, the size limit and the auto-restart setting. |
 | `conf/<model>_<id>.json` | Every acquisition register of that board, with address, channel and value. |
 | `calib/<model>_<id>.cal` | Two calibration coefficients per channel (offset, gain) for the energy axis. |
 

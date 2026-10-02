@@ -8,7 +8,7 @@ short:
 | **Graphite** | A time-series database with an HTTP API | Stores every number anyone measures: beam current, terminal voltage, board rates. WebDAQ writes to it and reads from it. |
 | **Grafana** | A dashboard and alerting server | Draws those numbers as plots on the wall screen, and raises alerts when one leaves its range. |
 | **WebDAQ Stats page** | Part of this application | Shows the current value of the metrics *you* selected, and copies them into each run's `stats.csv`. |
-| **Telegram / ELOG** | Messaging and the logbook | Tell a person that something happened. |
+| **Telegram / Zulip / ELOG** | Messaging and the logbook | Tell a person that something happened, and keep the record. |
 
 ---
 
@@ -43,7 +43,8 @@ accelerator.terminal_voltage    12c12c.tetram…
 ### What WebDAQ pushes
 
 * **Board rates** — events, pile-up, saturation, lost counts and file write rate
-  per board and channel, pushed by the acquisition every second during a run.
+  per board and channel, pushed by the acquisition on the sampling cadence during
+  a run — once a second unless it was changed on the Data Rates tab.
 * **Beam current** — every sample from the TetrAMM or the RBD 9103.
 
 Both go to Carbon on port 2003 of the host configured in Settings; the Stats page
@@ -83,6 +84,21 @@ Both can be changed afterwards with the pencil on the card.
 30-minute trend line so you can see whether it is rising, falling or flat. The
 eye hides a metric without deleting it; the bin removes it.
 
+**The Graphite server card** at the bottom of the page holds three things: the
+host, the port of the render API that WebDAQ reads, and the **metric prefix** for
+this experiment. The prefix names the campaign rather than a board — set it to
+`ancillary.rates.12c12c` and that campaign owns the subtree, so two campaigns can
+never merge series. WebDAQ's own rates land under
+`<prefix>.bo_<board>.ch_<channel>.totalRate`, keyed by the board's register id
+rather than its model name, so two identical boards stay apart. A live run picks
+up a change at its next stats interval.
+
+Note which Graphite address is which: this page configures the **render API**,
+read over HTTP, used for every plot and every monitored value. The address in
+Settings → Current Module is Carbon's **plaintext ingest** (usually port 2003),
+which measured values are pushed to. Mixing them up produces a page where
+everything reads `N/A` while the data is arriving perfectly well.
+
 ---
 
 ## 3. The run's stats file
@@ -90,7 +106,7 @@ eye hides a metric without deleting it; the bin removes it.
 While a run with data saving is in progress, every enabled metric is sampled once
 a second and written to `data/run<N>/stats.csv`:
 
-```csv
+```text
 # LUNA DAQ statistics
 # Run number: 1276
 # Start time: 2026-07-28T01:09:00
@@ -189,17 +205,34 @@ Two rules keep the messages worth reading:
   message follows, which can be switched off.
 * **Unknown is not wrong.** A Graphite server that cannot be reached, or a current
   monitor that is disconnected, leaves every rule exactly as it was. A hole in the
-  monitoring never invents an alert, and never silently clears a real one.
+  monitoring never invents an alert, and never silently clears a real one. A rule
+  in that state is marked **nothing to measure**, so it is not mistaken for a rule
+  that is happy.
+* **A flap is one message.** The same subject of the same rule is not announced
+  twice within a minute, so a value sitting exactly on its threshold cannot fill
+  the chat or roll the night out of the history.
+* **An alert that reached nobody says so.** If every destination of a rule is off
+  or unconfigured the message is still recorded, the bell turns amber, and the
+  history row is badged *reached nobody*.
 
 Rules live in `conf/alerts.json`. A DAQ machine that has never had rules starts
-with the one WebDAQ always had: board failures to Telegram.
+with the one WebDAQ always had: board failures to Telegram. A board failure is
+written to the history even when no rule is configured for it — it is the event
+this whole system exists for, and a shift reading the history in the morning has
+to find it there.
 
 A rule only works while the server is *watching*: the badge at the top of the
 panel says so, and offers **Start watching** when it is not (a backend started
 without `main.py` has no watcher). A rule whose destinations are all switched off
 is marked **reaches nobody** rather than looking armed.
 
-Auto-restart, configured under Run Control, is what a board-failure message refers
+A monitored beam current is read with a freshness horizon measured from the
+metric itself — the observed publication cadence and lag — rather than the fixed
+30 s window a picoammeter gets. A value published every 10 s legitimately reads
+back tens of seconds old, and used to be reported as a dead readout.
+
+Auto-restart, configured in the **Acquisition setup** card on the Overview, is
+what a board-failure message refers
 to: the run is stopped and started again after the delay, so a night shift does
 not lose hours to a board that hiccupped.
 

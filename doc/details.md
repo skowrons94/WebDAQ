@@ -117,7 +117,9 @@ stopped, flagged `bad` in the logbook with an explanatory note, and a new run
 started automatically. The new run continues the failed one: its beam-current
 file, charge and `stats.csv` are its own, and it carries over the target, the
 terminal and probe voltages and the run type. Run-linked Grafana alerts stay
-active. A Telegram message is sent if notifications are configured. The setting
+active. The failure is written to the Troubleshoot history whether or not a rule
+was configured to deliver it, and an alert goes to Telegram or Zulip if one was.
+The setting
 and its delay are kept in `conf/settings.json`, so they survive a server restart.
 The intent is that a night shift loses one run rather than the rest of the night.
 
@@ -152,11 +154,12 @@ Everything is under the working directory.
 | Path | What | Survives restart |
 |---|---|---|
 | `conf/<board>.json` | One file per board: its full register configuration | Yes |
-| `conf/settings.json` | Run number, data saving, size limits, sync mode | Yes |
+| `conf/settings.json` | Run number, data saving, size limits, the board list, auto-restart and its delay. Written atomically under a lock, and kept rather than replaced if it becomes unreadable | Yes |
 | `conf/histograms.json` | The histogram dashboard: which spectra, their ROIs, zooms, layout | Yes |
 | `conf/current.json` | Beam current module, its settings, lifetime accumulated charge | Yes |
 | `conf/stats.json` | Graphite server, metric subtree, monitored metrics, sampling cadence | Yes |
-| `conf/telegram_settings.json`, `conf/elog_settings.json` | Notification and logbook credentials | Yes |
+| `conf/telegram_settings.json`, `conf/zulip_settings.json`, `conf/elog_settings.json`, `conf/grafana_settings.json` | Notification, logbook and Grafana credentials, in plain text |
+| `conf/alerts.json`, `conf/alert_log.json` | The alert rules, and the history of what they raised | Yes |
 | `calib/<board>.cal` | Per-channel energy calibration | Yes |
 | `app.db` | Run metadata, users | Yes |
 | `data/run<N>/` | The run itself — see below | Yes |
@@ -213,7 +216,7 @@ useful when a run was interrupted and you want to know how much of it is good.
 | | |
 |---|---|
 | **Web** | The main interface. Any browser on the network; see the README for reaching it from another PC. |
-| **Mobile** | A React Native app for run status, spectra and logbook entries from a phone. |
+| **Mobile** | A React Native app for run status, spectra and logbook entries from a phone. It lives in its own repository and is not part of this checkout. |
 | **REST API** | Everything the browser does is an HTTP call the server serves, so scripting a run is a matter of calling the same endpoints. JWT-authenticated. See the [Server Architecture Guide](server-architecture.md). |
 
 The frontend has no privileged path into the DAQ — it is one API client among

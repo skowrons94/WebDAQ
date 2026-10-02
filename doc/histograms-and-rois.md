@@ -147,7 +147,7 @@ settings, and the charge to normalise by.
 
 ## 6. Waveforms and PSD
 
-Two related pages, with the same idea and separate controls:
+Two further tabs on the Dashboard, with the same idea and separate controls:
 
 - **Waveforms** show the digitised trace for a channel, which is what you look at
   when setting a trigger threshold or a trapezoid rise time. Traces have to be
@@ -156,7 +156,11 @@ Two related pages, with the same idea and separate controls:
 - **PSD** shows the two-dimensional charge-comparison plot for pulse-shape
   discrimination, used to separate neutrons from gammas in organic scintillators.
 
-Both select boards and channels independently of the histogram dashboard.
+Both select boards and channels independently of the histogram dashboard. The
+Waveforms tab also carries the board-configuration controls that decide what the
+board digitises into a trace — dual trace, what each trace carries, and the
+digital probe. Those are written to the board as soon as you change them, so they
+belong to setting a board up rather than to a measurement in progress.
 
 ---
 
@@ -164,7 +168,7 @@ Both select boards and channels independently of the histogram dashboard.
 
 | Symptom | Usual cause |
 |---|---|
-| A spectrum is empty | The channel is not enabled on the board, or its threshold is above the signal. Check the trace first. |
+| A spectrum is empty | Read the histogram's own title, which says which case it is — no run, this board not in the run, no counts on that channel. Then check on **Board Health** whether the board is reading data blocks at all, and only then the channel enable and the threshold. |
 | Counts do not move | Auto-update is off, or the run is not running, or the ROI is disabled. |
 | ROI counts look far too high | Rebinning changed, or the ROI is in channels while the axis is now in keV. |
 | The dashboard is empty after an upgrade | The server was started in a different working directory — the dashboard lives in `conf/histograms.json` under it. |

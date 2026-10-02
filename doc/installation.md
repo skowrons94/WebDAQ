@@ -1,231 +1,200 @@
-# LunaDAQ Installation Guide
+# Installation
 
-This page provides a detailed step-by-step guide to install and configure the LunaDAQ system for the LUNA experiment.
-
----
-
-## Table of Contents
-1. [Prerequisites](#prerequisites)
-2. [Installation Steps](#installation-steps)  
-   - [Clone Repository](#1-clone-repository)  
-   - [Conda Environment (Optional)](#3-conda-environment-optional)  
-   - [Server Configuration](#4-server-configuration)  
-   - [Frontend Setup](#5-frontend-setup)  
-3. [Post-Installation Checks](#post-installation-checks)
-4. [Troubleshooting](#troubleshooting)
+Getting WebDAQ onto a machine, and starting it the way the control room expects.
+If the machine is already set up and you only need to start the application, skip
+to [section 4](#4-starting-it).
 
 ---
 
-## Prerequisites
+## 1. What the machine needs
 
-The LunaDAQ is compatibile only with Linux systems, so ensure to use a PC with any Linux version you prefer. MacOS works as well, but the CAEN drivers are not available on it so the DAQ can be run only in test mode, i.e. without connecting to any board. Apart from the OS, the following packages are required:
+| | |
+|---|---|
+| **Operating system** | Linux for a DAQ machine; macOS works for development. |
+| **CAEN libraries** | CAENVMElib, CAENComm and CAENDigitizer, for real hardware. Without them WebDAQ still runs in test mode with simulated boards. |
+| **Build tools** | `git`, `cmake`, `make`, a C++ compiler, `curl`. The installer puts them in place on a fresh machine. |
+| **conda** | Miniforge, installed by the installer if no conda is present. Everything lives in an environment called `luna`. |
+| **ROOT** | Comes from the `luna` environment. It is needed for the spectra and for the offline converter. |
 
-| Component       | Version      | Verification Command      |
-|-----------------|--------------|----------------------------|
-| Node.js         | ≥ v18.x      | `node -v`                  |
-| Python          | ≥ v3.7       | `python3 --version`        |
-| Flask           | ≥ 2.0        | `flask --version`          |
-| SQLite          | ≥ 3.35       | `sqlite3 --version`        |
-| npm             | ≥ 7.x        | `npm -v`                   |
-
-For an easy installation of all the requirements, an `environment.yml` file is provided to create the `luna` conda environment which will install all of them.
+Nothing runs in Docker, and there is no container to start. Acquisition happens
+inside the server process through CaenDAQ.
 
 ```{note}
-No Docker is required. Acquisition runs in process through the CaenDAQ library;
-earlier versions ran XDAQ inside a container, and that is no longer the case.
+Versions before 4.0 ran acquisition as XDAQ inside a Docker container, with a
+separate spy server on port 6060. If a procedure tells you to start a container
+or to check port 6060, it predates 4.0 and does not apply.
 ```
-
-In order to communicate succesfully with the CAEN boards, the [CAENVME Library](https://www.caen.it/products/caenvmelib-library/), the [CAENComm Library](https://www.caen.it/products/caencomm-library/) and [CAENDigitizer Library](https://www.caen.it/products/caendigitizer-library/) must be installed in the operating system. Additionally, if the USB communication is used, remember to install the drivers for the CAEN board that is being used.
-
-Online data visualisation needs no extra software: the spectra come from the same
-CaenDAQ instance that is writing the data, so there is nothing separate to build
-or keep running. (Earlier versions required LunaSpy for this; it is no longer
-used.)
-
-## Common Issues
-
-In case you own an already installed ROOT version (outside of ```conda```), some issue might arise. The best solutions seems to be the following:
-
-### 1. Activate the `luna` Environment  
-Activate the Conda environment:  
-
-```bash
-conda activate luna
-```
-
-### 2. Create the Activation Script  
-Create the activation file:  
-
-```bash
-mkdir -p ~/miniconda3/envs/luna/etc/conda/activate.d
-nano ~/miniconda3/envs/luna/etc/conda/activate.d/env_vars.sh
-```
-
-### 3. Add to `env_vars.sh`  
-Edit the file and add the following lines:  
-
-```bash
-#!/bin/bash
-# Source a different bashrc or other setup file when 'luna' environment is activated
-source ~/miniconda3/envs/luna/.bashrc_luna
-```
-
-### 4. Create a Custom `.bashrc_luna`  
-Create the custom `.bashrc_luna` file:  
-
-```bash
-nano ~/miniconda3/envs/luna/.bashrc_luna
-```
-
-### 5. Add to `.bashrc_luna`  
-Add the following lines:  
-
-```bash
-# Remove all current ROOT paths from LD_LIBRARY_PATH and PYTHONPATH
-export LD_LIBRARY_PATH=$(echo $LD_LIBRARY_PATH | sed -e 's|[^:]*ROOT[^:]*:||g')
-unset PYTHONPATH
-
-# Point ROOTSYS to the conda environment's root directory
-export ROOTSYS=$CONDA_PREFIX
-
-# Add ROOT binary directory to the PATH
-export PATH=$ROOTSYS/bin:$PATH
-
-# Add ROOT library directory to LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$ROOTSYS/lib:$LD_LIBRARY_PATH
-
-# Add ROOT path to python path
-export PYTHONPATH=$ROOTSYS/lib:$PYTHONPATH
-```
-
-Save and exit.
-
-Now, whenever you activate the `luna` environment, it will automatically use the Conda-installed ROOT version without conflicts.
 
 ---
 
-## Installation Steps
-
-In the following all the steps for a fresh installation of LunaDAQ will be reported.
-
-### 1. Clone Repository
-
-First, the repository must be cloned:
+## 2. Installing
 
 ```bash
-git clone --recurse-submodules https://github.com/skowrons94/WebDAQ.git
+git clone https://github.com/skowrons94/WebDAQ.git
 cd WebDAQ
+./install.sh
 ```
 
-The submodules matter: `server/native/caendaq` is the acquisition library and
-`server/native/rureader` the offline converter. If you have already cloned
-without them, run `git submodule update --init --recursive`.
+The installer is idempotent — every step checks whether the work is already done,
+so running it again after an update is safe. It:
 
-The quickest path from here is `./install.sh`, which performs every step below
-and is safe to re-run. The manual steps are documented for the cases where it
-does not fit.
+1. installs the system build tools;
+2. checks out the two C++ submodules, **CaenDAQ** (the acquisition backend) and
+   **RUReader** (the offline `.caendat` → ROOT converter);
+3. installs Miniforge if conda is missing;
+4. creates the `luna` environment from `environment.yml`;
+5. builds RUReader and installs the `caendaq` Python module into the environment;
+6. writes `frontend/.env` and builds the web interface;
+7. adds a `LunaDAQ` launcher to your `~/.bashrc`.
 
----
+Open a new terminal afterwards, or `source ~/.bashrc`, so the launcher is on your
+PATH.
 
-### 3. Conda Environment (Optional)
+**The API address is baked into the frontend at build time.** `frontend/.env`
+holds `NEXT_PUBLIC_API_URL`, and Next.js compiles it into the bundle. If the DAQ
+server will be reached from other machines, set it to an address those machines
+can resolve — not `127.0.0.1` — and rebuild:
 
-A Conda environment simplifies dependency management. To create it:
-```bash
-conda env create -f environment.yml
-```
-
-Once created, the environment can be activated:
-```bash
-conda activate luna
-```
-Now all the dependencies (apart from the CAEN ones) should be succesfully installed.
-
----
-
-### 4. Server Configuration
-
-In order to start the DAQ, first the server part must be activated. This is the one that actually handles the data acquistion, stores the variables, and communicates with the other components that are being added.
-
-#### Initialize the Database
-LunaDAQ provides a SQL database where all the run information will be stored. In order to create a database we must:
-```bash
-cd server
-flask db init # Creates migration directory
-flask db migrate -m "Initial migration" # Generates migration script
-flask db upgrade # Applies migrations to the database
-```
-After these, the SQL should be ready for usage.
-
-#### Create a User
-In order to access the DAQ, the username and password are necessary. Due to security reason, these can only be created from command line as:
-```bash
-flask --app server create-user  # Follow prompts to set username/password
-```
-
-#### Start the Server
-
-If you have all the CAEN drivers installed and a board is connected to your PC:
-```bash
-python3 main.py
-```
-
-Alternatively, it is possible to start the server in test mode that is useful when working on the interface without the need of having a physical board attached:
-```bash
-TEST_FLAG=True python3 main.py
-```
-In the test mode, LunaDAQ will not check for any board communication and will use dummy board instead. It will be still possible to start and stop the runs, and the information in the SQL database will still be populated. 
-
-Note that the server will be run on a specific IP address and a dedicated port. In order to change the values of the port, open the `server/main.py` file and change the values in the last line. 
-
----
-
-### 5. Frontend Setup
-
-Now, instead, it is necessary to handle the interface of the DAQ by creating a web page that communicates with the server to get information about the DAQ status, the boards that are connected and the data that will be collected.
-
-#### Install Packages
-First we install the packages that are needed for the web page:
 ```bash
 cd frontend
-npm install    # Installs Next.js and React dependencies
+npm run build
 ```
 
-#### Build and Start
-Then we can build the web page and start it:
+Forgetting the rebuild is the most common deployment mistake: the interface loads
+and then fails every request, because the old address is still inside it.
+
+---
+
+## 3. The working directory
+
+**The working directory is the experiment.** Everything the server reads and
+writes is relative to the directory it was started in: `conf/` (board
+configurations, the histogram dashboard, credentials), `calib/`, `data/` and the
+`app.db` database. Two working directories are two independent experiments that
+share one installation.
+
+You do not have to create any of it by hand. The first launch creates the
+directories, brings the database schema up and creates a default user, so an
+empty directory is a valid starting point for a new campaign.
+
+---
+
+## 4. Starting it
+
+### 4.1 With the launcher
+
 ```bash
-npm run build  # Compiles production-ready assets
-npm run start  # Launches frontend on http://localhost:3000
+LunaDAQ            # start the web interface (freeing its port first)
+LunaDAQ status     # what is holding each port
+LunaDAQ stop       # stop both parts, politely then firmly
+LunaDAQ restart    # stop, then start the interface
+LunaDAQ backend    # run the DAQ server in this terminal, for debugging
 ```
 
-The web page will be looking for the server at the IP and port reported in `frontend/.env` files, thus ensure that matches the values with which the server was run. Beware that every time the values in `frontend/.env` are changed, the build must be redone before starting the new web page. Note that this permits to run the server and the web page on two completely different PCs, if needed.
+Then open <http://localhost:3000> and log in. The **DAQ Server** badge at the top
+right starts the server itself: pick the working directory for the campaign and
+press **Start**. The badge is also on the login page, so the server can be
+started before anyone logs in.
+
+`LunaDAQ stop` only ever stops processes that look like ours — an unrelated
+program on port 3000 is reported and left alone, which is why it is a better
+answer to a busy port than killing whatever holds it.
+
+### 4.2 Running it inside tmux
+
+The web interface is a long-lived process. Started from a plain SSH session it
+dies when the connection drops, so start it inside **tmux**: a session that keeps
+running on the machine whether or not anyone is attached to it.
+
+```bash
+tmux new -s daq        # create a session called "daq" and attach to it
+LunaDAQ                # start the interface inside it
+```
+
+Now detach and leave it running: press **Ctrl-b**, release both keys, then press
+**d**. You are back at your own shell; the session is still running.
+
+| What you want | How |
+|---|---|
+| List the sessions on the machine | `tmux ls` |
+| Attach to the session again | `tmux attach -t daq` |
+| Detach and leave it running | **Ctrl-b** then **d** |
+| Scroll back through the output | **Ctrl-b** then **[**, then the arrow keys or PageUp; **q** leaves scroll mode |
+| Open a second window in the session | **Ctrl-b** then **c**; switch with **Ctrl-b** then **0**, **1**, … |
+| Close the current window | type `exit` in it |
+| Stop the whole session | attach, stop the application with `LunaDAQ stop`, then `exit` |
+
+Every tmux command is the prefix **Ctrl-b** followed by one key; that is the only
+thing worth memorising. If a session is already attached somewhere else —
+somebody left it open — `tmux attach -d -t daq` takes it over.
+
+A detached session survives a dropped SSH connection, but not a reboot of the DAQ
+machine. After a reboot, attach to a new session and start it again.
 
 ---
 
-## Post-Installation Checks
+## 5. Without hardware
 
-1. **Verify Server Access**:  
-   ```bash
-   curl http://localhost:5001/experiment/get_run_number
-   ```
-   Expected response: `{"status": "ok"}`
+```bash
+TEST_FLAG=True LunaDAQ backend
+```
 
-2. **Access the Frontend**:  
-   Open `http://localhost:3000` in a browser. Log in with the credentials created earlier.
+or tick **Test Mode** in the DAQ Server panel before starting the server. Test
+mode fabricates CAEN-style data for simulated boards and simulates the
+picoammeter, so the whole chain — readout, data file, spectra, rates, run
+metadata — works on a laptop with no digitizers attached.
+
+Set the variable or leave it unset; **never set it to `False`**. Most of the code
+reads it as "any value at all means test mode", so `TEST_FLAG=False` puts the
+server into test mode while one part of it believes the hardware is real.
 
 ---
 
-## Troubleshooting
+## 6. Checking the installation
 
-| Issue                          | Solution                                   |
-|--------------------------------|--------------------------------------------|
-| Port conflicts (5001/3000)     | Stop conflicting services or modify ports in `main.py` (server) and `frontend/.env` (frontend). |
-| Database migration errors      | Delete the `migrations/` folder and re-run `flask db init`. |
-| npm build failures             | Clear `node_modules/` and run `npm install --force`. |
-| Missing environment variables  | Ensure `.env` files exist in both `server/` and `frontend/` directories. |
-| CAEN library errors            | Verify CAENVMElib, CAENComm, and CAENDigitizer are properly installed. |
-| `caendaq` not found            | Rebuild the acquisition module: `pip install server/native/caendaq` |
-| ROOT conflicts                 | Follow the Common Issues section above to configure Conda environment. |
+With the server running and a login in hand:
 
-For more detailed troubleshooting, see the [Troubleshooting Guide](troubleshooting.md).
+| Check | Where |
+|---|---|
+| The server answers | The **DAQ Server** badge reads *DAQ Server Online*. |
+| The boards answer | **Settings → Boards**: each board shows *Connected*. Use **Scan for boards** to find them rather than typing their settings from memory. |
+| The acquisition module is installed | **DAQ → Hardware Info** names the CaenDAQ version, and says `hardware` rather than `mock / test mode`. |
+| A run works | Take a short run with saving on, then open it in the Logbook: there should be a `.caendat` file and, with a current module configured, a `current.txt`. |
+| The converter is installed | **Logbook → the run → Convert** offers options instead of *RUReader is not installed*. |
 
-For further assistance, contact [LunaDAQ Support Team](mailto:jakub.skowronski@pd.infn.it).
+The server's own log is `server.log` **in the working directory it was started
+in**, and the interface can show it: **DAQ Server → Show logs**.
+
+---
+
+## 7. Updating an installation
+
+```bash
+cd WebDAQ
+git pull
+git submodule update --init --recursive
+conda activate luna
+pip install server/native/caendaq     # only if the submodule moved
+cd frontend && npm run build
+LunaDAQ restart
+```
+
+The database schema is brought up to date every time the server starts, so there
+is nothing to migrate by hand. `migrations/` is part of the repository — do not
+delete it, and do not run `flask db init`; that is how a schema history gets
+thrown away.
+
+---
+
+## 8. If the installation itself fails
+
+| Symptom | Usual cause |
+|---|---|
+| `caendaq` cannot be imported | The module was built into a different environment. `conda activate luna`, then `pip install server/native/caendaq`. |
+| `No module named flask` when running the tests | The same thing, from the other direction: the shell is not in the `luna` environment. |
+| Port 5001 or 3000 is in use | `LunaDAQ status` names what holds it; `LunaDAQ stop` clears our own leftovers. A port held by an unrelated program is reported, not killed. |
+| The interface loads but every request fails | `NEXT_PUBLIC_API_URL` points somewhere the browser cannot reach, or the frontend was not rebuilt after it changed. |
+| The boards are listed but never connect | The CAEN libraries are missing, or another process still holds the links — including a WebDAQ backend that did not exit. |
+
+[Troubleshooting](troubleshooting.md) covers what to do once it is installed and
+something stops working during a shift.

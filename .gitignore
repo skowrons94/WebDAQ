@@ -52,3 +52,12 @@ RELEASE_NOTES_*.md
 
 # Vendor manuals kept locally (large PDFs)
 manuals/
+
+# LaTeX build products of the manual (the PDF itself is committed)
+manual/*.aux
+manual/*.log
+manual/*.out
+manual/*.toc
+manual/*.fls
+manual/*.fdb_latexmk
+manual/*.synctex.gz

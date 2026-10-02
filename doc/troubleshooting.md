@@ -1,832 +1,300 @@
-# Troubleshooting Guide
-
-This guide helps diagnose and resolve common issues with the LunaDAQ system. Issues are organized by category for quick reference.
-
----
-
-## Table of Contents
-
-1. [Server Issues](#server-issues)
-2. [Frontend Issues](#frontend-issues)
-3. [Board Connection Issues](#board-connection-issues)
-4. [Data Acquisition Issues](#data-acquisition-issues)
-5. [Histogram and Visualization Issues](#histogram-and-visualization-issues)
-6. [Current Monitor Issues](#current-monitor-issues)
-7. [Database Issues](#database-issues)
-8. [Acquisition Issues](#acquisition-issues)
-9. [Network and Connectivity Issues](#network-and-connectivity-issues)
-10. [Performance Issues](#performance-issues)
-11. [Diagnostic Commands](#diagnostic-commands)
-
----
-
-## Server Issues
-
-### The server runs in the wrong conda environment
-
-**Symptoms** — the server starts and serves pages, but something it needs is
-"not installed", and it is installed:
-
-- `The py_elog package is not installed on the server`, yet `conda list -n luna`
-  shows `elog`
-- `Error configuring acquisition: add_board(): incompatible function arguments`
-- `caendaq` reported as missing when the tuner tries an online write
-
-**Cause.** The backend must run in the `luna` environment, which is where
-`caendaq`, `elog` and the CAEN libraries live. Two ways it ends up elsewhere:
-
-1. `conda run -n luna python` does not always pick that environment's
-   interpreter — on some conda versions it resolves `python` from the PATH it
-   inherited, so the server runs in whatever environment the person who started
-   the web app was in.
-2. Starting the server by hand without activating first: `python main.py` uses
-   whatever `python` means in that terminal.
-
-**Check which interpreter is actually serving:**
-
-```bash
-lsof -ti tcp:5001 -sTCP:LISTEN | xargs ps -o command=
-```
-
-The path must be `<conda>/envs/luna/bin/python`. `Start an Experiment` also
-reports it — the response carries `"python": "…/envs/luna/bin/python"`, and
-warns when that interpreter cannot import what the backend needs.
-
-**Fix:**
-
-```bash
-LunaDAQ stop
-conda activate luna
-LunaDAQ backend           # refuses to start if caendaq is not importable
-```
-
-or start it again from the web interface, which now resolves the environment's
-interpreter by path.
-
-**If the environment really is missing a package:**
-
-```bash
-conda env update -f environment.yml          # picks up anything added to the file
-conda install -n luna -c paulscherrerinstitute elog   # elog is not on PyPI
-```
-
-Re-running `install.sh` does both and then verifies every package imports.
-
-### Server Won't Start
-
-**Symptoms:**
-- `python3 main.py` exits immediately with an error
-- Server crashes on startup
-
-**Solutions:**
-
-| Cause | Solution |
-|-------|----------|
-| Port 5001 already in use | Kill the existing process: `lsof -ti:5001 \| xargs kill` |
-| Missing dependencies | Reinstall: `pip install -r requirements.txt` |
-| Database not initialized | Run: `flask db init && flask db migrate && flask db upgrade` |
-| CAEN libraries missing | Install CAENVMElib, CAENComm, CAENDigitizer (see Installation Guide) |
-| Python version mismatch | Ensure Python 3.7+ is installed |
-
-**Run in test mode without hardware:**
-```bash
-TEST_FLAG=True python3 main.py
-```
-
-### Server Crashes During Operation
-
-**Check the logs for error messages:**
-```bash
-# View recent output
-tail -100 server.log
-
-# Monitor live output
-python3 main.py 2>&1 | tee server.log
-```
-
-**Common causes:**
-- Board disconnection during acquisition
-- Out of memory (check with `free -h`)
-- Disk full (check with `df -h`)
-
-### API Requests Return 401 Unauthorized
-
-**Symptoms:**
-- Frontend shows "Unauthorized" errors
-- API calls fail with 401 status
-
-**Solutions:**
-
-1. **Token expired**: Log out and log back in
-2. **Invalid token**: Clear browser cookies and local storage, then log in again
-3. **Clock synchronization**: Ensure server and client clocks are synchronized
-
----
-
-## Frontend Issues
-
-### Frontend Won't Build
-
-**Symptoms:**
-- `npm run build` fails with errors
-- TypeScript compilation errors
-
-**Solutions:**
-
-```bash
-# Clear cache and reinstall
-cd frontend
-rm -rf node_modules .next
-npm cache clean --force
-npm install
-npm run build
-```
-
-### Frontend Won't Connect to Server
-
-**Symptoms:**
-- "Network Error" messages
-- Data not loading
-- Spinners never stop
-
-**Solutions:**
-
-1. **Check .env configuration:**
-   ```bash
-   cat frontend/.env
-   # Should contain:
-   # NEXT_PUBLIC_API_URL=http://127.0.0.1:5001
-   ```
-
-2. **Verify server is running:**
-   ```bash
-   curl http://localhost:5001/experiment/get_run_number
-   ```
-
-3. **Rebuild after .env changes:**
-   ```bash
-   npm run build
-   npm run start
-   ```
-
-4. **Check CORS settings** if server and frontend are on different domains
-
-### Page Shows Blank or Errors
-
-**Solutions:**
-
-1. **Clear browser cache**: `Ctrl+Shift+R` or `Cmd+Shift+R`
-2. **Check browser console** for JavaScript errors (F12 → Console)
-3. **Try a different browser** to rule out browser-specific issues
-4. **Check for ad blockers** that might interfere with API calls
-
-### Login Fails
-
-**Symptoms:**
-- Correct credentials rejected
-- Login button doesn't respond
-
-**Solutions:**
-
-1. **Verify credentials** by checking directly:
-   ```bash
-   curl -X POST http://localhost:5001/login \
-     -H "Content-Type: application/json" \
-     -d '{"username":"your_user","password":"your_pass"}'
-   ```
-
-2. **Reset password** by creating a new user:
-   ```bash
-   cd server
-   flask --app server create-user
-   ```
-
----
-
-## Board Connection Issues
-
-### Board Not Detected
-
-**Symptoms:**
-- "Failed to connect" error when adding board
-- Board appears disconnected in status
-
-**Diagnostic steps:**
-
-1. **Check physical connection:**
-   - USB cable properly connected
-   - Board powered on
-   - Optical fiber (if applicable) properly connected
-
-2. **Verify CAEN libraries:**
-   ```bash
-   # Check if libraries are installed
-   ldconfig -p | grep -i caen
-   ```
-
-3. **Check USB permissions (Linux):**
-   ```bash
-   # Add user to dialout group
-   sudo usermod -a -G dialout $USER
-   # Log out and back in for changes to take effect
-   ```
-
-4. **Test with CAEN tools:**
-   ```bash
-   # If available, use CAEN's diagnostic tools
-   CAENDigitizerDemo
-   ```
-
-### Board Connection Unstable
-
-**Symptoms:**
-- Board connects then disconnects
-- Intermittent communication errors
-- "Board not responding" during acquisition
-
-**Solutions:**
-
-| Cause | Solution |
-|-------|----------|
-| Loose cable | Reseat USB/optical cable |
-| Power issues | Check board power supply |
-| USB hub problems | Connect directly to computer |
-| Driver issues | Reinstall CAEN drivers |
-| Firmware issues | Update board firmware |
-
-**Refresh board connections:**
-```bash
-curl -X POST http://localhost:5001/experiment/refresh_board_connections
-```
-
-### Wrong Board Parameters
-
-**Symptoms:**
-- Board connects but wrong model shown
-- Wrong number of channels displayed
-
-**Solutions:**
-
-1. **Check link type** (0=USB, 1=Optical, 5=A4818)
-2. **Verify VME address** for VME-based systems
-3. **Remove and re-add the board** with correct parameters
-
----
-
-## Data Acquisition Issues
-
-### Acquisition Won't Start
-
-**Symptoms:**
-- Start button does nothing
-- Error when clicking Start
-
-**Check list:**
-
-| Check | Command/Action |
-|-------|----------------|
-| Boards connected | `curl http://localhost:5001/digitizer/connectivity` |
-| At least one board added | `curl http://localhost:5001/experiment/get_board_configuration` |
-| `caendaq` importable | `python -c "import caendaq; print(caendaq.__file__)"` |
-| Run directory writable | `touch data/test && rm data/test` |
-
-**Common solutions:**
-
-1. **Reset the acquisition state:**
-   ```bash
-   curl -X POST http://localhost:5001/experiment/reset
-   ```
-
-2. **Reopen the digitizers** (Board page → Refresh connections), or:
-   ```bash
-   curl -X POST http://localhost:5001/experiment/refresh_board_connections
-   ```
-
-3. **Check server logs** for specific error messages
-
-### Acquisition Starts but No Data
-
-**Symptoms:**
-- Run shows as "Running" but no counts
-- Histograms stay at zero
-- No data files created
-
-**Solutions:**
-
-1. **Check spy server status:**
-   ```bash
-   curl http://localhost:5001/spy/status
-   ```
-
-2. **Verify trigger settings:**
-   - Trigger threshold may be too high
-   - Channel may be disabled
-   - Input polarity may be wrong
-
-3. **Check signal source:**
-   - Verify detector is providing signals
-   - Check signal amplitude on oscilloscope
-
-4. **Verify channel enabled:**
-   ```bash
-   curl http://localhost:5001/digitizer/channel/0/0
-   ```
-
-### Acquisition Stops Unexpectedly
-
-**Symptoms:**
-- Run stops without user action
-- Error message about the acquisition failing to arm
-
-**Solutions:**
-
-1. **Check disk space:**
-   ```bash
-   df -h /path/to/data
-   ```
-
-2. **Check file size limits:**
-   - If limits are enabled, acquisition may stop when limit is reached
-
-3. **Check board connectivity:**
-   - Board may have disconnected
-   - Check server logs for error messages
-
-4. **Monitor the file write bandwidth:**
-   ```bash
-   curl http://localhost:5001/experiment/file_bandwidth
-   ```
-
-### Low Count Rates
-
-**Symptoms:**
-- Fewer counts than expected
-- High dead time
-
-**Solutions:**
-
-1. **Check trigger threshold:** May be set too high
-2. **Check pile-up rejection:** May be rejecting good events
-3. **Check dead time:**
-   ```bash
-   curl http://localhost:5001/stats/board_rates_dt
-   ```
-4. **Reduce input rate** if pile-up is excessive
-5. **Adjust trapezoid settings** for faster processing
-
----
-
-## Histogram and Visualization Issues
-
-### Histograms Not Updating
-
-**Symptoms:**
-- Histograms frozen during acquisition
-- Old data displayed
-
-**Solutions:**
-
-1. **Check spy server:**
-   ```bash
-   curl http://localhost:5001/spy/status
-   ```
-
-2. **Verify acquisition is running:**
-   ```bash
-   curl http://localhost:5001/experiment/get_run_status
-   ```
-
-3. **Restart spy server** by stopping and starting acquisition
-
-4. **Clear browser cache** and refresh page
-
-### Histogram Shows Wrong Data
-
-**Symptoms:**
-- Wrong channel displayed
-- Data from previous run
-
-**Solutions:**
-
-1. **Clear histogram buffers** by restarting acquisition
-2. **Verify board/channel selection** in the interface
-3. **Check histogram type** (energy vs. charge)
-
-### Waveforms Not Visible
-
-**Symptoms:**
-- Waveform tab shows no data
-- Waveforms all zero
-
-**Solutions:**
-
-1. **Enable waveform recording:**
-   ```bash
-   curl -X POST http://localhost:5001/waveforms/activate
-   ```
-
-2. **Check waveform status:**
-   ```bash
-   curl http://localhost:5001/waveforms/status
-   ```
-
-3. **Verify register 0x8000 bit 16 is set:**
-   ```bash
-   curl http://localhost:5001/digitizer/0/registers
-   ```
-
----
-
-## Current Monitor Issues
-
-### TetrAMM Not Connecting
-
-**Symptoms:**
-- "Connection failed" error
-- Current reads as zero
-
-**Solutions:**
-
-1. **Check network connectivity:**
-   ```bash
-   ping 169.254.145.10  # Default TetrAMM IP
-   ```
-
-2. **Verify IP and port settings:**
-   ```bash
-   curl http://localhost:5001/current/get_ip
-   curl http://localhost:5001/current/get_port
-   ```
-
-3. **Try reconnecting:**
-   ```bash
-   curl http://localhost:5001/current/connect
-   ```
-
-4. **Check firewall rules** for port 10001
-
-### RBD9103 Not Connecting
-
-**Symptoms:**
-- Serial port errors
-- Device not found
-
-**Solutions:**
-
-1. **Check serial port:**
-   ```bash
-   ls -la /dev/ttyUSB*
-   ls -la /dev/ttyACM*
-   ```
-
-2. **Verify permissions:**
-   ```bash
-   sudo usermod -a -G dialout $USER
-   # Log out and back in
-   ```
-
-3. **Check cable connection** and device power
-
-### Current Readings Incorrect
-
-**Symptoms:**
-- Unexpected current values
-- Noisy readings
-
-**Solutions:**
-
-1. **Check range setting** (may be set too high/low)
-2. **Verify channel selection**
-3. **Check for grounding issues** in the measurement setup
-4. **Reset device:**
-   ```bash
-   curl -X POST http://localhost:5001/current/reset
-   ```
-
----
-
-## Database Issues
-
-### Migration Errors
-
-**Symptoms:**
-- `flask db migrate` fails
-- "Table already exists" errors
-
-**Solutions:**
-
-```bash
-cd server
-
-# Option 1: Reset migrations (loses history)
-rm -rf migrations
-flask db init
-flask db migrate -m "Fresh start"
-flask db upgrade
-
-# Option 2: Fix specific migration
-flask db stamp head  # Mark current state
-flask db migrate -m "Fix"
-flask db upgrade
-```
-
-### Database Corruption
-
-**Symptoms:**
-- "Database is locked" errors
-- Queries fail with unexpected errors
-
-**Solutions:**
-
-1. **Check for stale locks:**
-   ```bash
-   fuser server/app.db  # Shows processes using the file
-   ```
-
-2. **Backup and repair:**
-   ```bash
-   cp server/app.db server/app.db.backup
-   sqlite3 server/app.db "PRAGMA integrity_check;"
-   sqlite3 server/app.db ".recover" | sqlite3 server/app_recovered.db
-   ```
-
-### Run Metadata Not Saving
-
-**Symptoms:**
-- Runs not appearing in logbook
-- Metadata lost after stop
-
-**Solutions:**
-
-1. **Check server logs** for database errors
-2. **Verify database file is writable:**
-   ```bash
-   ls -la server/app.db
-   touch server/app.db
-   ```
-3. **Check disk space**
-
----
-
-## Acquisition Issues
+# Troubleshooting
+
+Something is wrong and the beam is on. This chapter is ordered by what you can
+see, not by which part of the code is at fault.
+
+**Start at the Troubleshoot page.** It lists the state of each part of the system
+and offers the action that repairs it, and it keeps the history of what has
+already happened — including while you were asleep. Most of what follows is the
+longer explanation of what that page is telling you.
 
 ```{note}
-Earlier versions ran acquisition as XDAQ inside a Docker container, with a spy
-server on port 6060. Neither exists any more — acquisition and the online spectra
-both run inside the DAQ server process. If a guide tells you to restart a
-container or check port 6060, it predates v4.0.
-```
-
-### The acquisition module is missing or out of date
-
-**Symptoms:**
-- `ModuleNotFoundError: No module named 'caendaq'` in the server log
-- Start fails immediately with an import error
-- A warning that unknown keyword arguments were dropped when building the DAQ
-
-**Solutions:**
-
-1. **Rebuild it** — this is also needed after a `git pull` that moves the submodule:
-   ```bash
-   conda activate luna
-   pip install server/native/caendaq
-   ```
-
-2. **Check the submodule is actually checked out:**
-   ```bash
-   git submodule update --init --recursive
-   ```
-
-3. **Confirm which build is loaded:**
-   ```bash
-   python -c "import caendaq; print(caendaq.__file__)"
-   ```
-
-### Boards do not arm, or a synchronised start hangs
-
-**Symptoms:**
-- Start returns but no data is written
-- One board runs and the others do not
-
-**Solutions:**
-
-1. **Check every board is connected** on the Board page. A board that answers
-   `board_info` but not the run is usually held by another process — no other
-   program may have the digitizers open.
-2. **Check the sync settings.** With an external synchronised start, the boards
-   wait for the start signal; without the cabling, they wait forever. Switch to
-   individual start to confirm the boards themselves are fine.
-3. **Reopen the connections** (Board page → Refresh connections) and start again.
-
-### Spectra are empty while data is being written
-
-**Symptoms:**
-- The run writes `.caendat` files but the histograms stay flat
-
-**Solutions:**
-
-1. **Check the channel is enabled** and that its threshold is not above the
-   signal — look at the waveform first.
-2. **Check the rebin factor** on the Histograms page; a very large value on a
-   thin spectrum can look flat.
-3. **Confirm the board and channel** on the histogram card match the detector you
-   expect. Spectra are addressed by board id and channel, not by label.
-
-### The histogram dashboard is empty after an upgrade
-
-The dashboard now lives on the DAQ server, in `conf/histograms.json` in the
-working directory. An empty dashboard usually means the server was started from a
-different directory than before — check where its `data/` folder is and look for
-`conf/histograms.json` next to it.
-
----
-
-## Network and Connectivity Issues
-
-### API Timeout Errors
-
-**Symptoms:**
-- Requests hang then fail
-- "Timeout" error messages
-
-**Solutions:**
-
-1. **Check server responsiveness:**
-   ```bash
-   curl -w "@curl-format.txt" http://localhost:5001/experiment/get_run_number
-   ```
-
-2. **Reduce request frequency** if overloading server
-3. **Check network connectivity** between frontend and server
-4. **Increase timeout** in frontend configuration
-
-### Graphite Connection Failed
-
-**Symptoms:**
-- Metrics not loading
-- "Cannot connect to Graphite" errors
-
-**Solutions:**
-
-1. **Verify Graphite address:**
-   ```bash
-   curl http://localhost:5001/stats/graphite_config
-   ```
-
-2. **Test Graphite directly:**
-   ```bash
-   curl "http://graphite_host/render?target=*&format=json"
-   ```
-
-3. **Update configuration:**
-   ```bash
-   curl -X POST http://localhost:5001/stats/graphite_config \
-     -H "Content-Type: application/json" \
-     -d '{"host":"correct_host","port":80}'
-   ```
-
----
-
-## Performance Issues
-
-### Slow Histogram Updates
-
-**Symptoms:**
-- Long delay between data and display
-- UI feels sluggish
-
-**Solutions:**
-
-1. **Reduce rebin factor** for faster processing
-2. **Close unused browser tabs**
-3. **Check server CPU usage:**
-   ```bash
-   top -p $(pgrep -f main.py)
-   ```
-4. **Reduce polling frequency** in frontend settings
-
-### High Memory Usage
-
-**Symptoms:**
-- Server consumes excessive memory
-- System becomes slow
-
-**Solutions:**
-
-1. **Monitor memory:**
-   ```bash
-   ps aux | grep main.py
-   free -h
-   ```
-
-2. **Reduce histogram buffer sizes**
-3. **Restart server** to clear accumulated buffers
-4. **Check for memory leaks** in logs
-
-### Disk Space Running Low
-
-**Symptoms:**
-- Data not saving
-- "No space left" errors
-
-**Solutions:**
-
-1. **Check disk usage:**
-   ```bash
-   df -h
-   du -sh data/*
-   ```
-
-2. **Archive old runs** to external storage
-3. **Enable file size limits** to prevent runaway data collection
-4. **Delete test/bad runs** if no longer needed
-
----
-
-## Diagnostic Commands
-
-### Server Health Check
-
-```bash
-# Check if server is responding
-curl http://localhost:5001/experiment/get_run_number
-
-# Check run status
-curl http://localhost:5001/experiment/get_run_status
-
-# Check board connectivity
-curl http://localhost:5001/digitizer/connectivity
-
-# Check the file write bandwidth
-curl http://localhost:5001/experiment/file_bandwidth
-```
-
-### System Status
-
-```bash
-# Check all services
-ps aux | grep -E "main.py|node"
-
-# Check ports in use
-netstat -tlnp | grep -E "5001|3000"
-
-# Check disk space
-df -h
-
-# Check memory
-free -h
-
-# Check the acquisition module
-python -c "import caendaq; print(caendaq.__file__)"
-```
-
-### Log Analysis
-
-```bash
-# View server output
-tail -f /path/to/server.log
-
-# Search for errors
-grep -i error /path/to/server.log | tail -50
-```
-
-### Database Queries
-
-```bash
-# Open database
-sqlite3 server/app.db
-
-# Check tables
-.tables
-
-# View recent runs
-SELECT run_number, start_time, end_time, target_name FROM run_metadata ORDER BY run_number DESC LIMIT 10;
-
-# Exit
-.quit
+Versions before 4.0 ran acquisition as XDAQ in a Docker container with a spy
+server on port 6060. Any procedure that tells you to restart a container, check
+port 6060 or look at a `topology.xml` predates 4.0 and does not apply.
 ```
 
 ---
 
-## Getting Help
+## 1. The five recovery actions
 
-If you cannot resolve an issue:
+**Troubleshoot → Recovery.** Each action shows whether that part of the system is
+healthy right now, and nothing runs by itself — you press it.
 
-1. **Collect diagnostic information:**
-   - Server logs
-   - Browser console output
-   - The working directory the server was started in, and its `conf/`
-   - System information (`uname -a`, `python --version`)
+| Action | Use it when | Available during a run |
+|---|---|---|
+| **Reopen the boards** | A board reads *Disconnected* after a link glitch. | No — stop the run first. |
+| **Reset the acquisition** | A run failed or the boards are wedged: closes the boards, reopens them, leaves them idle. | No. |
+| **Reconnect the current monitor** | The beam current reads disconnected, or stops updating. | Yes. |
+| **Restart the statistics** | `stats.csv` stopped being written mid-run. | Yes. |
+| **Re-check Graphite** | After a Graphite outage, to clear the "unavailable" state it leaves behind. | Yes. |
 
-2. **Check documentation:**
-   - [Installation Guide](installation.md)
-   - [User Guide](usage.md)
-   - [Server Architecture](server-architecture.md)
+Two of these are refused while a run is in progress, with *"Not while a run is in
+progress"* written under the button. That is not a limitation to work around:
+reopening the boards mid-run would end the run.
 
-3. **Contact support:**
-   - Jakub Skowronski: jakub.skowronski@pd.infn.it
-   - Alessandro Compagnucci: alessandro.compagnucci@gssi.it
+**Restarting the statistics never overwrites measurements.** Starting a
+statistics run opens `stats.csv` for writing, so the rows already recorded are
+moved to `stats.csv.part1` first and the action tells you where they went. If they
+cannot be moved aside — a read-only run directory — the action refuses rather than
+truncating the file. The run report reads `stats.csv` and every `part` together,
+so the run's record stays whole.
 
-4. **Report bugs:**
-   - GitHub Issues: https://github.com/skowrons94/WebDAQ/issues
-   - Include logs, steps to reproduce, and system information
+---
+
+## 2. A board
+
+### A board reads *Disconnected*
+
+Either nothing opened it, or something else holds it. In order: *Reopen the
+boards* from Troubleshoot (with the run stopped); check that no second WebDAQ
+backend is running (`LunaDAQ status`); check the cable and, for optical links,
+that the right link number is configured in Settings → Boards.
+
+A board that stayed shut after a run is the expected case for exactly one
+situation: CaenDAQ closed it microseconds earlier and the link was not ready. The
+server retries by itself, warns in the log which boards stayed shut, and
+*Reopen the boards* is what finishes the job.
+
+### A board shows *Board Failure*, or the header says *CAEN Error*
+
+The board set its FAIL flag in a data block: it could not sustain the readout —
+typically a full internal buffer or a lost link — and **the data from that point
+may be incomplete**. Open **Dashboard → Board Health** and read the three problem
+counters for that board:
+
+* **FAIL blocks** not zero confirms it.
+* **Dropped** not zero means the write queue refused blocks: that is lost data,
+  and it points at the disk or at a rate the machine cannot write.
+* **Read errors** not zero points at the link itself.
+
+The run should usually be restarted. If auto-restart is on, that already happened
+and the new run continues the old one's target and voltages; the old run is
+flagged *bad* with a note saying why. Either way the event is in the Troubleshoot
+history even if no alert was configured to deliver it.
+
+### A board stops producing data without failing
+
+**Board Health** shows *No data for n s* and the counters stop moving. This is
+what the *Board stopped producing data* alert watches. The FAIL flag was not
+raised, so suspect the trigger, the cabling into TRG-IN, or a chain that never
+started (below).
+
+### A synchronised run never starts, or one board has no data
+
+Open **DAQ → Configuration → Synchronization**. Every board is checked against
+what its position in the chain requires, and anything that would stop the start
+pulse reaching the cable is listed with a ⚠ next to that board. The common ones:
+
+| Reported | Meaning |
+|---|---|
+| *the master is in … mode, so the software trigger that starts the chain will not start this board* | The master must be in **On first trigger**. It is started by its own software trigger, and only that mode treats a trigger as the start of the run. |
+| *the software trigger is not routed to TRG-OUT* | The master's start pulse never leaves the board, so nothing downstream starts. |
+| *TRG-IN is not routed to TRG-OUT* | A board in the middle of the chain is not passing the pulse on. |
+| *TRG-OUT is not set to carry the trigger* | TRG-OUT is carrying a probe signal instead of the trigger. |
+
+The master needs no TRG-IN → TRG-OUT — no trigger arrives on its TRG-IN, it makes
+its own — and the last board in the chain needs nothing on its TRG-OUT. The page
+marks each switch *needed — on*, *needed — off* or *not needed here* for that
+board, so you do not have to work it out from the register.
+
+While the boards are closed the master is **assumed** from the configuration; the
+page says so. Start a run and it is checked against the register ids the hardware
+reports.
+
+---
+
+## 3. The beam current
+
+### The current reads *Disconnected*, or does not move
+
+*Reconnect the current monitor* from Troubleshoot, which re-opens the device and
+reports what happened. If it still does not answer:
+
+* **TetrAMM** — check the address and port in Settings → Current Module, and that
+  nothing else holds the socket.
+* **RBD 9103** — the serial path. Settings → Current Module lists the ports that
+  actually exist and warns when the configured one is gone.
+* **Monitored Graphite value** — the metric itself may have stopped arriving.
+  Check it on the Stats page; "connected" for this module means the value is
+  arriving, not that the server answers.
+
+### The current is read as stale when it is fine
+
+A picoammeter answers in milliseconds, so a reading older than 30 s means it has
+stopped. A *monitored* value is different: it is published on its own cadence,
+Carbon flushes on its own schedule, and the render API will not serve the bucket
+it is still filling, so a value written every 10 s legitimately reads back tens of
+seconds old. WebDAQ measures this rather than assuming it — the freshness horizon
+for a monitored metric is derived from the observed publication cadence and lag —
+so a healthy slow metric is not reported as dead. If you see a monitored current
+called stale, check the metric's real cadence on the Stats page first.
+
+### The charge looks wrong
+
+*This run* integrates for exactly the length of the run, and follows the DAQ's own
+run state rather than the browser: closing the tab, or an auto-restart, does not
+affect it. *Lifetime total* never stops. A figure that does not move between runs
+is correct.
+
+A run taken with saving **off** has no metadata row, so its charge is not stored
+anywhere — by design.
+
+---
+
+## 4. Spectra and rates
+
+### A spectrum is empty
+
+In order: is a run going? Is that board reading at all (**Board Health**)? Is the
+channel enabled (**DAQ → Configuration → Channel Enable**)? Is the threshold
+sensible (**Tuner**)?
+
+An empty histogram says why in its own title — *No data yet — start a run*, *This
+board is not part of the current run*, *No counts yet on channel n* — so read the
+title before anything else.
+
+### Waveforms are empty
+
+Waveforms have to be switched on per board: the switch on the board card on the
+Overview, or in the Waveforms tab. A board acquiring without waveforms shows *No
+waveform — switch waveforms on for this board* in the plot title. Trace 2 needs
+dual trace enabled.
+
+### The rates are not updating
+
+**Data Rates** shows *No answer* when the last request failed — the numbers on
+screen are then the last known ones, not current. If it says *Stopped* while a
+run is going, the page and the server disagree about the run state; reload.
+
+Remember that the cadence control on that tab sets the averaging window as well
+as the refresh rate, so at 60 s the numbers are 60 s averages.
+
+---
+
+## 5. Monitored values and Graphite
+
+### Every metric reads *N/A* and the light is red
+
+Graphite is not answering. The light distinguishes this from "the metric has no
+data", which is the distinction that matters: check the host and port on the
+Stats page, then *Re-check Graphite* on Troubleshoot, which also clears the
+circuit breaker an outage leaves behind.
+
+The breaker exists to protect WebDAQ, not Graphite: with the server unreachable
+every request thread would park in `connect()` and the interface would become
+unusable. While it is open, queries fail immediately instead of waiting.
+
+### One metric reads *N/A*, the others are fine
+
+Its path. Re-add it with the browser rather than typing it — a renamed metric
+keeps the old path in your configuration.
+
+### `stats.csv` has all-zero columns
+
+Those metrics were unreachable *during that run*. The header still records which
+they were, and the alias and unit you gave them.
+
+### Grafana plots it but WebDAQ does not
+
+Different ports for different jobs: Graphite's render API (read) is configured on
+the Stats page, Carbon's ingest (write, usually 2003) in Settings → Current
+Module. Grafana often reads the render API on another port than the one WebDAQ is
+configured with.
+
+---
+
+## 6. Alerts that did not arrive
+
+This is the failure mode worth understanding, because its symptom is silence.
+
+| What you see | What it means |
+|---|---|
+| **Settings → Notifications** says *Not watching* | Nothing is evaluating any rule — the server was started without its watcher. Press **Start watching**. |
+| A rule badged **reaches nobody** | The rule is enabled and watching, but all of its destinations are switched off or unconfigured. |
+| A rule badged **nothing to measure** | It is watching something it cannot read: Graphite unreachable, the monitor stopped, or a counter this CaenDAQ build does not report. That is not the same as everything being fine. |
+| The bell is **amber** | Something was raised that reached nobody. |
+| A history row badged **reached nobody** | That specific alert was recorded but not delivered — a wrong token, a network outage, or no destination. |
+| *n saved alerts could not be read* | A rule in `conf/alerts.json` is malformed. The others still work; the reason is printed, and the file is kept rather than replaced. |
+| **Test message** said *sent* but nothing arrives | Read the whole message: if the transport is switched off it says so, because the test forces one send regardless. |
+
+A board failure is written to the history **even when no rule is configured for
+it**, so the morning after is never blank.
+
+Rules also hold back a repeat message for a minute per subject. A value sitting
+exactly on its threshold therefore gives one message, not one per tick — if you
+expected a stream of alerts and got one, that is why.
+
+---
+
+## 7. The server
+
+### It will not start
+
+| Symptom | What to do |
+|---|---|
+| *Port 5001 is still held by a previous WebDAQ server* | `LunaDAQ status` names it, `LunaDAQ stop` clears it. The server refuses to start over a backend that is **taking data**, which is the one case it will not resolve by itself. |
+| *Port … is in use by another process not managed by WebDAQ* | Stop that program, or point `NEXT_PUBLIC_API_URL` at a free port. WebDAQ never kills a process it does not recognise. |
+| `No module named caendaq` | The acquisition module is not in the active environment: `conda activate luna`, then `pip install server/native/caendaq`. |
+| The database will not open | Check which working directory the server was started in. The schema is upgraded automatically at every start; there is nothing to migrate by hand. |
+
+### It stops when the interface does
+
+That is deliberate. The backend watches the launcher that started it and exits
+when it disappears, so killing the web interface always takes the DAQ server with
+it rather than leaving a process holding the digitizers.
+
+### Something looks "missing" — no boards, no histograms
+
+Almost always the **working directory**. Everything the server reads is relative
+to the directory it was started in, so a server started somewhere else shows a
+different configuration: not a broken one, a different one. The DAQ Server panel
+names the directory it is running in.
+
+### The log
+
+`server.log` in the working directory the server was started in. **DAQ Server →
+Show logs** shows the last 200 kB of it without leaving the browser. The clean
+shutdown path stops the acquisition, stores the charge, closes the current log,
+writes `roi.json` and closes the boards — a server stopped properly leaves no run
+half-written.
+
+---
+
+## 8. The interface
+
+| Symptom | Usual cause |
+|---|---|
+| The page loads but every request fails | `NEXT_PUBLIC_API_URL` is wrong, or the frontend was not rebuilt after it changed. It is compiled into the bundle. |
+| You are sent back to the login page | The token was cleared. The notice says it plainly: the run is not affected, the DAQ server keeps taking data with nobody logged in. |
+| A number is frozen | Look for *No answer* on that panel. WebDAQ shows the last known value and marks it rather than showing a plausible wrong one. |
+| The ELOG panel cannot reach the logbook | The URL or the shared account in Settings → ELOG; if the message is about `py_elog`, the server is running in the wrong environment. |
+
+---
+
+## 9. After a crash or a power cut
+
+1. Start the server again. A `running: true` left behind in `conf/settings.json`
+   is cleared with a warning — acquisition cannot survive a restart, so a run that
+   was in progress ended when the machine did.
+2. Check the last run directory. A `.caendat` file has no trailer, which is why a
+   run killed mid-write is still readable up to where it stopped:
+   ```bash
+   cd server
+   python scripts/check_run_integrity.py data/run1276
+   ```
+3. Convert it. If the converter stops on a truncated final aggregate, the option
+   that skips it is passed automatically when the installed RUReader supports it.
+4. Read the Troubleshoot history for what the DAQ saw before it stopped.
+
+---
+
+## 10. Getting help
+
+Say which working directory, which run number, and what `server.log` shows around
+the time. The Troubleshoot history and the run's `metadata.json` together usually
+answer the question before anyone has to reproduce it.
+
+- Jakub Skowroński: [jakub.skowronski@pd.infn.it](mailto:jakub.skowronski@pd.infn.it)
+- Alessandro Compagnucci: [alessandro.compagnucci@gssi.it](mailto:alessandro.compagnucci@gssi.it)
+- Riccardo Gesuè: [gesue.riccardo@gssi.it](mailto:gesue.riccardo@gssi.it)

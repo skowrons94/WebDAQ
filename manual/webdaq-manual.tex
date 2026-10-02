@@ -1,0 +1,909 @@
+% WebDAQ manual.
+%
+% Build with `make` in this directory. The same material is published as a
+% website from doc/ (Sphinx); this is the version to print, to hand to a new
+% shift crew, or to read on a machine with no network.
+\documentclass[11pt,a4paper]{report}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[british]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[margin=2.6cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{fancyvrb}
+\usepackage{xcolor}
+\usepackage{titlesec}
+\usepackage[hidelinks]{hyperref}
+
+\hypersetup{
+  pdftitle={WebDAQ — data acquisition for the LUNA experiment},
+  pdfauthor={A. Compagnucci, R. Gesuè, J. Skowroński},
+  pdfsubject={Operator and technical manual, WebDAQ 5.0},
+}
+
+% Monospace for everything the operator types or reads on a screen.
+\newcommand{\cmd}[1]{\texttt{#1}}
+\newcommand{\ui}[1]{\textbf{#1}}          % a control on the screen
+\newcommand{\file}[1]{\texttt{#1}}
+
+\DefineVerbatimEnvironment{shell}{Verbatim}{%
+  frame=leftline, framesep=6pt, rulecolor=\color{gray!60},
+  fontsize=\small, xleftmargin=4pt}
+
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\titleformat{\chapter}[display]
+  {\normalfont\Large\bfseries}{\chaptertitlename\ \thechapter}{8pt}{\LARGE}
+\setlist{itemsep=2pt, parsep=0pt, topsep=4pt}
+
+\begin{document}
+
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+{\LARGE\bfseries WebDAQ\par}
+\vspace{6mm}
+{\Large Data acquisition for the LUNA experiment\par}
+\vspace{10mm}
+{\large Operator and technical manual\par}
+\vspace{2mm}
+{\large Version 5.0\par}
+\vfill
+\includegraphics[width=0.92\textwidth]{../doc/imgs/dashboard.png}
+\vfill
+{\normalsize A.~Compagnucci, R.~Gesuè, J.~Skowroński\par}
+\vspace{2mm}
+{\small INFN Laboratori Nazionali del Gran Sasso and Università di Padova\par}
+\vspace{6mm}
+{\small \today\par}
+\end{titlepage}
+
+\tableofcontents
+
+% ============================================================================
+\chapter{What WebDAQ is}
+
+WebDAQ reads the CAEN digitizers of the LUNA setup, writes the data, fills the
+spectra while they fill, records what the beam was doing, and says something when
+a board stops. It is used from a browser, by the person on shift, and it is meant
+to be learnt in an evening.
+
+\section{The data path}
+
+\begin{center}
+\begin{tabular}{@{}l@{\hspace{6pt}}c@{\hspace{6pt}}l@{}}
+digitizers & $\rightarrow$ & CaenDAQ, inside the server process \\
+           &               & $\rightarrow$ \file{run\_<N>\_0000.caendat} on disk \\
+           &               & $\rightarrow$ spectra, rates, regions of interest \\
+           &               & $\rightarrow$ Graphite, for the slow-control archive \\
+\end{tabular}
+\end{center}
+
+Acquisition runs \emph{inside} the DAQ server. The boards are opened, read,
+decoded and written by CaenDAQ, a C\texttt{++} library bound into Python, so
+pressing \ui{Start} is the whole operation: there is no container to launch, no
+state machine to drive and no second process to keep alive. The spectra you watch
+are the histograms CaenDAQ is already accumulating while it decodes; the server
+takes a snapshot of them when the page asks.
+
+Versions before~4.0 ran acquisition as XDAQ inside a Docker container, with a
+separate spy server on port~6060. Any procedure that mentions a container,
+port~6060 or a \file{topology.xml} predates~4.0 and does not apply.
+
+\section{The three pieces}
+
+\begin{itemize}
+  \item \textbf{The DAQ server} --- Flask and waitress on port~5001. It owns the
+        boards, the run, the files and the configuration.
+  \item \textbf{The web interface} --- Next.js on port~3000. It holds no state of
+        its own worth protecting; everything it shows comes from the server.
+  \item \textbf{RUReader} --- the offline converter from \file{.caendat} to ROOT,
+        run on request from the Logbook.
+\end{itemize}
+
+\section{The working directory is the experiment}
+
+Everything the server reads and writes is relative to the directory it was started
+in: \file{conf/} (board configurations, the histogram dashboard, credentials),
+\file{calib/}, \file{data/} and the \file{app.db} database. Two working
+directories are two independent experiments that happen to share one
+installation.
+
+This is worth knowing when something looks \emph{missing}. A dashboard with no
+histograms, or an empty board list, usually means the server was started somewhere
+other than where the campaign was configured. That is a different setup, not a
+broken one, and the \ui{DAQ Server} panel names the directory it is running in.
+
+% ============================================================================
+\chapter{Installing and starting}
+
+\section{What the machine needs}
+
+Linux for a DAQ machine, macOS for development. For real hardware, the CAEN
+libraries (CAENVMElib, CAENComm, CAENDigitizer); without them WebDAQ still runs
+in test mode with simulated boards. Everything else --- Python, ROOT, the
+acquisition module --- lives in a conda environment called \cmd{luna}, created by
+the installer.
+
+\section{Installing}
+
+\begin{shell}
+git clone https://github.com/skowrons94/WebDAQ.git
+cd WebDAQ
+./install.sh
+\end{shell}
+
+The installer is idempotent: every step checks whether the work is already done,
+so running it again after an update is safe. It installs the build tools, checks
+out the CaenDAQ and RUReader submodules, installs Miniforge if conda is missing,
+creates the \cmd{luna} environment, builds RUReader and the \cmd{caendaq} module,
+writes \file{frontend/.env}, builds the interface, and adds a \cmd{LunaDAQ}
+launcher to \file{\textasciitilde/.bashrc}.
+
+\paragraph{The API address is compiled in.} \file{frontend/.env} holds
+\cmd{NEXT\_PUBLIC\_API\_URL}, and Next.js bakes it into the bundle at build time.
+If the server is to be reached from other machines, set it to an address those
+machines can resolve --- not \cmd{127.0.0.1} --- and rebuild with
+\cmd{npm run build} in \file{frontend/}. Forgetting the rebuild is the most common
+deployment mistake: the interface loads, then fails every request.
+
+\section{Starting it}
+
+\begin{shell}
+LunaDAQ            # start the web interface (freeing its port first)
+LunaDAQ status     # what is holding each port
+LunaDAQ stop       # stop both parts, politely then firmly
+LunaDAQ restart    # stop, then start the interface
+LunaDAQ backend    # run the DAQ server in this terminal, for debugging
+\end{shell}
+
+Open \url{http://localhost:3000} and log in. The \ui{DAQ Server} badge at the top
+right starts the server itself: choose the working directory for the campaign and
+press \ui{Start}. The badge is also on the login page, so the server can be
+started before anyone logs in.
+
+\cmd{LunaDAQ stop} only stops processes that look like ours. An unrelated program
+on port~3000 is reported and left alone, which is why it is a better answer to a
+busy port than killing whatever holds it.
+
+\section{Running it in tmux}
+
+\label{sec:tmux}
+The web interface is a long-lived process: started from a plain SSH session it
+dies when the connection drops. Start it inside \textbf{tmux}, a session that
+keeps running on the machine whether or not anyone is attached to it.
+
+\begin{shell}
+tmux new -s daq        # create a session called "daq" and attach to it
+LunaDAQ                # start the interface inside it
+\end{shell}
+
+Then detach and leave it running: press \textbf{Ctrl-b}, release both keys, and
+press \textbf{d}. You are back in your own shell and the session is still
+running.
+
+\begin{center}
+\begin{tabular}{@{}L{0.46\textwidth}L{0.46\textwidth}@{}}
+\toprule
+\textbf{What you want} & \textbf{How} \\
+\midrule
+List the sessions on the machine & \cmd{tmux ls} \\
+Attach again & \cmd{tmux attach -t daq} \\
+Detach, leaving it running & \textbf{Ctrl-b} then \textbf{d} \\
+Take over a session someone left attached & \cmd{tmux attach -d -t daq} \\
+Scroll back through the output & \textbf{Ctrl-b} then \textbf{[}, arrows or PageUp; \textbf{q} to leave \\
+A second window in the session & \textbf{Ctrl-b} then \textbf{c}; switch with \textbf{Ctrl-b} then \textbf{0}, \textbf{1}, \dots \\
+Close a window & type \cmd{exit} in it \\
+Stop everything & attach, \cmd{LunaDAQ stop}, then \cmd{exit} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Every tmux command is the prefix \textbf{Ctrl-b} followed by one key; that is the
+only thing worth memorising. A detached session survives a dropped SSH
+connection, but not a reboot of the DAQ machine --- after a reboot, start a new
+session.
+
+\section{Without hardware}
+
+\begin{shell}
+TEST_FLAG=True LunaDAQ backend
+\end{shell}
+
+or tick \ui{Test Mode} in the \ui{DAQ Server} panel before starting. Test mode
+fabricates CAEN-style data for simulated boards and simulates the picoammeter, so
+the whole chain works on a laptop. Set the variable or leave it unset;
+\textbf{never set it to \cmd{False}} --- most of the code reads any value at all
+as ``test mode''.
+
+% ============================================================================
+\chapter{Taking a run}
+
+\section{Before the beam}
+
+\begin{enumerate}
+  \item \ui{Settings $\rightarrow$ Boards}: every board \emph{Connected}. Use
+        \ui{Scan for boards} rather than typing settings from memory; the scan
+        fills the add form and leaves the ID and the firmware choice to you.
+  \item \ui{DAQ $\rightarrow$ Configuration}: thresholds and shaping for the
+        measurement. For several boards, check \ui{Synchronization}
+        (chapter~\ref{ch:boards}).
+  \item \ui{Settings $\rightarrow$ Current Module}: where the beam current comes
+        from --- a TetrAMM, an RBD~9103, or a value already monitored in Graphite.
+  \item \ui{Stats}: the accelerator values this campaign should record. Their
+        name and unit become the column headings of every run's
+        \file{stats.csv}.
+  \item \ui{Settings $\rightarrow$ Notifications}: at least one destination and
+        the alerts worth having (chapter~\ref{ch:watching}).
+\end{enumerate}
+
+\section{Starting}
+
+On \ui{Dashboard $\rightarrow$ Overview}, in \ui{Run Setup \& Control}, fill in
+\ui{Run Name}, \ui{Run Type}, \ui{TV (kV)} and \ui{PV (kV)} --- all four are
+pre-filled from the last run --- and press \ui{Start Run}.
+
+What happens, in order: the run number and the saving options are stored; the
+beam-current recording and the statistics are pointed at this run; the boards are
+handed to CaenDAQ, configured and started; the run state is set, which starts the
+charge integration and the board monitor; and the run's metadata row is written
+with the hardware and software provenance read back from the open boards.
+
+Two refusals are worth knowing in advance. A run will not start without a run
+number, and a run directory that already holds data is never silently reused ---
+you are asked first.
+
+A run also starts when something \emph{next to} it fails. If the current module
+or the statistics cannot be started, the run starts anyway and the message names
+what is missing: \emph{``Run 1276 is acquiring, but beam current is not being
+recorded''}. A run without its current log is worth more than no run.
+
+\section{While it runs}
+
+\begin{center}
+\begin{tabular}{@{}L{0.30\textwidth}L{0.62\textwidth}@{}}
+\toprule
+\textbf{Where} & \textbf{What it answers} \\
+\midrule
+Overview, board cards & Is every board still \emph{Running}? \\
+\ui{Board Health} & What has each board actually read, written and lost? \\
+\ui{Data Rates} & Counts per second, per channel, for one board. \\
+\ui{Histograms} & Are the spectra filling where they should? \\
+\ui{Beam Control} & Current on target, charge this run, lifetime charge. \\
+Header & Run state, elapsed time, and the alert bell. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Changing settings mid-run is covered in section~\ref{sec:duringrun}.
+
+\section{Stopping}
+
+\ui{Stop Run} stops the monitor, the spy snapshots and the acquisition, hands the
+boards back, writes the end time, advances the run number (when saving) and sets
+the run state to stopped --- which stores the accumulated charge, closes
+\file{current.txt} and writes \file{roi.json}. Auto-managed Grafana rules are
+silenced again.
+
+\section{Afterwards}
+
+Open the run in the \ui{Logbook}: notes in Markdown, the beam current it was taken
+with, the monitored metrics beside it, the register dump of every board, and
+conversion to ROOT. \ui{Logbook $\rightarrow$ ELOG $\rightarrow$ New entry
+$\rightarrow$ Write up a run} drafts a logbook entry from the run's own record.
+
+% ============================================================================
+\chapter{The screens}
+
+The navigation is the same everywhere: \ui{Dashboard}, \ui{Logbook}, \ui{Stats},
+\ui{DAQ}, \ui{Tuner}, \ui{Troubleshoot}, \ui{Alerts}, \ui{Settings}. The header
+carries the run state with an elapsed clock, the \ui{DAQ Server} badge, the alert
+bell, and a \ui{Search} palette that jumps to any page or tab.
+
+Logging in is per browser and the session does not expire on its own. If it is
+cleared, the notice says plainly that the run is unaffected: the DAQ server keeps
+taking data with nobody logged in.
+
+\section{Dashboard}
+
+Six tabs: \ui{Overview}, \ui{Board Health}, \ui{Data Rates}, \ui{Histograms},
+\ui{Waveforms}, \ui{PSD}. The last three can be switched off in
+\ui{Settings $\rightarrow$ Appearance}.
+
+\subsection{Overview}
+
+\ui{System status} is the band of cards at the top; drag the handle beneath it to
+show one row more or less.
+
+\begin{center}
+\begin{tabular}{@{}L{0.24\textwidth}L{0.68\textwidth}@{}}
+\toprule
+\textbf{Card} & \textbf{What it tells you} \\
+\midrule
+\ui{Run Status} & Run number, running or stopped, how long ago it started, the
+file write rate, and a \ui{Save} switch. While stopped, the run number is a
+button that opens \emph{Next run}. \\
+\ui{DAQ Status} & Data saving, waveforms, current, stats --- each with a tick or a
+cross, so you can see what this run will actually record. \\
+\ui{Picoammeter} & For a real device only: connected or not, whether it is
+sampling, its address and range. A monitored Graphite value has no device card. \\
+\ui{Board \emph{n}} & \emph{Ready}, \emph{Running}, \emph{Board Failure} or
+\emph{Disconnected}, with a waveform switch that is locked during a run. \\
+\ui{ROIs}, \ui{Metrics} & Live region-of-interest integrals, and the Graphite
+values selected on the Stats page. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\ui{Acquisition setup} shows what this run will do --- saving, the file size
+limit, the auto-restart delay --- and \ui{Adjust} opens the dialog that sets them.
+\ui{Beam Control} plots the current with the charge beside it and can be moved to
+one of four places on the page.
+
+\subsection{Board Health}
+
+One card per board with the readout counters CaenDAQ keeps for the run: data
+blocks read, events decoded, bytes read and bytes sent to file, each with its
+rate, and then the three numbers that matter when something is wrong.
+
+\begin{center}
+\begin{tabular}{@{}L{0.22\textwidth}L{0.70\textwidth}@{}}
+\toprule
+\textbf{Counter} & \textbf{Read it as} \\
+\midrule
+\ui{FAIL blocks} & The board could not sustain the readout for that block --- a
+full buffer or a lost link. Data from that point may be incomplete. \\
+\ui{Dropped} & Blocks the write queue refused because it was full. \textbf{This is
+lost data} and should always be zero. \\
+\ui{Read errors} & CAEN read errors on the link. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The badge is the quick answer: \emph{Reading}, \emph{No data for n~s}, \emph{FAIL
+flag}, \emph{No answer} (the last request failed, so the numbers are the last
+known ones) or \emph{Not reported} (this CaenDAQ build does not publish that
+counter). Every counter belongs to the run: they start at zero and are gone when
+it ends, which is why the tab says so between runs rather than showing zeros.
+
+\subsection{Data Rates}
+
+A tile per board, four tiles for the selected board --- events, pile-ups, lost
+events, saturations --- and the write rate. Pile-up, lost and saturation turn
+amber when they are not zero.
+
+The \ui{Plot} control sets the sampling cadence, and it is not a display setting:
+one CaenDAQ tick samples the counters, differences them and publishes them, so the
+same number sets the refresh rate, the averaging window and the resolution of what
+reaches Graphite. \ui{Rate shown} switches between the four rates without losing
+the trace, because all four are recorded.
+
+\subsection{Histograms, Waveforms and PSD}
+
+The histogram dashboard belongs to the experiment, not to your browser: the
+layout, the regions of interest, the zoom and the display settings live on the DAQ
+server in \file{conf/histograms.json}, so every screen in the control room shows
+the same thing and a restart changes nothing. Chapter~\ref{ch:spectra} covers it.
+
+\section{Logbook}
+
+Two logbooks: the run metadata WebDAQ records itself, and the collaboration's
+ELOG. The run table is searchable and filterable, the flag and the notes are
+editable in place, and \ui{Export CSV} writes out exactly the rows you filtered
+to. A run number opens the run's own page with six tabs: \ui{Overview},
+\ui{Notes}, \ui{Beam Current}, \ui{Stats}, \ui{Boards} and \ui{Convert}
+(chapter~\ref{ch:rundata}).
+
+\section{Stats}
+
+The Graphite values this experiment watches, each with its latest reading, a
+sparkline and a timestamp. The light at the top says whether Graphite is
+answering at all, so a dead server never looks like a metric with no data.
+\ui{Add metric} browses or searches the metric tree. The \textbf{name and unit}
+you give a metric become the column heading in every run's \file{stats.csv}.
+
+The \ui{Graphite server} card holds the host, the port of the render API, and the
+\textbf{metric prefix} for this experiment. Give each campaign its own subtree ---
+\cmd{ancillary.rates.12c12c} --- and no two campaigns share a series.
+
+\section{DAQ}
+
+\ui{Configuration} is the full register set of one board, grouped by function, in
+the order the signal is processed; \ui{Advanced} shows every register and
+\ui{Binary} shows bit fields. \textbf{Writes on this tab reach the board
+immediately and are not blocked during a run} --- it is the same dashboard used to
+set a board up, so it is not the place to experiment mid-measurement. Use the
+Tuner, which knows what is safe.
+
+\ui{Synchronization} is the daisy chain (chapter~\ref{ch:boards}).
+\ui{Calibration} holds two numbers per channel for the energy axis.
+\ui{Hardware Info} is what the boards report about themselves --- model, serial
+number, firmware, licence, and the acquisition registers as programmed. The CAEN
+API answers only while the digitizers are open, so that page is populated during a
+run.
+
+\section{Tuner}
+
+The place to change thresholds and shaping with beam on target. It starts
+acquisition with \textbf{data saving switched off}, so nothing lands in a run
+directory, and a badge reminds you that the Tuner is holding the run.
+
+\label{sec:duringrun}
+The \ui{Online} switch decides where a change goes. With it on during a run, only
+registers on the firmware's safe list are written to the board; every field is
+marked \emph{live} or \emph{next run} \emph{before} you touch it. The save to the
+configuration always happens, and a write the board refuses is reported as
+\emph{saved, not sent to the board} with the reason --- so the configuration and
+the hardware cannot drift apart.
+
+\section{Troubleshoot}
+
+\ui{Recovery} at the top, \ui{History} below. Chapter~\ref{ch:trouble}.
+
+\section{Alerts}
+
+The Grafana alert rules, managed without leaving run control. Marking a rule
+\textbf{auto-managed} makes it active while a run is going and silent between
+runs, which is the answer to a ``beam current too low'' rule that is right during
+a run and pure noise while you are setting up.
+
+\section{Settings}
+
+Six sections: \ui{Boards}, \ui{Current Module}, \ui{Notifications}, \ui{ELOG},
+\ui{Grafana} and \ui{Appearance}. Everything except Appearance is stored on the
+DAQ server, so it is the same for everyone.
+
+\paragraph{Credentials.} \file{conf/telegram\_settings.json},
+\file{conf/zulip\_settings.json}, \file{conf/elog\_settings.json} and
+\file{conf/grafana\_settings.json} hold secrets in plain text on the DAQ machine.
+The interface masks them once saved and never shows them again, but the files are
+readable by anyone with an account on that machine --- so do not copy a working
+directory between sites without emptying them.
+
+% ============================================================================
+\chapter{Boards and synchronisation}
+\label{ch:boards}
+
+\section{Adding a board}
+
+\ui{Settings $\rightarrow$ Boards $\rightarrow$ Scan for boards} probes the links
+--- USB, optical (CONET), A4818, and a VME crate through a bridge --- and lists
+the digitizers that answer with their model, serial number, channel count and
+firmware. \ui{Use these settings} fills the add form rather than adding the board,
+because the board ID and the DPP firmware are judgements, not measurements: the
+firmware is only \emph{inferred} from the code the board reports.
+
+Adding a board reads its register dump out of the hardware into
+\file{conf/<model>\_<id>.json} and creates a unit calibration in \file{calib/}.
+That JSON file is the source of truth from then on: the Tuner, the CAEN
+dashboard, the waveform switch and CaenDAQ itself all read it, and it is copied
+into every run directory.
+
+\section{What a synchronised run is}
+
+Synchronisation is never set by WebDAQ. It comes from the boards' own registers,
+and the server reads it back rather than remembering what it was told. A board
+whose start mode (Acquisition Control \cmd{0x8100}, bits [1:0]) is anything other
+than \emph{software} is \emph{armed} rather than started, and waits.
+
+CaenDAQ then starts the run like this: align the clock chain, arm every
+synchronised board, and only then fire one software trigger on the \textbf{master}
+--- the synchronised board whose register id is~0. That pulse starts the master
+and leaves its TRG-OUT, enters the next board's TRG-IN, and walks the chain, so
+every board shares one time origin.
+
+\section{What each position needs}
+
+\begin{center}
+\begin{tabular}{@{}L{0.26\textwidth}L{0.66\textwidth}@{}}
+\toprule
+\textbf{Board} & \textbf{Needs} \\
+\midrule
+The master & \emph{On first trigger} mode, and its software trigger routed to
+TRG-OUT (\cmd{0x8110} bit~31) when any board follows it. It does \textbf{not} need
+TRG-IN $\rightarrow$ TRG-OUT: no trigger arrives on its TRG-IN, it makes its
+own. \\
+A board in the middle & TRG-IN $\rightarrow$ TRG-OUT (\cmd{0x8110} bit~30), so the
+pulse walks on, and TRG-OUT carrying the trigger rather than a probe
+(\cmd{0x811C} bits [17:16] $=0$). \\
+The last board & Nothing on its TRG-OUT. The chain ends there. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\ui{DAQ $\rightarrow$ Configuration $\rightarrow$ Synchronization} checks all of
+this for you and marks each switch \emph{needed --- on}, \emph{needed --- off} or
+\emph{not needed here} for that board's position. Anything that would stop the
+chain starting is listed against the board that causes it, in words rather than
+register numbers. Getting this wrong is expensive and silent --- the run starts,
+one board never sees a trigger, and its data is short --- which is why the check
+exists.
+
+The master is identified from the register ids the hardware reports. Those are
+readable only while the boards are open, so between runs the panel says the master
+is \emph{assumed} from the configuration.
+
+\section{Clock as well as start}
+
+Synchronising the \emph{start} aligns the boards at $t=0$; sharing a \emph{clock}
+keeps them aligned. On their own oscillators the boards drift apart over a long
+run. Leave the first board on \emph{Internal}, feed its CLK-OUT to the next
+board's CLK-IN, and set every downstream board to \emph{External CLK-IN}
+(\cmd{0x8100} bit~[6]; desktop and NIM digitizers only --- in a VME crate the
+clock comes from the crate). CaenDAQ re-aligns the chain at every run start and
+reports a board whose PLL did not stay locked, rather than refusing to run.
+
+% ============================================================================
+\chapter{Spectra and regions of interest}
+\label{ch:spectra}
+
+The spectra are the ones CaenDAQ accumulates while decoding; the server snapshots
+them when a page asks. Nothing is transported twice and there is no monitoring
+process to fall behind.
+
+\textbf{The dashboard belongs to the experiment.} Which spectra are shown, their
+labels, their regions of interest, their zoom and the display settings live in
+\file{conf/histograms.json} on the DAQ server. A second screen in the control room
+shows the same dashboard, and a restart changes nothing.
+
+\section{Regions of interest}
+
+A region is a name, a range and a colour, defined per spectrum. Integrals are
+shown live on the Overview and on the spectrum itself. At every run stop, every
+defined region --- visible or not, enabled or not --- is written into the run
+directory as \file{roi.json}, with its bounds and its counts, so a run carries the
+regions it was analysed with.
+
+\section{An empty spectrum}
+
+An empty histogram says why in its own title: \emph{No data yet --- start a run},
+\emph{This board is not part of the current run}, \emph{No waveform --- switch
+waveforms on for this board}, or \emph{No counts yet on channel n}. Read the title
+first; then check on \ui{Board Health} whether the board is reading data blocks at
+all, and only then the channel enable and the threshold.
+
+% ============================================================================
+\chapter{Beam current and charge}
+
+\section{Two charges, and why they differ}
+
+\ui{This run} integrates for exactly the length of the run and is stored in the
+run's metadata. \ui{Lifetime total} never stops, so it can serve as a target
+history. A figure that does not move between runs is correct behaviour.
+
+The run figure follows the DAQ's own run state rather than the browser: a closed
+tab, an auto-restart or a run that saves nothing all leave it correct. A dot next
+to \emph{This run} says whether it is integrating.
+
+\section{Three sources}
+
+\begin{center}
+\begin{tabular}{@{}L{0.22\textwidth}L{0.70\textwidth}@{}}
+\toprule
+\textbf{Module} & \textbf{What it is} \\
+\midrule
+TetrAMM & Four-channel picoammeter over TCP. One channel is the charge channel. \\
+RBD 9103 & Single-channel picoammeter over a serial port. \\
+Monitored value & No hardware: the beam current is read from a value already
+published to Graphite --- the accelerator's own readout --- scaled into
+microamps. It plots, logs and integrates exactly like a picoammeter. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Freshness}
+
+A picoammeter answers in milliseconds, so a reading older than 30~s means it has
+stopped. A monitored value is different: it is published on its own cadence,
+Carbon flushes on its own schedule, and the render API will not serve the bucket
+it is still filling --- so a value written every 10~s legitimately reads back tens
+of seconds old. WebDAQ measures the cadence and the lag it actually sees and
+derives the freshness horizon from them, which is why a healthy slow metric is no
+longer reported as a dead readout.
+
+Non-finite and negative readings are refused rather than integrated, and the
+length of gap that may be integrated across is bounded --- so a Graphite outage
+cannot add charge that was never delivered.
+
+% ============================================================================
+\chapter{Watching the experiment}
+\label{ch:watching}
+
+Four different things watch a run, and they are easy to confuse.
+
+\begin{center}
+\begin{tabular}{@{}L{0.24\textwidth}L{0.68\textwidth}@{}}
+\toprule
+\textbf{Tool} & \textbf{What it does here} \\
+\midrule
+Graphite & Stores every number anyone measures: beam current, terminal voltage,
+board rates. WebDAQ writes to it and reads from it. \\
+Grafana & Draws those numbers on the control-room screen and raises its own
+alerts. \\
+The Stats page & Shows the current value of the metrics \emph{you} selected, and
+copies them into each run's \file{stats.csv}. \\
+Board Health & The readout counters of each board, live for the run only. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Alerts are rules}
+
+An alert is a rule: what to watch, the threshold, how long the condition has to
+hold, and which destinations carry it. Rules live in \file{conf/alerts.json} and
+are edited in \ui{Settings $\rightarrow$ Notifications}.
+
+\begin{center}
+\begin{tabular}{@{}L{0.30\textwidth}L{0.62\textwidth}@{}}
+\toprule
+\textbf{Alert} & \textbf{Fires when} \\
+\midrule
+Board failure & A board sets its FAIL flag during a run. \\
+Board stopped producing data & A board reads no new data block for $n$ seconds
+during a run, whether or not it raised the FAIL flag. \\
+Beam current & The current stays below (or above) a threshold for $n$ seconds. \\
+Graphite metric & A monitored value stays outside its range. One rule per
+metric. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Destinations are \textbf{Telegram} (a bot posting to a chat or group) and
+\textbf{Zulip} (a bot posting to one stream and topic). Each rule names its own,
+so a board failure can wake the whole shift while a current dip reaches one group.
+
+\section{Why the messages are worth reading}
+
+\begin{itemize}
+  \item \textbf{One message per episode.} A rule fires when its condition starts
+        and stays quiet until it clears, then says it cleared.
+  \item \textbf{Unknown is not wrong.} An unreachable Graphite, or a monitor that
+        stopped, leaves every rule exactly as it was --- a hole in the monitoring
+        never invents an alert and never silently clears a real one. Such a rule
+        is marked \emph{nothing to measure}, so it is not mistaken for a happy
+        one.
+  \item \textbf{A flap is one message.} The same subject is not announced twice
+        within a minute.
+  \item \textbf{An alert that reached nobody says so.} The bell turns amber and
+        the history row is badged \emph{reached nobody}.
+\end{itemize}
+
+A rule only works while the server is \emph{watching}; the panel says so and
+offers \ui{Start watching} when it is not. A board failure is recorded in the
+history \textbf{even when no rule is configured for it}.
+
+\section{Auto-restart}
+
+With auto-restart on, a board failure stops the run, flags it \emph{bad} with a
+note, and starts a new one after the delay. The new run continues the failed one:
+its own \file{current.txt}, charge and \file{stats.csv}, and the target, voltages
+and run type carried over. The intent is that a night shift loses one run rather
+than the rest of the night.
+
+\section{What happened while nobody was looking}
+
+Every alert and every recovery is written on the server
+(\file{conf/alert\_log.json}, the most recent 500 events, kept across restarts).
+The \textbf{bell} carries the unread count; \ui{Troubleshoot} is the full history,
+with the time, what it was about, which run it belonged to, and which destinations
+received it. This is the page to open after a night shift.
+
+% ============================================================================
+\chapter{Run data and conversion}
+\label{ch:rundata}
+
+\section{What a run leaves behind}
+
+Everything goes into \file{data/run<N>/}, and only when saving is on.
+
+\begin{center}
+\begin{longtable}{@{}L{0.30\textwidth}L{0.62\textwidth}@{}}
+\toprule
+\textbf{File} & \textbf{What it is} \\
+\midrule
+\endhead
+\file{run\_<N>\_0000.caendat} & The data: one unified stream for every board, with
+the same header layout the XDAQ-era files had. Further parts appear when a size
+limit is set. \\
+\file{<model>\_<id>.json} & The board's complete register dump, copied from
+\file{conf/} at run start. This is what makes the run reproducible. \\
+\file{current.txt} & The beam current, one row per sample, time relative to the
+start of the log. \\
+\file{stats.csv} & The monitored accelerator values, one row per sampling tick,
+with the aliases and units you chose. \\
+\file{stats.csv.part1}, \dots & Earlier rows of the same run, kept aside when the
+statistics were restarted mid-run. The run report reads them together with
+\file{stats.csv}. \\
+\file{metadata.json} & The run's record, rewritten after every change, so a
+copied directory is self-describing. \\
+\file{roi.json} & Every region of interest with its counts, written at stop. \\
+\file{run<N>.root} & The converted file, on request. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+The \file{.caendat} file has no trailer. That is deliberate: a run killed by a
+power cut is still readable up to the point where it stopped.
+
+\section{Converting}
+
+\ui{Logbook $\rightarrow$ the run $\rightarrow$ Convert} runs RUReader over every
+\file{.caendat} in the directory, in name order so a run split across files keeps
+its time order, and writes \file{run<N>.root} next to them. The options offered
+are read from the installed converter rather than assumed, so a build that does
+not support a flag does not show it. Conversion runs on the server: you can leave
+the page.
+
+\section{Checking an interrupted run}
+
+\begin{shell}
+cd server
+python scripts/check_run_integrity.py data/run1276
+\end{shell}
+
+This walks the file structure without converting anything and reports whether the
+header, the board definitions and the aggregate chain are consistent --- the first
+thing to do after a crash, a full disk or a power cut.
+
+% ============================================================================
+\chapter{When something is wrong}
+\label{ch:trouble}
+
+\textbf{Start at the Troubleshoot page.} It lists the state of each part of the
+system, offers the action that repairs it, and keeps the history of what has
+already happened.
+
+\section{The five recovery actions}
+
+\begin{center}
+\begin{tabular}{@{}L{0.30\textwidth}L{0.50\textwidth}L{0.12\textwidth}@{}}
+\toprule
+\textbf{Action} & \textbf{Use it when} & \textbf{During a run} \\
+\midrule
+Reopen the boards & A board reads \emph{Disconnected} after a link glitch. & No \\
+Reset the acquisition & A run failed or the boards are wedged. & No \\
+Reconnect the current monitor & The current reads disconnected or stops updating. & Yes \\
+Restart the statistics & \file{stats.csv} stopped being written mid-run. & Yes \\
+Re-check Graphite & After a Graphite outage. & Yes \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Nothing here runs by itself. The two that would cost data during a run are refused
+with the reason written under the button. Restarting the statistics never
+overwrites measurements: the rows already recorded are moved to
+\file{stats.csv.part1} first, and if they cannot be moved the action refuses
+rather than truncating the file.
+
+\section{Symptoms}
+
+\begin{description}[style=nextline, leftmargin=0pt]
+  \item[A board reads \emph{Disconnected}] Nothing opened it, or something else
+        holds it. \emph{Reopen the boards} with the run stopped; check that no
+        second backend is running (\cmd{LunaDAQ status}); check the cable and the
+        link number.
+  \item[A board shows \emph{Board Failure}] It set its FAIL flag: it could not
+        sustain the readout, and data from that point may be incomplete. Read the
+        three problem counters on \ui{Board Health} --- dropped blocks point at
+        the disk or the write rate, read errors at the link. The run should
+        usually be restarted.
+  \item[A board stops producing data without failing] \ui{Board Health} shows
+        \emph{No data for n~s}. The FAIL flag was not raised, so suspect the
+        trigger, the cabling into TRG-IN, or a chain that never started.
+  \item[A synchronised run never starts] \ui{DAQ $\rightarrow$ Synchronization}
+        names the board at fault and what it is missing. See
+        chapter~\ref{ch:boards}.
+  \item[Every metric reads \emph{N/A}] Graphite is not answering --- the light
+        says which case it is. \emph{Re-check Graphite} also clears the circuit
+        breaker an outage leaves behind.
+  \item[An alert never arrived] Check, in this order: is the panel
+        \emph{Watching}? Is the rule badged \emph{reaches nobody} (no destination
+        on) or \emph{nothing to measure} (nothing to read)? Is the bell amber? The
+        history records a board failure even with no rule configured.
+  \item[Something looks ``missing''] Almost always the working directory: the
+        server was started somewhere else, so it is showing a different
+        configuration, not a broken one.
+\end{description}
+
+\section{After a crash or a power cut}
+
+Start the server again --- a \cmd{running: true} left behind is cleared with a
+warning, because acquisition cannot survive a restart. Check the last run
+directory with \cmd{check\_run\_integrity.py}, convert it (the option that skips a
+truncated final aggregate is passed automatically when the installed converter
+supports it), and read the Troubleshoot history for what the DAQ saw before it
+stopped.
+
+\section{The log}
+
+\file{server.log}, in the working directory the server was started in.
+\ui{DAQ Server $\rightarrow$ Show logs} shows the last 200~kB of it in the
+browser.
+
+% ============================================================================
+\appendix
+
+\chapter{Configuration files}
+
+All paths are relative to the working directory.
+
+\begin{center}
+\begin{longtable}{@{}L{0.34\textwidth}L{0.58\textwidth}@{}}
+\toprule
+\textbf{File} & \textbf{Holds} \\
+\midrule
+\endhead
+\file{conf/settings.json} & Run number, data saving, size limit, the board list,
+auto-restart and its delay. Written atomically under a lock; an unreadable one is
+kept rather than replaced. \\
+\file{conf/<model>\_<id>.json} & A board's full register dump. \\
+\file{conf/histograms.json} & The histogram dashboard, its ROIs and display
+settings. \\
+\file{conf/stats.json} & The Graphite render API, the metric prefix, the sampling
+cadence and the selected metrics. \\
+\file{conf/current.json} & Which current module is active and its settings, plus
+the Carbon ingest address and the lifetime charge. \\
+\file{conf/alerts.json} & The alert rules. \\
+\file{conf/alert\_log.json} & The alert history, most recent 500 events. \\
+\file{conf/telegram\_settings.json} & Bot token and chat id. \\
+\file{conf/zulip\_settings.json} & Site, bot account, stream and topic. \\
+\file{conf/elog\_settings.json} & Logbook URL, shared account, default
+attributes. \\
+\file{conf/grafana\_settings.json} & Grafana address and service-account token. \\
+\file{calib/<model>\_<id>.cal} & Two calibration numbers per channel. \\
+\file{app.db} & Users and run metadata. \\
+\file{server.log} & The server's log. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+\chapter{Environment variables}
+
+\begin{center}
+\begin{tabular}{@{}L{0.30\textwidth}L{0.62\textwidth}@{}}
+\toprule
+\textbf{Variable} & \textbf{Effect} \\
+\midrule
+\cmd{TEST\_FLAG} & Simulated boards and a simulated picoammeter. Set it or leave
+it unset; never set it to \cmd{False}. \\
+\cmd{DATABASE\_URL} & Where the database lives. Defaults to \file{app.db} in the
+working directory. \\
+\cmd{SECRET\_KEY}, \cmd{JWT\_SECRET\_KEY} & Flask and token signing keys. Both
+have insecure defaults; set them on a machine that is reachable from outside. \\
+\cmd{NEXT\_PUBLIC\_API\_URL} & The API address compiled into the interface. \\
+\cmd{WEBDAQ\_SKIP\_DB\_UPGRADE} & Skip the schema check at startup. \\
+\cmd{WEBDAQ\_FORCE\_RESTART} & Start even over a backend that is taking data. \\
+\cmd{RUREADER\_BIN} & Path to the converter, when it is not on \cmd{PATH}. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\chapter{Running the tests}
+
+\begin{shell}
+cd server
+conda activate luna
+./tests/run_tests.sh            # everything
+./tests/run_tests.sh alerting   # only modules matching test_*alerting*.py
+\end{shell}
+
+The suite runs with simulated boards in a scratch working directory, so it never
+touches a real \file{conf/}, \file{data/} or database. Tests that drive the HTTP
+surface read the directory they are started from, which is why the script creates
+one.
+
+\vfill
+\noindent\rule{\textwidth}{0.4pt}
+
+\noindent\small For technical support or feature requests:
+Jakub Skowroński (\href{mailto:jakub.skowronski@pd.infn.it}{jakub.skowronski@pd.infn.it}),
+Alessandro Compagnucci (\href{mailto:alessandro.compagnucci@gssi.it}{alessandro.compagnucci@gssi.it}),
+Riccardo Gesuè (\href{mailto:gesue.riccardo@gssi.it}{gesue.riccardo@gssi.it}).
+
+\end{document}

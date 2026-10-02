@@ -1,28 +1,26 @@
-# Configuration file for the Sphinx documentation builder.
+# Sphinx configuration for the WebDAQ documentation.
 #
-# For the full list of built-in configuration values, see the documentation:
-# https://www.sphinx-doc.org/en/master/usage/configuration.html
+# The pages are MyST Markdown so that they read as well in the repository as on
+# the published site. GitHub Actions builds this directory on every push and
+# deploys it from main (see .github/workflows/documentation.yml).
 
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
-
-project = 'LunaDAQ'
-copyright = 'AC and JS'
-author = 'AC and JS'
-release = '1.0'
-
-
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+project = 'WebDAQ'
+copyright = '2026, LUNA collaboration'
+author = 'A. Compagnucci and J. Skowronski'
+release = '5.0'
 
 extensions = ['myst_parser']
 
-templates_path = ['_templates']
+# The chapters link to each other's sections, including third-level headings, so
+# anchors have to be generated for them.
+myst_heading_anchors = 3
+myst_enable_extensions = ['colon_fence', 'deflist']
+
+templates_path = []
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
-
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
-
 html_theme = 'sphinx_rtd_theme'
-html_static_path = ['_static']
+html_title = 'WebDAQ 5.0'
+# No custom CSS or templates: the directories would have to exist, and every
+# build warned about them.
+html_static_path = []

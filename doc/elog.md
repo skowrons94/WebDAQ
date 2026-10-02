@@ -73,11 +73,17 @@ Reading does not need the *Allow posting* switch.
 
 ## 3. Writing
 
-**New entry** opens the composer. The attribute fields are the ones your logbook
-actually uses — WebDAQ learns them from recent entries, since ELOG has no API
-that reports a logbook's configuration. For the LUNA B10 logbook that means
-Author, Category, Beam type, Beam energy, Target, List mode run number and
-Subject.
+**New entry** opens the composer. The attribute fields are read from the
+logbook's own entry form, so the names, the allowed values and which attributes
+are required are the logbook's, not a guess — a required Category cannot be left
+blank here and rejected after you have written the entry.
+
+**Write up a run** drafts the entry from the run itself: the timing, the beam
+current and accumulated charge, the regions of interest and the board
+configuration, assembled out of the database row, `metadata.json`, `current.txt`,
+`stats.csv` (including any `stats.csv.partN`) and `roi.json`. Everything stays
+editable before you post, and if some of those sources are missing for that run
+the toast names which — so a thin draft is never mistaken for a complete one.
 
 * Author is filled with your WebDAQ user; change it if you are writing for
   someone else.
@@ -111,7 +117,7 @@ the reasons.
 
 | Message | Cause |
 |---------|-------|
-| "The py_elog package is not installed" | Either it really is not installed — use the conda command above — or the server is running in the wrong environment. Check with `lsof -ti tcp:5001 -sTCP:LISTEN \| xargs ps -o command=`: the interpreter must be `…/envs/luna/bin/python`. See [Troubleshooting](troubleshooting.md#the-server-runs-in-the-wrong-conda-environment). |
+| "The py_elog package is not installed" | Either it really is not installed — use the conda command above — or the server is running in the wrong environment. Check with `lsof -ti tcp:5001 -sTCP:LISTEN \| xargs ps -o command=`: the interpreter must be `…/envs/luna/bin/python`. See [Troubleshooting](troubleshooting.md#7-the-server). |
 | "check the ELOG user and password" | Wrong credentials, or the account has no access to that logbook. |
 | "the ELOG server did not answer in time" | The logbook is unreachable — check the VPN. Every call gives up after 10 seconds so the DAQ is never held up by it. |
 | "ELOG rejected the entry" | A required attribute is missing or has a value the logbook does not allow. The message repeats what ELOG said. |

@@ -1,7 +1,7 @@
 # WebDAQ — data acquisition for the LUNA experiment
 
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/m/skowrons94/WebDAQ) ![GitHub Release](https://img.shields.io/github/v/release/skowrons94/WebDAQ?include_prereleases) <img alt="Static Badge" src="https://img.shields.io/badge/Documentation-up-green?logo=Github&link=https%3A%2F%2Fskowrons94.github.io%2FWebDAQ%2Findex.html">
-[![Project License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Project License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/skowrons94/WebDAQ/blob/main/LICENSE)
 
 ![Dashboard](imgs/dashboard.png)
 
@@ -25,15 +25,16 @@ machine to a written logbook entry.
 | [Installation](installation.md) | Getting it onto a machine. |
 | [A complete session](example-session.md) | The whole workflow, end to end. |
 | [How WebDAQ works](details.md) | What happens when you press Start; what is stored and where; what can be changed during a run. |
-| [User guide](usage.md) | Screen-by-screen reference. |
+| [User guide](usage.md) | Screen-by-screen reference: every page, every control. |
 | [CAEN digitizers](caen-settings.md) | Scanning and adding boards, thresholds and trapezoid settings, PSD gates, multi-board synchronisation, online tuning. |
 | [Spectra and ROIs](histograms-and-rois.md) | The histogram dashboard, regions of interest, and the per-run `roi.json`. |
 | [Beam current and charge](current-and-charge.md) | TetrAMM, RBD 9103, a monitored Graphite value, and what the two accumulated charges mean. |
 | [Monitoring and alerts](monitoring-and-alerts.md) | Graphite, Grafana, the Stats page, `stats.csv`, run-linked alerts, Telegram and Zulip, Board Health, the alert history and recovery. |
 | [ELOG](elog.md) | Reading and writing the collaboration logbook from run control. |
+| [Run data and conversion](run-data.md) | What a run leaves on disk, how to convert it to ROOT, and how to check a run that was interrupted. |
 | [Directory structure](directory-structure.md) | What lives where in the repository and in a working directory. |
 | [Server architecture](server-architecture.md) | Technical reference for developers. |
-| [Troubleshooting](troubleshooting.md) | When something does not work. |
+| [Troubleshooting](troubleshooting.md) | When something does not work — start with the Troubleshoot page, which offers the fix next to the problem. |
 
 ## Key capabilities
 
@@ -45,9 +46,15 @@ machine to a written logbook entry.
   recorded into each run
 - **Beam current and accumulated charge** from a picoammeter or from a monitored
   accelerator value
-- **Rates and slow control** archived to Graphite, with Grafana alerts tied to
-  the run
-- **FAIR-compliant run metadata**, ELOG logbook entries and Telegram alerts
+- **Rates and slow control** archived to Graphite, with Grafana alert rules tied
+  to the run
+- **Per-board readout counters** on the Board Health tab: blocks read, events
+  decoded, blocks dropped, read errors, for the run in progress
+- **Alerts you configure** — a board failure, a board that stops producing data,
+  a beam current or any Graphite value outside its range — delivered to Telegram
+  or Zulip, with a history of what happened and the recovery next to it
+- **FAIR-compliant run metadata** and ELOG logbook entries, including a draft
+  entry assembled from the run itself
 
 ## Support
 

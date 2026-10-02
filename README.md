@@ -114,7 +114,10 @@ name and the matching firewall rules.
 
 ## Documentation
 
-Everything is in `doc/`, and builds with Sphinx (`cd doc && make html`).
+Everything is in `doc/`, and builds with Sphinx (`cd doc && make html`). The same
+material is also a single PDF — `manual/webdaq-manual.pdf`, rebuilt with `make`
+in `manual/` — for printing, for a new shift crew, or for a machine with no
+network.
 
 | Chapter | Read it for |
 |---------|-------------|
@@ -125,10 +128,12 @@ Everything is in `doc/`, and builds with Sphinx (`cd doc && make html`).
 | [Beam current and charge](doc/current-and-charge.md) | TetrAMM, RBD 9103 and monitored-metric settings, and what the two accumulated charges mean. |
 | [Monitoring and alerts](doc/monitoring-and-alerts.md) | What Graphite and Grafana each do, the Stats page, `stats.csv`, run-linked alerts, Telegram and Zulip, Board Health, the alert history and recovery. |
 | [ELOG](doc/elog.md) | Reading and writing the collaboration logbook from run control. |
-| [User guide](doc/usage.md) | Screen-by-screen reference. |
+| [Installation](doc/installation.md) | Getting it onto a machine, and starting it in a tmux session. |
+| [User guide](doc/usage.md) | Screen-by-screen reference: every page, every control, and what is refused when. |
+| [Run data and conversion](doc/run-data.md) | What a run leaves on disk, converting it to ROOT, and checking an interrupted run. |
 | [Directory structure](doc/directory-structure.md) | What lives where, in the repository and in a working directory. |
 | [Server architecture](doc/server-architecture.md) | How the backend is put together. |
-| [Troubleshooting](doc/troubleshooting.md) | When something does not work. |
+| [Troubleshooting](doc/troubleshooting.md) | When something does not work — the Troubleshoot page, the five recovery actions, and the symptoms worth recognising. |
 
 Published at
 [skowrons94.github.io/WebDAQ](https://skowrons94.github.io/WebDAQ/index.html),

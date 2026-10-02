@@ -40,7 +40,7 @@ If a board is missing, press **Scan for boards**, let it probe the links, and ad
 what it finds. See [CAEN digitizers](caen-settings.md) for the scan options and
 for the VME range.
 
-**Picoammeter.** Settings → Current Module. Pick TetrAMM or RBD 9103 and check it
+**Picoammeter.** Settings → Current Module. Pick TetrAMM, RBD 9103 or a monitored Graphite value and check it
 connects. With the beam off the reading should be near zero; if it is not, fix
 that before anything else ([Beam current and charge](current-and-charge.md)).
 
@@ -92,6 +92,8 @@ Dashboard.
 4. Watch:
    * **Run control** — run number, elapsed time, state.
    * **Board cards** — connection, waveform switch, failure flags.
+   * **Board Health** — what each board has read, written and lost: data blocks,
+     events decoded, and the three counters that should stay at zero.
    * **Beam & Charge** — live current, the charge for this run (integrating,
      green dot) and the lifetime total.
    * **Histograms / waveforms** — per board and channel.
@@ -99,8 +101,10 @@ Dashboard.
 5. Press **Stop** when done. The run's charge is written into its record, the
    stats file is closed, and auto-managed Grafana alerts are silenced again.
 
-If a board fails mid-run, a Telegram message goes out (once per run) and, if
-auto-restart is enabled, the run is restarted after the configured delay.
+If a board fails mid-run, the failure is written to the Troubleshoot history, and
+an alert goes to Telegram or Zulip if a rule is configured for it. With
+auto-restart enabled the run is stopped and a new one started after the
+configured delay, carrying over this run's target and voltages.
 
 ---
 
@@ -108,9 +112,13 @@ auto-restart is enabled, the run is restarted after the configured delay.
 
 ```
 data/run1276/
-├── run1276_0.caendat      raw data, one file per board set, rotated by size
+├── run_1276_0000.caendat  the data: every board in one stream, further parts
+│                          appear when a size limit is set
+├── V1730_0.json           the register dump each board ran with
 ├── current.txt            beam current samples
-├── stats.csv              the Graphite metrics, one row per second
+├── stats.csv              the monitored accelerator values, one row per
+│                          sampling tick
+├── roi.json               every region of interest, with its counts
 └── metadata.json          run number, times, boards, firmware, file list
 ```
 
