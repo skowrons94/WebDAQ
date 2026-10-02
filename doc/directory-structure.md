@@ -38,7 +38,7 @@ Two more things may be present without being tracked: `manuals/`, which holds th
 | `tests/` | The server test suite — plain `unittest`, no hardware, driven by `tests/run_tests.sh`. |
 | `scripts/` | `check_db.sh` (backup, upgrade or stamp `app.db`), `kill-server.sh` (kill a dangling backend), `convert.sh`, `sync.sh`. |
 | `jupyter/` | Offline analysis notebooks. Not part of the running DAQ. |
-| `conf/`, `calib/`, `data/`, `cache/`, `app.db` | Runtime state of whichever working directory the server was started in — see section 5. |
+| `conf/`, `calib/`, `data/`, `cache/`, `app.db` | Runtime state of whichever working directory the server was started in — see section 4. |
 
 ### `server/app/routes/` — the HTTP surface
 
@@ -140,7 +140,7 @@ Nothing in this list needs to be created by hand; the server writes a default on
 
 ## 5. Legacy and dead paths
 
-Say so out loud, because each of these looks live until you look twice.
+**Each of these looks live until you look twice**, so it is named here rather than left for you to find — the usual cost of the ones below is an afternoon spent changing code that nothing calls.
 
 | Path | Status |
 |---|---|

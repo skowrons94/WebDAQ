@@ -224,9 +224,11 @@ The one thing to get right here: **the ingest and the read API are different ser
 Two properties keep the alerts worth reading:
 
 - **One message per episode.** A rule fires when its condition becomes true and stays quiet until it clears. A beam current sitting just below its threshold is one message, not one per tick.
-- **Unknown is not false.** A Graphite server that cannot be reached, or a picoammeter whose samples have gone stale, yields no value — and no value must neither invent an alert nor clear a real one.
+- **Unknown is not false.** A Graphite server that cannot be reached, or a picoammeter whose samples have gone stale, yields no value at all — and a gap in the monitoring path must neither invent an alert nor clear a real one.
 
-Every measurement is taken through a small set of callables (`AlertSources`), so the whole engine is testable without hardware, without Graphite and without a run.
+Every measurement is taken through a small set of callables (`AlertSources`), so the whole engine is testable without hardware, without Graphite and without a run. The watching itself is deliberately dull: one thread, one pass per tick, and Graphite rules throttle themselves further with their own `poll_seconds`.
+
+Rules are normalised and validated on the way in, and a bad one is rejected with `AlertConfigError` rather than stored and silently never fired. Each type carries its own defaults and the parameters the UI needs to render it, which is where to add a new kind of alert: a `RULE_DEFAULTS` entry, a source callable, and an `_evaluate_*` branch. Most types also take `during_run_only`, because a beam current below threshold means nothing when nobody is measuring.
 
 `services/alert_log.py` writes every alert and every recovery to `conf/alert_log.json`, capped at the most recent 500 events. A Telegram message is gone once it has been read, and a shift arriving at 08:00 needs to be able to ask what the DAQ did at 03:00 — including across the restart that is often part of the story. Nothing in this module may raise into its caller: failing to *record* an alert must never stop it being sent.
 
@@ -322,6 +324,8 @@ The web interface has no privileged path into the DAQ. It is one API client amon
 
 **`src/app/api/server-control/route.ts`** runs in the Next.js process, not the browser, and is how *Start an Experiment* works: it resolves the conda environment's prefix (asking conda rather than trusting `conda run -n luna python`, which on some versions resolves `python` from the inherited PATH), runs `scripts/check_db.sh` against the chosen working directory's `app.db`, creates the default user if there is none, and spawns `server/main.py` with that directory as its cwd and its own pid as `LUNA_LAUNCHER_PID`. Every step has a hard timeout so a hung conda or sqlite call cannot wedge the request, and a graceful exit of the launcher takes the backend with it — a SIGKILL is covered from the other side by the watchdog in section 2.
 
+Two things in that preflight are worth knowing when a start behaves oddly. It copies migration revisions the repository has and the measurement directory does not, adding only — anything already there wins, so a project whose history diverged keeps it. And it probes the database with plain sqlite3 reads first, skipping both the conda-wrapped `flask db upgrade` and the create-user script when there is nothing to do, because importing the app is the single most expensive step of a start and on a warm boot neither is needed.
+
 **`src/app/api/cache/route.ts`** keeps the state that genuinely belongs to a browser rather than to the DAQ: the visualisation channel selection, the waveform view configuration, the list of recent working directories. The histogram dashboard used to live here too, and section 10 explains why it does not any more.
 
 Everything else is conventional: Zustand stores for client state, React Query for polling, and JSROOT for drawing the `TBufferJSON` payloads the histogram endpoints return.
@@ -340,7 +344,8 @@ A short list of things that are easy to get wrong here.
 | Touching the database off a request | Open a context on the app reference handed to `app/routes/experiment.py` by `set_flask_app()`. |
 | Opening a file | Relative paths are relative to the working directory. Anything that must follow the *installation* has to be anchored to `__file__`, as `main.py` does for `migrations/`. |
 | Writing a config file | Temporary file plus `os.replace`, under a lock. Background threads write these too. |
-| A side effect at run start | It may not be able to fail the run. Catch it and report it. |
+| A side effect at run start | It must not be able to fail the run. Catch it, let the run proceed, and say which part did not start. |
+| Adding an alert | A `RULE_DEFAULTS` entry, a source callable in `AlertSources`, an `_evaluate_*` branch — and decide whether it only applies during a run. |
 | Reporting a failure | Say what broke and what to press. The alert log, the recovery actions and the empty-histogram titles all exist because "something went wrong" is not a message anyone can act on at 03:00. |
 | Changing the schema | `flask db migrate` in `server/`; `ensure_schema_current` applies it at the next start, in whichever working directory the server runs. |
 | Changing C++ | `pip install server/native/caendaq` after a submodule bump or a source change. |
