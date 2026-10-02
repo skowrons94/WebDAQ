@@ -142,6 +142,22 @@ def _live_run_number() -> Optional[int]:
         return None
 
 
+def max_sample_age(controller: Any) -> float:
+    """How old this source's newest sample may be before it stops being news.
+
+    Hardware on the target answers immediately, so _STALE_AFTER_S is right for
+    it. A source whose samples come from somewhere else — a metric published on
+    its own cadence and served by an archive — knows better, and says so.
+    """
+    try:
+        reported = controller.max_sample_age()
+        if reported and reported > 0:
+            return float(reported)
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return _STALE_AFTER_S
+
+
 def _live_beam_current() -> Optional[float]:
     """The latest beam current in µA, or None when there is nothing to read.
 
@@ -164,7 +180,7 @@ def _live_beam_current() -> Optional[float]:
         value = None
         history = None
         if hasattr(controller, 'get_history'):
-            history = controller.get_history(since=time.time() - _STALE_AFTER_S,
+            history = controller.get_history(since=time.time() - max_sample_age(controller),
                                              max_points=64)
             if history:
                 value = history[-1][1]

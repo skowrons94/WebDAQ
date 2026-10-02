@@ -33,6 +33,16 @@ logger = logging.getLogger(__name__)
 BUFFER_SAMPLES = 100        # what get_data_array() returns, as the real modules do
 HISTORY_SAMPLES = 100000    # timestamped history for the rolling/run-start charts
 
+# Polls remembered when measuring the metric's cadence and its publication lag.
+# Long enough that one slow answer does not set the verdict, short enough that
+# the measurement follows a metric whose rate is changed.
+_CADENCE_SAMPLES = 20
+
+# No metric is ever called stale sooner than this, however fast it is published.
+# A monitored value that has just been written still has to survive a Graphite
+# hiccup without the whole readout being declared dead.
+_MIN_SAMPLE_AGE_S = 30.0
+
 
 class GraphiteCurrentController:
     """A current source backed by a Graphite metric rather than by hardware."""
@@ -70,6 +80,16 @@ class GraphiteCurrentController:
         self._last_value = 0.0
         self._last_sample_wall = 0.0
         self._primed = False
+
+        # How far behind the clock this metric runs, measured rather than
+        # assumed. A published value does not become readable the instant it is
+        # measured: the accelerator writes every few seconds, Carbon flushes on
+        # its own schedule, and the render API will not serve the bucket it is
+        # still filling. The newest readable point is therefore always some
+        # seconds old, and anything that calls a reading "recent" has to know
+        # how many — see max_sample_age().
+        self._gaps = deque(maxlen=_CADENCE_SAMPLES)   # spacing between points
+        self._lags = deque(maxlen=_CADENCE_SAMPLES)   # age of a point when read
 
         self.save_data = False
         self.save_folder = ""
@@ -187,6 +207,11 @@ class GraphiteCurrentController:
                         f"Ignoring unusable reading from '{metric}': {value}")
                     continue
 
+                if self._history_times:
+                    gap = timestamp - self._history_times[-1]
+                    if gap > 0:
+                        self._gaps.append(gap)
+
                 self._history_times.append(timestamp)
                 self._history_values.append(value)
                 self._buffer.append(value)
@@ -220,6 +245,10 @@ class GraphiteCurrentController:
                 # integration cursor or the connected state.
                 self._primed = True
                 self._last_sample_wall = time.time()
+                # How old the newest point was by the time it could be read.
+                # Measured between the same two clocks every time, so a Graphite
+                # server whose clock differs from this one is accounted for too.
+                self._lags.append(max(0.0, self._last_sample_wall - self._last_timestamp))
             folder = self.save_folder
 
         for relative_time, value in to_log:
@@ -280,6 +309,31 @@ class GraphiteCurrentController:
             last = self._last_sample_wall
             stale_after = max(60.0, 10.0 * self.acquisition_interval)
         return bool(last) and (time.time() - last) <= stale_after
+
+    def max_sample_age(self) -> float:
+        """How old the newest sample may be and still count as a reading.
+
+        A picoammeter on the target answers in milliseconds, so anything a few
+        seconds old means it has stopped. A monitored metric is different: it is
+        published on its own cadence and served with a lag, so its newest
+        readable point is permanently some tens of seconds behind the clock —
+        at LUNA, a value written every 10 s reads back around 40 s old. Judging
+        it against a picoammeter's idea of "recent" reported a healthy readout
+        as dead, every time, and offered a reconnect for a monitor that was
+        working perfectly.
+
+        Both numbers are measured rather than configured, because neither is
+        ours to choose: the cadence comes from whoever publishes the metric and
+        the lag from the archive. Three cadences past the worst lag seen
+        recently is late enough never to cry wolf, and early enough that a
+        metric which really has stopped is still reported within about a minute.
+        """
+        with self._lock:
+            gaps = sorted(gap for gap in self._gaps if gap > 0)
+            lag = max(self._lags) if self._lags else 0.0
+            interval = self.acquisition_interval
+        cadence = gaps[len(gaps) // 2] if gaps else interval
+        return max(_MIN_SAMPLE_AGE_S, lag + 3.0 * cadence)
 
     def port_exists(self) -> bool:
         return bool(self.metric)

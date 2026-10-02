@@ -532,6 +532,7 @@ def get_current_history():
         bins = (max(10, min(MAX_HISTORY_BINS, int(bins_arg)))
                 if bins_arg is not None else None)
         since_arg = request.args.get('since')
+        seconds = None
         if since_arg is not None:
             since = float(since_arg)
         else:
@@ -570,6 +571,31 @@ def get_current_history():
 
     source = "controller-buffer"
     interval = getattr(controller, 'acquisition_interval', None)
+
+    if not samples and seconds is not None:
+        # A relative window — "the last 30 seconds" — is measured against this
+        # clock, but a source that publishes through an archive is permanently
+        # behind it: a metric written every 10 s reads back around 40 s old, so
+        # the whole window falls into that gap and the plot is empty while the
+        # readout is perfectly healthy. (Asking for a longer window appeared to
+        # fix it, which is how this was found.)
+        #
+        # Keep the width that was asked for and anchor it on the newest sample
+        # instead. Only within the source's own freshness horizon: past that the
+        # readout really has stopped, and a 30-second window drawn from an hour
+        # ago would be a plot of history labelled as now.
+        from ..services.alerting import max_sample_age
+
+        try:
+            widened = controller.get_history(
+                since=now - seconds - max_sample_age(controller),
+                max_points=MAX_RAW_HISTORY_POINTS if bins else max_points)
+        except Exception as e:
+            print(f"Warning: could not widen the current history window: {e}")
+            widened = []
+        if widened:
+            newest = widened[-1][0]
+            samples = [point for point in widened if point[0] >= newest - seconds]
 
     # The controller's buffer is large but finite — around 14 hours at the
     # TetrAMM's sampling rate. A dashboard opened deep into a long run needs the
