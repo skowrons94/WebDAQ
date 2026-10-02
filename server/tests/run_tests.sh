@@ -22,7 +22,16 @@ fi
 
 # A scratch working directory keeps conf/ and data/ out of harm's way. The
 # suite still imports from server/, which stays on PYTHONPATH.
-WORKDIR="$(mktemp -d -t webdaq-tests)"
+#
+# The template must carry the X's: BSD mktemp invents a suffix for '-t name',
+# GNU mktemp refuses the same line outright. It failed quietly on Linux —
+# WORKDIR came back empty, 'cd ""' succeeds and stays put, and the whole suite
+# then ran in server/ and wrote its conf/, data/ and app.db there. Exactly what
+# the scratch directory exists to prevent, so give up rather than guess.
+WORKDIR="$(mktemp -d -t webdaq-tests.XXXXXX)" || exit 1
+[ -n "$WORKDIR" ] && [ -d "$WORKDIR" ] || {
+    echo "Could not create a scratch working directory" >&2; exit 1
+}
 cleanup() { rm -rf "$WORKDIR"; }
 trap cleanup EXIT
 
