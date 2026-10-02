@@ -1,0 +1,25 @@
+.analysis-grid { display: grid; grid-template-columns: minmax(0, min(var(--analysis-panel-width, 300px), 36%)) 12px minmax(0, 1fr) 12px minmax(0, min(var(--analysis-results-width, 340px), 36%)); gap: 8px; height: max(680px, calc(100vh - 230px)); }
+.analysis-workspace .react-flow__controls-button { background: hsl(var(--card)); color: hsl(var(--foreground)); border-color: hsl(var(--border)); }
+.analysis-workspace .react-flow__controls-button svg { fill: currentColor; }
+.analysis-workspace .react-flow__minimap { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 8px; width: 130px; height: 90px; }
+.analysis-workspace .react-flow__edge.selected .react-flow__edge-path { stroke: #f59e0b !important; stroke-width: 3 !important; }
+@media (max-width: 1279px) {
+  .analysis-grid { grid-template-columns: minmax(0, min(var(--analysis-panel-width, 300px), 44%)) 12px minmax(0, 1fr); height: auto; }
+  .analysis-grid > aside:first-child, .analysis-grid > section { height: 640px; }
+  .analysis-grid > aside:last-child { grid-column: 1 / -1; height: var(--analysis-results-height, 650px); min-height: 260px; }
+}
+@media (max-width: 700px) {
+  .analysis-grid { display: flex; flex-direction: column; }
+  .analysis-grid > aside:first-child { height: 300px; }
+  .analysis-grid > section { height: 580px; }
+}
+
+.analysis-resize-handle { cursor: col-resize; touch-action: none; display: flex; align-items: center; justify-content: center; color: hsl(var(--muted-foreground)); border-radius: 6px; }
+.analysis-resize-handle:hover, .analysis-resize-handle:focus-visible { background: hsl(var(--accent)); color: #0d9488; outline: 2px solid #0d9488; }
+@media (max-width: 700px) { .analysis-resize-handle { display: none; } }
+.analysis-resize-handle svg { flex-shrink: 0; width: 12px; height: 44px; border: 1px solid hsl(var(--border)); border-radius: 6px; background: hsl(var(--muted)); }
+
+@media (max-width: 1279px) {
+  .analysis-results-resize { grid-column: 1 / -1; display: flex; cursor: row-resize; height: 12px; }
+  .analysis-results-resize svg { width: 44px; height: 12px; }
+}

@@ -28,6 +28,7 @@ from any version convert with the same
 | **Monitoring** | Per-channel spectra, waveforms and PSD plots; event, pile-up, lost and saturation rates per channel; beam current and accumulated charge. |
 | **Spectra & ROIs** | Named regions of interest with live counts, defined once on the server: the same dashboard on every screen, restored after a restart, and written into each run as `roi.json`. |
 | **Slow control** | Beam current from a TetrAMM, an RBD 9103, or a value the accelerator already publishes to Graphite — plus any other metric, recorded into each run's `stats.csv`. |
+| **Offline analysis** | Graph workflows for converted ROOT events: batch conversion, detector selection, calibration, ROI counts, charge-normalised yields and scan plots. See [Analysis](doc/analysis.md). |
 | **Bookkeeping** | Run metadata for FAIR-compliant conversion, the collaboration's PSI ELOG logbook, and Grafana alert rules tied to the run. |
 | **Watching** | Per-board readout counters, alerts on board failure, a board that stops producing data, beam current or any Graphite value — to Telegram or Zulip — with a history of what happened and the recovery next to it. |
 
