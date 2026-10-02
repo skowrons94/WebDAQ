@@ -19,9 +19,9 @@ import { useToast } from "@/components/ui/use-toast"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { MarkdownPreview, RunNotesEditor } from "@/components/run-notes-editor"
 import {
-  getRuns, getRunDetail, getRunCurrent, getConversionStatus, startConversion,
-  type RunSummary, type RunDetail, type CurrentData, type ConversionStatus,
-  type ConversionOptions,
+  getRuns, getRunDetail, getRunCurrent, getRunStats, getConversionStatus, startConversion,
+  type RunSummary, type RunDetail, type CurrentData, type RunStatsData,
+  type ConversionStatus, type ConversionOptions,
 } from "@/lib/api"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -157,7 +157,8 @@ function CurrentTab({ runNumber }: { runNumber: number }) {
         <AlertTitle>No beam current recorded</AlertTitle>
         <AlertDescription>
           This run has no <span className="font-mono">current.txt</span>. The current is only
-          logged when a TetrAMM or RBD 9103 is connected and acquiring while the run is saved.
+          logged while the run is saved and a current module is reading — a TetrAMM, an
+          RBD 9103, or a monitored Graphite metric.
         </AlertDescription>
       </Alert>
     )
@@ -246,6 +247,146 @@ function CurrentTab({ runNumber }: { runNumber: number }) {
           </p>
         )}
       </div>
+    </div>
+  )
+}
+
+// ── Monitored metrics (stats.csv) ────────────────────────────────────────────
+
+/**
+ * The machine the run was taken on, as it was recorded minute by minute.
+ *
+ * One plot per metric rather than one plot with every metric on it: a terminal
+ * voltage of 130 kV and a collimator current of a few µA share no axis, and
+ * stacking them hides whichever is smaller. Each keeps the operator's own alias
+ * and unit from the Stats page, so the plot is labelled the way they named it.
+ */
+function StatsTab({ runNumber }: { runNumber: number }) {
+  const [data, setData] = useState<RunStatsData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    getRunStats(runNumber)
+      .then(d => { if (!cancelled) setData(d) })
+      .catch(error => {
+        if (cancelled) return
+        // No data directory is a normal state to report, not an error to raise.
+        const status = (error as { response?: { status?: number } })?.response?.status
+        if (status === 404) {
+          setData({
+            available: false, start_time: null, columns: [], metrics: [],
+            samples: [], n_samples: 0, downsampled: false,
+          })
+          return
+        }
+        toast({
+          title: "Error", description: "Could not read the statistics for this run.",
+          variant: "destructive",
+        })
+      })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [runNumber, toast])
+
+  // Recharts wants one object per row; the API sends arrays to keep it small.
+  const series = useMemo(() => {
+    if (!data?.samples?.length) return []
+    const names = data.columns.slice(1)
+    return names.map((name, index) => ({
+      name,
+      unit: data.metrics[index]?.unit ?? "",
+      source: data.metrics[index]?.source ?? "",
+      points: data.samples.map(row => ({ t: row[0], v: row[index + 1] })),
+    }))
+  }, [data])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 text-muted-foreground">
+        <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Reading statistics…
+      </div>
+    )
+  }
+
+  if (!data?.available || series.length === 0) {
+    return (
+      <Alert>
+        <AlertTitle>No statistics recorded</AlertTitle>
+        <AlertDescription>
+          This run has no <span className="font-mono">stats.csv</span>. It is written while
+          a run saves data, for the metrics selected on the Stats page.
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-baseline justify-between">
+        <h4 className="text-sm font-semibold">Monitored Metrics</h4>
+        <span className="text-xs text-muted-foreground">
+          {data.downsampled
+            ? `showing ${series[0].points.length.toLocaleString()} of `
+              + `${data.n_samples.toLocaleString()} samples`
+            : `${data.n_samples.toLocaleString()} samples`}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {series.map((metric, index) => (
+          <Card key={metric.name}>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">
+                {metric.name}{metric.unit ? ` (${metric.unit})` : ""}
+              </CardTitle>
+              {metric.source && (
+                <span className="text-xs text-muted-foreground font-mono">{metric.source}</span>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="h-56 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={metric.points} margin={CHART_MARGIN}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis
+                      dataKey="t" type="number" domain={["dataMin", "dataMax"]}
+                      tickFormatter={(v: number) => v.toFixed(0)}
+                      minTickGap={32}
+                      label={xAxisLabel("Time (s)")}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis
+                      tickFormatter={formatTick}
+                      width={64}
+                      label={yAxisLabel(metric.unit || metric.name)}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <Tooltip
+                      labelFormatter={(v: number) => `t = ${Number(v).toFixed(2)} s`}
+                      formatter={(v: number) => [formatValue(v, metric.unit), metric.name]}
+                      contentStyle={{ fontSize: 12 }}
+                    />
+                    <Line
+                      type="monotone" dataKey="v" dot={false} strokeWidth={1.5}
+                      stroke={CHANNEL_COLOURS[index % CHANNEL_COLOURS.length]}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {data.start_time && (
+        <p className="text-xs text-muted-foreground">
+          Recording started {data.start_time}; time is relative to that.
+        </p>
+      )}
     </div>
   )
 }
@@ -976,10 +1117,11 @@ function RunDetailTabs({
         <LogbookRunHeader detail={detail} action={headerAction} />
 
         <Tabs defaultValue="overview">
-          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1 sm:grid-cols-5">
+          <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1 sm:grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
             <TabsTrigger value="current">Beam Current</TabsTrigger>
+            <TabsTrigger value="stats">Stats</TabsTrigger>
             <TabsTrigger value="boards">Boards</TabsTrigger>
             <TabsTrigger value="convert">Convert</TabsTrigger>
           </TabsList>
@@ -1000,6 +1142,9 @@ function RunDetailTabs({
           </TabsContent>
           <TabsContent value="current" className="mt-4">
             <CurrentTab runNumber={detail.run_number} />
+          </TabsContent>
+          <TabsContent value="stats" className="mt-4">
+            <StatsTab runNumber={detail.run_number} />
           </TabsContent>
           <TabsContent value="boards" className="mt-4">
             <BoardsTab detail={detail} />
@@ -1022,9 +1167,10 @@ function RunDetailTabs({
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList className="grid w-full max-w-2xl grid-cols-4">
+        <TabsList className="grid w-full max-w-2xl grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="current">Beam Current</TabsTrigger>
+          <TabsTrigger value="stats">Stats</TabsTrigger>
           <TabsTrigger value="boards">Boards</TabsTrigger>
           <TabsTrigger value="convert">Convert</TabsTrigger>
         </TabsList>
@@ -1034,6 +1180,9 @@ function RunDetailTabs({
         </TabsContent>
         <TabsContent value="current" className="mt-4">
           <CurrentTab runNumber={detail.run_number} />
+        </TabsContent>
+        <TabsContent value="stats" className="mt-4">
+          <StatsTab runNumber={detail.run_number} />
         </TabsContent>
         <TabsContent value="boards" className="mt-4">
           <BoardsTab detail={detail} />

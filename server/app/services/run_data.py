@@ -6,6 +6,7 @@ Everything a finished run left on disk lives under ``data/run<N>/``:
     run_<N>_0000.caendat    the raw CAEN data (one unified file per board set)
     <board>_<id>.json       the register dump each board ran with
     current.txt             the beam current logged during the run
+    stats.csv               the monitored metrics sampled during the run
     metadata.json           the run record written at stop
 
 This module turns that directory into something the Data dashboard can show:
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 DATA_DIR = "data"
 CURRENT_FILE = "current.txt"
+STATS_FILE = "stats.csv"
 METADATA_FILE = "metadata.json"
 
 # The converter installed by install.sh. Overridable for unusual setups.
@@ -167,6 +169,104 @@ def read_current(run_number: int, max_points: int = 2000) -> Dict[str, Any]:
         [times[i]] + list(values[i][:n_channels]) for i in range(0, len(times), step)
     ]
     return result
+
+
+def read_stats(run_number: int, max_points: int = 2000) -> Dict[str, Any]:
+    """
+    The monitored metrics sampled during a run, ready to plot.
+
+    ``stats.csv`` is what the Stats page recorded while the run was going: one
+    column per metric the operator had selected, sampled from Graphite. It is
+    the record of the machine the data was taken on — terminal voltage, beam
+    current, collimator currents — and until now it could only be read by
+    opening the file.
+
+    The header carries more than the column names, and all of it is kept:
+
+        # Metric: Terminal Voltage | unit: kV | source: accelerator.terminal_voltage
+
+    so a plot can be labelled with the operator's own alias and unit rather than
+    with a Graphite path. Rows are ``[elapsed_seconds, *values]``, downsampled
+    by striding to ``max_points`` — a run of a few days writes a few hundred
+    thousand of them, which no plot can draw and no browser should parse.
+    """
+    path = os.path.join(run_dir(run_number), STATS_FILE)
+    result: Dict[str, Any] = {
+        "available": False, "start_time": None, "columns": [], "metrics": [],
+        "samples": [], "n_samples": 0, "downsampled": False,
+    }
+    if not os.path.isfile(path):
+        return result
+
+    metrics: List[Dict[str, str]] = []
+    columns: List[str] = []
+    rows: List[List[float]] = []
+
+    try:
+        with open(path, "r") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if not line.strip():
+                    continue
+                if line.startswith("#"):
+                    body = line.lstrip("#").strip()
+                    if body.startswith("Start time:"):
+                        result["start_time"] = body.split("Start time:")[1].strip()
+                    elif body.startswith("Metric:"):
+                        metrics.append(_parse_metric_header(body))
+                    continue
+                parts = [p.strip() for p in line.split(",")]
+                if not columns:
+                    # The first non-comment line names the columns.
+                    columns = parts
+                    continue
+                try:
+                    rows.append([float(p) for p in parts])
+                except ValueError:
+                    continue           # a partially written last line
+    except OSError as e:
+        logger.error(f"Could not read {path}: {e}")
+        return result
+
+    if not rows or len(columns) < 2:
+        return result
+
+    # Every row is full width by construction — the writer pads a metric it
+    # could not sample with 0 — so a short row is the last line of a file caught
+    # mid-write. It cannot be used: "4.4,12" is not a sample of 12, it is the
+    # first two characters of 129.5, and plotting it would draw a cliff that
+    # never happened. Longer rows (a metric added to a file already open) keep
+    # what the header names.
+    width = len(columns)
+    rows = [row[:width] for row in rows if len(row) >= width]
+
+    result["available"] = True
+    result["columns"] = columns
+    result["metrics"] = metrics if len(metrics) == width - 1 else []
+    result["n_samples"] = len(rows)
+
+    step = max(1, len(rows) // max_points)
+    result["downsampled"] = step > 1
+    result["samples"] = [rows[i] for i in range(0, len(rows), step)]
+    return result
+
+
+def _parse_metric_header(body: str) -> Dict[str, str]:
+    """'Metric: Terminal Voltage | unit: kV | source: accelerator...' → a dict."""
+    fields = {"name": "", "unit": "", "source": ""}
+    for index, part in enumerate(body.split("|")):
+        part = part.strip()
+        key, _, value = part.partition(":")
+        key = key.strip().lower()
+        if index == 0 and key == "metric":
+            fields["name"] = value.strip()
+        elif key in ("unit", "source"):
+            fields[key] = value.strip()
+    # The writer puts '-' in for a metric with no unit; an empty string says the
+    # same thing without the axis label claiming the unit is called "-".
+    if fields["unit"] == "-":
+        fields["unit"] = ""
+    return fields
 
 
 def integrate_current(

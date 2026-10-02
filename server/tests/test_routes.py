@@ -40,6 +40,7 @@ class AuthenticationTests(RouteTestCase):
                     '/notifications/status', '/experiment/board_diagnostics',
                     '/notifications/events', '/notifications/events/summary',
                     '/recovery/actions',
+                    '/data/runs/1/stats',
                     '/stats/paths', '/stats/connection'):
             response = self.client.get(url)
             self.assertEqual(response.status_code, 401, f'{url} is unauthenticated')

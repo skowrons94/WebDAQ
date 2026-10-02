@@ -136,6 +136,24 @@ def run_current(run_number):
     return jsonify(run_data.read_current(run_number, max_points=max_points))
 
 
+@bp.route('/data/runs/<int:run_number>/stats', methods=['GET'])
+@jwt_required_custom
+def run_stats(run_number):
+    """
+    The monitored metrics sampled during the run (its ``stats.csv``).
+
+    Same shape and same `max_points` bound as the current log, so the two plot
+    side by side: the beam the run saw, and the machine that delivered it.
+    """
+    if not run_data.run_exists(run_number):
+        return jsonify({'message': f'Run {run_number} has no data directory'}), 404
+    try:
+        max_points = max(100, min(20000, int(request.args.get('max_points', 2000))))
+    except (TypeError, ValueError):
+        max_points = 2000
+    return jsonify(run_data.read_stats(run_number, max_points=max_points))
+
+
 def _boards_of(run_number: int) -> list:
     """The boards this run was taken with, as {name, id} pairs.
 

@@ -286,6 +286,28 @@ export interface ChargeChannel {
     mean_current_uA: number
 }
 
+/** One column of a run's stats.csv, as the operator named it on the Stats page. */
+export interface RunStatsMetric {
+    name: string
+    /** Empty when the metric was recorded without one. */
+    unit: string
+    /** The Graphite path it was read from. */
+    source: string
+}
+
+export interface RunStatsData {
+    available: boolean
+    start_time: string | null
+    /** ["Time [s]", <metric>, ...] */
+    columns: string[]
+    /** Per metric column, in the same order; empty if the header was unusable. */
+    metrics: RunStatsMetric[]
+    /** [elapsed_s, v0, v1, ...] per row, downsampled for plotting. */
+    samples: number[][]
+    n_samples: number
+    downsampled: boolean
+}
+
 export interface CurrentData {
     available: boolean
     start_time: string | null
@@ -334,6 +356,10 @@ export const getRunDetail = (runNumber: number): Promise<RunDetail> =>
 
 export const getRunCurrent = (runNumber: number, maxPoints = 2000): Promise<CurrentData> =>
     api.get(`/data/runs/${runNumber}/current`, { params: { max_points: maxPoints } })
+        .then(res => res.data);
+
+export const getRunStats = (runNumber: number, maxPoints = 2000): Promise<RunStatsData> =>
+    api.get(`/data/runs/${runNumber}/stats`, { params: { max_points: maxPoints } })
         .then(res => res.data);
 
 export const getConversionStatus = (runNumber: number): Promise<ConversionStatus> =>
