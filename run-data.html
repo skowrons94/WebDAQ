@@ -1,0 +1,277 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Run data and conversion &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="The ELOG logbook" href="elog.html" />
+    <link rel="prev" title="Monitoring: Graphite, Grafana, alerts and notifications" href="monitoring-and-alerts.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Run data and conversion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-run-directory">1. The run directory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-data-file">2. The data file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#converting-to-root">3. Converting to ROOT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checking-a-run-that-was-interrupted">4. Checking a run that was interrupted</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#reading-the-run-back-in-the-logbook">5. Reading the run back in the Logbook</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#housekeeping">6. Housekeeping</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Run data and conversion</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/run-data.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="run-data-and-conversion">
+<h1>Run data and conversion<a class="headerlink" href="#run-data-and-conversion" title="Link to this heading"></a></h1>
+<p>What a run leaves on disk, what each file is for, and how to turn it into
+something an analysis can read. The run directory is the unit of data: a copy of
+<code class="docutils literal notranslate"><span class="pre">data/run1276/</span></code> is a complete, self-describing measurement, with the board
+configuration it was taken with and a record of the beam that produced it.</p>
+<hr class="docutils" />
+<section id="the-run-directory">
+<h2>1. The run directory<a class="headerlink" href="#the-run-directory" title="Link to this heading"></a></h2>
+<p>Everything a run writes goes into <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/</span></code>, relative to the working
+directory the server was started from. The directory is created when the run
+starts, and only when <strong>Save data</strong> is on — a run with saving off still decodes,
+fills spectra and publishes rates, it just writes nothing.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Written</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">run_&lt;N&gt;_0000.caendat</span></code></p></td>
+<td><p>during</p></td>
+<td><p>The data. One unified binary stream for every board, with the same header layout the XDAQ-era files had, so the same converter reads old and new runs.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_&lt;N&gt;_0001.caendat</span></code>, …</p></td>
+<td><p>during</p></td>
+<td><p>The next parts, when a size limit is set. The header is written once, in the first file.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">&lt;model&gt;_&lt;id&gt;.json</span></code></p></td>
+<td><p>at start</p></td>
+<td><p>The board’s complete register dump, copied out of <code class="docutils literal notranslate"><span class="pre">conf/</span></code>. This is what makes the run reproducible: thresholds, gates, trapezoid parameters, start mode, as they were.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">current.txt</span></code></p></td>
+<td><p>during</p></td>
+<td><p>The beam current, one row per sample, with the time relative to the start of the log. The first two lines name the start time and the columns.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stats.csv</span></code></p></td>
+<td><p>during</p></td>
+<td><p>The accelerator readings you selected on the Stats page, one row per sampling tick.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stats.csv.part1</span></code>, …</p></td>
+<td><p>during</p></td>
+<td><p>Earlier rows of the same run, kept aside when the statistics were restarted mid-run (see <a class="reference internal" href="troubleshooting.html"><span class="std std-doc">Troubleshooting</span></a>).</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">metadata.json</span></code></p></td>
+<td><p>at every change</p></td>
+<td><p>The run’s record — times, target, voltages, charge, flag, notes, the boards and the software versions — written again whenever anything changes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">roi.json</span></code></p></td>
+<td><p>at stop</p></td>
+<td><p>Every region of interest defined at the time, with its counts.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">run&lt;N&gt;.root</span></code></p></td>
+<td><p>on request</p></td>
+<td><p>The converted file, produced by RUReader from every <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> in the directory.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>The database is the live record; <code class="docutils literal notranslate"><span class="pre">metadata.json</span></code> is the copy that travels.</strong>
+SQLite (<code class="docutils literal notranslate"><span class="pre">app.db</span></code>) is what the Logbook reads and writes. After every change the
+same information is written into the run directory, so a directory copied to
+another machine still knows its target, its charge and the firmware that took it.</p>
+</section>
+<hr class="docutils" />
+<section id="the-data-file">
+<h2>2. The data file<a class="headerlink" href="#the-data-file" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">.caendat</span></code> is the raw CAEN aggregate stream with a small header in front of it.
+The header names the boards — sampling period, time-tag period, DPP version,
+channel count and register id for each — and then the aggregates follow as the
+boards produced them. There is no trailer, which is deliberate: a run killed by a
+power cut is still readable up to the point where it stopped.</p>
+<p>Two consequences worth knowing on shift:</p>
+<ul class="simple">
+<li><p><strong>One file holds every board.</strong> The boards are interleaved in one stream rather
+than written side by side, which is what makes a synchronised run a single
+object with one time origin.</p></li>
+<li><p><strong>Nothing is ever overwritten.</strong> Starting a run in a directory that already has
+data writes <code class="docutils literal notranslate"><span class="pre">_1</span></code>, <code class="docutils literal notranslate"><span class="pre">_2</span></code>, … rather than replacing what is there, and the dashboard
+asks before reusing a run number at all.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="converting-to-root">
+<h2>3. Converting to ROOT<a class="headerlink" href="#converting-to-root" title="Link to this heading"></a></h2>
+<p>Conversion is offline and does not touch the run: it reads the <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> files
+and writes <code class="docutils literal notranslate"><span class="pre">run&lt;N&gt;.root</span></code> next to them, using RUReader.</p>
+<p>Open <strong>Logbook → the run → Convert</strong>. The tab shows what the installed RUReader
+can do, because the options are read from the converter itself rather than
+assumed; a build that does not offer a flag does not show it. Start the
+conversion and leave the page if you like — it runs on the server, in the
+background, and the tab reports progress and the last lines of the converter’s
+log when it finishes.</p>
+<p>A conversion that fails leaves the <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> files untouched. The log tail is
+the first thing to read; a truncated final aggregate from an interrupted run is
+the usual cause, and <code class="docutils literal notranslate"><span class="pre">--ignore-fail</span></code> (passed automatically when the installed
+converter supports it) is what gets the rest of the data out.</p>
+</section>
+<hr class="docutils" />
+<section id="checking-a-run-that-was-interrupted">
+<h2>4. Checking a run that was interrupted<a class="headerlink" href="#checking-a-run-that-was-interrupted" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+python<span class="w"> </span>scripts/check_run_integrity.py<span class="w"> </span>data/run1276
+</pre></div>
+</div>
+<p>The script walks the file structure without converting anything and says whether
+the header, the board definitions and the aggregate chain are consistent. Use it
+after a crash, a full disk or a power cut, before deciding whether a run is worth
+converting.</p>
+</section>
+<hr class="docutils" />
+<section id="reading-the-run-back-in-the-logbook">
+<h2>5. Reading the run back in the Logbook<a class="headerlink" href="#reading-the-run-back-in-the-logbook" title="Link to this heading"></a></h2>
+<p><strong>Logbook → the run</strong> opens the run’s own page, which reads the directory rather
+than only the database:</p>
+<ul class="simple">
+<li><p><strong>Overview</strong> — times, duration, target, voltages, run type, accumulated charge,
+the flag, and the file inventory with sizes.</p></li>
+<li><p><strong>Notes</strong> — the free-text record, editable after the fact.</p></li>
+<li><p><strong>Beam Current</strong> — <code class="docutils literal notranslate"><span class="pre">current.txt</span></code> plotted, with the charge integrated over the
+whole series rather than over the drawn points.</p></li>
+<li><p><strong>Stats</strong> — one plot per metric from <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, each labelled with the alias
+and unit you gave it on the Stats page. A final row still being written is
+dropped rather than plotted, because half a number drawn as a value looks like
+a cliff that never happened.</p></li>
+<li><p><strong>Boards</strong> — the register dumps copied in at run start, so you can see what the
+run was taken with without opening the files.</p></li>
+<li><p><strong>Convert</strong> — section 3 above.</p></li>
+</ul>
+</section>
+<hr class="docutils" />
+<section id="housekeeping">
+<h2>6. Housekeeping<a class="headerlink" href="#housekeeping" title="Link to this heading"></a></h2>
+<p><strong>Run numbers</strong> live in <code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code> and advance on Stop, only when
+saving. Set the number by hand on the dashboard when a campaign needs to continue
+an older series — the dashboard warns before reusing a directory that already
+holds data.</p>
+<p><strong>Disk.</strong> A rate of a few MB/s is normal for a busy chain; the dashboard shows
+the current write rate, and <strong>Board Health</strong> shows the bytes each board has
+handed to the writer. If the write queue cannot keep up, the blocks it refuses
+are counted as <em>Dropped</em> on Board Health — that counter is lost data, and it is
+the one number on that page that should always be zero.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="monitoring-and-alerts.html" class="btn btn-neutral float-left" title="Monitoring: Graphite, Grafana, alerts and notifications" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="elog.html" class="btn btn-neutral float-right" title="The ELOG logbook" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,386 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Installation &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="A complete session, start to finish" href="example-session.html" />
+    <link rel="prev" title="WebDAQ — data acquisition for the LUNA experiment" href="welcome.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#what-the-machine-needs">1. What the machine needs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#installing">2. Installing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-working-directory">3. The working directory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#starting-it">4. Starting it</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#with-the-launcher">4.1 With the launcher</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#running-it-inside-tmux">4.2 Running it inside tmux</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#without-hardware">5. Without hardware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#checking-the-installation">6. Checking the installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#updating-an-installation">7. Updating an installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#if-the-installation-itself-fails">8. If the installation itself fails</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Installation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/installation.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Link to this heading"></a></h1>
+<p>Getting WebDAQ onto a machine, and starting it the way the control room expects.
+If the machine is already set up and you only need to start the application, skip
+to <a class="reference internal" href="#starting-it">section 4</a>.</p>
+<hr class="docutils" />
+<section id="what-the-machine-needs">
+<h2>1. What the machine needs<a class="headerlink" href="#what-the-machine-needs" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Operating system</strong></p></td>
+<td><p>Linux for a DAQ machine; macOS works for development.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>CAEN libraries</strong></p></td>
+<td><p>CAENVMElib, CAENComm and CAENDigitizer, for real hardware. Without them WebDAQ still runs in test mode with simulated boards.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Build tools</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">git</span></code>, <code class="docutils literal notranslate"><span class="pre">cmake</span></code>, <code class="docutils literal notranslate"><span class="pre">make</span></code>, a C++ compiler, <code class="docutils literal notranslate"><span class="pre">curl</span></code>. The installer puts them in place on a fresh machine.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>conda</strong></p></td>
+<td><p>Miniforge, installed by the installer if no conda is present. Everything lives in an environment called <code class="docutils literal notranslate"><span class="pre">luna</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>ROOT</strong></p></td>
+<td><p>Comes from the <code class="docutils literal notranslate"><span class="pre">luna</span></code> environment. It is needed for the spectra and for the offline converter.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Nothing runs in Docker, and there is no container to start. Acquisition happens
+inside the server process through CaenDAQ.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Versions before 4.0 ran acquisition as XDAQ inside a Docker container, with a
+separate spy server on port 6060. If a procedure tells you to start a container
+or to check port 6060, it predates 4.0 and does not apply.</p>
+</div>
+</section>
+<hr class="docutils" />
+<section id="installing">
+<h2>2. Installing<a class="headerlink" href="#installing" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/skowrons94/WebDAQ.git
+<span class="nb">cd</span><span class="w"> </span>WebDAQ
+./install.sh
+</pre></div>
+</div>
+<p>The installer is idempotent — every step checks whether the work is already done,
+so running it again after an update is safe. It:</p>
+<ol class="arabic simple">
+<li><p>installs the system build tools;</p></li>
+<li><p>checks out the two C++ submodules, <strong>CaenDAQ</strong> (the acquisition backend) and
+<strong>RUReader</strong> (the offline <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> → ROOT converter);</p></li>
+<li><p>installs Miniforge if conda is missing;</p></li>
+<li><p>creates the <code class="docutils literal notranslate"><span class="pre">luna</span></code> environment from <code class="docutils literal notranslate"><span class="pre">environment.yml</span></code>;</p></li>
+<li><p>builds RUReader and installs the <code class="docutils literal notranslate"><span class="pre">caendaq</span></code> Python module into the environment;</p></li>
+<li><p>writes <code class="docutils literal notranslate"><span class="pre">frontend/.env</span></code> and builds the web interface;</p></li>
+<li><p>adds a <code class="docutils literal notranslate"><span class="pre">LunaDAQ</span></code> launcher to your <code class="docutils literal notranslate"><span class="pre">~/.bashrc</span></code>.</p></li>
+</ol>
+<p>Open a new terminal afterwards, or <code class="docutils literal notranslate"><span class="pre">source</span> <span class="pre">~/.bashrc</span></code>, so the launcher is on your
+PATH.</p>
+<p><strong>The API address is baked into the frontend at build time.</strong> <code class="docutils literal notranslate"><span class="pre">frontend/.env</span></code>
+holds <code class="docutils literal notranslate"><span class="pre">NEXT_PUBLIC_API_URL</span></code>, and Next.js compiles it into the bundle. If the DAQ
+server will be reached from other machines, set it to an address those machines
+can resolve — not <code class="docutils literal notranslate"><span class="pre">127.0.0.1</span></code> — and rebuild:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>frontend
+npm<span class="w"> </span>run<span class="w"> </span>build
+</pre></div>
+</div>
+<p>Forgetting the rebuild is the most common deployment mistake: the interface loads
+and then fails every request, because the old address is still inside it.</p>
+</section>
+<hr class="docutils" />
+<section id="the-working-directory">
+<h2>3. The working directory<a class="headerlink" href="#the-working-directory" title="Link to this heading"></a></h2>
+<p><strong>The working directory is the experiment.</strong> Everything the server reads and
+writes is relative to the directory it was started in: <code class="docutils literal notranslate"><span class="pre">conf/</span></code> (board
+configurations, the histogram dashboard, credentials), <code class="docutils literal notranslate"><span class="pre">calib/</span></code>, <code class="docutils literal notranslate"><span class="pre">data/</span></code> and the
+<code class="docutils literal notranslate"><span class="pre">app.db</span></code> database. Two working directories are two independent experiments that
+share one installation.</p>
+<p>You do not have to create any of it by hand. The first launch creates the
+directories, brings the database schema up and creates a default user, so an
+empty directory is a valid starting point for a new campaign.</p>
+</section>
+<hr class="docutils" />
+<section id="starting-it">
+<h2>4. Starting it<a class="headerlink" href="#starting-it" title="Link to this heading"></a></h2>
+<section id="with-the-launcher">
+<h3>4.1 With the launcher<a class="headerlink" href="#with-the-launcher" title="Link to this heading"></a></h3>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>LunaDAQ<span class="w">            </span><span class="c1"># start the web interface (freeing its port first)</span>
+LunaDAQ<span class="w"> </span>status<span class="w">     </span><span class="c1"># what is holding each port</span>
+LunaDAQ<span class="w"> </span>stop<span class="w">       </span><span class="c1"># stop both parts, politely then firmly</span>
+LunaDAQ<span class="w"> </span>restart<span class="w">    </span><span class="c1"># stop, then start the interface</span>
+LunaDAQ<span class="w"> </span>backend<span class="w">    </span><span class="c1"># run the DAQ server in this terminal, for debugging</span>
+</pre></div>
+</div>
+<p>Then open <a class="reference external" href="http://localhost:3000">http://localhost:3000</a> and log in. The <strong>DAQ Server</strong> badge at the top
+right starts the server itself: pick the working directory for the campaign and
+press <strong>Start</strong>. The badge is also on the login page, so the server can be
+started before anyone logs in.</p>
+<p><code class="docutils literal notranslate"><span class="pre">LunaDAQ</span> <span class="pre">stop</span></code> only ever stops processes that look like ours — an unrelated
+program on port 3000 is reported and left alone, which is why it is a better
+answer to a busy port than killing whatever holds it.</p>
+</section>
+<section id="running-it-inside-tmux">
+<h3>4.2 Running it inside tmux<a class="headerlink" href="#running-it-inside-tmux" title="Link to this heading"></a></h3>
+<p>The web interface is a long-lived process. Started from a plain SSH session it
+dies when the connection drops, so start it inside <strong>tmux</strong>: a session that keeps
+running on the machine whether or not anyone is attached to it.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>tmux<span class="w"> </span>new<span class="w"> </span>-s<span class="w"> </span>daq<span class="w">        </span><span class="c1"># create a session called "daq" and attach to it</span>
+LunaDAQ<span class="w">                </span><span class="c1"># start the interface inside it</span>
+</pre></div>
+</div>
+<p>Now detach and leave it running: press <strong>Ctrl-b</strong>, release both keys, then press
+<strong>d</strong>. You are back at your own shell; the session is still running.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>What you want</p></th>
+<th class="head"><p>How</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>List the sessions on the machine</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tmux</span> <span class="pre">ls</span></code></p></td>
+</tr>
+<tr class="row-odd"><td><p>Attach to the session again</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tmux</span> <span class="pre">attach</span> <span class="pre">-t</span> <span class="pre">daq</span></code></p></td>
+</tr>
+<tr class="row-even"><td><p>Detach and leave it running</p></td>
+<td><p><strong>Ctrl-b</strong> then <strong>d</strong></p></td>
+</tr>
+<tr class="row-odd"><td><p>Scroll back through the output</p></td>
+<td><p><strong>Ctrl-b</strong> then <strong>[</strong>, then the arrow keys or PageUp; <strong>q</strong> leaves scroll mode</p></td>
+</tr>
+<tr class="row-even"><td><p>Open a second window in the session</p></td>
+<td><p><strong>Ctrl-b</strong> then <strong>c</strong>; switch with <strong>Ctrl-b</strong> then <strong>0</strong>, <strong>1</strong>, …</p></td>
+</tr>
+<tr class="row-odd"><td><p>Close the current window</p></td>
+<td><p>type <code class="docutils literal notranslate"><span class="pre">exit</span></code> in it</p></td>
+</tr>
+<tr class="row-even"><td><p>Stop the whole session</p></td>
+<td><p>attach, stop the application with <code class="docutils literal notranslate"><span class="pre">LunaDAQ</span> <span class="pre">stop</span></code>, then <code class="docutils literal notranslate"><span class="pre">exit</span></code></p></td>
+</tr>
+</tbody>
+</table>
+<p>Every tmux command is the prefix <strong>Ctrl-b</strong> followed by one key; that is the only
+thing worth memorising. If a session is already attached somewhere else —
+somebody left it open — <code class="docutils literal notranslate"><span class="pre">tmux</span> <span class="pre">attach</span> <span class="pre">-d</span> <span class="pre">-t</span> <span class="pre">daq</span></code> takes it over.</p>
+<p>A detached session survives a dropped SSH connection, but not a reboot of the DAQ
+machine. After a reboot, attach to a new session and start it again.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="without-hardware">
+<h2>5. Without hardware<a class="headerlink" href="#without-hardware" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nv">TEST_FLAG</span><span class="o">=</span>True<span class="w"> </span>LunaDAQ<span class="w"> </span>backend
+</pre></div>
+</div>
+<p>or tick <strong>Test Mode</strong> in the DAQ Server panel before starting the server. Test
+mode fabricates CAEN-style data for simulated boards and simulates the
+picoammeter, so the whole chain — readout, data file, spectra, rates, run
+metadata — works on a laptop with no digitizers attached.</p>
+<p>Set the variable or leave it unset; <strong>never set it to <code class="docutils literal notranslate"><span class="pre">False</span></code></strong>. Most of the code
+reads it as “any value at all means test mode”, so <code class="docutils literal notranslate"><span class="pre">TEST_FLAG=False</span></code> puts the
+server into test mode while one part of it believes the hardware is real.</p>
+</section>
+<hr class="docutils" />
+<section id="checking-the-installation">
+<h2>6. Checking the installation<a class="headerlink" href="#checking-the-installation" title="Link to this heading"></a></h2>
+<p>With the server running and a login in hand:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Check</p></th>
+<th class="head"><p>Where</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>The server answers</p></td>
+<td><p>The <strong>DAQ Server</strong> badge reads <em>DAQ Server Online</em>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>The boards answer</p></td>
+<td><p><strong>Settings → Boards</strong>: each board shows <em>Connected</em>. Use <strong>Scan for boards</strong> to find them rather than typing their settings from memory.</p></td>
+</tr>
+<tr class="row-even"><td><p>The acquisition module is installed</p></td>
+<td><p><strong>DAQ → Hardware Info</strong> names the CaenDAQ version, and says <code class="docutils literal notranslate"><span class="pre">hardware</span></code> rather than <code class="docutils literal notranslate"><span class="pre">mock</span> <span class="pre">/</span> <span class="pre">test</span> <span class="pre">mode</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>A run works</p></td>
+<td><p>Take a short run with saving on, then open it in the Logbook: there should be a <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> file and, with a current module configured, a <code class="docutils literal notranslate"><span class="pre">current.txt</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>The converter is installed</p></td>
+<td><p><strong>Logbook → the run → Convert</strong> offers options instead of <em>RUReader is not installed</em>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The server’s own log is <code class="docutils literal notranslate"><span class="pre">server.log</span></code> <strong>in the working directory it was started
+in</strong>, and the interface can show it: <strong>DAQ Server → Show logs</strong>.</p>
+</section>
+<hr class="docutils" />
+<section id="updating-an-installation">
+<h2>7. Updating an installation<a class="headerlink" href="#updating-an-installation" title="Link to this heading"></a></h2>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>WebDAQ
+git<span class="w"> </span>pull
+git<span class="w"> </span>submodule<span class="w"> </span>update<span class="w"> </span>--init<span class="w"> </span>--recursive
+conda<span class="w"> </span>activate<span class="w"> </span>luna
+pip<span class="w"> </span>install<span class="w"> </span>server/native/caendaq<span class="w">     </span><span class="c1"># only if the submodule moved</span>
+<span class="nb">cd</span><span class="w"> </span>frontend<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>npm<span class="w"> </span>run<span class="w"> </span>build
+LunaDAQ<span class="w"> </span>restart
+</pre></div>
+</div>
+<p>The database schema is brought up to date every time the server starts, so there
+is nothing to migrate by hand. <code class="docutils literal notranslate"><span class="pre">migrations/</span></code> is part of the repository — do not
+delete it, and do not run <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">db</span> <span class="pre">init</span></code>; that is how a schema history gets
+thrown away.</p>
+</section>
+<hr class="docutils" />
+<section id="if-the-installation-itself-fails">
+<h2>8. If the installation itself fails<a class="headerlink" href="#if-the-installation-itself-fails" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>Usual cause</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">caendaq</span></code> cannot be imported</p></td>
+<td><p>The module was built into a different environment. <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">activate</span> <span class="pre">luna</span></code>, then <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">server/native/caendaq</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">No</span> <span class="pre">module</span> <span class="pre">named</span> <span class="pre">flask</span></code> when running the tests</p></td>
+<td><p>The same thing, from the other direction: the shell is not in the <code class="docutils literal notranslate"><span class="pre">luna</span></code> environment.</p></td>
+</tr>
+<tr class="row-even"><td><p>Port 5001 or 3000 is in use</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LunaDAQ</span> <span class="pre">status</span></code> names what holds it; <code class="docutils literal notranslate"><span class="pre">LunaDAQ</span> <span class="pre">stop</span></code> clears our own leftovers. A port held by an unrelated program is reported, not killed.</p></td>
+</tr>
+<tr class="row-odd"><td><p>The interface loads but every request fails</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NEXT_PUBLIC_API_URL</span></code> points somewhere the browser cannot reach, or the frontend was not rebuilt after it changed.</p></td>
+</tr>
+<tr class="row-even"><td><p>The boards are listed but never connect</p></td>
+<td><p>The CAEN libraries are missing, or another process still holds the links — including a WebDAQ backend that did not exit.</p></td>
+</tr>
+</tbody>
+</table>
+<p><a class="reference internal" href="troubleshooting.html"><span class="std std-doc">Troubleshooting</span></a> covers what to do once it is installed and
+something stops working during a shift.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="welcome.html" class="btn btn-neutral float-left" title="WebDAQ — data acquisition for the LUNA experiment" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="example-session.html" class="btn btn-neutral float-right" title="A complete session, start to finish" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -1,0 +1,510 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Directory structure &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Server architecture" href="server-architecture.html" />
+    <link rel="prev" title="How WebDAQ works" href="details.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Directory structure</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#top-level">1. Top level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#server-the-flask-backend">2. <code class="docutils literal notranslate"><span class="pre">server/</span></code> — the Flask backend</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#server-app-routes-the-http-surface"><code class="docutils literal notranslate"><span class="pre">server/app/routes/</span></code> — the HTTP surface</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#server-app-services-state-and-background-work"><code class="docutils literal notranslate"><span class="pre">server/app/services/</span></code> — state and background work</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#server-app-utils-hardware-and-helpers"><code class="docutils literal notranslate"><span class="pre">server/app/utils/</span></code> — hardware and helpers</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#frontend-the-web-interface">3. <code class="docutils literal notranslate"><span class="pre">frontend/</span></code> — the web interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-repository-versus-a-working-directory">4. The repository versus a working directory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#legacy-and-dead-paths">5. Legacy and dead paths</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Directory structure</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/directory-structure.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="directory-structure">
+<h1>Directory structure<a class="headerlink" href="#directory-structure" title="Link to this heading"></a></h1>
+<p><strong>This chapter is an inventory: what lives where, and which of it is source, runtime data or legacy.</strong> Two of those distinctions matter more than the rest — the repository is not the same thing as a working directory (see <a class="reference internal" href="details.html"><span class="std std-doc">How WebDAQ works</span></a>), and a few paths are still present only so that old links and old setups keep working.</p>
+<hr class="docutils" />
+<section id="top-level">
+<h2>1. Top level<a class="headerlink" href="#top-level" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">server/</span></code></p></td>
+<td><p>The DAQ server: a Flask application served by waitress on port 5001.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">frontend/</span></code></p></td>
+<td><p>The web interface: Next.js 14 on port 3000.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/</span></code></p></td>
+<td><p>What you run from a shell: <code class="docutils literal notranslate"><span class="pre">lunadaq</span></code> (start/stop/status for both processes, freeing stuck ports) and <code class="docutils literal notranslate"><span class="pre">check_run_integrity.py</span></code> (verify a run’s files without converting them).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">doc/</span></code></p></td>
+<td><p>The Sphinx/MyST source of this manual.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">manual/</span></code></p></td>
+<td><p>A <code class="docutils literal notranslate"><span class="pre">Makefile</span></code> that builds the same material as a single PDF with pdflatex.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">imgs/</span></code>, <code class="docutils literal notranslate"><span class="pre">doc/imgs/</span></code></p></td>
+<td><p>Screenshots used by the README and the manual.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">environment.yml</span></code></p></td>
+<td><p>The conda environment (<code class="docutils literal notranslate"><span class="pre">luna</span></code>) the server and the tests expect.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">install.sh</span></code></p></td>
+<td><p>Installation helper: CAEN libraries, the environment, the native modules.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">.github/workflows/documentation.yml</span></code></p></td>
+<td><p>Builds the documentation in CI.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">README.md</span></code>, <code class="docutils literal notranslate"><span class="pre">LICENSE</span></code></p></td>
+<td><p>Project readme and licence.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Two more things may be present without being tracked: <code class="docutils literal notranslate"><span class="pre">manuals/</span></code>, which holds the CAEN register manuals that <code class="docutils literal notranslate"><span class="pre">app/utils/board_defaults.py</span></code> cites and is gitignored because the PDFs are large, and <code class="docutils literal notranslate"><span class="pre">CLAUDE.md</span></code>/<code class="docutils literal notranslate"><span class="pre">AGENTS.md</span></code>, which are notes for coding agents.</p>
+<p><strong>There is no mobile client in this checkout.</strong> The React Native app that <a class="reference internal" href="details.html"><span class="std std-doc">How WebDAQ works</span></a> lists as an interface is a separate repository; nothing here builds, serves or configures it. It is a supported interface because it speaks the same JWT-authenticated REST API as the browser, not because its source is here.</p>
+</section>
+<hr class="docutils" />
+<section id="server-the-flask-backend">
+<h2>2. <code class="docutils literal notranslate"><span class="pre">server/</span></code> — the Flask backend<a class="headerlink" href="#server-the-flask-backend" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">main.py</span></code></p></td>
+<td><p><strong>The entry point.</strong> Refuses a second instance, brings the database schema up to date, writes a pid file, starts the alert watcher and serves the app.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">server.py</span></code></p></td>
+<td><p>The Flask CLI app object, for management commands such as <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">--app</span> <span class="pre">server</span> <span class="pre">create-user</span></code>. It does not serve.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">config.py</span></code></p></td>
+<td><p>Secret keys, the database URL and the JWT policy.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">app/</span></code></p></td>
+<td><p>The application package — see below.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">native/</span></code></p></td>
+<td><p>Two git submodules: <code class="docutils literal notranslate"><span class="pre">caendaq/</span></code> (the C++/pybind11 acquisition library that reads the boards) and <code class="docutils literal notranslate"><span class="pre">rureader/</span></code> (the <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> → ROOT converter).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">migrations/</span></code></p></td>
+<td><p>Alembic revisions for <code class="docutils literal notranslate"><span class="pre">app.db</span></code>. The directory next to <code class="docutils literal notranslate"><span class="pre">main.py</span></code> is always the one applied, whichever working directory the server runs in.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tests/</span></code></p></td>
+<td><p>The server test suite — plain <code class="docutils literal notranslate"><span class="pre">unittest</span></code>, no hardware, driven by <code class="docutils literal notranslate"><span class="pre">tests/run_tests.sh</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">scripts/</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">check_db.sh</span></code> (backup, upgrade or stamp <code class="docutils literal notranslate"><span class="pre">app.db</span></code>), <code class="docutils literal notranslate"><span class="pre">kill-server.sh</span></code> (kill a dangling backend), <code class="docutils literal notranslate"><span class="pre">convert.sh</span></code>, <code class="docutils literal notranslate"><span class="pre">sync.sh</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">jupyter/</span></code></p></td>
+<td><p>Offline analysis notebooks. Not part of the running DAQ.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/</span></code>, <code class="docutils literal notranslate"><span class="pre">calib/</span></code>, <code class="docutils literal notranslate"><span class="pre">data/</span></code>, <code class="docutils literal notranslate"><span class="pre">cache/</span></code>, <code class="docutils literal notranslate"><span class="pre">app.db</span></code></p></td>
+<td><p>Runtime state of whichever working directory the server was started in — see section 4.</p></td>
+</tr>
+</tbody>
+</table>
+<section id="server-app-routes-the-http-surface">
+<h3><code class="docutils literal notranslate"><span class="pre">server/app/routes/</span></code> — the HTTP surface<a class="headerlink" href="#server-app-routes-the-http-surface" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Serves</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">auth.py</span></code></p></td>
+<td><p>Registration, login, and a token check.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">experiment.py</span></code></p></td>
+<td><p>Run control, run metadata, boards, data-saving settings, diagnostics, auto-restart, and the legacy Telegram settings.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">digitizer.py</span></code></p></td>
+<td><p>Board register reads and writes, the board scan, and online tuning.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">histograms.py</span></code></p></td>
+<td><p>Spectra, PSD maps, waveforms, the dashboard/ROI configuration, batch ROI integrals, and <code class="docutils literal notranslate"><span class="pre">/spy/status</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">current.py</span></code></p></td>
+<td><p>The beam-current module: its type, settings, readings, history and accumulated charge.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stats.py</span></code></p></td>
+<td><p>The Graphite server, the monitored metric list, the per-run <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, and board-rate queries.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">data.py</span></code></p></td>
+<td><p>Completed runs: inventory, current log, <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, and the RUReader conversion.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">elog.py</span></code></p></td>
+<td><p>PSI ELOG: settings, entries, attributes, attachments and the run draft.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">grafana.py</span></code></p></td>
+<td><p>Grafana settings and alert rules.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">notifications.py</span></code></p></td>
+<td><p>Notification transports, alert rules, the event log, the alert watcher — and the <code class="docutils literal notranslate"><span class="pre">/recovery/*</span></code> actions.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calib.py</span></code></p></td>
+<td><p>Per-channel energy calibration.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">faraday.py</span></code></p></td>
+<td><p><strong>Dead code.</strong> A Faraday-cup blueprint that <code class="docutils literal notranslate"><span class="pre">app/__init__.py</span></code> never registers, so <code class="docutils literal notranslate"><span class="pre">/faraday/*</span></code> is unreachable.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="server-app-services-state-and-background-work">
+<h3><code class="docutils literal notranslate"><span class="pre">server/app/services/</span></code> — state and background work<a class="headerlink" href="#server-app-services-state-and-background-work" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Owns</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">daq_manager.py</span></code></p></td>
+<td><p>The DAQ state: run number, saving, boards, run-state listeners, board-failure monitoring, auto-restart.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">caen_acquisition.py</span></code></p></td>
+<td><p>The single in-process <code class="docutils literal notranslate"><span class="pre">caendaq.DAQ</span></code> that reads the boards, writes the files and accumulates the spectra.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">digitizer_container.py</span></code></p></td>
+<td><p>The persistent probe connections to the boards, released to caendaq during a run.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">board_scanner.py</span></code></p></td>
+<td><p>The background sweep of USB, optical and VME links that discovers boards.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">sync_chain.py</span></code></p></td>
+<td><p>What the daisy chain needs per board, read back from the registers.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">spy_manager.py</span></code></p></td>
+<td><p>Online spectra, waveforms and ROI reads, plus the calibration applied to their axes.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">histogram_config.py</span></code></p></td>
+<td><p>The server-owned histogram dashboard in <code class="docutils literal notranslate"><span class="pre">conf/histograms.json</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">roi_analysis.py</span></code></p></td>
+<td><p>Every ROI integral in one pass, and the per-run <code class="docutils literal notranslate"><span class="pre">roi.json</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">stats_manager.py</span></code></p></td>
+<td><p>The Graphite metric list and the loop that writes a run’s <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">graphite_reader.py</span></code></p></td>
+<td><p>Read-side Graphite access for everything that plots history.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">run_data.py</span></code></p></td>
+<td><p>A finished run directory: its files, its current, its charge, and the ROOT conversion.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">run_metadata_snapshot.py</span></code></p></td>
+<td><p>Keeps each run’s <code class="docutils literal notranslate"><span class="pre">metadata.json</span></code> in step with its database row.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">run_report.py</span></code></p></td>
+<td><p>Assembles a finished run into a draft ELOG entry.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">alerting.py</span></code></p></td>
+<td><p>The alert rules, the watcher thread that evaluates them, and the dispatch to transports.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">alert_log.py</span></code></p></td>
+<td><p>The durable record of every alert and recovery, in <code class="docutils literal notranslate"><span class="pre">conf/alert_log.json</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">recovery.py</span></code></p></td>
+<td><p>The named recovery actions, whether each is currently needed, and running one on request.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">telegram_notifier.py</span></code>, <code class="docutils literal notranslate"><span class="pre">zulip_notifier.py</span></code></p></td>
+<td><p>The two notification transports.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">grafana_client.py</span></code></p></td>
+<td><p>Grafana’s alert-rule API, with the service-account token kept on the server.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">elog_client.py</span></code></p></td>
+<td><p>The PSI ELOG logbook, through py_elog.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="server-app-utils-hardware-and-helpers">
+<h3><code class="docutils literal notranslate"><span class="pre">server/app/utils/</span></code> — hardware and helpers<a class="headerlink" href="#server-app-utils-hardware-and-helpers" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">dgtz.py</span></code></p></td>
+<td><p>The ctypes wrapper around CAENDigitizer: open, info, register access, register dumps.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">safe_registers.py</span></code></p></td>
+<td><p>Which registers may be written to a board that is acquiring.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">board_defaults.py</span></code></p></td>
+<td><p>Fabricated register dumps so test mode has something to configure and edit.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">spy.py</span></code></p></td>
+<td><p>Builds a ROOT histogram from a caendaq snapshot, on demand.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tetramm.py</span></code>, <code class="docutils literal notranslate"><span class="pre">rbd9103.py</span></code></p></td>
+<td><p>The two picoammeter controllers.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">graphite_current.py</span></code></p></td>
+<td><p>A beam-current module whose readings come from a monitored Graphite metric.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">mock_current.py</span></code></p></td>
+<td><p>The simulated picoammeter used when <code class="docutils literal notranslate"><span class="pre">TEST_FLAG</span></code> is set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">graphite.py</span></code></p></td>
+<td><p>The Graphite render-API client.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">carbon.py</span></code></p></td>
+<td><p>The guarded push to Carbon’s plaintext ingest, so a dead collector cannot stall an acquisition loop.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">single_instance.py</span></code></p></td>
+<td><p>The guard that stops a second backend reaching into running hardware.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">jwt_utils.py</span></code></p></td>
+<td><p>Token issue and the <code class="docutils literal notranslate"><span class="pre">jwt_required_custom</span></code> decorator.</p></td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal notranslate"><span class="pre">app/models/</span></code> holds the two SQLAlchemy models, <code class="docutils literal notranslate"><span class="pre">user.py</span></code> and <code class="docutils literal notranslate"><span class="pre">run_metadata.py</span></code>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="frontend-the-web-interface">
+<h2>3. <code class="docutils literal notranslate"><span class="pre">frontend/</span></code> — the web interface<a class="headerlink" href="#frontend-the-web-interface" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>What it is</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">src/app/</span></code></p></td>
+<td><p>App Router pages: <code class="docutils literal notranslate"><span class="pre">dashboard/</span></code>, <code class="docutils literal notranslate"><span class="pre">logbook/</span></code> (and <code class="docutils literal notranslate"><span class="pre">logbook/[run_number]/</span></code>), <code class="docutils literal notranslate"><span class="pre">stats/</span></code>, <code class="docutils literal notranslate"><span class="pre">DAQ/</span></code> (board configuration, calibration, hardware info), <code class="docutils literal notranslate"><span class="pre">tuner/</span></code>, <code class="docutils literal notranslate"><span class="pre">troubleshoot/</span></code>, <code class="docutils literal notranslate"><span class="pre">alerts/</span></code>, <code class="docutils literal notranslate"><span class="pre">settings/</span></code>, <code class="docutils literal notranslate"><span class="pre">auth/login/</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">src/app/api/</span></code></p></td>
+<td><p>Route handlers that run in the Next.js process, not in the browser: <code class="docutils literal notranslate"><span class="pre">server-control/</span></code> launches and stops the backend in a chosen working directory, <code class="docutils literal notranslate"><span class="pre">cache/</span></code> keeps the per-browser UI state.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">src/components/</span></code></p></td>
+<td><p>The React components. Dashboards (<code class="docutils literal notranslate"><span class="pre">caen-dashboard</span></code>, <code class="docutils literal notranslate"><span class="pre">histo-dashboard</span></code>, <code class="docutils literal notranslate"><span class="pre">wave-dashboard</span></code>, <code class="docutils literal notranslate"><span class="pre">psd-dashboard</span></code>, <code class="docutils literal notranslate"><span class="pre">calib-dashboard</span></code>, <code class="docutils literal notranslate"><span class="pre">data-dashboard</span></code>), run control (<code class="docutils literal notranslate"><span class="pre">run-control</span></code>, <code class="docutils literal notranslate"><span class="pre">run-control-buttons</span></code>, <code class="docutils literal notranslate"><span class="pre">daq-state</span></code>, <code class="docutils literal notranslate"><span class="pre">run-status-indicator</span></code>), boards (<code class="docutils literal notranslate"><span class="pre">board</span></code>, <code class="docutils literal notranslate"><span class="pre">board-scan</span></code>, <code class="docutils literal notranslate"><span class="pre">board-health</span></code>, <code class="docutils literal notranslate"><span class="pre">board-info</span></code>, <code class="docutils literal notranslate"><span class="pre">param-tuner</span></code>), current (<code class="docutils literal notranslate"><span class="pre">current-plot</span></code>, <code class="docutils literal notranslate"><span class="pre">current-graph</span></code>, <code class="docutils literal notranslate"><span class="pre">current-module-settings</span></code>, <code class="docutils literal notranslate"><span class="pre">beam-control-panel</span></code>), monitoring (<code class="docutils literal notranslate"><span class="pre">stats/</span></code>, <code class="docutils literal notranslate"><span class="pre">metrics-settings</span></code>, <code class="docutils literal notranslate"><span class="pre">activity-log</span></code>, <code class="docutils literal notranslate"><span class="pre">notification-settings</span></code>, <code class="docutils literal notranslate"><span class="pre">grafana-settings</span></code>, <code class="docutils literal notranslate"><span class="pre">grafana-alert-manager</span></code>), the logbook (<code class="docutils literal notranslate"><span class="pre">logbook-table/</span></code>, <code class="docutils literal notranslate"><span class="pre">run-notes-editor</span></code>, <code class="docutils literal notranslate"><span class="pre">elog/</span></code>), and <code class="docutils literal notranslate"><span class="pre">ui/</span></code> (shadcn/ui primitives).</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">src/lib/</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">api.ts</span></code> (the Axios client with the JWT interceptor), <code class="docutils literal notranslate"><span class="pre">grafana-api.ts</span></code>, <code class="docutils literal notranslate"><span class="pre">histogram-config.ts</span></code>, <code class="docutils literal notranslate"><span class="pre">caen-registers.ts</span></code>, <code class="docutils literal notranslate"><span class="pre">load-jsroot.ts</span></code>, <code class="docutils literal notranslate"><span class="pre">chart-format.ts</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">src/store/</span></code></p></td>
+<td><p>Zustand stores: auth, run control, histograms, stats, metrics, Grafana alerts, dashboard tab, visualisation settings.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">cache/</span></code></p></td>
+<td><p>Runtime UI state written by the Next.js process (<code class="docutils literal notranslate"><span class="pre">visualization-channels.json</span></code>, <code class="docutils literal notranslate"><span class="pre">wave-config.json</span></code>, <code class="docutils literal notranslate"><span class="pre">working-directories.json</span></code>, <code class="docutils literal notranslate"><span class="pre">server-control-state.json</span></code>). Not source; safe to delete.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">package.json</span></code>, <code class="docutils literal notranslate"><span class="pre">next.config.mjs</span></code>, <code class="docutils literal notranslate"><span class="pre">tailwind.config.ts</span></code>, <code class="docutils literal notranslate"><span class="pre">tsconfig.json</span></code>, <code class="docutils literal notranslate"><span class="pre">components.json</span></code></p></td>
+<td><p>Build and tooling configuration.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="the-repository-versus-a-working-directory">
+<h2>4. The repository versus a working directory<a class="headerlink" href="#the-repository-versus-a-working-directory" title="Link to this heading"></a></h2>
+<p><strong>Every relative path the server opens is relative to the directory it was started in, not to <code class="docutils literal notranslate"><span class="pre">server/</span></code>.</strong> <code class="docutils literal notranslate"><span class="pre">conf/</span></code>, <code class="docutils literal notranslate"><span class="pre">calib/</span></code>, <code class="docutils literal notranslate"><span class="pre">data/</span></code>, <code class="docutils literal notranslate"><span class="pre">cache/</span></code> and <code class="docutils literal notranslate"><span class="pre">app.db</span></code> are therefore the state of one experiment, and the copies under <code class="docutils literal notranslate"><span class="pre">server/</span></code> are simply the state of the experiment someone last ran from there.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Written into the working directory</p></th>
+<th class="head"><p>By</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code></p></td>
+<td><p>The DAQ state: run number, saving, size limits, boards, auto-restart.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/&lt;name&gt;_&lt;id&gt;.json</span></code></p></td>
+<td><p>One full register dump per board. Copied into each run directory at start.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/histograms.json</span></code></p></td>
+<td><p>The histogram dashboard: histograms, ROIs, zooms, layout.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/current.json</span></code>, <code class="docutils literal notranslate"><span class="pre">conf/tetram.json</span></code>, <code class="docutils literal notranslate"><span class="pre">conf/rbd9103.json</span></code></p></td>
+<td><p>The beam-current module, its per-device settings and the lifetime charge.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/stats.json</span></code></p></td>
+<td><p>The Graphite server, the monitored metrics and the sampling cadence.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/alerts.json</span></code>, <code class="docutils literal notranslate"><span class="pre">conf/alert_log.json</span></code></p></td>
+<td><p>The alert rules, and the record of what they did.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">conf/telegram_settings.json</span></code>, <code class="docutils literal notranslate"><span class="pre">conf/zulip_settings.json</span></code></p></td>
+<td><p>Transport credentials.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">conf/grafana_settings.json</span></code>, <code class="docutils literal notranslate"><span class="pre">conf/elog_settings.json</span></code></p></td>
+<td><p>Grafana and ELOG addresses and service tokens.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calib/&lt;name&gt;_&lt;id&gt;.cal</span></code></p></td>
+<td><p>Per-channel energy calibration. Not copied into the run directory.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/</span></code></p></td>
+<td><p>The run: <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> files, the board configurations, <code class="docutils literal notranslate"><span class="pre">current.txt</span></code>, <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, <code class="docutils literal notranslate"><span class="pre">roi.json</span></code>, <code class="docutils literal notranslate"><span class="pre">metadata.json</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">cache/daq-server.pid</span></code></p></td>
+<td><p>The backend’s pid, so <code class="docutils literal notranslate"><span class="pre">scripts/kill-server.sh</span></code> and the single-instance guard can find it.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">app.db</span></code></p></td>
+<td><p>Run metadata and users.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Nothing in this list needs to be created by hand; the server writes a default on first use and keeps an unreadable <code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code> aside rather than replacing it.</p>
+</section>
+<hr class="docutils" />
+<section id="legacy-and-dead-paths">
+<h2>5. Legacy and dead paths<a class="headerlink" href="#legacy-and-dead-paths" title="Link to this heading"></a></h2>
+<p><strong>Each of these looks live until you look twice</strong>, so it is named here rather than left for you to find — the usual cost of the ones below is an afternoon spent changing code that nothing calls.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Path</p></th>
+<th class="head"><p>Status</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">server/app/routes/faraday.py</span></code></p></td>
+<td><p>Never registered as a blueprint. <code class="docutils literal notranslate"><span class="pre">/faraday/*</span></code> returns 404.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">frontend/src/api/cache/route.ts</span></code></p></td>
+<td><p>Outside the App Router and imported by nothing — superseded by <code class="docutils literal notranslate"><span class="pre">src/app/api/cache/route.ts</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">frontend/src/app/activity/page.tsx</span></code></p></td>
+<td><p>A redirect to <code class="docutils literal notranslate"><span class="pre">/troubleshoot</span></code>, kept because the old address is in control-room browser histories.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">frontend/src/app/board/page.tsx</span></code></p></td>
+<td><p>Still works, but no longer in the navigation: the <code class="docutils literal notranslate"><span class="pre">Board</span></code> component is rendered inside Settings.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">histogram-configs.json</span></code>, <code class="docutils literal notranslate"><span class="pre">roi-cache-enhanced.json</span></code>, <code class="docutils literal notranslate"><span class="pre">dashboard-settings.json</span></code></p></td>
+<td><p>The dashboard’s old home in <code class="docutils literal notranslate"><span class="pre">frontend/cache/</span></code>. If they are still there, the DAQ server reads them once to seed <code class="docutils literal notranslate"><span class="pre">conf/histograms.json</span></code>, and never writes them again; <code class="docutils literal notranslate"><span class="pre">WEBDAQ_FRONTEND_CACHE</span></code> pointed at an empty directory switches the import off.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">server/conf/tuning_backups/</span></code></p></td>
+<td><p>An empty directory no code refers to.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Earlier releases also had <code class="docutils literal notranslate"><span class="pre">server/json/</span></code> (per-model register templates) and <code class="docutils literal notranslate"><span class="pre">conf/topology.xml</span></code> (the XDAQ topology). Both are gone: a board’s register set is read from the hardware, or fabricated by <code class="docutils literal notranslate"><span class="pre">app/utils/board_defaults.py</span></code> in test mode, and there is no XDAQ to describe.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="details.html" class="btn btn-neutral float-left" title="How WebDAQ works" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="server-architecture.html" class="btn btn-neutral float-right" title="Server architecture" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

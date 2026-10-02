@@ -1,0 +1,540 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Troubleshooting &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="CAEN digitizers: settings, filters and synchronisation" href="caen-settings.html" />
+    <link rel="prev" title="User guide" href="usage.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Troubleshooting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-five-recovery-actions">1. The five recovery actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#a-board">2. A board</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#a-board-reads-disconnected">A board reads <em>Disconnected</em></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#a-board-shows-board-failure-or-the-header-says-caen-error">A board shows <em>Board Failure</em>, or the header says <em>CAEN Error</em></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#a-board-stops-producing-data-without-failing">A board stops producing data without failing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#a-synchronised-run-never-starts-or-one-board-has-no-data">A synchronised run never starts, or one board has no data</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#the-beam-current">3. The beam current</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#the-current-reads-disconnected-or-does-not-move">The current reads <em>Disconnected</em>, or does not move</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-current-is-read-as-stale-when-it-is-fine">The current is read as stale when it is fine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-charge-looks-wrong">The charge looks wrong</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#spectra-and-rates">4. Spectra and rates</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#a-spectrum-is-empty">A spectrum is empty</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#waveforms-are-empty">Waveforms are empty</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-rates-are-not-updating">The rates are not updating</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#monitored-values-and-graphite">5. Monitored values and Graphite</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#every-metric-reads-n-a-and-the-light-is-red">Every metric reads <em>N/A</em> and the light is red</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#one-metric-reads-n-a-the-others-are-fine">One metric reads <em>N/A</em>, the others are fine</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#stats-csv-has-all-zero-columns"><code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> has all-zero columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#grafana-plots-it-but-webdaq-does-not">Grafana plots it but WebDAQ does not</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#alerts-that-did-not-arrive">6. Alerts that did not arrive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-server">7. The server</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#it-will-not-start">It will not start</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#it-stops-when-the-interface-does">It stops when the interface does</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#something-looks-missing-no-boards-no-histograms">Something looks “missing” — no boards, no histograms</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#the-log">The log</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#the-interface">8. The interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#after-a-crash-or-a-power-cut">9. After a crash or a power cut</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#getting-help">10. Getting help</a></li>
+</ul>
+</li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Troubleshooting</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/troubleshooting.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="troubleshooting">
+<h1>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Link to this heading"></a></h1>
+<p>Something is wrong and the beam is on. This chapter is ordered by what you can
+see, not by which part of the code is at fault.</p>
+<p><strong>Start at the Troubleshoot page.</strong> It lists the state of each part of the system
+and offers the action that repairs it, and it keeps the history of what has
+already happened — including while you were asleep. Most of what follows is the
+longer explanation of what that page is telling you.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Versions before 4.0 ran acquisition as XDAQ in a Docker container with a spy
+server on port 6060. Any procedure that tells you to restart a container, check
+port 6060 or look at a <code class="docutils literal notranslate"><span class="pre">topology.xml</span></code> predates 4.0 and does not apply.</p>
+</div>
+<hr class="docutils" />
+<section id="the-five-recovery-actions">
+<h2>1. The five recovery actions<a class="headerlink" href="#the-five-recovery-actions" title="Link to this heading"></a></h2>
+<p><strong>Troubleshoot → Recovery.</strong> Each action shows whether that part of the system is
+healthy right now, and nothing runs by itself — you press it.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Action</p></th>
+<th class="head"><p>Use it when</p></th>
+<th class="head"><p>Available during a run</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Reopen the boards</strong></p></td>
+<td><p>A board reads <em>Disconnected</em> after a link glitch.</p></td>
+<td><p>No — stop the run first.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Reset the acquisition</strong></p></td>
+<td><p>A run failed or the boards are wedged: closes the boards, reopens them, leaves them idle.</p></td>
+<td><p>No.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Reconnect the current monitor</strong></p></td>
+<td><p>The beam current reads disconnected, or stops updating.</p></td>
+<td><p>Yes.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Restart the statistics</strong></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> stopped being written mid-run.</p></td>
+<td><p>Yes.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Re-check Graphite</strong></p></td>
+<td><p>After a Graphite outage, to clear the “unavailable” state it leaves behind.</p></td>
+<td><p>Yes.</p></td>
+</tr>
+</tbody>
+</table>
+<p>Two of these are refused while a run is in progress, with <em>“Not while a run is in
+progress”</em> written under the button. That is not a limitation to work around:
+reopening the boards mid-run would end the run.</p>
+<p><strong>Restarting the statistics never overwrites measurements.</strong> Starting a
+statistics run opens <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> for writing, so the rows already recorded are
+moved to <code class="docutils literal notranslate"><span class="pre">stats.csv.part1</span></code> first and the action tells you where they went. If they
+cannot be moved aside — a read-only run directory — the action refuses rather than
+truncating the file. The run report reads <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> and every <code class="docutils literal notranslate"><span class="pre">part</span></code> together,
+so the run’s record stays whole.</p>
+</section>
+<hr class="docutils" />
+<section id="a-board">
+<h2>2. A board<a class="headerlink" href="#a-board" title="Link to this heading"></a></h2>
+<section id="a-board-reads-disconnected">
+<h3>A board reads <em>Disconnected</em><a class="headerlink" href="#a-board-reads-disconnected" title="Link to this heading"></a></h3>
+<p>Either nothing opened it, or something else holds it. In order: <em>Reopen the
+boards</em> from Troubleshoot (with the run stopped); check that no second WebDAQ
+backend is running (<code class="docutils literal notranslate"><span class="pre">LunaDAQ</span> <span class="pre">status</span></code>); check the cable and, for optical links,
+that the right link number is configured in Settings → Boards.</p>
+<p>A board that stayed shut after a run is the expected case for exactly one
+situation: CaenDAQ closed it microseconds earlier and the link was not ready. The
+server retries by itself, warns in the log which boards stayed shut, and
+<em>Reopen the boards</em> is what finishes the job.</p>
+</section>
+<section id="a-board-shows-board-failure-or-the-header-says-caen-error">
+<h3>A board shows <em>Board Failure</em>, or the header says <em>CAEN Error</em><a class="headerlink" href="#a-board-shows-board-failure-or-the-header-says-caen-error" title="Link to this heading"></a></h3>
+<p>The board set its FAIL flag in a data block: it could not sustain the readout —
+typically a full internal buffer or a lost link — and <strong>the data from that point
+may be incomplete</strong>. Open <strong>Dashboard → Board Health</strong> and read the three problem
+counters for that board:</p>
+<ul class="simple">
+<li><p><strong>FAIL blocks</strong> not zero confirms it.</p></li>
+<li><p><strong>Dropped</strong> not zero means the write queue refused blocks: that is lost data,
+and it points at the disk or at a rate the machine cannot write.</p></li>
+<li><p><strong>Read errors</strong> not zero points at the link itself.</p></li>
+</ul>
+<p>The run should usually be restarted. If auto-restart is on, that already happened
+and the new run continues the old one’s target and voltages; the old run is
+flagged <em>bad</em> with a note saying why. Either way the event is in the Troubleshoot
+history even if no alert was configured to deliver it.</p>
+</section>
+<section id="a-board-stops-producing-data-without-failing">
+<h3>A board stops producing data without failing<a class="headerlink" href="#a-board-stops-producing-data-without-failing" title="Link to this heading"></a></h3>
+<p><strong>Board Health</strong> shows <em>No data for n s</em> and the counters stop moving. This is
+what the <em>Board stopped producing data</em> alert watches. The FAIL flag was not
+raised, so suspect the trigger, the cabling into TRG-IN, or a chain that never
+started (below).</p>
+</section>
+<section id="a-synchronised-run-never-starts-or-one-board-has-no-data">
+<h3>A synchronised run never starts, or one board has no data<a class="headerlink" href="#a-synchronised-run-never-starts-or-one-board-has-no-data" title="Link to this heading"></a></h3>
+<p>Open <strong>DAQ → Configuration → Synchronization</strong>. Every board is checked against
+what its position in the chain requires, and anything that would stop the start
+pulse reaching the cable is listed with a ⚠ next to that board. The common ones:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Reported</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><em>the master is in … mode, so the software trigger that starts the chain will not start this board</em></p></td>
+<td><p>The master must be in <strong>On first trigger</strong>. It is started by its own software trigger, and only that mode treats a trigger as the start of the run.</p></td>
+</tr>
+<tr class="row-odd"><td><p><em>the software trigger is not routed to TRG-OUT</em></p></td>
+<td><p>The master’s start pulse never leaves the board, so nothing downstream starts.</p></td>
+</tr>
+<tr class="row-even"><td><p><em>TRG-IN is not routed to TRG-OUT</em></p></td>
+<td><p>A board in the middle of the chain is not passing the pulse on.</p></td>
+</tr>
+<tr class="row-odd"><td><p><em>TRG-OUT is not set to carry the trigger</em></p></td>
+<td><p>TRG-OUT is carrying a probe signal instead of the trigger.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The master needs no TRG-IN → TRG-OUT — no trigger arrives on its TRG-IN, it makes
+its own — and the last board in the chain needs nothing on its TRG-OUT. The page
+marks each switch <em>needed — on</em>, <em>needed — off</em> or <em>not needed here</em> for that
+board, so you do not have to work it out from the register.</p>
+<p>While the boards are closed the master is <strong>assumed</strong> from the configuration; the
+page says so. Start a run and it is checked against the register ids the hardware
+reports.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="the-beam-current">
+<h2>3. The beam current<a class="headerlink" href="#the-beam-current" title="Link to this heading"></a></h2>
+<section id="the-current-reads-disconnected-or-does-not-move">
+<h3>The current reads <em>Disconnected</em>, or does not move<a class="headerlink" href="#the-current-reads-disconnected-or-does-not-move" title="Link to this heading"></a></h3>
+<p><em>Reconnect the current monitor</em> from Troubleshoot, which re-opens the device and
+reports what happened. If it still does not answer:</p>
+<ul class="simple">
+<li><p><strong>TetrAMM</strong> — check the address and port in Settings → Current Module, and that
+nothing else holds the socket.</p></li>
+<li><p><strong>RBD 9103</strong> — the serial path. Settings → Current Module lists the ports that
+actually exist and warns when the configured one is gone.</p></li>
+<li><p><strong>Monitored Graphite value</strong> — the metric itself may have stopped arriving.
+Check it on the Stats page; “connected” for this module means the value is
+arriving, not that the server answers.</p></li>
+</ul>
+</section>
+<section id="the-current-is-read-as-stale-when-it-is-fine">
+<h3>The current is read as stale when it is fine<a class="headerlink" href="#the-current-is-read-as-stale-when-it-is-fine" title="Link to this heading"></a></h3>
+<p>A picoammeter answers in milliseconds, so a reading older than 30 s means it has
+stopped. A <em>monitored</em> value is different: it is published on its own cadence,
+Carbon flushes on its own schedule, and the render API will not serve the bucket
+it is still filling, so a value written every 10 s legitimately reads back tens of
+seconds old. WebDAQ measures this rather than assuming it — the freshness horizon
+for a monitored metric is derived from the observed publication cadence and lag —
+so a healthy slow metric is not reported as dead. If you see a monitored current
+called stale, check the metric’s real cadence on the Stats page first.</p>
+</section>
+<section id="the-charge-looks-wrong">
+<h3>The charge looks wrong<a class="headerlink" href="#the-charge-looks-wrong" title="Link to this heading"></a></h3>
+<p><em>This run</em> integrates for exactly the length of the run, and follows the DAQ’s own
+run state rather than the browser: closing the tab, or an auto-restart, does not
+affect it. <em>Lifetime total</em> never stops. A figure that does not move between runs
+is correct.</p>
+<p>A run taken with saving <strong>off</strong> has no metadata row, so its charge is not stored
+anywhere — by design.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="spectra-and-rates">
+<h2>4. Spectra and rates<a class="headerlink" href="#spectra-and-rates" title="Link to this heading"></a></h2>
+<section id="a-spectrum-is-empty">
+<h3>A spectrum is empty<a class="headerlink" href="#a-spectrum-is-empty" title="Link to this heading"></a></h3>
+<p>In order: is a run going? Is that board reading at all (<strong>Board Health</strong>)? Is the
+channel enabled (<strong>DAQ → Configuration → Channel Enable</strong>)? Is the threshold
+sensible (<strong>Tuner</strong>)?</p>
+<p>An empty histogram says why in its own title — <em>No data yet — start a run</em>, <em>This
+board is not part of the current run</em>, <em>No counts yet on channel n</em> — so read the
+title before anything else.</p>
+</section>
+<section id="waveforms-are-empty">
+<h3>Waveforms are empty<a class="headerlink" href="#waveforms-are-empty" title="Link to this heading"></a></h3>
+<p>Waveforms have to be switched on per board: the switch on the board card on the
+Overview, or in the Waveforms tab. A board acquiring without waveforms shows <em>No
+waveform — switch waveforms on for this board</em> in the plot title. Trace 2 needs
+dual trace enabled.</p>
+</section>
+<section id="the-rates-are-not-updating">
+<h3>The rates are not updating<a class="headerlink" href="#the-rates-are-not-updating" title="Link to this heading"></a></h3>
+<p><strong>Data Rates</strong> shows <em>No answer</em> when the last request failed — the numbers on
+screen are then the last known ones, not current. If it says <em>Stopped</em> while a
+run is going, the page and the server disagree about the run state; reload.</p>
+<p>Remember that the cadence control on that tab sets the averaging window as well
+as the refresh rate, so at 60 s the numbers are 60 s averages.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="monitored-values-and-graphite">
+<h2>5. Monitored values and Graphite<a class="headerlink" href="#monitored-values-and-graphite" title="Link to this heading"></a></h2>
+<section id="every-metric-reads-n-a-and-the-light-is-red">
+<h3>Every metric reads <em>N/A</em> and the light is red<a class="headerlink" href="#every-metric-reads-n-a-and-the-light-is-red" title="Link to this heading"></a></h3>
+<p>Graphite is not answering. The light distinguishes this from “the metric has no
+data”, which is the distinction that matters: check the host and port on the
+Stats page, then <em>Re-check Graphite</em> on Troubleshoot, which also clears the
+circuit breaker an outage leaves behind.</p>
+<p>The breaker exists to protect WebDAQ, not Graphite: with the server unreachable
+every request thread would park in <code class="docutils literal notranslate"><span class="pre">connect()</span></code> and the interface would become
+unusable. While it is open, queries fail immediately instead of waiting.</p>
+</section>
+<section id="one-metric-reads-n-a-the-others-are-fine">
+<h3>One metric reads <em>N/A</em>, the others are fine<a class="headerlink" href="#one-metric-reads-n-a-the-others-are-fine" title="Link to this heading"></a></h3>
+<p>Its path. Re-add it with the browser rather than typing it — a renamed metric
+keeps the old path in your configuration.</p>
+</section>
+<section id="stats-csv-has-all-zero-columns">
+<h3><code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> has all-zero columns<a class="headerlink" href="#stats-csv-has-all-zero-columns" title="Link to this heading"></a></h3>
+<p>Those metrics were unreachable <em>during that run</em>. The header still records which
+they were, and the alias and unit you gave them.</p>
+</section>
+<section id="grafana-plots-it-but-webdaq-does-not">
+<h3>Grafana plots it but WebDAQ does not<a class="headerlink" href="#grafana-plots-it-but-webdaq-does-not" title="Link to this heading"></a></h3>
+<p>Different ports for different jobs: Graphite’s render API (read) is configured on
+the Stats page, Carbon’s ingest (write, usually 2003) in Settings → Current
+Module. Grafana often reads the render API on another port than the one WebDAQ is
+configured with.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="alerts-that-did-not-arrive">
+<h2>6. Alerts that did not arrive<a class="headerlink" href="#alerts-that-did-not-arrive" title="Link to this heading"></a></h2>
+<p>This is the failure mode worth understanding, because its symptom is silence.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>What you see</p></th>
+<th class="head"><p>What it means</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Settings → Notifications</strong> says <em>Not watching</em></p></td>
+<td><p>Nothing is evaluating any rule — the server was started without its watcher. Press <strong>Start watching</strong>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>A rule badged <strong>reaches nobody</strong></p></td>
+<td><p>The rule is enabled and watching, but all of its destinations are switched off or unconfigured.</p></td>
+</tr>
+<tr class="row-even"><td><p>A rule badged <strong>nothing to measure</strong></p></td>
+<td><p>It is watching something it cannot read: Graphite unreachable, the monitor stopped, or a counter this CaenDAQ build does not report. That is not the same as everything being fine.</p></td>
+</tr>
+<tr class="row-odd"><td><p>The bell is <strong>amber</strong></p></td>
+<td><p>Something was raised that reached nobody.</p></td>
+</tr>
+<tr class="row-even"><td><p>A history row badged <strong>reached nobody</strong></p></td>
+<td><p>That specific alert was recorded but not delivered — a wrong token, a network outage, or no destination.</p></td>
+</tr>
+<tr class="row-odd"><td><p><em>n saved alerts could not be read</em></p></td>
+<td><p>A rule in <code class="docutils literal notranslate"><span class="pre">conf/alerts.json</span></code> is malformed. The others still work; the reason is printed, and the file is kept rather than replaced.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Test message</strong> said <em>sent</em> but nothing arrives</p></td>
+<td><p>Read the whole message: if the transport is switched off it says so, because the test forces one send regardless.</p></td>
+</tr>
+</tbody>
+</table>
+<p>A board failure is written to the history <strong>even when no rule is configured for
+it</strong>, so the morning after is never blank.</p>
+<p>Rules also hold back a repeat message for a minute per subject. A value sitting
+exactly on its threshold therefore gives one message, not one per tick — if you
+expected a stream of alerts and got one, that is why.</p>
+</section>
+<hr class="docutils" />
+<section id="the-server">
+<h2>7. The server<a class="headerlink" href="#the-server" title="Link to this heading"></a></h2>
+<section id="it-will-not-start">
+<h3>It will not start<a class="headerlink" href="#it-will-not-start" title="Link to this heading"></a></h3>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>What to do</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><em>Port 5001 is still held by a previous WebDAQ server</em></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">LunaDAQ</span> <span class="pre">status</span></code> names it, <code class="docutils literal notranslate"><span class="pre">LunaDAQ</span> <span class="pre">stop</span></code> clears it. The server refuses to start over a backend that is <strong>taking data</strong>, which is the one case it will not resolve by itself.</p></td>
+</tr>
+<tr class="row-odd"><td><p><em>Port … is in use by another process not managed by WebDAQ</em></p></td>
+<td><p>Stop that program, or point <code class="docutils literal notranslate"><span class="pre">NEXT_PUBLIC_API_URL</span></code> at a free port. WebDAQ never kills a process it does not recognise.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">No</span> <span class="pre">module</span> <span class="pre">named</span> <span class="pre">caendaq</span></code></p></td>
+<td><p>The acquisition module is not in the active environment: <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">activate</span> <span class="pre">luna</span></code>, then <code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">server/native/caendaq</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>The database will not open</p></td>
+<td><p>Check which working directory the server was started in. The schema is upgraded automatically at every start; there is nothing to migrate by hand.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="it-stops-when-the-interface-does">
+<h3>It stops when the interface does<a class="headerlink" href="#it-stops-when-the-interface-does" title="Link to this heading"></a></h3>
+<p>That is deliberate. The backend watches the launcher that started it and exits
+when it disappears, so killing the web interface always takes the DAQ server with
+it rather than leaving a process holding the digitizers.</p>
+</section>
+<section id="something-looks-missing-no-boards-no-histograms">
+<h3>Something looks “missing” — no boards, no histograms<a class="headerlink" href="#something-looks-missing-no-boards-no-histograms" title="Link to this heading"></a></h3>
+<p>Almost always the <strong>working directory</strong>. Everything the server reads is relative
+to the directory it was started in, so a server started somewhere else shows a
+different configuration: not a broken one, a different one. The DAQ Server panel
+names the directory it is running in.</p>
+</section>
+<section id="the-log">
+<h3>The log<a class="headerlink" href="#the-log" title="Link to this heading"></a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">server.log</span></code> in the working directory the server was started in. <strong>DAQ Server →
+Show logs</strong> shows the last 200 kB of it without leaving the browser. The clean
+shutdown path stops the acquisition, stores the charge, closes the current log,
+writes <code class="docutils literal notranslate"><span class="pre">roi.json</span></code> and closes the boards — a server stopped properly leaves no run
+half-written.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="the-interface">
+<h2>8. The interface<a class="headerlink" href="#the-interface" title="Link to this heading"></a></h2>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Symptom</p></th>
+<th class="head"><p>Usual cause</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>The page loads but every request fails</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">NEXT_PUBLIC_API_URL</span></code> is wrong, or the frontend was not rebuilt after it changed. It is compiled into the bundle.</p></td>
+</tr>
+<tr class="row-odd"><td><p>You are sent back to the login page</p></td>
+<td><p>The token was cleared. The notice says it plainly: the run is not affected, the DAQ server keeps taking data with nobody logged in.</p></td>
+</tr>
+<tr class="row-even"><td><p>A number is frozen</p></td>
+<td><p>Look for <em>No answer</em> on that panel. WebDAQ shows the last known value and marks it rather than showing a plausible wrong one.</p></td>
+</tr>
+<tr class="row-odd"><td><p>The ELOG panel cannot reach the logbook</p></td>
+<td><p>The URL or the shared account in Settings → ELOG; if the message is about <code class="docutils literal notranslate"><span class="pre">py_elog</span></code>, the server is running in the wrong environment.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<hr class="docutils" />
+<section id="after-a-crash-or-a-power-cut">
+<h2>9. After a crash or a power cut<a class="headerlink" href="#after-a-crash-or-a-power-cut" title="Link to this heading"></a></h2>
+<ol class="arabic">
+<li><p>Start the server again. A <code class="docutils literal notranslate"><span class="pre">running:</span> <span class="pre">true</span></code> left behind in <code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code>
+is cleared with a warning — acquisition cannot survive a restart, so a run that
+was in progress ended when the machine did.</p></li>
+<li><p>Check the last run directory. A <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> file has no trailer, which is why a
+run killed mid-write is still readable up to where it stopped:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span><span class="w"> </span>server
+python<span class="w"> </span>scripts/check_run_integrity.py<span class="w"> </span>data/run1276
+</pre></div>
+</div>
+</li>
+<li><p>Convert it. If the converter stops on a truncated final aggregate, the option
+that skips it is passed automatically when the installed RUReader supports it.</p></li>
+<li><p>Read the Troubleshoot history for what the DAQ saw before it stopped.</p></li>
+</ol>
+</section>
+<hr class="docutils" />
+<section id="getting-help">
+<h2>10. Getting help<a class="headerlink" href="#getting-help" title="Link to this heading"></a></h2>
+<p>Say which working directory, which run number, and what <code class="docutils literal notranslate"><span class="pre">server.log</span></code> shows around
+the time. The Troubleshoot history and the run’s <code class="docutils literal notranslate"><span class="pre">metadata.json</span></code> together usually
+answer the question before anyone has to reproduce it.</p>
+<ul class="simple">
+<li><p>Jakub Skowroński: <a class="reference external" href="mailto:jakub&#46;skowronski&#37;&#52;&#48;pd&#46;infn&#46;it">jakub<span>&#46;</span>skowronski<span>&#64;</span>pd<span>&#46;</span>infn<span>&#46;</span>it</a></p></li>
+<li><p>Alessandro Compagnucci: <a class="reference external" href="mailto:alessandro&#46;compagnucci&#37;&#52;&#48;gssi&#46;it">alessandro<span>&#46;</span>compagnucci<span>&#64;</span>gssi<span>&#46;</span>it</a></p></li>
+<li><p>Riccardo Gesuè: <a class="reference external" href="mailto:gesue&#46;riccardo&#37;&#52;&#48;gssi&#46;it">gesue<span>&#46;</span>riccardo<span>&#64;</span>gssi<span>&#46;</span>it</a></p></li>
+</ul>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="usage.html" class="btn btn-neutral float-left" title="User guide" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="caen-settings.html" class="btn btn-neutral float-right" title="CAEN digitizers: settings, filters and synchronisation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

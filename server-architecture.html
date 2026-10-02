@@ -1,0 +1,560 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Server architecture &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Directory structure" href="directory-structure.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Server architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#the-shape-of-the-server">1. The shape of the server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#starting-up-what-main-py-guarantees">2. Starting up: what <code class="docutils literal notranslate"><span class="pre">main.py</span></code> guarantees</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-application-factory">3. The application factory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-http-surface">4. The HTTP surface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-database">5. The database</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#acquisition-who-owns-the-boards">6. Acquisition: who owns the boards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#board-failures-auto-restart-and-diagnostics">7. Board failures, auto-restart and diagnostics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#online-spectra-what-spy-means-now">8. Online spectra: what “spy” means now</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#online-tuning">9. Online tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-histogram-dashboard-and-the-rois">10. The histogram dashboard and the ROIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#beam-current-and-charge">11. Beam current and charge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#graphite-two-endpoints-two-directions">12. Graphite: two endpoints, two directions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#alerts-notifications-and-recovery">13. Alerts, notifications and recovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#grafana-elog-and-the-run-report">14. Grafana, ELOG and the run report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#completed-runs-and-conversion">15. Completed runs and conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#a-run-start-to-finish">16. A run, start to finish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#configuration-files">17. Configuration files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#test-mode-and-the-test-suite">18. Test mode and the test suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-frontend-as-a-client">19. The frontend as a client</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#working-in-this-codebase">20. Working in this codebase</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Server architecture</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/server-architecture.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="server-architecture">
+<h1>Server architecture<a class="headerlink" href="#server-architecture" title="Link to this heading"></a></h1>
+<p><strong>This chapter is for whoever has to change the server.</strong> It describes what the backend is made of, which module owns which piece of state, and why the awkward parts are the way they are. <a class="reference internal" href="details.html"><span class="std std-doc">How WebDAQ works</span></a> covers the same system from the outside; read that first if you want the behaviour rather than the structure, and <a class="reference internal" href="directory-structure.html"><span class="std std-doc">Directory structure</span></a> for the file-by-file inventory.</p>
+<hr class="docutils" />
+<section id="the-shape-of-the-server">
+<h2>1. The shape of the server<a class="headerlink" href="#the-shape-of-the-server" title="Link to this heading"></a></h2>
+<p>One process holds everything: the Flask application, the open digitizers, the acquisition, the spectra, the picoammeter, the background threads.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>          HTTP (JWT)                in process
+browser ─────────────► Flask routes ──────────► services ──────────► caendaq ──► boards
+mobile                 (11 blueprints)          (state, threads)      (C++)      .caendat
+script                                              │
+                                                    ├──► picoammeter / Graphite metric
+                                                    ├──► Carbon (rates, current)
+                                                    └──► SQLite (run metadata)
+</pre></div>
+</div>
+<p>The layering is conventional — routes validate and translate, services hold state and run threads, <code class="docutils literal notranslate"><span class="pre">app/utils/</span></code> talks to hardware and to other servers — with one consequence worth stating: <strong>a service is a process-wide singleton reached through a <code class="docutils literal notranslate"><span class="pre">get_*()</span></code> function</strong>, because there is exactly one set of boards and one run. <code class="docutils literal notranslate"><span class="pre">get_daq_manager()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_caen_acquisition()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_spy_manager()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_alert_manager()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_alert_log()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_histogram_config()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_grafana_client()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_elog_client()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_zulip_notifier()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_board_scanner()</span></code>, <code class="docutils literal notranslate"><span class="pre">get_conversion_manager()</span></code> all behave this way. Constructing a second one is a bug, not an option.</p>
+<p><strong>There is no acquisition process, no container and no socket between the boards and the file.</strong> <code class="docutils literal notranslate"><span class="pre">caendaq</span></code> is a C++/pybind11 library (<code class="docutils literal notranslate"><span class="pre">server/native/caendaq</span></code>) imported into this process; it opens the boards, reads them, writes <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> and accumulates the online spectra in C++. Earlier releases ran XDAQ in Docker with a TCP “spy” socket; the vocabulary survives in module names (<code class="docutils literal notranslate"><span class="pre">spy.py</span></code>, <code class="docutils literal notranslate"><span class="pre">spy_manager.py</span></code>, <code class="docutils literal notranslate"><span class="pre">/spy/status</span></code>) and nowhere else.</p>
+<p><strong>Every relative path is relative to the process’s working directory.</strong> <code class="docutils literal notranslate"><span class="pre">conf/</span></code>, <code class="docutils literal notranslate"><span class="pre">calib/</span></code>, <code class="docutils literal notranslate"><span class="pre">data/</span></code>, <code class="docutils literal notranslate"><span class="pre">cache/</span></code> and <code class="docutils literal notranslate"><span class="pre">app.db</span></code> belong to the experiment the server was started in, not to <code class="docutils literal notranslate"><span class="pre">server/</span></code>. This is the single most common source of “my configuration disappeared”.</p>
+</section>
+<hr class="docutils" />
+<section id="starting-up-what-main-py-guarantees">
+<h2>2. Starting up: what <code class="docutils literal notranslate"><span class="pre">main.py</span></code> guarantees<a class="headerlink" href="#starting-up-what-main-py-guarantees" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">main.py</span></code> is short but almost none of it is optional, because each piece prevents a specific failure that was seen in a control room.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Step</p></th>
+<th class="head"><p>Why it is there</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">ensure_sole_instance()</span></code> <strong>above the imports</strong></p></td>
+<td><p>Creating the app opens the CAEN boards over USB and the picoammeter socket. If the guard ran in <code class="docutils literal notranslate"><span class="pre">__main__</span></code>, a second launch would already have reached into a running acquisition before waitress discovered the port was taken — and its error path calls <code class="docutils literal notranslate"><span class="pre">cleanup_on_shutdown()</span></code>, which would stop the <em>first</em> server’s acquisition and close its handles. A leftover backend from a crash is killed and the launch proceeds; a run in progress, or a port held by something that is not ours, stops it.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ensure_schema_current(app)</span></code></p></td>
+<td><p>Runs the Alembic migrations from the directory next to <code class="docutils literal notranslate"><span class="pre">main.py</span></code> against whichever <code class="docutils literal notranslate"><span class="pre">app.db</span></code> the working directory holds. If the upgrade fails but the tables already match the models, it stamps the revision and carries on; if columns are genuinely missing it logs a loud block and <strong>still serves</strong>, because refusing to start mid-shift is worse than losing metadata. <code class="docutils literal notranslate"><span class="pre">WEBDAQ_SKIP_DB_UPGRADE=1</span></code> opts out.</p></td>
+</tr>
+<tr class="row-even"><td><p>Signal handlers</p></td>
+<td><p>SIGINT and SIGTERM run <code class="docutils literal notranslate"><span class="pre">cleanup_on_shutdown()</span></code>: stop the acquisition, drop the run state, close the digitizers, stop the alert watcher, disconnect the picoammeter, remove the pid file, <code class="docutils literal notranslate"><span class="pre">os._exit(0)</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">_write_pid_file()</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">cache/daq-server.pid</span></code>, so <code class="docutils literal notranslate"><span class="pre">scripts/kill-server.sh</span></code> and the single-instance guard can find a dangling backend. Removal is ownership-checked.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">_launcher_watchdog()</span></code> thread</p></td>
+<td><p>Polls <code class="docutils literal notranslate"><span class="pre">LUNA_LAUNCHER_PID</span></code> (the npm/Next.js process that spawned the backend) every two seconds, with reparenting to init as a fallback, and shuts down when the launcher is gone. Killing npm therefore always takes the backend with it, even on SIGKILL.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">get_alert_manager().start()</span></code></p></td>
+<td><p>Starts the alert watcher here rather than in <code class="docutils literal notranslate"><span class="pre">create_app()</span></code>, so importing the app — for a test or a <code class="docutils literal notranslate"><span class="pre">flask</span></code> command — measures nothing and notifies nobody.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">serve(app,</span> <span class="pre">host='0.0.0.0',</span> <span class="pre">port=5001,</span> <span class="pre">threads=10)</span></code></p></td>
+<td><p>Waitress. Ten threads, every interface.</p></td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal notranslate"><span class="pre">ensure_schema_current</span></code> is deliberately <em>not</em> called at import time: <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">--app</span> <span class="pre">main.py</span> <span class="pre">db</span> <span class="pre">...</span></code> imports this module, and upgrading there would fire in the middle of the very commands meant to manage the database.</p>
+<p><code class="docutils literal notranslate"><span class="pre">server.py</span></code> is a separate Flask CLI app object for management commands such as <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">--app</span> <span class="pre">server</span> <span class="pre">create-user</span></code>. It does not serve anything.</p>
+</section>
+<hr class="docutils" />
+<section id="the-application-factory">
+<h2>3. The application factory<a class="headerlink" href="#the-application-factory" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">app/__init__.py</span></code> is <code class="docutils literal notranslate"><span class="pre">create_app()</span></code>: config, SQLAlchemy, Flask-Migrate, JWT, CORS, eleven blueprints, one <code class="docutils literal notranslate"><span class="pre">after_request</span></code> hook, and <code class="docutils literal notranslate"><span class="pre">experiment.set_flask_app(app)</span></code>.</p>
+<p>That last line matters. Background threads — the auto-restart, the run-state listeners, the charge persistence — touch the database from outside a request, so they need an app to open a context against. The reference is handed to <code class="docutils literal notranslate"><span class="pre">app/routes/experiment.py</span></code>, and <code class="docutils literal notranslate"><span class="pre">main.py</span></code> sets it again for the case where the app is created there.</p>
+<p><strong>The <code class="docutils literal notranslate"><span class="pre">after_request</span></code> hook gzips large JSON and text responses.</strong> One energy spectrum is 32768 bins of JSON, a PSD map is the same again, and the dashboard fetches that for every channel on display every couple of seconds. The payload is mostly zeros and short repeated numbers, so it compresses by one to two orders of magnitude — the difference between a usable and an unusable connection over the VPN. Responses under 4 kB are left alone, compression level is 5 rather than 9 because this runs on the machine that is also taking the data, and <code class="docutils literal notranslate"><span class="pre">Vary:</span> <span class="pre">Accept-Encoding</span></code> is added so caches behave.</p>
+<p>Sessions do not expire (<code class="docutils literal notranslate"><span class="pre">JWT_ACCESS_TOKEN_EXPIRES</span> <span class="pre">=</span> <span class="pre">False</span></code>). A control-room browser is logged in once and left open for a campaign, and an expiry mid-run logged the operator out with no warning. The trade-off is explicit: there is no token blocklist, so rotating <code class="docutils literal notranslate"><span class="pre">JWT_SECRET_KEY</span></code> is the only revocation there is. Acceptable for an instrument on a controlled network.</p>
+</section>
+<hr class="docutils" />
+<section id="the-http-surface">
+<h2>4. The HTTP surface<a class="headerlink" href="#the-http-surface" title="Link to this heading"></a></h2>
+<p>Blueprints carry no URL prefix; each route spells its own path. There are 187 reachable endpoints.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Blueprint</p></th>
+<th class="head"><p>Paths</p></th>
+<th class="head"><p>What it serves</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">auth</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/register</span></code>, <code class="docutils literal notranslate"><span class="pre">/login</span></code>, <code class="docutils literal notranslate"><span class="pre">/protected</span></code></p></td>
+<td><p>Issues and checks the JWT.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">experiment</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/experiment/*</span></code></p></td>
+<td><p>Run start and stop, run metadata, notes and flags, adding and removing boards, data-saving settings, board status and diagnostics, auto-restart, and the superseded Telegram settings routes.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">digitizer</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/digitizer/*</span></code></p></td>
+<td><p>Register reads and writes, polarity and channel enables, the board scan, online tuning, board info.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">histograms</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/histograms/*</span></code>, <code class="docutils literal notranslate"><span class="pre">/roi/*</span></code>, <code class="docutils literal notranslate"><span class="pre">/waveforms/*</span></code>, <code class="docutils literal notranslate"><span class="pre">/psd/*</span></code>, <code class="docutils literal notranslate"><span class="pre">/spy/status</span></code></p></td>
+<td><p>Spectra and PSD maps, waveform traces and their per-board switch, the dashboard and ROI configuration, batch ROI integrals.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">current</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/current/*</span></code></p></td>
+<td><p>The beam-current module: type, settings, connection, readings, history, accumulated and lifetime charge.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stats</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/stats/*</span></code></p></td>
+<td><p>The Graphite server and metric tree, the monitored metric list, the per-run <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, and board-rate queries.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">data</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/data/runs/*</span></code></p></td>
+<td><p>Completed runs: summary list, detail, current log, <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, and the ROOT conversion.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">elog</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/elog/*</span></code></p></td>
+<td><p>ELOG settings, entries, attributes and fields, attachments, and the run draft.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">grafana</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/grafana/*</span></code></p></td>
+<td><p>Grafana settings and alert rules.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">notifications</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/notifications/*</span></code>, <code class="docutils literal notranslate"><span class="pre">/recovery/*</span></code></p></td>
+<td><p>Transports and their tests, alert rules, the event log, the watcher, and the recovery actions.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">calib</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">/calib/get/...</span></code>, <code class="docutils literal notranslate"><span class="pre">/calib/set/...</span></code></p></td>
+<td><p>Per-channel energy calibration.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong><code class="docutils literal notranslate"><span class="pre">app/routes/faraday.py</span></code> is dead code.</strong> It defines a blueprint with <code class="docutils literal notranslate"><span class="pre">/faraday/open</span></code> and <code class="docutils literal notranslate"><span class="pre">/faraday/close</span></code>, and <code class="docutils literal notranslate"><span class="pre">create_app()</span></code> does not register it, so both return 404. Nothing calls them.</p>
+<p>Older paths are kept working on purpose where the frontend has moved on — the Telegram settings under <code class="docutils literal notranslate"><span class="pre">/experiment/</span></code> are the clearest case. A bookmark or a shift script pointing at them does not have to be rewritten.</p>
+<p>Conventions across the surface: everything but <code class="docutils literal notranslate"><span class="pre">/register</span></code> and <code class="docutils literal notranslate"><span class="pre">/login</span></code> carries <code class="docutils literal notranslate"><span class="pre">&#64;jwt_required_custom</span></code> (just <code class="docutils literal notranslate"><span class="pre">flask_jwt_extended</span></code>’s <code class="docutils literal notranslate"><span class="pre">jwt_required()</span></code>, re-exported from <code class="docutils literal notranslate"><span class="pre">app/utils/jwt_utils.py</span></code> so the identity casting lives in one place), bodies and replies are JSON, and the identity in the token is the user id as a string, cast back by <code class="docutils literal notranslate"><span class="pre">get_current_user()</span></code>.</p>
+<p>The status codes and the message strings are part of the contract, not incidental: the frontend decides what to show from them, and <code class="docutils literal notranslate"><span class="pre">tests/test_routes.py</span></code> exists to pin exactly that. A route that changes a 404 into a 400, or rewords a message the UI matches on, will break a page without breaking anything that looks like an API. Several routes also return <em>why</em> something did not happen rather than a bare failure — online tuning’s <code class="docutils literal notranslate"><span class="pre">{saved,</span> <span class="pre">written,</span> <span class="pre">via,</span> <span class="pre">reason}</span></code> is the pattern to copy, because the browser has to tell the operator whether the change reached the board or only the configuration file.</p>
+</section>
+<hr class="docutils" />
+<section id="the-database">
+<h2>5. The database<a class="headerlink" href="#the-database" title="Link to this heading"></a></h2>
+<p>Two models, in <code class="docutils literal notranslate"><span class="pre">app/models/</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">User</span></code> is id, username, email and password hash. <code class="docutils literal notranslate"><span class="pre">RunMetadata</span></code> is the run record: run number, start and end time, notes, accumulated charge, target name, terminal and probe voltage, run type, a <code class="docutils literal notranslate"><span class="pre">flag</span></code> of <code class="docutils literal notranslate"><span class="pre">good</span></code>/<code class="docutils literal notranslate"><span class="pre">unknown</span></code>/<code class="docutils literal notranslate"><span class="pre">bad</span></code>, the owning user, and three provenance columns — <code class="docutils literal notranslate"><span class="pre">board_info</span></code> (the per-board snapshot from <code class="docutils literal notranslate"><span class="pre">CaenAcquisition.board_info_all</span></code>), <code class="docutils literal notranslate"><span class="pre">software_versions</span></code> (WebDAQ, caendaq, Python, platform) and <code class="docutils literal notranslate"><span class="pre">sync_mode</span></code> (<code class="docutils literal notranslate"><span class="pre">daisy-chain</span></code> or <code class="docutils literal notranslate"><span class="pre">independent</span></code>).</p>
+<p>SQLite is the live source of truth. <code class="docutils literal notranslate"><span class="pre">app/services/run_metadata_snapshot.py</span></code> mirrors each row into <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/metadata.json</span></code> after every commit, which is what makes a copied or archived run directory self-describing — the database stays behind on the acquisition machine, the run directory travels. Anything that mutates run metadata calls <code class="docutils literal notranslate"><span class="pre">sync_run_metadata_file()</span></code> after its commit, and there are several such places (run start and stop, notes, flags, the charge, the auto-restart), so adding another one means remembering this.</p>
+<p>The snapshot is versioned (<code class="docutils literal notranslate"><span class="pre">METADATA_SCHEMA_VERSION</span></code>) and carries more than the row. It walks the run directory and records every file with its size and a <strong>role</strong> — <code class="docutils literal notranslate"><span class="pre">raw-data</span></code>, <code class="docutils literal notranslate"><span class="pre">root</span></code>, <code class="docutils literal notranslate"><span class="pre">beam-current</span></code>, <code class="docutils literal notranslate"><span class="pre">statistics</span></code>, <code class="docutils literal notranslate"><span class="pre">board-configuration</span></code> — grouped by role as well as listed, so a reader a year later does not have to infer what <code class="docutils literal notranslate"><span class="pre">run_7_0000.caendat</span></code> is from its extension. It is written to a temporary file in the same directory and moved into place, so a half-written <code class="docutils literal notranslate"><span class="pre">metadata.json</span></code> is never observable.</p>
+<p>Schema changes go through Flask-Migrate (<code class="docutils literal notranslate"><span class="pre">server/migrations/</span></code>), and <code class="docutils literal notranslate"><span class="pre">ensure_schema_current</span></code> applies them at every start.</p>
+</section>
+<hr class="docutils" />
+<section id="acquisition-who-owns-the-boards">
+<h2>6. Acquisition: who owns the boards<a class="headerlink" href="#acquisition-who-owns-the-boards" title="Link to this heading"></a></h2>
+<p>Three modules, and the hand-off between them is the part to understand.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Module</p></th>
+<th class="head"><p>Owns</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">services/daq_manager.py</span></code></p></td>
+<td><p>The DAQ state — run number, saving, size limits, the board list, the run-state listeners, board-failure monitoring and auto-restart. Persists to <code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">services/digitizer_container.py</span></code></p></td>
+<td><p>The persistent <em>probe</em> connections, through the ctypes wrapper in <code class="docutils literal notranslate"><span class="pre">utils/dgtz.py</span></code>, so the UI can read board info and registers between runs without opening and closing a board per request.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">services/caen_acquisition.py</span></code></p></td>
+<td><p>The single in-process <code class="docutils literal notranslate"><span class="pre">caendaq.DAQ</span></code>: configure, start, stop, register access, rates, board diagnostics and the histogram arrays.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>A board can only be open once, so starting a run moves it.</strong> <code class="docutils literal notranslate"><span class="pre">start_run</span></code> calls <code class="docutils literal notranslate"><span class="pre">daq_mgr.release_digitizers()</span></code> to close the probe connections, then <code class="docutils literal notranslate"><span class="pre">caen_acq.configure(...)</span></code> and <code class="docutils literal notranslate"><span class="pre">.start()</span></code>. Stopping does the reverse with <code class="docutils literal notranslate"><span class="pre">reacquire_digitizers()</span></code>, which retries three times a second apart — a CAEN link that was closed a moment ago is not always ready to reopen — and logs exactly which boards stayed shut, because those are the ones that will read “Disconnected” on the dashboard until <em>Reset acquisition</em> is used.</p>
+<p><code class="docutils literal notranslate"><span class="pre">write_board_register()</span></code> hides the hand-off from its callers: during a run the write goes through caendaq, between runs through the probe connection, and the caller never asks which.</p>
+<p><code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code> is written to a temporary file and moved into place under a lock. It is written from request threads and from background threads, and two interleaved writes once left invalid JSON — which the next start read as “no boards configured” and replaced with an empty board list.</p>
+<p>Two more services sit beside these. <code class="docutils literal notranslate"><span class="pre">services/board_scanner.py</span></code> probes USB, optical and VME links in a background thread (a full optical sweep is 32 probes and a VME range can be hundreds, far too long for one request) and deliberately bypasses the container’s retry-three-times open, which is right for a board you know is there and ruinous for a sweep where most probes are expected to miss. <code class="docutils literal notranslate"><span class="pre">services/sync_chain.py</span></code> reads back what each board in a daisy chain actually needs — the master’s software trigger on TRG-OUT, the followers’ TRG-IN to TRG-OUT propagation, the start mode — and reports the differences rather than assuming them.</p>
+</section>
+<hr class="docutils" />
+<section id="board-failures-auto-restart-and-diagnostics">
+<h2>7. Board failures, auto-restart and diagnostics<a class="headerlink" href="#board-failures-auto-restart-and-diagnostics" title="Link to this heading"></a></h2>
+<p><strong>No board is polled while a run is in progress.</strong> caendaq owns the digitizers then, so asking a board a question directly would conflict with the readout. What the monitoring thread in <code class="docutils literal notranslate"><span class="pre">daq_manager.py</span></code> watches instead is caendaq’s own board-FAIL signal: bit 26 of the aggregate header, counted per board as the data is decoded. The thread wakes once a second and acts only on a board’s <em>first</em> transition to failed, once per board per run.</p>
+<p>The count of failing aggregates is all there is to report, and the code says so. There is no failure register behind the flag — typically it means a full internal buffer or a lost link — so the message reads “Board FAIL flag (37 data blocks)”. It used to be decoded as if it were register bits, producing labels like “Board Error (0x2)” that meant nothing to anyone.</p>
+<p>A first failure sends the board-failure notification and, when auto-restart is enabled, schedules the restart after the configured delay (minimum five seconds, stored in <code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code> so it survives a restart). The delay is interruptible: stopping the monitoring cancels it.</p>
+<p><code class="docutils literal notranslate"><span class="pre">perform_auto_restart()</span></code> in <code class="docutils literal notranslate"><span class="pre">app/routes/experiment.py</span></code> is registered as the DAQ manager’s restart callback, and it does by hand what the Stop and Start buttons do together — which is why it is long. It notes which side channels were live, flags the failed run <code class="docutils literal notranslate"><span class="pre">bad</span></code> with an explanatory note, closes its current recording and its <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, increments the run number, waits, then points both side channels at the new run <em>before</em> the acquisition starts, configures and starts caendaq, re-enables the spy and the monitoring, and records the new run with the failed one’s parameters carried over. If the new acquisition fails to start it closes the recordings it just opened, because no run follows them.</p>
+<p><code class="docutils literal notranslate"><span class="pre">/experiment/board_diagnostics</span></code> and <code class="docutils literal notranslate"><span class="pre">/experiment/get_board_status</span></code> expose the counters caendaq keeps per board for the run — blocks read, bytes read and written, blocks the write queue refused, CAEN read errors, events decoded, aggregates with the FAIL flag — which is what the dashboard’s Board Health tab shows and what the stall rule in section 13 watches. They are cumulative for the run and empty outside one, and a counter that the installed caendaq build does not provide reads <code class="docutils literal notranslate"><span class="pre">None</span></code> rather than failing the whole request.</p>
+</section>
+<hr class="docutils" />
+<section id="online-spectra-what-spy-means-now">
+<h2>8. Online spectra: what “spy” means now<a class="headerlink" href="#online-spectra-what-spy-means-now" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">caendaq</span></code> accumulates per-channel spectra, PSD maps and waveform traces continuously in C++ while it decodes. <code class="docutils literal notranslate"><span class="pre">app/utils/spy.py</span></code> builds a ROOT object from the current snapshot <strong>on demand</strong>: no socket, no background collection thread, no second copy of the data stream, and no global channel numbering to get wrong. A spectrum request is addressed by <code class="docutils literal notranslate"><span class="pre">(board</span> <span class="pre">index,</span> <span class="pre">channel)</span></code>, where the board index is the one caendaq handed out when the run was configured.</p>
+<p>A request travels like this:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>GET /histograms/&lt;board&gt;/&lt;channel&gt;[/&lt;type&gt;]
+  → spy_manager.get_histogram()      pick the type from the board's DPP if not given
+      → ru_spy.histogram()           numpy array from caendaq → ROOT TH1F (TH2F for PSD)
+  ← apply calib/&lt;name&gt;_&lt;id&gt;.cal to the x-axis, then Rebin
+  → TBufferJSON.ConvertToJSON()
+  ← rendered in the browser by JSROOT
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">ReadoutUnitSpy.start()</span></code> and <code class="docutils literal notranslate"><span class="pre">.stop()</span></code> only flip a flag — there is nothing left to spawn. What they do is make <code class="docutils literal notranslate"><span class="pre">/spy/status</span></code> honest about whether a run is live.</p>
+<p>Two details exist to keep the operator informed rather than puzzled. <strong>There is always a histogram to draw, and its title says why it is empty</strong>: “No data yet — start a run”, “This board is not part of the current run”, “No waveform — switch waveforms on for this board”. A blank canvas or a stale plot tells you nothing, and an empty plot labelled “Default Histogram” tells you less. And the statistics box is switched off everywhere, because it covers the part of the spectrum people look at and its mean and RMS over raw ADC bin indices mean nothing.</p>
+<p>The calibration is cached by file mtime, so editing a <code class="docutils literal notranslate"><span class="pre">.cal</span></code> file takes effect without a restart and without re-parsing it on every poll. 1-D spectra are rebinned by <code class="docutils literal notranslate"><span class="pre">SpyManager</span></code>; the 2-D PSD map is rebinned by the route.</p>
+<p><code class="docutils literal notranslate"><span class="pre">BuilderUnitSpy</span></code> in the same module is a placeholder: the single-process DAQ does not produce coincidence histograms yet, and it returns an empty one that says so.</p>
+</section>
+<hr class="docutils" />
+<section id="online-tuning">
+<h2>9. Online tuning<a class="headerlink" href="#online-tuning" title="Link to this heading"></a></h2>
+<p>Online tuning is not a service. It is one route plus an allowlist.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">POST</span> <span class="o">/</span><span class="n">digitizer</span><span class="o">/&lt;</span><span class="nb">id</span><span class="o">&gt;/</span><span class="n">setting</span><span class="o">/&lt;</span><span class="n">setting</span><span class="o">&gt;</span>     <span class="p">{</span><span class="s2">"value"</span><span class="p">:</span> <span class="mi">1234</span><span class="p">,</span> <span class="s2">"online"</span><span class="p">:</span> <span class="n">true</span><span class="p">}</span>
+<span class="n">GET</span>  <span class="o">/</span><span class="n">digitizer</span><span class="o">/&lt;</span><span class="nb">id</span><span class="o">&gt;/</span><span class="n">online_registers</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">POST</span></code> without <code class="docutils literal notranslate"><span class="pre">online</span></code> is the plain configuration edit: the value lands in <code class="docutils literal notranslate"><span class="pre">conf/&lt;name&gt;_&lt;id&gt;.json</span></code> and applies at the next run. With <code class="docutils literal notranslate"><span class="pre">online</span></code> it is <em>also</em> written to the board, so the effect shows up in the trace and the spectrum immediately. <strong>The configuration is updated either way, even when the board write is refused or fails</strong> — so what the tuner shows and what the next run will apply can never drift apart. The response says what happened: <code class="docutils literal notranslate"><span class="pre">saved</span></code>, <code class="docutils literal notranslate"><span class="pre">written</span></code>, <code class="docutils literal notranslate"><span class="pre">via</span></code> (<code class="docutils literal notranslate"><span class="pre">run</span></code> or <code class="docutils literal notranslate"><span class="pre">probe</span></code>), and a <code class="docutils literal notranslate"><span class="pre">reason</span></code> when the write did not go through.</p>
+<p><code class="docutils literal notranslate"><span class="pre">app/utils/safe_registers.py</span></code> decides what may be written. It is an <strong>allowlist, not a denylist</strong>: per-channel DPP parameters — thresholds, gates, shaping and trapezoid times, DC offset, fine gain, the algorithm-control registers that select the probe — are listed by their channel-0 address (<code class="docutils literal notranslate"><span class="pre">0x10??</span></code>, with the live address normalised to that form), and anything unrecognised is left to the configuration file. A denylist would mean that a register added to a dump later quietly became writable mid-run.</p>
+<p>The registers kept out are the ones that describe the <em>shape</em> of the readout: record length, pre-trigger, input dynamic range, events per aggregate, aggregate and board configuration, the channel enable mask, acquisition control. Changing one of those under a live acquisition produces buffers the decoder does not expect — a corrupted run at best, a stopped board at worst. They are named in the module anyway, so a refusal can say why rather than “not in the list”.</p>
+<p><code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/digitizer/&lt;id&gt;/online_registers</span></code> returns the board’s firmware and the safe register names, so the tuner can mark which fields are tunable before anything is changed instead of discovering it one write at a time.</p>
+</section>
+<hr class="docutils" />
+<section id="the-histogram-dashboard-and-the-rois">
+<h2>10. The histogram dashboard and the ROIs<a class="headerlink" href="#the-histogram-dashboard-and-the-rois" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">services/histogram_config.py</span></code> owns <code class="docutils literal notranslate"><span class="pre">conf/histograms.json</span></code>: which histograms exist, their names, their ROIs, their zooms and the dashboard settings.</p>
+<p>This used to live in the browser and be persisted to the <em>web</em> server’s <code class="docutils literal notranslate"><span class="pre">frontend/cache/</span></code>, which put it in the one process that knows nothing about boards, runs or the run directory. Three things followed, and moving it fixed all three: the DAQ server could not record a run’s ROIs because it could not see them, every browser kept its own dashboard, and the definitions were declared three times in TypeScript and drifted. On first start the store seeds itself once from <code class="docutils literal notranslate"><span class="pre">frontend/cache/histogram-configs.json</span></code> and friends if they are still there; <code class="docutils literal notranslate"><span class="pre">WEBDAQ_FRONTEND_CACHE</span></code> pointed at an empty directory switches that off. Writes are atomic and serialised, because the dashboard saves on every ROI edit and every zoom.</p>
+<p><code class="docutils literal notranslate"><span class="pre">services/roi_analysis.py</span></code> does two jobs with that configuration. <code class="docutils literal notranslate"><span class="pre">compute_integrals()</span></code> answers the whole dashboard in one call behind <code class="docutils literal notranslate"><span class="pre">GET</span> <span class="pre">/histograms/roi_integrals</span></code>: the spectrum is read once per board and channel and every ROI on it is integrated from that one copy. The browser used to ask for one integral per ROI per tick, so sixteen histograms with three ROIs each meant forty-eight round trips and forty-eight spectrum reads every few seconds. Results are <code class="docutils literal notranslate"><span class="pre">{gross,</span> <span class="pre">background,</span> <span class="pre">net}</span></code> rather than a bare number.</p>
+<p><code class="docutils literal notranslate"><span class="pre">write_run_snapshot()</span></code> drops <code class="docutils literal notranslate"><span class="pre">roi.json</span></code> into the run directory when a run ends. It is wired in through <code class="docutils literal notranslate"><span class="pre">register_run_hook()</span></code>, called at import of <code class="docutils literal notranslate"><span class="pre">app/routes/histograms.py</span></code>, which registers a listener on the DAQ manager’s run state — so it happens whether or not a browser is still open. <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/histograms/run/&lt;n&gt;/roi_snapshot</span></code> writes one on demand.</p>
+</section>
+<hr class="docutils" />
+<section id="beam-current-and-charge">
+<h2>11. Beam current and charge<a class="headerlink" href="#beam-current-and-charge" title="Link to this heading"></a></h2>
+<p>Four interchangeable modules present the same interface to <code class="docutils literal notranslate"><span class="pre">app/routes/current.py</span></code>: <code class="docutils literal notranslate"><span class="pre">utils/tetramm.py</span></code> (TCP), <code class="docutils literal notranslate"><span class="pre">utils/rbd9103.py</span></code> (serial), <code class="docutils literal notranslate"><span class="pre">utils/graphite_current.py</span></code> (a monitored accelerator metric, scaled into µA) and <code class="docutils literal notranslate"><span class="pre">utils/mock_current.py</span></code> (test mode). Nothing downstream can tell which is in use, which is the point — the per-run <code class="docutils literal notranslate"><span class="pre">current.txt</span></code>, the readout and the accumulated charge all work the same way.</p>
+<p><strong>The charge integration follows the DAQ’s own run state, not the client.</strong> <code class="docutils literal notranslate"><span class="pre">_on_run_state_changed()</span></code> in <code class="docutils literal notranslate"><span class="pre">current.py</span></code> is registered with <code class="docutils literal notranslate"><span class="pre">daq_mgr.add_run_state_listener()</span></code>, so a closed browser, a run stopped by the auto-restart and a run that saves no data all leave the figure correct. It also decides <em>which</em> run the charge belongs to, at the moment the run starts: leaving that to <code class="docutils literal notranslate"><span class="pre">/current/start</span></code> — which the dashboard calls only when data is being saved — once let a run started with saving off keep the previous run’s number and overwrite that run’s charge on stop. A 12-hour run was left reading 100 µC. A run that saves nothing now claims no run number and stores nothing. The lifetime total keeps counting either way, because it answers how much beam the target has seen.</p>
+<p>On stop the run’s charge is written into its metadata row from the same listener, and the log is closed — a stop issued while the monitor was unreachable used to leave <code class="docutils literal notranslate"><span class="pre">current.txt</span></code> open, and later readings were appended to a finished run.</p>
+<p>If the server is restarted mid-run, the module picks the integration back up at import rather than sitting there switched off.</p>
+</section>
+<hr class="docutils" />
+<section id="graphite-two-endpoints-two-directions">
+<h2>12. Graphite: two endpoints, two directions<a class="headerlink" href="#graphite-two-endpoints-two-directions" title="Link to this heading"></a></h2>
+<p>The one thing to get right here: <strong>the ingest and the read API are different servers on different ports, configured in different files.</strong></p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p></p></th>
+<th class="head"><p>Configured in</p></th>
+<th class="head"><p>Used for</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Carbon plaintext ingest, port 2003</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">conf/current.json</span></code> (<code class="docutils literal notranslate"><span class="pre">graphite_host</span></code>/<code class="docutils literal notranslate"><span class="pre">graphite_port</span></code>)</p></td>
+<td><p>What the picoammeter controllers and caendaq <strong>push</strong>. Nothing can be read back from it.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Graphite render API, HTTP</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">conf/stats.json</span></code> (<code class="docutils literal notranslate"><span class="pre">graphite_host</span></code>/<code class="docutils literal notranslate"><span class="pre">graphite_port</span></code>)</p></td>
+<td><p>What the Stats page, the current history and the alert rules <strong>read</strong>.</p></td>
+</tr>
+</tbody>
+</table>
+<p><code class="docutils literal notranslate"><span class="pre">utils/carbon.py</span></code> owns the push side, and it is guarded rather than plain: one connection per push for all metrics (Carbon’s protocol takes any number of newline-terminated lines, so a four-channel picoammeter costs one handshake instead of four), a one-second handshake deadline, and a circuit breaker that opens after three consecutive failures and stays open for a minute. The loops that call it also own the buffers the web layer reads and the charge integration the run metadata depends on, so a dead collector must never hold anything up — and the breaker is the part that matters. A host refusing connections fails in microseconds, but a host that is powered off or behind a firewall dropping SYNs never answers at all, and then every push waits out the connect timeout. At a 0.5 s sampling interval that is not a hiccup, it is a permanent stall. Board rates are pushed by caendaq itself, configured through <code class="docutils literal notranslate"><span class="pre">CaenAcquisition.set_graphite()</span></code> from <code class="docutils literal notranslate"><span class="pre">conf/stats.json</span></code>.</p>
+<p><code class="docutils literal notranslate"><span class="pre">utils/graphite.py</span></code> is the render-API client. <code class="docutils literal notranslate"><span class="pre">services/graphite_reader.py</span></code> wraps it for everything that plots history and rebuilds the client whenever <code class="docutils literal notranslate"><span class="pre">conf/stats.json</span></code> changes, so editing the server in the UI takes effect without a restart. Taking the address from the file the Stats page configures means an operator sets it once; the current plot used to query port 2003 and report “no data”. <code class="docutils literal notranslate"><span class="pre">services/stats_manager.py</span></code> holds the monitored metric list and the loop that samples them into <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/stats.csv</span></code>, with the column set frozen at run start.</p>
+</section>
+<hr class="docutils" />
+<section id="alerts-notifications-and-recovery">
+<h2>13. Alerts, notifications and recovery<a class="headerlink" href="#alerts-notifications-and-recovery" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">services/alerting.py</span></code> holds the rules in <code class="docutils literal notranslate"><span class="pre">conf/alerts.json</span></code> and one watcher thread that evaluates them on a two-second tick. A rule is a type (<code class="docutils literal notranslate"><span class="pre">board_failure</span></code>, <code class="docutils literal notranslate"><span class="pre">stalled_buffers</span></code>, <code class="docutils literal notranslate"><span class="pre">beam_current</span></code>, <code class="docutils literal notranslate"><span class="pre">graphite_metric</span></code>), a threshold, how long the condition must hold, and which transports carry it.</p>
+<p>Two properties keep the alerts worth reading:</p>
+<ul class="simple">
+<li><p><strong>One message per episode.</strong> A rule fires when its condition becomes true and stays quiet until it clears. A beam current sitting just below its threshold is one message, not one per tick.</p></li>
+<li><p><strong>Unknown is not false.</strong> A Graphite server that cannot be reached, or a picoammeter whose samples have gone stale, yields no value at all — and a gap in the monitoring path must neither invent an alert nor clear a real one.</p></li>
+</ul>
+<p>Every measurement is taken through a small set of callables (<code class="docutils literal notranslate"><span class="pre">AlertSources</span></code>), so the whole engine is testable without hardware, without Graphite and without a run. The watching itself is deliberately dull: one thread, one pass per tick, and Graphite rules throttle themselves further with their own <code class="docutils literal notranslate"><span class="pre">poll_seconds</span></code>.</p>
+<p>Rules are normalised and validated on the way in, and a bad one is rejected with <code class="docutils literal notranslate"><span class="pre">AlertConfigError</span></code> rather than stored and silently never fired. Each type carries its own defaults and the parameters the UI needs to render it, which is where to add a new kind of alert: a <code class="docutils literal notranslate"><span class="pre">RULE_DEFAULTS</span></code> entry, a source callable, and an <code class="docutils literal notranslate"><span class="pre">_evaluate_*</span></code> branch. Most types also take <code class="docutils literal notranslate"><span class="pre">during_run_only</span></code>, because a beam current below threshold means nothing when nobody is measuring.</p>
+<p><code class="docutils literal notranslate"><span class="pre">services/alert_log.py</span></code> writes every alert and every recovery to <code class="docutils literal notranslate"><span class="pre">conf/alert_log.json</span></code>, capped at the most recent 500 events. A Telegram message is gone once it has been read, and a shift arriving at 08:00 needs to be able to ask what the DAQ did at 03:00 — including across the restart that is often part of the story. Nothing in this module may raise into its caller: failing to <em>record</em> an alert must never stop it being sent.</p>
+<p><code class="docutils literal notranslate"><span class="pre">services/telegram_notifier.py</span></code> and <code class="docutils literal notranslate"><span class="pre">services/zulip_notifier.py</span></code> are the two transports. Their credentials live in <code class="docutils literal notranslate"><span class="pre">conf/telegram_settings.json</span></code> and <code class="docutils literal notranslate"><span class="pre">conf/zulip_settings.json</span></code> and are returned to the browser masked.</p>
+<p><code class="docutils literal notranslate"><span class="pre">services/recovery.py</span></code> names the handful of things that actually recover a session — reopen the board connections, reset the acquisition, reconnect the current monitor, restart the statistics collection, re-check Graphite — reports for each whether it currently looks needed, and runs one on request. <strong>Nothing in it runs by itself.</strong> The operator presses it, so a recovery never happens behind their back mid-measurement; the one exception in WebDAQ is auto-restart, which is opt-in and says so in the logbook entry it writes.</p>
+<p>The watcher is normally started by <code class="docutils literal notranslate"><span class="pre">main.py</span></code>. <code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/notifications/watcher</span></code> exists because a backend launched another way — a bare <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">run</span></code>, some other WSGI server — would leave the rules configured and never evaluated, and the settings page that reports this has to be able to fix it.</p>
+</section>
+<hr class="docutils" />
+<section id="grafana-elog-and-the-run-report">
+<h2>14. Grafana, ELOG and the run report<a class="headerlink" href="#grafana-elog-and-the-run-report" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">services/grafana_client.py</span></code> exposes only Grafana’s alert-rule API: list, read, update, silence, activate. The address and the service-account token stay in <code class="docutils literal notranslate"><span class="pre">conf/grafana_settings.json</span></code> and never reach the browser, and the narrow surface is deliberate because the token may carry far more rights than the Alerts page needs. Which rules are auto-managed is remembered in the frontend, which silences them on stop and activates them on start.</p>
+<p><code class="docutils literal notranslate"><span class="pre">services/elog_client.py</span></code> reads and writes a PSI ELOG logbook through py_elog, imported lazily so a server without the package still starts and reports a clear reason. Authentication is one shared service account in <code class="docutils literal notranslate"><span class="pre">conf/elog_settings.json</span></code>; attribution is separate, with ELOG’s <code class="docutils literal notranslate"><span class="pre">Author</span></code> attribute filled from the WebDAQ user who is posting, so entries still carry a real name.</p>
+<p><code class="docutils literal notranslate"><span class="pre">services/run_report.py</span></code> turns a finished run into a draft entry — the database row, <code class="docutils literal notranslate"><span class="pre">metadata.json</span></code>, the logged current, the accelerator readings and the ROIs, assembled into body text and attributes. The result is a <em>draft</em> the operator edits before posting; nothing here is authoritative. Attributes are matched by keyword rather than exact name, because every LUNA logbook names its fields slightly differently and the composer learns the real field list from the logbook itself.</p>
+</section>
+<hr class="docutils" />
+<section id="completed-runs-and-conversion">
+<h2>15. Completed runs and conversion<a class="headerlink" href="#completed-runs-and-conversion" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">services/run_data.py</span></code> is the read side: it turns <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/</span></code> into a file inventory, the current as a time series, an integrated charge, and a RUReader conversion to ROOT. It only reads, and writes ROOT output; the acquisition path is untouched.</p>
+<p><code class="docutils literal notranslate"><span class="pre">ConversionManager</span></code> runs RUReader as a subprocess, one conversion per run at a time, writing <code class="docutils literal notranslate"><span class="pre">run&lt;N&gt;.root</span></code> next to the data it was made from. A large run takes minutes, so the request only starts the job and the dashboard polls <code class="docutils literal notranslate"><span class="pre">status</span></code>.</p>
+<p>Two details are there because of the binary rather than the data. <strong>The installed RUReader is not necessarily built from the pinned submodule</strong>, and an older one exits with “Unknown option” instead of converting, so <code class="docutils literal notranslate"><span class="pre">capabilities()</span></code> asks it once with <code class="docutils literal notranslate"><span class="pre">--help</span></code> and only sends the flags it advertises — which also lets the UI offer exactly those options. And a RUReader built against a different ROOT fails with a linker error that says nothing about the real cause, so <code class="docutils literal notranslate"><span class="pre">_annotate_log()</span></code> prepends the explanation and the fix to the log the dashboard shows. <code class="docutils literal notranslate"><span class="pre">RUREADER_BIN</span></code> and <code class="docutils literal notranslate"><span class="pre">RUREADER_ENV_PREFIX</span></code> override the binary and the environment it is run in.</p>
+<p><code class="docutils literal notranslate"><span class="pre">app/routes/data.py</span></code> joins all that with what the database knows, so a run list can show what is actually on disk — whether there is data, whether there is a current log, whether it has been converted, how many files and how many bytes — rather than only what was intended.</p>
+</section>
+<hr class="docutils" />
+<section id="a-run-start-to-finish">
+<h2>16. A run, start to finish<a class="headerlink" href="#a-run-start-to-finish" title="Link to this heading"></a></h2>
+<p>Starting a run is partly orchestrated by the client, and it is worth knowing which parts.</p>
+<p>The browser (<code class="docutils literal notranslate"><span class="pre">components/run-control-buttons.tsx</span></code>) pushes the acquisition settings, then starts the side channels — <code class="docutils literal notranslate"><span class="pre">/current/start/&lt;run&gt;</span></code> and <code class="docutils literal notranslate"><span class="pre">/stats/run/&lt;run&gt;/start</span></code>, only when data is being saved — then calls <code class="docutils literal notranslate"><span class="pre">/experiment/start_run</span></code>, then writes the run metadata and activates the auto-managed Grafana alerts. <strong>The side channels may not stop the run.</strong> They were once awaited bare, so a picoammeter that was connected but not sampling answered 4xx, threw, and the DAQ was never started at all: the operator saw “Failed to start the run” and lost beam time to a monitor. They are now caught, and the toast says which one did not start.</p>
+<p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/experiment/start_run</span></code> then does this, in order:</p>
+<ol class="arabic simple">
+<li><p>Refuse if a run is already in progress or no boards are configured.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">prepare_run_start()</span></code> — create <code class="docutils literal notranslate"><span class="pre">data/</span></code>, and when saving, <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/</span></code>, and copy each board’s <code class="docutils literal notranslate"><span class="pre">conf/&lt;name&gt;_&lt;id&gt;.json</span></code> into it. <strong>Only the board configurations are copied. Calibration files are not</strong> — <code class="docutils literal notranslate"><span class="pre">calib/*.cal</span></code> is read live from the working directory, so a run directory carries the settings it was taken with but not the calibration it was displayed with.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">release_digitizers()</span></code>, then <code class="docutils literal notranslate"><span class="pre">caen_acq.configure(boards,</span> <span class="pre">run,</span> <span class="pre">out_dir,</span> <span class="pre">max_file_bytes,</span> <span class="pre">write=save)</span></code> and <code class="docutils literal notranslate"><span class="pre">caen_acq.start()</span></code>. A failure at either step reacquires the probe connections before returning, so a failed start does not leave the boards closed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">set_running_state(True)</span></code> — which stamps a timezone-aware ISO 8601 start time (without the offset the browser parsed it ambiguously and the run timer could start negative) and <strong>notifies the run-state listeners</strong>.</p></li>
+<li><p>Enable the on-demand spy and start board-failure monitoring.</p></li>
+<li><p>Record the run in the database, if saving.</p></li>
+</ol>
+<p><code class="docutils literal notranslate"><span class="pre">set_save_data(false)</span></code> is a real mode: <code class="docutils literal notranslate"><span class="pre">configure(write=False)</span></code> runs decode-only, so spectra, rates and charge all work and nothing is written.</p>
+<p><code class="docutils literal notranslate"><span class="pre">POST</span> <span class="pre">/experiment/stop_run</span></code> unwinds it — stop monitoring, stop the spy, stop the acquisition, reacquire the digitizers, write the end time, increment the run number if data was saved, and <code class="docutils literal notranslate"><span class="pre">set_running_state(False)</span></code>. The listeners do the rest: the charge is persisted and the current log closed by <code class="docutils literal notranslate"><span class="pre">current.py</span></code>, <code class="docutils literal notranslate"><span class="pre">roi.json</span></code> is written by <code class="docutils literal notranslate"><span class="pre">roi_analysis.py</span></code>. Metadata failures are logged and never fail the stop, but they <em>are</em> logged — a silent <code class="docutils literal notranslate"><span class="pre">pass</span></code> there once hid a missing migration.</p>
+<p><strong>The run-state listeners are the extension point for anything that must follow a run.</strong> Register with <code class="docutils literal notranslate"><span class="pre">daq_mgr.add_run_state_listener(fn)</span></code> rather than adding a step to the route: a listener fires for a run stopped by the auto-restart and for a run whose browser has gone away, and a route step does not.</p>
+</section>
+<hr class="docutils" />
+<section id="configuration-files">
+<h2>17. Configuration files<a class="headerlink" href="#configuration-files" title="Link to this heading"></a></h2>
+<p>All of them are JSON in <code class="docutils literal notranslate"><span class="pre">conf/</span></code>, relative to the working directory, written by the server and safe to read or edit by hand when it is stopped.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>File</p></th>
+<th class="head"><p>Owner</p></th>
+<th class="head"><p>Holds</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">settings.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">daq_manager.py</span></code></p></td>
+<td><p>Run number, saving, size limits, the board list, auto-restart and its delay.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">&lt;name&gt;_&lt;id&gt;.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">digitizer.py</span></code>, <code class="docutils literal notranslate"><span class="pre">dgtz.py</span></code>, <code class="docutils literal notranslate"><span class="pre">board_defaults.py</span></code></p></td>
+<td><p>One board’s full register dump. The single source of truth for the board: the CAEN dashboard edits it, caendaq applies it, and Acquisition Control (0x8100) in it decides how a run starts.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">histograms.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">histogram_config.py</span></code></p></td>
+<td><p>Histograms, ROIs, zooms, dashboard settings.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">current.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">routes/current.py</span></code></p></td>
+<td><p>The current module in use, the Carbon ingest address, the lifetime charge.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">tetram.json</span></code>, <code class="docutils literal notranslate"><span class="pre">rbd9103.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">tetramm.py</span></code>, <code class="docutils literal notranslate"><span class="pre">rbd9103.py</span></code></p></td>
+<td><p>Per-device settings for the two picoammeters.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">stats.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">stats_manager.py</span></code></p></td>
+<td><p>The Graphite render API, the metric subtree, the monitored metrics and their units, the sampling cadence.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">alerts.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alerting.py</span></code></p></td>
+<td><p>The alert rules.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">alert_log.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">alert_log.py</span></code></p></td>
+<td><p>The last 500 alert and recovery events.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">telegram_settings.json</span></code>, <code class="docutils literal notranslate"><span class="pre">zulip_settings.json</span></code></p></td>
+<td><p>the two notifiers</p></td>
+<td><p>Bot credentials.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">grafana_settings.json</span></code>, <code class="docutils literal notranslate"><span class="pre">elog_settings.json</span></code></p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">grafana_client.py</span></code>, <code class="docutils literal notranslate"><span class="pre">elog_client.py</span></code></p></td>
+<td><p>Addresses and service tokens.</p></td>
+</tr>
+</tbody>
+</table>
+<p>A missing file is not an error: each owner writes a sensible default on first use. An <em>unreadable</em> <code class="docutils literal notranslate"><span class="pre">conf/settings.json</span></code> is moved aside with a timestamp rather than replaced, so the board configuration in it can be repaired instead of lost.</p>
+</section>
+<hr class="docutils" />
+<section id="test-mode-and-the-test-suite">
+<h2>18. Test mode and the test suite<a class="headerlink" href="#test-mode-and-the-test-suite" title="Link to this heading"></a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">TEST_FLAG=True</span></code> substitutes the simulated digitizer and the simulated picoammeter. It is not a stub layer bolted on the side: <code class="docutils literal notranslate"><span class="pre">utils/board_defaults.py</span></code> fabricates a register dump with the same register set, the same JSON shape and plausible values, so the CAEN dashboard, the synchronisation controls and online tuning all have something real to act on; <code class="docutils literal notranslate"><span class="pre">utils/mock_current.py</span></code> writes exactly the same <code class="docutils literal notranslate"><span class="pre">current.txt</span></code> format and produces a deliberately beam-like signal — a slow decay with ripple, drift and the occasional dip — so plots and charge integrals look like something an operator would recognise. Database and metadata paths are unchanged.</p>
+<p><code class="docutils literal notranslate"><span class="pre">server/tests/</span></code> is plain <code class="docutils literal notranslate"><span class="pre">unittest</span></code>, no extra packages, no hardware, no Graphite and no ELOG; HTTP responses are faked where a server would be needed. <code class="docutils literal notranslate"><span class="pre">tests/run_tests.sh</span></code> runs the suite from a scratch working directory so a real setup’s <code class="docutils literal notranslate"><span class="pre">conf/</span></code> and <code class="docutils literal notranslate"><span class="pre">data/</span></code> are never touched — the exception is <code class="docutils literal notranslate"><span class="pre">test_routes.py</span></code>, which drives the app the way the frontend does and therefore reads the directory it is started from.</p>
+<p>The convention for new tests is to test the rule rather than the implementation: “a structural register is refused mid-run” survives a refactor, “the structural list has 16 entries” does not.</p>
+</section>
+<hr class="docutils" />
+<section id="the-frontend-as-a-client">
+<h2>19. The frontend as a client<a class="headerlink" href="#the-frontend-as-a-client" title="Link to this heading"></a></h2>
+<p>The web interface has no privileged path into the DAQ. It is one API client among several, which is why a browser crash cannot take a run with it, and it is worth knowing the three places where it does more than draw.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">src/lib/api.ts</span></code></strong> is the single Axios instance, with <code class="docutils literal notranslate"><span class="pre">NEXT_PUBLIC_API_URL</span></code> as its base and two interceptors. The request interceptor attaches the JWT from the auth store. The response interceptor catches a dead session centrally — 401 from flask-jwt-extended for missing or expired, 422 for malformed — clears the token and redirects to the login page with the current path as <code class="docutils literal notranslate"><span class="pre">next</span></code>. Without it, every polling component would start getting 401s and, because most of them swallow errors to survive a brief server hiccup, the page would simply stop updating and look as though the DAQ had died. Calls to <code class="docutils literal notranslate"><span class="pre">/login</span></code> and <code class="docutils literal notranslate"><span class="pre">/register</span></code> are exempt, since a 401 there is the login form’s business.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">src/app/api/server-control/route.ts</span></code></strong> runs in the Next.js process, not the browser, and is how <em>Start an Experiment</em> works: it resolves the conda environment’s prefix (asking conda rather than trusting <code class="docutils literal notranslate"><span class="pre">conda</span> <span class="pre">run</span> <span class="pre">-n</span> <span class="pre">luna</span> <span class="pre">python</span></code>, which on some versions resolves <code class="docutils literal notranslate"><span class="pre">python</span></code> from the inherited PATH), runs <code class="docutils literal notranslate"><span class="pre">scripts/check_db.sh</span></code> against the chosen working directory’s <code class="docutils literal notranslate"><span class="pre">app.db</span></code>, creates the default user if there is none, and spawns <code class="docutils literal notranslate"><span class="pre">server/main.py</span></code> with that directory as its cwd and its own pid as <code class="docutils literal notranslate"><span class="pre">LUNA_LAUNCHER_PID</span></code>. Every step has a hard timeout so a hung conda or sqlite call cannot wedge the request, and a graceful exit of the launcher takes the backend with it — a SIGKILL is covered from the other side by the watchdog in section 2.</p>
+<p>Two things in that preflight are worth knowing when a start behaves oddly. It copies migration revisions the repository has and the measurement directory does not, adding only — anything already there wins, so a project whose history diverged keeps it. And it probes the database with plain sqlite3 reads first, skipping both the conda-wrapped <code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">db</span> <span class="pre">upgrade</span></code> and the create-user script when there is nothing to do, because importing the app is the single most expensive step of a start and on a warm boot neither is needed.</p>
+<p><strong><code class="docutils literal notranslate"><span class="pre">src/app/api/cache/route.ts</span></code></strong> keeps the state that genuinely belongs to a browser rather than to the DAQ: the visualisation channel selection, the waveform view configuration, the list of recent working directories. The histogram dashboard used to live here too, and section 10 explains why it does not any more.</p>
+<p>Everything else is conventional: Zustand stores for client state, React Query for polling, and JSROOT for drawing the <code class="docutils literal notranslate"><span class="pre">TBufferJSON</span></code> payloads the histogram endpoints return.</p>
+</section>
+<hr class="docutils" />
+<section id="working-in-this-codebase">
+<h2>20. Working in this codebase<a class="headerlink" href="#working-in-this-codebase" title="Link to this heading"></a></h2>
+<p>A short list of things that are easy to get wrong here.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Doing this</p></th>
+<th class="head"><p>Do it this way</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Adding an endpoint</p></td>
+<td><p>Put it in the blueprint that owns the subject, decorate with <code class="docutils literal notranslate"><span class="pre">&#64;jwt_required_custom</span></code>, and add the call to <code class="docutils literal notranslate"><span class="pre">frontend/src/lib/api.ts</span></code>. A new blueprint also needs registering in <code class="docutils literal notranslate"><span class="pre">create_app()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Needing a service</p></td>
+<td><p>Call its <code class="docutils literal notranslate"><span class="pre">get_*()</span></code>. Never construct a second instance.</p></td>
+</tr>
+<tr class="row-even"><td><p>Needing to react to a run</p></td>
+<td><p>Register a run-state listener, not a step in the start or stop route.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Touching the database off a request</p></td>
+<td><p>Open a context on the app reference handed to <code class="docutils literal notranslate"><span class="pre">app/routes/experiment.py</span></code> by <code class="docutils literal notranslate"><span class="pre">set_flask_app()</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>Opening a file</p></td>
+<td><p>Relative paths are relative to the working directory. Anything that must follow the <em>installation</em> has to be anchored to <code class="docutils literal notranslate"><span class="pre">__file__</span></code>, as <code class="docutils literal notranslate"><span class="pre">main.py</span></code> does for <code class="docutils literal notranslate"><span class="pre">migrations/</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Writing a config file</p></td>
+<td><p>Temporary file plus <code class="docutils literal notranslate"><span class="pre">os.replace</span></code>, under a lock. Background threads write these too.</p></td>
+</tr>
+<tr class="row-even"><td><p>A side effect at run start</p></td>
+<td><p>It must not be able to fail the run. Catch it, let the run proceed, and say which part did not start.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Adding an alert</p></td>
+<td><p>A <code class="docutils literal notranslate"><span class="pre">RULE_DEFAULTS</span></code> entry, a source callable in <code class="docutils literal notranslate"><span class="pre">AlertSources</span></code>, an <code class="docutils literal notranslate"><span class="pre">_evaluate_*</span></code> branch — and decide whether it only applies during a run.</p></td>
+</tr>
+<tr class="row-even"><td><p>Reporting a failure</p></td>
+<td><p>Say what broke and what to press. The alert log, the recovery actions and the empty-histogram titles all exist because “something went wrong” is not a message anyone can act on at 03:00.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Changing the schema</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">flask</span> <span class="pre">db</span> <span class="pre">migrate</span></code> in <code class="docutils literal notranslate"><span class="pre">server/</span></code>; <code class="docutils literal notranslate"><span class="pre">ensure_schema_current</span></code> applies it at the next start, in whichever working directory the server runs.</p></td>
+</tr>
+<tr class="row-even"><td><p>Changing C++</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">server/native/caendaq</span></code> after a submodule bump or a source change.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="directory-structure.html" class="btn btn-neutral float-left" title="Directory structure" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

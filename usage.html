@@ -1,0 +1,548 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User guide &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Troubleshooting" href="troubleshooting.html" />
+    <link rel="prev" title="A complete session, start to finish" href="example-session.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">User guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#dashboard">1. Dashboard</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#overview-taking-the-run">1.1 Overview — taking the run</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#board-health-what-the-boards-are-actually-doing">1.2 Board Health — what the boards are actually doing</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#data-rates-counts-per-second-per-channel">1.3 Data Rates — counts per second, per channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#histograms-waveforms-and-psd">1.4 Histograms, Waveforms and PSD</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#logbook">2. Logbook</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#runs">2.1 Runs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#one-run">2.2 One run</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#elog">2.3 ELOG</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#stats">3. Stats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#daq">4. DAQ</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#configuration">4.1 Configuration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#calibration">4.2 Calibration</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#hardware-info">4.3 Hardware Info</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#tuner">5. Tuner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#troubleshoot">6. Troubleshoot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#alerts">7. Alerts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#settings">8. Settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-is-refused-and-when">9. What is refused, and when</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">User guide</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/usage.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="user-guide">
+<h1>User guide<a class="headerlink" href="#user-guide" title="Link to this heading"></a></h1>
+<p>Every page, what it shows and what you can change from it. For the workflow of a
+single run from start to logbook entry, read <a class="reference internal" href="example-session.html"><span class="std std-doc">A complete
+session</span></a> first; this chapter is the reference you come back
+to.</p>
+<p>The navigation is the same on every page: <strong>Dashboard, Logbook, Stats, DAQ,
+Tuner, Troubleshoot, Alerts, Settings</strong>. The header carries four things worth
+knowing about:</p>
+<ul class="simple">
+<li><p>the <strong>run status</strong> — <em>Running</em> with an elapsed clock, <em>Stopped</em>, or <em>CAEN
+Error</em> when a board raised its FAIL flag during this run;</p></li>
+<li><p>the <strong>DAQ Server</strong> badge, which starts and stops the server itself and shows
+its log;</p></li>
+<li><p>the <strong>bell</strong>, which counts alerts nobody has looked at yet and turns amber when
+something was raised that reached nobody;</p></li>
+<li><p><strong>Search</strong>, a command palette that jumps to any page, any dashboard tab or any
+settings section.</p></li>
+</ul>
+<p>Logging in is per browser, and the session does not expire on its own. If it is
+cleared you are told plainly that the run is unaffected: the DAQ server keeps
+taking data with nobody logged in.</p>
+<hr class="docutils" />
+<section id="dashboard">
+<h2>1. Dashboard<a class="headerlink" href="#dashboard" title="Link to this heading"></a></h2>
+<p>Six tabs: <strong>Overview</strong>, <strong>Board Health</strong>, <strong>Data Rates</strong>, <strong>Histograms</strong>,
+<strong>Waveforms</strong> and <strong>PSD</strong>. The last three can be switched off in Settings →
+Appearance, and the tab strip follows.</p>
+<section id="overview-taking-the-run">
+<h3>1.1 Overview — taking the run<a class="headerlink" href="#overview-taking-the-run" title="Link to this heading"></a></h3>
+<p><strong>System status</strong> is the band of cards at the top. Drag the handle beneath it to
+show one row more or less; the height is remembered per browser.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Card</p></th>
+<th class="head"><p>What it tells you</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Run Status</strong></p></td>
+<td><p>The run number, <em>Running</em> or <em>Stopped</em>, how long ago it started (or how long the last one lasted), the file write rate, and a <strong>Save</strong> switch. While the DAQ is stopped the run number is a button that opens <em>Next run</em>, where you set the number the next run will take.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>DAQ Status</strong></p></td>
+<td><p>Four lines — data saving, waveforms, current, stats — each with a tick or a cross, so you can see at a glance what this run will actually record.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Picoammeter</strong></p></td>
+<td><p>Only for a real device: connected or not, whether it is sampling, its address and range. A monitored Graphite value has no device card, because it has no device.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Board <em>n</em></strong></p></td>
+<td><p>One per board: <em>Ready</em>, <em>Running</em>, <em>Board Failure</em> or <em>Disconnected</em>, the firmware and channel count, and a waveform switch (locked while a run is going).</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>ROIs</strong> and <strong>Metrics</strong></p></td>
+<td><p>The regions of interest you defined, with live integrals, and the Graphite values you selected on the Stats page.</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Run Setup &amp; Control</strong> is where a run begins. Fill in <strong>Run Name</strong>, <strong>Run Type</strong>
+(long run, scan, background, calibration), <strong>TV (kV)</strong> and <strong>PV (kV)</strong> — all four
+are pre-filled from the last run, and all four are locked while a run is in
+progress. Then <strong>Start Run</strong>.</p>
+<p>If the directory for that run number already exists, WebDAQ asks before using it
+again rather than quietly overwriting. If the run number is not set at all, it
+refuses and says so.</p>
+<p>A run starts even when something next to it fails: if the current module or the
+statistics cannot be started, the run still starts and the toast names what is
+missing — <em>“Run 1276 is acquiring, but beam current is not being recorded”</em>. A
+run without its current log is worth more than no run.</p>
+<p>The <strong>Maintenance</strong> section underneath holds the things you need rarely: connect
+the current module, refresh the board connections (not while running), and reset
+the acquisition. <strong>Reset total charge</strong> clears the lifetime charge counter and is
+deliberately outside that section, because it is a bookkeeping action rather than
+a repair.</p>
+<p><strong>Acquisition setup</strong> shows what this run will do — saving on or off, the file
+size limit, the auto-restart delay — and <strong>Adjust</strong> opens the dialog where those
+are set, including <strong>Auto-Restart on Board Failure</strong> and its delay.</p>
+<p><strong>Beam Control</strong> plots the current on target with the charge beside it: <em>This run</em>
+(with a dot that says whether it is integrating) and <em>Lifetime total</em>. While a
+run is going the plot covers the run from its start; while stopped you can pick a
+30 s to 5 min window. The <strong>Position</strong> button moves the panel to one of four
+places on the Overview.</p>
+</section>
+<section id="board-health-what-the-boards-are-actually-doing">
+<h3>1.2 Board Health — what the boards are actually doing<a class="headerlink" href="#board-health-what-the-boards-are-actually-doing" title="Link to this heading"></a></h3>
+<p>One card per board with the readout counters CaenDAQ keeps for the run: <strong>data
+blocks</strong> read, <strong>events decoded</strong>, <strong>bytes read</strong> and <strong>bytes sent to file</strong>, each
+with its rate, and then the three numbers that matter when something is wrong:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Counter</p></th>
+<th class="head"><p>Read it as</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>FAIL blocks</strong></p></td>
+<td><p>The board could not sustain the readout for that block — a full buffer or a lost link. Data from that point may be incomplete.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Dropped</strong></p></td>
+<td><p>Blocks the write queue refused because it was full. <strong>This is lost data</strong> and should always be zero.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Read errors</strong></p></td>
+<td><p>CAEN read errors on the link.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The badge on each card is the quick answer: <em>Reading</em>, <em>No data for n s</em>, <em>FAIL
+flag</em>, <em>No answer</em> (the last request to the server failed, so the numbers are the
+last known ones) or <em>Not reported</em> (this CaenDAQ build does not publish that
+counter). A dash in a counter means the same thing.</p>
+<p>Every counter belongs to the run. They start at zero when a run starts and are
+gone when it ends, which is why the tab says so plainly between runs instead of
+showing zeros.</p>
+</section>
+<section id="data-rates-counts-per-second-per-channel">
+<h3>1.3 Data Rates — counts per second, per channel<a class="headerlink" href="#data-rates-counts-per-second-per-channel" title="Link to this heading"></a></h3>
+<p>A tile per board with its total event rate, then four tiles for the selected
+board — <strong>Events</strong>, <strong>Pile-ups</strong>, <strong>Lost events</strong>, <strong>Saturations</strong> — and the
+write rate for the board and for all boards together. Pile-up, lost and
+saturation turn amber when they are not zero.</p>
+<p>The plot shows one metric for up to six channels of one board. Two controls sit
+above it:</p>
+<ul class="simple">
+<li><p><strong>Plot</strong> — the sampling cadence, from 0.5 s to 60 s. This is not a display
+setting: one CaenDAQ tick samples the counters, differences them and publishes
+them, so the same number sets the refresh rate, the averaging window and the
+resolution of what reaches Graphite. Changing it starts the trace over.</p></li>
+<li><p><strong>Rate shown</strong> — which of the four rates is drawn. All four are recorded, so
+switching keeps the history you already have.</p></li>
+</ul>
+<p>A badge reads <em>Running</em>, <em>Stopped</em> or <em>No answer</em>. A run that stops leaves its
+trace on screen; a run that starts clears it.</p>
+</section>
+<section id="histograms-waveforms-and-psd">
+<h3>1.4 Histograms, Waveforms and PSD<a class="headerlink" href="#histograms-waveforms-and-psd" title="Link to this heading"></a></h3>
+<p>The histogram dashboard is covered in <a class="reference internal" href="histograms-and-rois.html"><span class="std std-doc">Spectra and
+ROIs</span></a>: which spectra are shown, their ROIs, zoom,
+rebinning and the per-run <code class="docutils literal notranslate"><span class="pre">roi.json</span></code>. It belongs to the experiment rather than to
+your browser — the layout lives on the DAQ server, so every screen in the control
+room shows the same thing.</p>
+<p><strong>Waveforms</strong> and <strong>PSD</strong> are tabs on the same dashboard. Waveforms also carries
+the board-configuration controls that decide what the board digitises into a
+trace — dual trace, what trace 1 and trace 2 carry, and the digital probe. Those
+go to the board immediately, so treat them as a setup activity rather than
+something to touch mid-measurement.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="logbook">
+<h2>2. Logbook<a class="headerlink" href="#logbook" title="Link to this heading"></a></h2>
+<p>Two logbooks live here: the run metadata WebDAQ records itself (<strong>Runs</strong>) and the
+collaboration’s ELOG (<strong>ELOG</strong>).</p>
+<section id="runs">
+<h3>2.1 Runs<a class="headerlink" href="#runs" title="Link to this heading"></a></h3>
+<p>A table of every run, newest first. Search covers run numbers, targets, notes and
+voltages; the type and flag filters narrow it; <strong>Columns</strong> chooses what is shown
+and <strong>Export CSV</strong> writes out exactly the rows you have filtered to.</p>
+<p>Two columns are editable in place: the <strong>Flag</strong> (good, unknown, bad) and the
+<strong>Notes</strong>. <strong>Actions → Edit entry…</strong> corrects the run name, voltages and type of
+a run already taken — useful when a shift realises the target was mistyped.</p>
+<p>The run number is a link to the run’s own page.</p>
+</section>
+<section id="one-run">
+<h3>2.2 One run<a class="headerlink" href="#one-run" title="Link to this heading"></a></h3>
+<p>Six tabs, reading the database and the run directory together:</p>
+<ul class="simple">
+<li><p><strong>Overview</strong> — the notes, the timeline, the run conditions, the data products
+with their sizes, and the acquisition provenance (which WebDAQ, which CaenDAQ,
+which platform, and whether the data came from real boards or from the mock).</p></li>
+<li><p><strong>Notes</strong> — a Markdown editor with a preview. It warns you before leaving with
+an unsaved draft.</p></li>
+<li><p><strong>Beam Current</strong> — <code class="docutils literal notranslate"><span class="pre">current.txt</span></code> plotted, with the charge integrated over every
+sample rather than over the drawn points.</p></li>
+<li><p><strong>Stats</strong> — one plot per monitored metric from <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>, each labelled with
+the name and unit you gave it on the Stats page.</p></li>
+<li><p><strong>Boards</strong> — the register dump each board ran with, copied into the run
+directory at start. This is what makes the run reproducible.</p></li>
+<li><p><strong>Convert</strong> — RUReader, offering only the options the installed converter
+advertises. See <a class="reference internal" href="run-data.html"><span class="std std-doc">Run data and conversion</span></a>.</p></li>
+</ul>
+<p>A run still in progress is marked <em>in progress</em> and its duration reads <em>still in
+progress</em>; nothing on the page pretends the run is finished.</p>
+</section>
+<section id="elog">
+<h3>2.3 ELOG<a class="headerlink" href="#elog" title="Link to this heading"></a></h3>
+<p>Read and write the collaboration logbook without leaving run control: the entry
+list with search, the reading pane with attachments, and a composer whose fields
+come from the logbook’s own form definition, so required attributes are required
+here too.</p>
+<p><strong>Write up a run</strong> fills a new entry from the run’s own record — timing, beam
+current, ROIs, board configuration — and tells you if some of that was missing.
+Everything stays editable before you post. See <a class="reference internal" href="elog.html"><span class="std std-doc">ELOG</span></a>.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="stats">
+<h2>3. Stats<a class="headerlink" href="#stats" title="Link to this heading"></a></h2>
+<p>The Graphite values this experiment watches. Each card is one metric, with its
+latest value, a sparkline, and buttons to rename it, stop reading it or remove it.
+<em>N/A</em> means no reading came back; the light at the top says whether Graphite is
+answering at all, so “server down” never looks like “metric with no data”.</p>
+<p><strong>Add metric</strong> browses the metric tree or searches it by name, which beats typing
+a path from memory. The <strong>name and unit</strong> you give a metric are not cosmetic:
+they become the column heading in every run’s <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code>.</p>
+<p>The <strong>Graphite server</strong> card holds the host, the port and the <strong>metric prefix</strong>
+for this experiment. Give each campaign its own subtree — <code class="docutils literal notranslate"><span class="pre">ancillary.rates.12c12c</span></code>
+— and no campaign ever shares a series with another. A live run picks up a change
+at its next stats interval.</p>
+</section>
+<hr class="docutils" />
+<section id="daq">
+<h2>4. DAQ<a class="headerlink" href="#daq" title="Link to this heading"></a></h2>
+<p>Three tabs: <strong>Configuration</strong>, <strong>Calibration</strong> and <strong>Hardware Info</strong>.</p>
+<section id="configuration">
+<h3>4.1 Configuration<a class="headerlink" href="#configuration" title="Link to this heading"></a></h3>
+<p><strong>Board Settings</strong> is the whole register set of one board, grouped by function and
+in the order the signal is processed. <strong>Advanced</strong> shows every register rather
+than the tuned ones; <strong>Binary</strong> shows bit fields. Registers carry their CAEN
+manual description, and values are shown in the units you think in — per cent for
+the DC offset, nanoseconds for the time registers.</p>
+<p>Writes on this tab go to the board immediately and are not blocked while a run is
+in progress. That is deliberate — it is the same dashboard used to set a board up
+— but it means this is not the place to experiment during a measurement. Use the
+<a class="reference internal" href="#tuner">Tuner</a>, which knows which registers are safe to move while the boards
+are acquiring.</p>
+<p><strong>Synchronization</strong> is the daisy chain: which board is master, which are slaves,
+what each board’s TRG-OUT carries, and whether the start pulse can actually walk
+the cable. Each switch is annotated <em>needed — on</em>, <em>needed — off</em> or <em>not needed
+here</em> for that board’s position in the chain, and anything that would stop the
+chain starting is listed with a ⚠ next to the board that causes it. The page also
+draws the cable order and the start sequence. <a class="reference internal" href="caen-settings.html#synchronising-several-boards"><span class="std std-ref">CAEN
+digitizers</span></a> explains the
+mechanism.</p>
+</section>
+<section id="calibration">
+<h3>4.2 Calibration<a class="headerlink" href="#calibration" title="Link to this heading"></a></h3>
+<p>Two numbers per channel, <code class="docutils literal notranslate"><span class="pre">A</span></code> and <code class="docutils literal notranslate"><span class="pre">B</span></code>, applied to the energy axis of the spectra.
+They are stored per board and channel in <code class="docutils literal notranslate"><span class="pre">calib/</span></code> and are read again whenever the
+file changes.</p>
+</section>
+<section id="hardware-info">
+<h3>4.3 Hardware Info<a class="headerlink" href="#hardware-info" title="Link to this heading"></a></h3>
+<p>What the boards report about themselves — model, serial number, firmware, DPP
+licence, connection, and the acquisition registers as actually programmed — plus
+the software versions recorded with every run. The CAEN API only answers while
+the digitizers are open, so this page is populated during a run and says so when
+there is none.</p>
+</section>
+</section>
+<hr class="docutils" />
+<section id="tuner">
+<h2>5. Tuner<a class="headerlink" href="#tuner" title="Link to this heading"></a></h2>
+<p>The place to change thresholds and shaping with beam on target. The page starts
+acquisition with <strong>data saving switched off</strong>, so nothing you do here lands in a
+run directory; a yellow badge reminds you that the Tuner is holding the run.</p>
+<p>The <strong>Online</strong> switch decides where a change goes:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Online</p></th>
+<th class="head"><p>While a run is going</p></th>
+<th class="head"><p>Effect</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>on</p></td>
+<td><p>yes</p></td>
+<td><p>Registers that are safe to move are written to the board as you save them. Each field is marked <em>live</em> or <em>next run</em>, so you know before you touch it.</p></td>
+</tr>
+<tr class="row-odd"><td><p>on</p></td>
+<td><p>no</p></td>
+<td><p>Written to the board anyway — the next run applies the whole configuration regardless.</p></td>
+</tr>
+<tr class="row-even"><td><p>off</p></td>
+<td><p>either</p></td>
+<td><p>Saved to the board’s configuration only, and applied at the next run.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The allowlist of live-writable registers comes from the server per firmware and
+channel, and a write the board refuses is reported as <em>saved, not sent to the
+board</em> with the reason. The configuration and the hardware therefore cannot drift
+apart: the save always happens, and you are told whether the board took it.</p>
+<p>Beneath the controls are a waveform panel (with the trace and digital-probe
+selectors) and the energy spectrum of the channel you are tuning.</p>
+</section>
+<hr class="docutils" />
+<section id="troubleshoot">
+<h2>6. Troubleshoot<a class="headerlink" href="#troubleshoot" title="Link to this heading"></a></h2>
+<p>The page to open when something looks wrong, and the one to read the morning
+after. It has two halves: <strong>Recovery</strong> at the top and <strong>History</strong> below.
+<a class="reference internal" href="troubleshooting.html"><span class="std std-doc">Troubleshooting</span></a> is the chapter that goes with it.</p>
+<p><strong>Recovery</strong> lists five actions, each with its current state — whether that part
+of the system answers right now — and a <strong>Run</strong> button. Nothing here runs by
+itself. An action that would cost data while a run is in progress is refused
+before you press it, with the reason on the page.</p>
+<p><strong>History</strong> is every alert and recovery, newest first, kept on the server across
+restarts. Filter it by <em>Everything</em>, <em>Problems</em>, <em>Recoveries</em> or <em>Actions</em>. Each
+row carries the board or value it was about, the run it belonged to, and which
+destinations received it — including the badge <strong>reached nobody</strong>, which is the
+one you want to notice. <em>Mark all read</em> clears the bell.</p>
+</section>
+<hr class="docutils" />
+<section id="alerts">
+<h2>7. Alerts<a class="headerlink" href="#alerts" title="Link to this heading"></a></h2>
+<p>The Grafana alert rules, managed from here so you do not have to open Grafana
+during a shift: pause or activate a rule, edit its threshold, and mark rules as
+<strong>auto-managed</strong> with the ⚡ button.</p>
+<p>An auto-managed rule is activated when a run starts and silenced when it stops,
+which is the answer to a “beam current too low” rule that is right during a run
+and pure noise while you are setting up. The marks are stored per browser, so set
+them on the control-room screen.</p>
+<p>This page talks to Grafana through the DAQ server; the address and token are in
+Settings → Grafana.</p>
+</section>
+<hr class="docutils" />
+<section id="settings">
+<h2>8. Settings<a class="headerlink" href="#settings" title="Link to this heading"></a></h2>
+<p>Six sections. Everything except <strong>Appearance</strong> is stored on the DAQ server and is
+therefore the same for everyone.</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Section</p></th>
+<th class="head"><p>What it holds</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><strong>Boards</strong></p></td>
+<td><p>The configured digitizers with their live status, a <strong>Scan</strong> that probes the links and lists what answers, and the form to add a board. Scan fills the form rather than adding the board — the ID and the firmware choice stay yours.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Current Module</strong></p></td>
+<td><p>Which source the beam current comes from — TetrAMM, RBD 9103 or a monitored Graphite value — and its settings. Also the Carbon address the measured current is <em>pushed</em> to, which is not the same as the Graphite server the Stats page <em>reads</em>.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Notifications</strong></p></td>
+<td><p>Telegram and Zulip credentials, and the alert rules. See <a class="reference internal" href="monitoring-and-alerts.html"><span class="std std-doc">Monitoring and alerts</span></a>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>ELOG</strong></p></td>
+<td><p>The logbook URL, the shared account, default attributes, and whether WebDAQ may post at all.</p></td>
+</tr>
+<tr class="row-even"><td><p><strong>Grafana</strong></p></td>
+<td><p>The Grafana address and a service-account token. The DAQ server makes those requests, so the address has to be reachable from the server machine.</p></td>
+</tr>
+<tr class="row-odd"><td><p><strong>Appearance</strong></p></td>
+<td><p>Theme, which dashboard tabs and cards are shown, and whether current acquisition is enabled at all. Browser-local.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p><code class="docutils literal notranslate"><span class="pre">conf/telegram_settings.json</span></code>, <code class="docutils literal notranslate"><span class="pre">conf/zulip_settings.json</span></code>,
+<code class="docutils literal notranslate"><span class="pre">conf/elog_settings.json</span></code> and <code class="docutils literal notranslate"><span class="pre">conf/grafana_settings.json</span></code> hold credentials in
+plain text on the DAQ machine. The interface never shows them again once saved —
+it masks them — but the files themselves are readable by anyone with an account
+on that machine, so do not copy a working directory between sites without
+emptying them.</p>
+</div>
+</section>
+<hr class="docutils" />
+<section id="what-is-refused-and-when">
+<h2>9. What is refused, and when<a class="headerlink" href="#what-is-refused-and-when" title="Link to this heading"></a></h2>
+<p>A short list of the places WebDAQ says no, so the refusal is not a surprise:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Action</p></th>
+<th class="head"><p>Refused when</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>Start a run</p></td>
+<td><p>No run number set; a run is already going; no boards configured.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Overwrite a run directory</p></td>
+<td><p>Always asked first.</p></td>
+</tr>
+<tr class="row-even"><td><p>Change the run number, saving, the size limit, the run name, type or voltages</p></td>
+<td><p>While a run is in progress.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Refresh the board connections</p></td>
+<td><p>While a run is in progress.</p></td>
+</tr>
+<tr class="row-even"><td><p>Reopen the boards, reset the acquisition</p></td>
+<td><p>While a run is in progress (from Troubleshoot).</p></td>
+</tr>
+<tr class="row-odd"><td><p>Scan for boards</p></td>
+<td><p>While a run is in progress.</p></td>
+</tr>
+<tr class="row-even"><td><p>Switch the current module</p></td>
+<td><p>While the current module is acquiring.</p></td>
+</tr>
+<tr class="row-odd"><td><p>Restart the statistics</p></td>
+<td><p>With no run active, or when the run saves no data, or when the existing <code class="docutils literal notranslate"><span class="pre">stats.csv</span></code> cannot be moved aside.</p></td>
+</tr>
+<tr class="row-even"><td><p>Write a register to a live board</p></td>
+<td><p>When it is not on the firmware’s safe list — it is saved to the configuration and applied at the next run instead.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="example-session.html" class="btn btn-neutral float-left" title="A complete session, start to finish" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="troubleshooting.html" class="btn btn-neutral float-right" title="Troubleshooting" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
