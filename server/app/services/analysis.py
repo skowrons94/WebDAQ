@@ -18,8 +18,8 @@ class AnalysisError(ValueError):
     pass
 
 
-def field(label, default, kind='number'):
-    return {'label': label, 'default': default, 'type': kind}
+def field(label, default, kind='number', options=None):
+    return {'label': label, 'default': default, 'type': kind, **({'options': options} if options else {})}
 
 
 CATALOG = {
@@ -30,6 +30,15 @@ CATALOG = {
                       'run_type': field('Run type (exact match, optional)', '', 'text'),
                       'file': field('ROOT filename (blank: all files)', '', 'text'),
                       'tree': field('Tree (blank: Data / DataR)', '', 'text'),
+                      'timestamp': field('Timestamp branch', 'Timestamp', 'text'),
+                      'time_scale': field('Timestamp to seconds (ps = 1e-12)', 1e-12),
+                      'time_offset': field('Time offset from run start (s)', 0),
+                      'flag': field('Run flag', '', 'text', ['', 'good', 'bad', 'unknown']),
+                      'exclude': field('Exclude runs', '', 'text'),
+                      'date_from': field('Start date from (ISO)', '', 'text'),
+                      'date_to': field('Start date through (ISO)', '', 'text'),
+                      'voltage_min': field('Minimum terminal voltage (kV)', '', 'text'),
+                      'voltage_max': field('Maximum terminal voltage (kV)', '', 'text'),
                       'energy': field('Energy branch', 'Energy', 'text')}},
     'database': {'label': 'Run Database', 'group': 'Inputs', 'description': 'Read metadata from the active experiment database.',
                  'inputs': {}, 'outputs': {'metadata': 'metadata'}, 'params': {}},
@@ -42,13 +51,13 @@ CATALOG = {
     'roi': {'label': 'ROI Counts', 'group': 'Counting', 'description': 'Count events strictly inside the energy bounds, separately per run.',
             'inputs': {'events': 'events'}, 'outputs': {'counts': 'counts'}, 'params': {
                 'min': field('ROI minimum (keV)', 3800), 'max': field('ROI maximum (keV)', 4500)}},
-    'yield': {'label': 'Yield', 'group': 'Counting', 'description': 'Counts / saved run charge (µC), with √N / Q statistical uncertainty.',
+    'yield': {'label': 'Yield', 'group': 'Counting', 'description': 'Normalise counts or extracted peak area by saved charge, propagating the input error.',
               'inputs': {'counts': 'counts', 'metadata': 'metadata'}, 'outputs': {'values': 'series'}, 'params': {}},
     'beam_energy': {'label': 'Beam Energy', 'group': 'Transform', 'description': 'Editable scan formula: scale × (terminal + probe in kV) + offset.',
                     'inputs': {'events': 'events', 'metadata': 'metadata'}, 'outputs': {'values': 'series'}, 'params': {
                         'scale': field('Voltage scale', 0.9933), 'offset': field('Offset (keV)', -0.41)}},
     'histogram': {'label': 'Histogram', 'group': 'Plots', 'description': 'Overlay calibrated spectra for the selected runs.',
-                  'inputs': {'events': 'events'}, 'outputs': {}, 'params': {
+                  'inputs': {'events': 'events'}, 'outputs': {'spectrum': 'spectrum'}, 'params': {
                       'bins': field('Bins', 200), 'min': field('Minimum (keV)', 0), 'max': field('Maximum (keV)', 8192),
                       'title': field('Title', 'Calibrated spectrum', 'text')}},
     'plot': {'label': 'Plot Series', 'group': 'Plots', 'description': 'Join X and Y by run number; plot statistical error bars.',
@@ -57,6 +66,9 @@ CATALOG = {
                  'y_label': field('Y label', 'Yield (counts/µC)', 'text')}},
 }
 
+
+from .analysis_nodes import CATALOG as EXTRA_CATALOG
+CATALOG.update(EXTRA_CATALOG)
 
 def parse_runs(value):
     if not isinstance(value, (str, list)):
@@ -86,20 +98,46 @@ def resolve_runs(params, metadata):
     Target/type are case-insensitive exact matches, combined with AND and any
     explicit run list. A query never includes an unfinished acquisition.
     """
+    from datetime import datetime, timedelta
     filters = {key: params.get(param, '').strip().casefold()
-               for param, key in (('target', 'target_name'), ('run_type', 'run_type'))
+               for param, key in (('target', 'target_name'), ('run_type', 'run_type'), ('flag', 'flag'))
                if params.get(param, '').strip()}
-    if not filters:
-        return parse_runs(params.get('runs', ''))
-    candidates = (parse_runs(params['runs']) if params.get('runs', '').strip()
-                  else sorted(metadata))
-    runs = [run for run in candidates if metadata.get(run, {}).get('complete')
-            and all(str(metadata[run].get(key) or '').strip().casefold() == value
-                    for key, value in filters.items())]
-    if not runs:
-        raise AnalysisError('No completed runs match this target/type query.')
-    if len(runs) > 100:
-        raise AnalysisError('Query matches more than 100 runs. Narrow it with a run list or range.')
+    def date(key):
+        text = params.get(key, '').strip()
+        if not text: return None
+        try: return datetime.fromisoformat(text.replace('Z', '+00:00')).replace(tzinfo=None)
+        except ValueError as exc: raise AnalysisError(f'{key}: use an ISO date/time.') from exc
+    lo, hi = date('date_from'), date('date_to')
+    if hi and len(params['date_to']) == 10: hi += timedelta(days=1)
+    if lo and hi and lo >= hi: raise AnalysisError('Date range must be ascending.')
+    def number(key):
+        text = params.get(key, '').strip()
+        if not text: return None
+        try:
+            value = float(text)
+            if not math.isfinite(value): raise ValueError()
+            return value
+        except ValueError as exc: raise AnalysisError(f'{key}: enter a finite voltage.') from exc
+    vmin, vmax = number('voltage_min'), number('voltage_max')
+    if vmin is not None and vmax is not None and vmin > vmax: raise AnalysisError('Voltage range must be ascending.')
+    excluded = set(parse_runs(params['exclude'])) if params.get('exclude', '').strip() else set()
+    queried = filters or lo or hi or vmin is not None or vmax is not None or excluded
+    if not queried: return parse_runs(params.get('runs', ''))
+    candidates = parse_runs(params['runs']) if params.get('runs', '').strip() else sorted(metadata)
+    runs = []
+    for run in candidates:
+        row = metadata.get(run, {})
+        if run in excluded or not row.get('complete') or not all(str(row.get(k) or '').strip().casefold() == v for k,v in filters.items()): continue
+        if lo or hi:
+            try: start = datetime.fromisoformat(row['start_time'].replace('Z', '+00:00')).replace(tzinfo=None)
+            except (KeyError, TypeError, ValueError): continue
+            if (lo and start < lo) or (hi and start >= hi): continue
+        voltage = row.get('terminal_voltage')
+        if vmin is not None and (voltage is None or voltage < vmin): continue
+        if vmax is not None and (voltage is None or voltage > vmax): continue
+        runs.append(run)
+    if not runs: raise AnalysisError('No completed runs match this query.')
+    if len(runs) > 100: raise AnalysisError('Query matches more than 100 runs. Narrow it with a run list or range.')
     return runs
 
 
@@ -127,6 +165,9 @@ def validate_graph(graph):
                     raise AnalysisError(f'{ident}: {key} must be a finite number.')
             elif not isinstance(value, str) or len(value) > 1000:
                 raise AnalysisError(f'{ident}: {key} must be text (up to 1000 characters).')
+        for key, definition in spec['params'].items():
+            if definition.get('options') and params[key] not in definition['options']:
+                raise AnalysisError(f'{ident}: invalid {key}.')
         if kind in ('histogram', 'roi') and params['min'] >= params['max']:
             raise AnalysisError(f'{ident}: minimum must be less than maximum.')
         if kind == 'histogram' and (params['bins'] != int(params['bins']) or not 1 <= params['bins'] <= 4096):
@@ -134,8 +175,9 @@ def validate_graph(graph):
         if kind == 'channel' and any(params[k] != int(params[k]) or params[k] < 0 for k in ('board', 'channel')):
             raise AnalysisError(f'{ident}: board and channel must be non-negative integers.')
         if kind == 'load_runs':
-            if params['runs'].strip() or not (params['target'].strip() or params['run_type'].strip()):
+            if params['runs'].strip() or not any(params.get(k, '').strip() for k in ('target', 'run_type', 'flag', 'exclude', 'date_from', 'date_to', 'voltage_min', 'voltage_max')):
                 parse_runs(params['runs'])
+            if params['time_scale'] <= 0: raise AnalysisError('Timestamp scale must be positive.')
             if params['file'] and (Path(params['file']).name != params['file'] or not params['file'].endswith('.root')):
                 raise AnalysisError(f'{ident}: choose a ROOT filename inside the run directory.')
         by_id[ident] = {**node, 'params': params}
@@ -215,9 +257,12 @@ class Events:
     intercept: float = 0
     board: int | None = None
     channel: int | None = None
+    timestamp: str = 'Timestamp'
+    time_scale: float = 1e-12
+    time_offset: float = 0
 
 
-def chunks(events, deadline):
+def chunks(events, deadline, with_time=False):
     uproot = root_module()
     for run, paths in events.files:
         for path in paths:
@@ -229,6 +274,9 @@ def chunks(events, deadline):
                 branches = [events.energy, 'Channel']
                 if not all(name in tree.keys() for name in branches):
                     raise AnalysisError(f'Run {run}, {path.name}: missing {events.energy} or Channel. Inspect the ROOT schema; PSD normally uses EnergyLong.')
+                if with_time:
+                    if events.timestamp not in tree.keys(): raise AnalysisError(f'Run {run}: missing timestamp branch {events.timestamp}.')
+                    branches.append(events.timestamp)
                 has_board = 'Board' in tree.keys()
                 if has_board:
                     branches.append('Board')
@@ -246,7 +294,13 @@ def chunks(events, deadline):
                     energy = energy[mask] * events.slope + events.intercept
                     if not np.all(np.isfinite(energy)):
                         raise AnalysisError(f'Run {run}: non-finite energy values or calibration overflow.')
-                    yield run, energy
+                    if energy.ndim != 1: raise AnalysisError('Select a scalar energy branch.')
+                    if with_time:
+                        times = np.asarray(arrays[events.timestamp], dtype=float)[mask] * events.time_scale + events.time_offset
+                        if times.ndim != 1 or not np.isfinite(times).all() or np.any(times < 0): raise AnalysisError('Timestamps must be finite non-negative seconds relative to run start.')
+                        yield run, energy, times
+                    else:
+                        yield run, energy
 
 
 def execute(graph, metadata, progress=lambda _: None):
@@ -282,7 +336,7 @@ def execute(graph, metadata, progress=lambda _: None):
                             raise AnalysisError(f'Run {run}: ROOT input changed during analysis.')
                         if previous is None:
                             source['files'].append(entry)
-                result = {'events': Events(tuple(runs), tuple(files), p['tree'], p['energy'])}
+                result = {'events': Events(tuple(runs), tuple(files), p['tree'], p['energy'], timestamp=p['timestamp'], time_scale=p['time_scale'], time_offset=p['time_offset'])}
             elif kind == 'database':
                 result = {'metadata': metadata}
             elif kind == 'calibrate':
@@ -310,14 +364,16 @@ def execute(graph, metadata, progress=lambda _: None):
                     edges = np.linspace(p['min'], p['max'], int(p['bins']) + 1).tolist()
                     plots.append({'node': ident, 'kind': 'histogram', 'title': p['title'], 'edges': edges,
                                   'series': [{'run': run, 'counts': counts.tolist()} for run, counts in values.items()]})
-                    result = {'entries_in_range': {run: int(counts.sum()) for run, counts in values.items()}}
+                    result = {'spectrum': {'edges': edges, 'series': [{'run': run, 'counts': counts.tolist(), 'variance': counts.tolist()} for run, counts in values.items()]}, 'entries_in_range': {run: int(counts.sum()) for run, counts in values.items()}}
             elif kind == 'yield':
                 values = {}
                 for run, counts in args['counts'].items():
                     charge = args['metadata'][run]['charge_uC']
                     if charge is None or not math.isfinite(charge) or charge <= 0:
                         raise AnalysisError(f'Run {run}: saved charge must be positive to calculate yield.')
-                    values[run] = {'value': counts / charge, 'error': math.sqrt(counts) / charge, 'counts': counts, 'charge_uC': charge}
+                    value = counts['value'] if isinstance(counts, dict) else counts
+                    error = counts['error'] if isinstance(counts, dict) else math.sqrt(counts)
+                    values[run] = {'value': value / charge, 'error': error / charge, 'counts': value, 'charge_uC': charge}
                 result = {'values': values}
             elif kind == 'beam_energy':
                 values = {}
@@ -337,15 +393,24 @@ def execute(graph, metadata, progress=lambda _: None):
                 plots.append({'node': ident, 'kind': 'series', 'title': p['title'], 'x_label': p['x_label'], 'y_label': p['y_label'],
                               'points': sorted(points, key=lambda row: row['x'])})
                 result = {'points': points}
+            else:
+                from .analysis_nodes import run_node
+                result, extra_plots = run_node(kind, p, args, ident, metadata, deadline, provenance)
+                result_bins += sum(sum(len(row['counts']) for row in plot['series']) if plot['kind'] == 'histogram' else len(plot['points']) for plot in extra_plots)
+                if result_bins > 1_000_000: raise AnalysisError('Workflow exceeds one million output bins/points.')
+                plots.extend(extra_plots)
+            if time.monotonic() > deadline: raise AnalysisError('Analysis exceeded 5 minutes.')
             outputs[ident] = result
             if 'events' in result:
                 ev = result['events']
                 summaries[ident] = {'runs': list(ev.runs), 'energy_branch': ev.energy, 'slope': ev.slope, 'intercept': ev.intercept, 'board': ev.board, 'channel': ev.channel}
+            elif 'current' in result:
+                summaries[ident] = {'runs': {run: {'samples': len(row['time']), 'column': p['column']} for run,row in result['current'].items()}}
             elif kind == 'database':
                 summaries[ident] = {'source': 'Active experiment database (read only)'}
             else:
                 summaries[ident] = result
-        except (AnalysisError, OSError, KeyError, ValueError, TypeError) as exc:
+        except (AnalysisError, OSError, KeyError, ValueError, TypeError, RuntimeError, ImportError) as exc:
             raise AnalysisError(f'{ident} ({CATALOG[kind]["label"]}): {exc}') from exc
     for run, source in provenance.items():
         for file in source['files']:
@@ -355,5 +420,5 @@ def execute(graph, metadata, progress=lambda _: None):
                 raise AnalysisError(f'Run {run}: ROOT input changed during analysis; run again when conversion finishes.')
     return {'nodes': summaries, 'plots': plots, 'provenance': provenance, 'workflow': graph,
             'notes': ['ROI bounds are exclusive; histogram bins follow NumPy conventions.',
-                      'Yield errors include Poisson counting statistics only, not charge/calibration uncertainty.',
+                      'Errors propagate counting and fit variance; efficiency may add a shared systematic. Charge/calibration uncertainties are not propagated. Shared backgrounds correlate different runs.',
                       'Charge comes from the saved run database in µC; beam energy uses the workflow formula.']}

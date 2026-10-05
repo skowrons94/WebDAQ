@@ -24,7 +24,7 @@ _batch = {'state': 'idle', 'runs': []}
 def metadata_snapshot():
     return {r.run_number: {'run_number': r.run_number, 'complete': r.end_time is not None,
                           'charge_uC': r.accumulated_charge, 'terminal_voltage': r.terminal_voltage,
-                          'probe_voltage': r.probe_voltage, 'target_name': r.target_name, 'run_type': r.run_type,
+                          'probe_voltage': r.probe_voltage, 'target_name': r.target_name, 'run_type': r.run_type, 'flag': r.flag,
                           'start_time': r.start_time.isoformat() if r.start_time else None,
                           'end_time': r.end_time.isoformat() if r.end_time else None}
             for r in RunMetadata.query.all()}
@@ -70,10 +70,11 @@ def context():
             saved = active['graph']
     except analysis.AnalysisError as exc:
         warning = str(exc)
+    from ..services.analysis_examples import examples
     identity = f'{Path.cwd()}|{current_app.config["SQLALCHEMY_DATABASE_URI"]}'
     return jsonify({'project_id': hashlib.sha256(identity.encode()).hexdigest()[:16],
                     'project_name': Path.cwd().name, 'catalog': analysis.CATALOG,
-                    'workflow': saved, 'active_workflow': {k: v for k, v in active.items() if k != 'graph'} if active else None, 'warning': warning})
+                    'examples': examples(), 'workflow': saved, 'active_workflow': {k: v for k, v in active.items() if k != 'graph'} if active else None, 'warning': warning})
 
 
 @bp.put('/analysis/workflow')
@@ -127,6 +128,18 @@ def load_workflow(ident):
         data['active_id'] = ident
         analysis_workflows.write(library_path(), data)
     return jsonify(row)
+
+
+@bp.post('/analysis/query')
+@jwt_required_custom
+def query_runs():
+    params = payload()
+    known = analysis.CATALOG['load_runs']['params']
+    if set(params) - set(known) or any(not isinstance(v, str) for v in params.values()):
+        raise analysis.AnalysisError('Invalid query fields.')
+    metadata = metadata_snapshot()
+    runs = analysis.resolve_runs(params, metadata)
+    return jsonify({'runs': runs})
 
 
 @bp.get('/analysis/runs/<int:run>/schema')

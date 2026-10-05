@@ -67,8 +67,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         : 'text-muted-foreground hover:text-foreground hover:bg-accent/50'
 
     return (
-        <div className="flex min-h-screen w-full flex-col">
-            <header className="sticky top-0 z-50 flex h-16 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:gap-4 md:px-6">
+        <div className={`flex w-full flex-col ${pathname === '/analysis' ? 'h-dvh overflow-hidden' : 'min-h-screen'}`}>
+            <header className="sticky top-0 z-50 flex h-16 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:gap-4 md:px-6">
                 <nav aria-label="Main navigation" className="hidden shrink-0 items-center gap-1 lg:flex">
                     <Link href="/dashboard" className="mr-3 flex items-center gap-2 font-semibold">
                         <MoonStarIcon className="h-8 w-8 text-primary" />
@@ -197,7 +197,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </DropdownMenu>
                 </div>
             </header>
-            <main className="flex-1 px-4 pt-4 md:px-8 md:pt-6">
+            <main className={`flex-1 px-4 pt-4 md:px-8 md:pt-6 ${pathname === '/analysis' ? 'analysis-main min-h-0 overflow-auto' : ''}`}>
                 {activeGroup && activePage && (
                     <nav aria-label="Breadcrumb" className="mb-4 text-sm text-muted-foreground">
                         <ol className="flex flex-wrap items-center gap-2">
@@ -211,8 +211,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 )}
                 {children}
             </main>
-            <footer className="mt-auto flex h-16 items-center justify-center bg-background text-muted-foreground">
-                <span>&copy; 2025 LUNADAQ</span>
+            <footer className={`mt-auto flex shrink-0 items-center justify-center bg-background text-muted-foreground ${pathname === '/analysis' ? 'h-8 text-xs border-t' : 'h-16'}`}>
+                <span>&copy; {new Date().getFullYear()} LUNADAQ</span>
             </footer>
         </div>
     )

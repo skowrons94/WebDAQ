@@ -200,7 +200,34 @@ class AnalysisRoutesTests(unittest.TestCase):
         for path in ('/analysis/execute', '/analysis/conversions'):
             self.assertEqual(self.client.post(path, json={}).status_code, 401)
         self.assertEqual(self.client.put('/analysis/workflow', json={}).status_code, 401)
-        self.assertEqual(len(self.client.get('/analysis/context', headers=self.auth).get_json()['catalog']), 9)
+        self.assertGreaterEqual(len(self.client.get('/analysis/context', headers=self.auth).get_json()['catalog']), 22)
+
+    def test_query_endpoint_and_examples(self):
+        self.assertEqual(self.client.post('/analysis/query', json={'runs':'1'}).status_code, 401)
+        self.assertEqual(self.client.post('/analysis/query', headers=self.auth, json={'runs':'1'}).get_json()['runs'], [1])
+        self.assertEqual(self.client.post('/analysis/query', headers=self.auth, json={'runs':[]}).status_code, 400)
+        self.assertEqual(self.client.post('/analysis/query', headers=self.auth, json={'sql':'select *'}).status_code, 400)
+        examples = self.client.get('/analysis/context', headers=self.auth).get_json()['examples']
+        self.assertEqual(len(examples), 8)
+        for example in examples:
+            from app.services.analysis_workflows import validate_draft
+            validate_draft(example['graph'])
+
+
+    def test_examples_on_empty_installation(self):
+        from app import db
+        from app.models.run_metadata import RunMetadata
+        with self.app.app_context():
+            RunMetadata.query.delete(); db.session.commit()
+        context = self.client.get('/analysis/context', headers=self.auth).get_json()
+        self.assertIsNone(context['workflow'])
+        self.assertEqual(len(context['examples']), 8)
+        for template in context['examples']:
+            with self.subTest(template=template['id']):
+                self.assertTrue(template['setup'])
+                body = dict(name=template['name'], description='\n'.join(template['setup']), graph=template['graph'])
+                self.assertEqual(self.client.post('/analysis/workflows', headers=self.auth, json=body).status_code, 201)
+                self.assertEqual(self.client.post('/analysis/execute', headers=self.auth, json=template['graph']).status_code, 400)
 
     def test_save_draft_and_invalid_execution(self):
         graph = workflow('')

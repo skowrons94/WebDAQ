@@ -40,7 +40,7 @@ values, not waveform arrays. A legacy tree without `Board` is treated as board
 ## Nodes and scientific conventions
 
 Every node supports one run or a list of runs; results retain run-number keys.
-There is no separate list-only node family.
+There is no separate list-only node family. Drag library items onto the canvas to add them.
 
 | Node | Operation |
 | --- | --- |
@@ -54,12 +54,114 @@ There is no separate list-only node family.
 | Histogram | One spectrum per run, on shared, explicit bins and energy range. NumPy bin convention: left-inclusive/right-exclusive, final upper edge inclusive. |
 | Plot Series | Match X and Y by run number, sort by X, and show Y error bars. Different run sets are rejected. |
 
-Yield uncertainty is **counting statistics only**. There is no background
-subtraction, dead-time, efficiency, pile-up, saturation, or charge/calibration
-uncertainty correction in this first node set. ROOT events are counted as stored.
-Charge is taken from LUNAdaq's saved per-run charge, which follows the selected
-charge channel during acquisition; the old prototype's hard-coded timestamp
-conversion/current-column assumptions are not used.
+Raw ROI uncertainty is Poisson counting statistics. Extracted areas carry their
+subtraction or fit variance into Yield. Charge uncertainty, dead time, pile-up,
+and calibration-coefficient uncertainty are not propagated. Efficiencies can
+include an explicit relative systematic uncertainty.
+
+## Spectrum analysis
+
+Histogram provides a **spectrum** output containing bin edges, counts and
+variances, while still drawing a chart. Connect it to:
+
+- **Rebin**: merge adjacent bins; the integer factor must divide the bin count.
+  Counts and variances are summed.
+- **Background subtraction**: identical bins and independent runs are required.
+  Background runs are summed. Scale by signal elapsed measurement time / summed
+  background time, signal charge / summed background charge, or a manual factor.
+  Net counts are `S − aB`; variance is `Var(S) + a² Var(B)`. Negative net bins are
+  retained. Time is wall-clock run duration, not live time. Exposure errors are
+  not included. A shared background correlates different signal runs.
+- **Peak area**: integrate bins whose centres are strictly inside the bounds.
+- **Sideband subtraction**: subtract a flat continuum from two non-overlapping
+  flanking sidebands, weighted by actual included bin widths. Propagates sideband
+  counting variance; assumes locally flat background.
+- **Peak fit**: bin-integrated Gaussian plus linear background, using weighted
+  least squares and `sqrt(max(variance, 1))` bin errors. Output is the **total
+  Gaussian area**, not just its part inside the fit window. Summary diagnostics
+  include centroid, sigma, covariance, residuals and reduced chi-square. Inspect
+  them, especially for sparse spectra: this is not a Poisson-likelihood fit.
+- **Calibration fit**: a straight line through supplied `[ADC, energy_keV]`
+  reference points, with residual plots. Covariance uses residual scatter for
+  more than two points; two-point covariance is unavailable. Reference-point
+  errors are not modelled. Connect to **Apply fitted calibration** with events.
+- **Efficiency correction**: divide by a piecewise-linear absolute efficiency
+  curve at the specified peak energy. Rejects extrapolation and nonpositive
+  efficiencies. Relative efficiency uncertainty adds a shared systematic,
+  separately recorded in output.
+- **Ratio / arithmetic**: add, subtract, multiply or divide matching run-keyed
+  series. Errors use an explicit correlation coefficient (default independent).
+  Division by zero is rejected. A full cross-run covariance matrix is not
+  propagated for shared backgrounds or efficiency curves.
+
+Peak area, Sideband subtraction and Peak fit provide **counts** for Yield and
+**values** for arithmetic/efficiency. Existing unbinned ROI workflows still work.
+
+In a spectrum chart, select the destination ROI/fit node, then **drag across the
+chart** or edit its two bounds. This updates the node and marks results stale;
+**Run pipeline** recalculates. Choose a spectrum in the same calibrated energy
+coordinates as the destination. Sideband bounds remain inspector parameters.
+
+## Time analysis and ROOT trees
+
+**Inspect ROOT → Use tree** sets filename, tree and run on the selected source
+(or the first source). Energy/timestamp branches remain editable. RUReader's
+default Timestamp unit is ps (`1e-12` seconds per tick). Set the scale to match
+your conversion and an explicit offset to align timestamps to run start; clock
+origins are not inferred.
+
+**Counting rate over time** bins detector-selected ROI events and divides by
+actual bin duration, including the final short bin. Zero stop uses run duration.
+**Load current** reads the same runs' current.txt with an explicit recorded column
+such as `Ch0(uA)` or `Current(uA)`; no physical channel is assumed. **Yield over
+time** divides each bin's counts by trapezoidally integrated current over the
+same interval, using full-resolution samples and interpolated endpoints. Missing
+coverage, non-monotonic times, and nonpositive charge are errors. Interpolation
+assumes linear current between samples: inspect gaps. Current uncertainty is not
+included. Plot nodes retain run IDs. This analyses recorded runs, not live DAQ.
+
+Richer run queries support ranges, exclusions, flags, start-date bounds and
+terminal-voltage ranges, combined with AND. Date-only upper bounds include the
+whole date; timestamp upper bounds are exclusive. Preview matches before applying.
+
+## Example workflows
+
+**Workflows → Examples** contains eight experiment-independent draft templates.
+A fresh experiment with no saved workflow starts with **Spectrum & ROI counts**.
+
+| Template | Required inputs beyond converted detector events |
+| --- | --- |
+| Spectrum & ROI counts | Measured calibration and chosen energy/ROI ranges; no charge or beam metadata. |
+| Time-normalised background | Independent background runs, matching spectrum bins, valid start/end times. Uses elapsed time, not live time. |
+| Background → peak yield | Independent background, positive signal/background charge, signal terminal/probe voltages, fit settings. |
+| Sideband yield scan | Positive charge, terminal/probe voltages, two sidebands around a locally flat continuum. |
+| Fit energy calibration | At least two measured ADC-centroid / known-energy pairs from the same detector settings. |
+| Counting rate over time | Event timestamps with known unit/origin and valid run start/end times; no current log needed. |
+| Rate, current & yield over time | Rate inputs plus a recorded current column in µA, overlapping time coverage and positive time-bin charge. |
+| Efficiency & peak ratios | Two disjoint peak windows, peak energies and measured absolute-efficiency curves; no charge or beam metadata. Gross areas and their ratio appear in Summary. |
+
+All run selections and queries start blank, so no template assumes demo run IDs
+or automatically analyses existing data. Loading and saving a draft works on an
+empty installation; executing it requires choosing actual completed runs first.
+For workflows with two sources, select the intended Load Run(s) node before
+applying a run selection/query. No acquisition or sample data is created by
+loading a template.
+
+Expand **Setup requirements** on each template for its prerequisites. These
+instructions are also copied into its description when saving a new workflow.
+The identity energy calibration, board/channel 0, 0–2000 keV spectrum and
+400–600 keV ROI are explicit starting settings, not measured values. Adjust
+both paths of a background workflow consistently. Calibration reference points,
+efficiency curves and the current-log column are deliberately blank. The default
+Timestamp scale is ps; verify your ROOT conversion and time origin. Time stop 0
+uses each run's duration; narrow it to current-log coverage for time yields.
+Beam Energy uses neutral scale 1 and offset 0 in templates; configure your
+accelerator's voltage calibration and ion charge state. Existing saved workflows
+and their settings are not migrated or overwritten.
+
+The peak-ratio template assumes independent errors by default. Common efficiency
+systematics can correlate the two corrected areas; set an appropriate correlation
+or use a fuller covariance treatment before interpreting ratio uncertainties.
 
 ## Workflows and results
 
@@ -99,7 +201,7 @@ it does not pretend partially converted output is ready for analysis.
 
 ## Install and test
 
-`environment.yml` includes `uproot>=5,<6`; rerun the installer or update the
+`environment.yml` includes `uproot>=5,<6` and `scipy>=1.11`; rerun the installer or update the
 `luna` environment after pulling this feature. Frontend dependencies include
 `@xyflow/react`. The offline reader does not require a working PyROOT import,
 but RUReader still needs its compiled ROOT libraries for conversion.
@@ -113,3 +215,22 @@ The tests use temporary data directories, an in-memory metadata DB, and small
 ROOT files written with uproot. They cover detector selection, calibration,
 exclusive ROI boundaries, histogram counts, yields/errors, run alignment,
 invalid graphs, input confinement, authentication and batch conversion orchestration.
+
+Numerical references: [SciPy curve_fit](https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.curve_fit.html)
+and [NumPy polyfit](https://numpy.org/doc/stable/reference/generated/numpy.polyfit.html).
+
+## Editor rendering and layout
+
+On wide screens the editor fills the space between the header and footer;
+results scroll inside their own panel. At narrower widths the panels stack,
+with a separately resizable results height. More results never increase that
+panel's height. Library nodes show short descriptions and styled help opens
+on hover after 150 ms or on keyboard focus.
+
+Charts mount only near the visible results area and release their chart DOM
+when scrolled away. Unchanged results and nodes are memoized so moving nodes
+does not redraw plots or mark scientific results stale. Current traces render
+as lines without per-sample markers; nonzero time-bin uncertainties still have
+error bars. Numeric exports retain every sample. Summary sections render on
+expansion; raw previews cap arrays at 200 entries and text at 100,000 characters,
+with a truncation notice and a full-data export.

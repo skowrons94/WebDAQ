@@ -1152,7 +1152,7 @@ export default api;
 export interface AnalysisNodeSpec {
     label: string; group: string; description: string
     inputs: Record<string, string>; outputs: Record<string, string>
-    params: Record<string, { label: string; default: number | string; type: 'number' | 'text' }>
+    params: Record<string, { label: string; default: number | string; type: 'number' | 'text'; options?: string[] }>
 }
 export interface AnalysisGraph {
     version: 1
@@ -1160,14 +1160,15 @@ export interface AnalysisGraph {
     edges: { id: string; source: string; target: string; sourceHandle: string; targetHandle: string }[]
 }
 export interface AnalysisContext {
+    examples: { id: string; name: string; description: string; setup: string[]; graph: AnalysisGraph }[]
     project_id: string; project_name: string; catalog: Record<string, AnalysisNodeSpec>
     workflow: AnalysisGraph | null; warning: string | null; active_workflow: SavedAnalysisWorkflow | null
 }
 export type AnalysisPlot = {
     node: string; title: string; kind: 'histogram'; edges: number[]
-    series: { run: number; counts: number[] }[]
+    series: { run: number; counts: number[]; variance?: number[] }[]; fit?: (number | null)[]
 } | {
-    node: string; title: string; kind: 'series'; x_label: string; y_label: string
+    node: string; title: string; kind: 'series' | 'time'; x_label: string; y_label: string
     points: { run: number; x: number; y: number; error: number }[]
 }
 export interface AnalysisResult {
@@ -1195,3 +1196,5 @@ export const getAnalysisWorkflows = (): Promise<{ workflows: SavedAnalysisWorkfl
 export const storeAnalysisWorkflow = (value: { name: string; description: string; graph: AnalysisGraph }, id?: string): Promise<SavedAnalysisWorkflow & { graph: AnalysisGraph }> =>
     (id ? api.put(`/analysis/workflows/${id}`, value) : api.post('/analysis/workflows', value)).then(r => r.data)
 export const loadAnalysisWorkflow = (id: string): Promise<SavedAnalysisWorkflow & { graph: AnalysisGraph }> => api.post(`/analysis/workflows/${id}/load`).then(r => r.data)
+
+export const queryAnalysisRuns = (params: Record<string, string>): Promise<{runs: number[]}> => api.post('/analysis/query', params).then(r => r.data)
