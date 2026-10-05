@@ -1147,3 +1147,54 @@ export const getElogAttachment = (url: string) =>
         .then(res => res.data as Blob);
 
 export default api;
+
+// Offline analysis uses the active experiment and its existing JWT session.
+export interface AnalysisNodeSpec {
+    label: string; group: string; description: string
+    inputs: Record<string, string>; outputs: Record<string, string>
+    params: Record<string, { label: string; default: number | string; type: 'number' | 'text'; options?: string[] }>
+}
+export interface AnalysisGraph {
+    version: 1
+    nodes: { id: string; kind: string; params: Record<string, number | string>; position: { x: number; y: number } }[]
+    edges: { id: string; source: string; target: string; sourceHandle: string; targetHandle: string }[]
+}
+export interface AnalysisContext {
+    examples: { id: string; name: string; description: string; setup: string[]; graph: AnalysisGraph }[]
+    project_id: string; project_name: string; catalog: Record<string, AnalysisNodeSpec>
+    workflow: AnalysisGraph | null; warning: string | null; active_workflow: SavedAnalysisWorkflow | null
+}
+export type AnalysisPlot = {
+    node: string; title: string; kind: 'histogram'; edges: number[]
+    series: { run: number; counts: number[]; variance?: number[] }[]; fit?: (number | null)[]
+} | {
+    node: string; title: string; kind: 'series' | 'time'; x_label: string; y_label: string
+    points: { run: number; x: number; y: number; error: number }[]
+}
+export interface AnalysisResult {
+    nodes: Record<string, unknown>; plots: AnalysisPlot[]; provenance: Record<string, unknown>
+    workflow: AnalysisGraph; notes: string[]
+}
+export interface AnalysisJob {
+    id: string; state: 'running' | 'done' | 'failed'; node?: string; result?: AnalysisResult; message?: string
+}
+export interface AnalysisBatch {
+    state: 'idle' | 'running' | 'done' | 'failed'
+    runs: { run: number; state: string; message: string }[]
+}
+export interface AnalysisSchema { files: { name: string; trees: { name: string; entries: number; branches: string[] }[] }[] }
+export const getAnalysisContext = (): Promise<AnalysisContext> => api.get('/analysis/context').then(r => r.data)
+export const saveAnalysisWorkflow = (graph: AnalysisGraph) => api.put('/analysis/workflow', graph)
+export const executeAnalysis = (graph: AnalysisGraph): Promise<{ id: string }> => api.post('/analysis/execute', graph).then(r => r.data)
+export const getAnalysisJob = (id: string): Promise<AnalysisJob> => api.get(`/analysis/jobs/${id}`).then(r => r.data)
+export const getAnalysisSchema = (run: number): Promise<AnalysisSchema> => api.get(`/analysis/runs/${run}/schema`).then(r => r.data)
+export const getAnalysisBatch = (): Promise<AnalysisBatch> => api.get('/analysis/conversions').then(r => r.data)
+export const startAnalysisBatch = (runs: number[]) => api.post('/analysis/conversions', { runs })
+
+export interface SavedAnalysisWorkflow { id: string; name: string; description: string; updated_at: string }
+export const getAnalysisWorkflows = (): Promise<{ workflows: SavedAnalysisWorkflow[] }> => api.get('/analysis/workflows').then(r => r.data)
+export const storeAnalysisWorkflow = (value: { name: string; description: string; graph: AnalysisGraph }, id?: string): Promise<SavedAnalysisWorkflow & { graph: AnalysisGraph }> =>
+    (id ? api.put(`/analysis/workflows/${id}`, value) : api.post('/analysis/workflows', value)).then(r => r.data)
+export const loadAnalysisWorkflow = (id: string): Promise<SavedAnalysisWorkflow & { graph: AnalysisGraph }> => api.post(`/analysis/workflows/${id}/load`).then(r => r.data)
+
+export const queryAnalysisRuns = (params: Record<string, string>): Promise<{runs: number[]}> => api.post('/analysis/query', params).then(r => r.data)
