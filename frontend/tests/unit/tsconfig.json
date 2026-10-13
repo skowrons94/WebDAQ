@@ -1,0 +1,10 @@
+{
+  // Type-checks the unit tests (the app's tsconfig leaves tests/ out):
+  //   npx tsc --noEmit -p tests/unit
+  // vitest is not a dependency of the app: vitest-env.d.ts declares the few
+  // calls the tests use.
+  "extends": "../../tsconfig.json",
+  "compilerOptions": { "incremental": false, "paths": { "@/*": ["../../src/*"] } },
+  "include": ["../../next-env.d.ts", "../../src/lib/load-jsroot.ts", "*.ts", "vitest-env.d.ts"],
+  "exclude": []
+}

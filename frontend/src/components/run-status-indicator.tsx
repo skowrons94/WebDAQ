@@ -11,7 +11,7 @@
 // colour-vision-deficient users and a glance at a badly lit control room. The
 // states and their precedence are in hooks/use-run-badge.ts:
 //   Board failure       red     at least one board reported a FAIL aggregate this run
-//   Tuning · not saved  amber   the Tuner's own acquisition, saving off
+//   Tuning              amber   the Tuner's own acquisition, saving off
 //   Running             green   acquiring, no board failures
 //   Stopped             neutral no run in progress
 // A board failure outranks "running": the run is still going, but the data has

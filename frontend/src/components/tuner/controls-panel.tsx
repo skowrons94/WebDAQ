@@ -137,8 +137,8 @@ export function ControlsPanel({
                   notes.push({ text: `The trace shows the baseline at ${Math.round(measuredBaseline)} LSB: trust the trace.`, warn: true })
                 }
               }
-              if ((spec.id === 'rise' || spec.id === 'decay') && changed) {
-                notes.push({ text: 'The energy gain depends on the rise and decay times: the peaks move, so check the calibration after this change.', warn: true })
+              if ((spec.id === 'rise' || spec.id === 'decay' || spec.id === 'finegain' || spec.id === 'rescale') && changed) {
+                notes.push({ text: 'The energy gain depends on the rise and decay times, fine gain and rescaling: the peaks move, so check the calibration after this change.', warn: true })
               }
               if (spec.id === 'peaking') {
                 const flat = byId('flat')

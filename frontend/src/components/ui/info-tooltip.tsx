@@ -45,7 +45,7 @@ export function InfoTooltip({
       <span
         role="tooltip"
         className={cn(
-          "pointer-events-none absolute left-1/2 z-50 w-64 -translate-x-1/2 rounded-md border",
+          "pointer-events-none absolute left-1/2 z-50 w-[min(16rem,calc(100vw-32px))] -translate-x-1/2 rounded-md border",
           "bg-popover p-2.5 text-xs leading-snug text-popover-foreground shadow-md",
           "invisible opacity-0 transition-opacity duration-100",
           "group-hover/tip:visible group-hover/tip:opacity-100",

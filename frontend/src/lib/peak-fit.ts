@@ -258,7 +258,8 @@ function widthAt(g: (x: number) => number, lo: number, hi: number, frac: number)
 
 /**
  * Fit the peak inside [lo, hi] (axis units). `variance` per bin defaults to
- * the counts (Poisson); pass current + snapshot for a difference spectrum.
+ * the counts (Poisson); for a difference spectrum pass the new counts
+ * (max(cur - snapshot, 1)), which are Poisson on their own.
  * Tries Gaussian + line first, then adds a low-energy tail when the peak has
  * the counts for it and the tail clearly improves the fit.
  */
@@ -367,6 +368,8 @@ export function fitPeak(
   let net = 0
   for (let i = 0; i < n; i++) net += ys[i] - (p[3] + p[4] * (xs[i] - mu0))
   if (!Number.isFinite(fwhm) || fwhm <= 0) return null
+  // A width pinned at its lower limit is no measurement: no fit.
+  if (p[2] <= binW * 0.2 * 1.01) return null
   const fwhmErr = err(2) * (fwhm / p[2])
   // A continuum (Compton edge, shoulder) is not a peak: wide against its
   // position, or hardly above its own background.

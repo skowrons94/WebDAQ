@@ -91,12 +91,21 @@ export default function HistoryPanel({
   }, [run, boardId, boardName, channel, dpp])
 
   const list = entries.slice().reverse()
-  const fwhmAfter = (i: number) => {
-    // The next change's "before" is this one's "after"; for the latest, the fit now.
+  // One FWHM reading per Save all: entries saved together share a group, and
+  // the change is shown once, on the group's last entry, against the next
+  // group's "before" (or the fit now for the latest).
+  const key = (e: HistoryEntry) => e.group ?? e.id
+  const fwhmFor = (i: number): { before: number; after: number | null; n: number } | null => {
     const idx = entries.length - 1 - i
-    const next = entries[idx + 1]
-    if (next) return next.fwhmBefore
-    return currentFwhm?.fwhm ?? null
+    const e = entries[idx]
+    if (entries[idx + 1] && key(entries[idx + 1]) === key(e)) return null // not the group's last entry
+    if (!e.written || e.fwhmBefore == null) return null
+    let j = idx + 1
+    while (j < entries.length && key(entries[j]) === key(e)) j++
+    let n = 0
+    for (let k = idx; k >= 0 && key(entries[k]) === key(e); k--) n++
+    const next = entries[j]
+    return { before: e.fwhmBefore, after: next ? next.fwhmBefore : (currentFwhm?.fwhm ?? null), n }
   }
   const time = (t: number) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   const cmpPreset = presets.find((p) => p.id === compare)
@@ -113,7 +122,7 @@ export default function HistoryPanel({
         ) : (
           <ol className="max-h-72 space-y-1.5 overflow-auto pr-1">
             {list.map((e, i) => {
-              const after = fwhmAfter(i)
+              const f = fwhmFor(i)
               return (
                 <li key={e.id} className="flex items-start gap-2 rounded-md border px-2 py-1.5 text-sm">
                   <span className="mt-0.5 font-mono text-xs text-muted-foreground">{time(e.at)}</span>
@@ -121,7 +130,7 @@ export default function HistoryPanel({
                     {e.label}
                     <span className="block text-xs text-muted-foreground">
                       {e.written ? 'on the board' : 'from the next run · not applied yet'}
-                      {e.written && e.fwhmBefore != null && ` · FWHM ${e.fwhmBefore.toFixed(2)}${after != null ? ` → ${after.toFixed(2)}` : ''} ${e.unit ?? ''}`}
+                      {f && ` · FWHM ${f.before.toFixed(2)}${f.after != null ? ` → ${f.after.toFixed(2)}` : ''} ${e.unit ?? ''}${f.n > 1 ? ` (all ${f.n} changes of this save together)` : ''}`}
                     </span>
                   </span>
                   <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onUndo(e)}>Undo</Button>

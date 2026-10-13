@@ -54,6 +54,10 @@ interface Props {
   online: boolean
   /** Board Configuration register (0x8000) value, or null when unknown. */
   boardConfig: number | null
+  /** The 0x8000 value the board is running with (captured at run start), for reading the trace. */
+  runningConfig?: number | null
+  /** Energy-filter settings the board runs with: a change resets the trace statistics. */
+  filterKey?: string
   onBoardConfigChange: (newValue: number, label: string) => void
   /** Pre-trigger and record length, in samples (from the channel's registers). */
   preSamples: number | null
@@ -98,9 +102,12 @@ export function WaveformPanel(p: Props) {
   const ap2Options: RegisterOption[] = psd ? [] : getFieldOptions('Analog Probe 2', p.dpp) ?? []
   const dp1Options: RegisterOption[] = getFieldOptions('Digital Virtual Probe 1', p.dpp) ?? []
 
-  // What trace 1 is, for the diagnostics.
-  const showsInput = psd ? ap1 === 0 : ap1 === 0
-  const showsTrapezoid = !psd && ap1 === 3
+  // What trace 1 is, for the diagnostics: what the board runs with, not a
+  // probe choice that only applies at the next run.
+  const runCfg = p.running && p.runningConfig != null ? p.runningConfig : cfg
+  const runAp1 = psd ? getBits(runCfg, PROBE_BITS.psd.ap) : getBits(runCfg, PROBE_BITS.pha.ap1)
+  const showsInput = runAp1 === 0
+  const showsTrapezoid = !psd && runAp1 === 3
   // Dual trace interleaves the two traces: each has every other sample.
   const sampleNs = p.timing.sampleNs * (dual ? 2 : 1)
 
@@ -119,7 +126,7 @@ export function WaveformPanel(p: Props) {
     inputHist.current = []
     trapHist.current = []
     setMetrics(null)
-  }, [p.boardId, p.channel, cfg, p.riseNs])
+  }, [p.boardId, p.channel, runCfg, p.riseNs, p.flatNs, p.filterKey])
 
   useEffect(() => {
     if (!p.jsrootLoaded || !p.boardId) return
@@ -167,9 +174,10 @@ export function WaveformPanel(p: Props) {
               } : null,
               trap: th.length ? {
                 height: median(th.map((m) => m.height)) ?? 0,
-                flatSlopePctPerUs: median(th.map((m) => m.flatSlopePctPerUs)) ?? 0,
+                flatSlopePctPerUs: median(th.filter((m) => m.flatTopOk).map((m) => m.flatSlopePctPerUs)) ?? 0,
                 pzResidualPct: median(th.map((m) => m.pzResidualPct ?? NaN)),
-                cutOff: th.some((m) => m.cutOff),
+                // The majority decides: one pile-up trace must not void the rest.
+                cutOff: th.filter((m) => m.cutOff).length * 2 > th.length,
                 flatSamples: median(th.map((m) => m.flatSamples)) ?? 0,
                 flatTopOk: th.filter((m) => m.flatTopOk).length * 2 >= th.length,
               } : null,
@@ -308,7 +316,7 @@ export function WaveformPanel(p: Props) {
           metrics={metrics}
           fit={fit}
           timing={p.timing}
-          onShowTrapezoid={!psd && !showsTrapezoid ? () => setField(PROBE_BITS.pha.ap1, 3, 'Trace 1') : undefined}
+          onShowTrapezoid={!psd && !showsTrapezoid && ap1 !== 3 ? () => setField(PROBE_BITS.pha.ap1, 3, 'Trace 1') : undefined}
         />
       </CardContent>
     </Card>
@@ -363,10 +371,13 @@ function TraceReadout({
   const t = metrics?.trap
   if (showsTrapezoid && t) {
     rows.push(
-      !t.flatTopOk
-        ? <Ok key="flat" ok={false}>No flat top: the top is rounded (ballistic deficit). Lengthen the flat top.</Ok>
+      // No verdict on the top while the trapezoid does not fit the record.
+      fit && !fit.ok
+        ? <span key="flat" className="text-muted-foreground">Flat top not judged: the trapezoid does not fit the record.</span>
+        : !t.flatTopOk
+        ? <Ok key="flat" ok={false}>No flat top: lengthen the flat top, or check the pole-zero (decay time).</Ok>
         : <Ok key="flat" ok={Math.abs(t.flatSlopePctPerUs) < 1}>
-        Flat-top slope {t.flatSlopePctPerUs >= 0 ? '+' : ''}{t.flatSlopePctPerUs.toFixed(2)} %/µs
+        Flat-top slope {t.flatSlopePctPerUs >= 0 ? '+' : ''}{t.flatSlopePctPerUs.toFixed(2)} %/µs{Math.abs(t.flatSlopePctPerUs) >= 1 ? ' (pole-zero mismatch or ballistic deficit)' : ''}
       </Ok>,
       t.pzResidualPct === null || t.cutOff
         ? <Ok key="pz" ok={false}>The trapezoid does not return to the baseline inside the record: pole-zero not measurable</Ok>

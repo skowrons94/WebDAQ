@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { changedSince, fieldChanges, undoTarget } from '@/lib/tuner-history'
-import { spectrumSince } from '@/components/tuner/spectrum-panel'
+import { changedSince, fieldChanges, filterHistory, undoTarget, type HistoryEntry } from '@/lib/tuner-history'
+import { autoPickable, MIN_COUNTS, spectrumSince } from '@/components/tuner/spectrum-panel'
+import { onlineMustDrop, restoredOnline, runKind } from '@/lib/tuner-online'
 import { binCenters, fitPeak, groupFor } from '@/lib/peak-fit'
 import { trapezoidMetrics } from '@/lib/trace-metrics'
 import { expectedPileup, pileupWindow } from '@/components/tuner/health-strip'
@@ -122,6 +123,55 @@ describe('expected pile-up (H2)', () => {
   })
   it('uses rise + sampling delay + peak hold-off (PHA) and offset + long gate (PSD)', () => {
     expect(pileupWindow(false, { riseNs: 4000, samplingDelayNs: 800, peakHoldNs: 1000, longGateNs: 0, gateOffsetNs: 0 })).toBe(5800)
-    expect(pileupWindow(true, { riseNs: 0, samplingDelayNs: 0, peakHoldNs: 0, longGateNs: 400, gateOffsetNs: 40 })).toBe(440)
+    // PSD: approximate 1 − e^(−R·(offset + long gate)), passed as half the gate
+    const T = pileupWindow(true, { riseNs: 0, samplingDelayNs: 0, peakHoldNs: 0, longGateNs: 400, gateOffsetNs: 40 })
+    expect(T).toBe(220)
+    expect(expectedPileup(10000, T)).toBeCloseTo(1 - Math.exp(-10000 * 440e-9), 10)
+  })
+})
+
+// ── review M1: Online and production runs ──
+describe('Online never tunes a production run silently (M1)', () => {
+  it('is restored from the tab only without a production run', () => {
+    expect(restoredOnline(true, runKind(true, false, false))).toBe(true)  // stopped
+    expect(restoredOnline(true, runKind(true, true, true))).toBe(true)    // the Tuner's run
+    expect(restoredOnline(true, runKind(true, true, false))).toBe(false)  // production
+    expect(restoredOnline(true, runKind(false, false, false))).toBe(false) // not known yet
+    expect(restoredOnline(false, 'stopped')).toBe(false)
+  })
+  it('is switched off when a production run is on, unless confirmed for that run', () => {
+    expect(onlineMustDrop(true, 'production', null, 't1')).toBe(true)
+    expect(onlineMustDrop(true, 'production', 't0', 't1')).toBe(true)   // confirmed for an earlier run
+    expect(onlineMustDrop(true, 'production', 't1', 't1')).toBe(false)  // confirmed for this run
+    expect(onlineMustDrop(true, 'tuner', null, 't1')).toBe(false)
+    expect(onlineMustDrop(false, 'production', null, 't1')).toBe(false)
+  })
+})
+
+// ── review S4: no fit from a handful of counts ──
+describe('fits need counts and a real width (S4)', () => {
+  it('does not auto-pick a few-count spike', () => {
+    const c = [{ x: 2567, fwhm: 2, net: 3 }, { x: 1332, fwhm: 20, net: 400 }, { x: 600, fwhm: 300, net: 900 }]
+    expect(autoPickable(c).map((p) => p.x)).toEqual([1332])
+    expect(MIN_COUNTS).toBe(50)
+  })
+  it('a width stuck at its lower limit is no fit', () => {
+    // a single-bin spike on a flat background: sigma collapses to its clamp
+    const x = binCenters(400, 0, 400)
+    const y = Float64Array.from(x, (v) => (Math.abs(v - 200.5) < 0.6 ? 400 : 5))
+    expect(fitPeak(x, y, 180, 220)).toBeNull()
+  })
+})
+
+// ── review S7: history per firmware ──
+describe('history is kept per firmware (S7)', () => {
+  const e = (dpp: string | undefined, channel = 0): HistoryEntry => ({
+    id: Math.random().toString(36), at: 0, boardId: '0', channel, regKey: 'reg_1060', name: 'x', label: 'x',
+    from: 1, to: 2, written: false, source: 'manual', fwhmBefore: null, unit: null, dpp,
+  })
+  it('shows only entries of the firmware the board runs now', () => {
+    const all = [e('DPP-PHA'), e('DPP-PSD'), e(undefined), e('DPP-PHA', 1)]
+    expect(filterHistory(all, '0', 0, 'DPP-PSD')).toHaveLength(1)
+    expect(filterHistory(all, '0', 0, 'DPP-PHA')).toHaveLength(1)
   })
 })

@@ -2,8 +2,8 @@
 
 import { useRunStatus, noteRunAction } from '@/hooks/use-run-status'
 import useRunControlStore from '@/store/run-control-store'
-import { markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerOwnsRun, tunerRunRecordStarted } from '@/lib/tuner-save'
-import { applySetting as applySettingRaw, getStartTime } from '@/lib/api'
+import { markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerOwnsRun, tunerRunRecordStarted, tunerRunStartUnknown } from '@/lib/tuner-save'
+import { getStartTime } from '@/lib/api'
 import { StatusBadge } from '@/components/ui/status-badge'
 import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
@@ -26,6 +26,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { Zap } from 'lucide-react'
 import { loadJSROOT } from '@/lib/load-jsroot'
 import { useJsrootTheme } from '@/lib/jsroot-theme'
+import { onlineMustDrop, restoredOnline, runKind } from '@/lib/tuner-online'
 import { ControlsPanel, findRegKey, type BoardSettings } from '@/components/tuner/controls-panel'
 import { HealthStrip, expectedPileup, pileupWindow } from '@/components/tuner/health-strip'
 import { WaveformPanel } from '@/components/tuner/waveform-panel'
@@ -41,7 +42,6 @@ import { addHistory, changedSince, clearHistory, fieldChanges, loadHistory, regi
 import type { TraceReadout } from '@/components/tuner/waveform-panel'
 import type { FitSummary } from '@/components/tuner/spectrum-panel'
 import type { GuideStatus } from '@/components/tuner/guided-flow'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import dynamic from 'next/dynamic'
 
 // History and the guided checklist load on demand.
@@ -60,6 +60,7 @@ type BoardData = {
 }
 
 const ONLINE_KEY = 'lunadaq:tuner-online'
+const DONE_KEY = 'lunadaq:tuner-checklist'
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export default function ParamTuner() {
@@ -80,11 +81,9 @@ export default function ParamTuner() {
   // Online mode: write each change to the board as well as to its configuration,
   // so the effect shows up in the trace and the spectrum straight away. Off by
   // default — a session that only edits the configuration must stay possible.
-  // Kept for the browser tab, so leaving the page and coming back keeps it.
+  // Kept for the browser tab, but never carried into a production run
+  // (lib/tuner-online.ts): restored only when no production run is on.
   const [online, setOnlineState] = useState(false)
-  useEffect(() => {
-    try { setOnlineState(window.sessionStorage.getItem(ONLINE_KEY) === '1') } catch { /* default off */ }
-  }, [])
   const setOnline = (v: boolean) => {
     setOnlineState(v)
     try { window.sessionStorage.setItem(ONLINE_KEY, v ? '1' : '0') } catch { /* tab-only setting */ }
@@ -111,18 +110,31 @@ export default function ParamTuner() {
     const k = findRegKey(settings, selectedChannel, address)
     return k ? (pending[k] ?? settings[k].value_dec) : null
   }
-  const algo = reg(0x1080)
+  // What the board runs with: the settings at run start, plus what Save all
+  // wrote live since. The trace readout and the pile-up expectation use these,
+  // never staged edits nor saved "next run" values.
+  const [runningSettings, setRunningSettings] = useState<BoardSettings | null>(null)
+  const runReg = (address: number): number | null => {
+    const src = isRunning && runningSettings ? runningSettings : settings
+    const k = findRegKey(src, selectedChannel, address)
+    return k ? src[k].value_dec : null
+  }
+  const runCfgKey = runningSettings ? Object.keys(runningSettings).find((k) => parseInt(runningSettings[k].address, 16) === 0x8000) : undefined
+  const runningConfig = isRunning && runningSettings && runCfgKey ? runningSettings[runCfgKey].value_dec : null
+  const algo = runReg(0x1080)
   const negative = algo !== null && getBits(algo, [16, 16]) === 1
-  const recordRaw = reg(0x1020)
-  const preRaw = reg(0x1038)
-  const riseNs = !isPSD && reg(0x105c) !== null ? toDisplay(reg(0x105c)!, 'step', timing) : null
-  const flatNs = !isPSD && reg(0x1060) !== null ? toDisplay(reg(0x1060)!, 'step', timing) : null
-  const peakHoldNs = !isPSD && reg(0x1078) !== null ? toDisplay(reg(0x1078)!, 'step', timing) : 0
-  const longGateNs = isPSD && reg(0x1058) !== null ? toDisplay(reg(0x1058)!, 'sample', timing) : 0
+  const recordRaw = runReg(0x1020)
+  const preRaw = runReg(0x1038)
+  const riseNs = !isPSD && runReg(0x105c) !== null ? toDisplay(runReg(0x105c)!, 'step', timing) : null
+  const flatNs = !isPSD && runReg(0x1060) !== null ? toDisplay(runReg(0x1060)!, 'step', timing) : null
+  const peakHoldNs = !isPSD && runReg(0x1078) !== null ? toDisplay(runReg(0x1078)!, 'step', timing) : 0
+  const longGateNs = isPSD && runReg(0x1058) !== null ? toDisplay(runReg(0x1058)!, 'sample', timing) : 0
   // The window in which a second pulse piles up (design §P2).
-  const samplingDelayNs = !isPSD && reg(0x1064) !== null ? toDisplay(reg(0x1064)!, 'step', timing) : 0
-  const gateOffsetNs = isPSD && reg(0x105c) !== null ? toDisplay(reg(0x105c)!, 'sample', timing) : 0
+  const samplingDelayNs = !isPSD && runReg(0x1064) !== null ? toDisplay(runReg(0x1064)!, 'step', timing) : 0
+  const gateOffsetNs = isPSD && runReg(0x105c) !== null ? toDisplay(runReg(0x105c)!, 'sample', timing) : 0
   const pileupWindowNs = pileupWindow(isPSD, { riseNs: riseNs ?? 0, samplingDelayNs, peakHoldNs, longGateNs, gateOffsetNs })
+  // A change to the energy filter the board runs with restarts the trace statistics.
+  const filterKey = [0x1068, 0x105c, 0x1060, 0x1064, 0x1080, 0x1054, 0x1058].map((a) => runReg(a)).join(',')
 
   const rates = useChannelRates(selectedBoardId, selectedChannel, isRunning)
 
@@ -137,14 +149,24 @@ export default function ParamTuner() {
   const fitRef = useRef<FitSummary | null>(null)
   fitRef.current = fit
   const [trace, setTrace] = useState<TraceReadout | null>(null)
-  const [presetSaved, setPresetSaved] = useState(false)
+  // Checklist steps done on this board, channel and firmware (this tab).
+  const [done, setDone] = useState<Record<string, string[]>>({})
+  useEffect(() => { try { setDone(JSON.parse(window.sessionStorage.getItem(DONE_KEY) ?? '{}')) } catch { /* none */ } }, [])
+  const doneKey = `${selectedBoardId}:${selectedChannel}:${dpp}`
+  const markDone = (what: string) => setDone((d) => {
+    const next = { ...d, [doneKey]: Array.from(new Set([...(d[doneKey] ?? []), what])) }
+    try { window.sessionStorage.setItem(DONE_KEY, JSON.stringify(next)) } catch { /* tab only */ }
+    return next
+  })
+  const presetSaved = (done[doneKey] ?? []).includes('preset')
+  const thresholdSet = (done[doneKey] ?? []).includes('thr')
   const [guideOpen, setGuideOpen] = useState(false)
   useEffect(() => {
-    if (selectedBoardId) setHistory(loadHistory(selectedBoardId, selectedChannel))
-    setFit(null); setTrace(null)
-  }, [selectedBoardId, selectedChannel])
+    if (selectedBoardId) setHistory(loadHistory(selectedBoardId, selectedChannel, dpp))
+    setFit(null); setTrace(null); setMeasuredBaseline(null)
+  }, [selectedBoardId, selectedChannel, dpp])
   /** Log a register change, one entry per Tuner field it touched (so Undo puts back only that field). */
-  const logChange = (regKey: string, from: number, to: number, written: boolean, source: HistoryEntry['source']) => {
+  const logChange = (regKey: string, from: number, to: number, written: boolean, source: HistoryEntry['source'], group?: string) => {
     const f = fitRef.current
     const r = settings[regKey]
     if (!r) return
@@ -152,11 +174,11 @@ export default function ParamTuner() {
       addHistory({
         boardId: selectedBoardId, channel: selectedChannel, regKey, name: c.spec?.label ?? r.name,
         label: c.spec ? `${c.spec.label} ${formatControl(c.spec, c.from, timing)} → ${formatControl(c.spec, c.to, timing)}` : `${r.name} ${from} → ${to}`,
-        field: c.spec?.id, bits: c.spec?.bits,
+        field: c.spec?.id, bits: c.spec?.bits, dpp, group,
         from: c.from, to: c.to, written, source, fwhmBefore: f?.reliable ? f.fwhm : null, unit: f?.reliable ? f.unit : null,
       })
     }
-    setHistory(loadHistory(selectedBoardId, selectedChannel))
+    setHistory(loadHistory(selectedBoardId, selectedChannel, dpp))
   }
 
   // --- Effects ---
@@ -193,6 +215,7 @@ export default function ParamTuner() {
       try {
         const data = await getBoardSettings(selectedBoardId)
         setSettings(data)
+        setRunningSettings(isRunningRef.current ? data : null)
       } catch (error) {
         // A board with no register file (config deleted, never read from the
         // hardware) is the usual cause, and "failed to load" hides that.
@@ -247,6 +270,50 @@ export default function ParamTuner() {
   useEffect(() => {
     if (runKnown && isRunning && tunerOwnsRun(runStartTime)) setIsAcquiring(true)
   }, [runKnown, isRunning, runStartTime])
+
+  // Capture what the board runs with when a run starts (or when the page
+  // loads its settings during a run).
+  // (A run applies the saved configuration at start; the board-settings load
+  // below captures it when the page opens during a run.)
+  useEffect(() => {
+    if (!isRunning) { setRunningSettings(null); return }
+    setRunningSettings((prev) => prev ?? (Object.keys(settings).length ? settings : null))
+  }, [isRunning]) // eslint-disable-line react-hooks/exhaustive-deps
+  const isRunningRef = useRef(isRunning)
+  isRunningRef.current = isRunning
+
+  // The Tuner's run record could not learn the server's start time at Start
+  // (4 s deadline): take it from the shared poller as soon as it has one.
+  useEffect(() => {
+    if (isAcquiring && isRunning && runStartTime && tunerRunRecordStarted() && !tunerOwnsRun(runStartTime) && tunerRunStartUnknown()) {
+      markTunerRunStarted(runStartTime)
+    }
+  }, [isAcquiring, isRunning, runStartTime])
+
+  // Online and production runs (review M1): restore it from the tab only
+  // without a production run; switch it off when one is on, unless the
+  // operator confirmed Online for that very run.
+  const kind = runKind(runKnown, isRunning, isAcquiring || tunerOwnsRun(runStartTime))
+  const [onlineConfirmedFor, setOnlineConfirmedFor] = useState<string | null>(null)
+  const [confirmOnline, setConfirmOnline] = useState(false)
+  const onlineRestored = useRef(false)
+  useEffect(() => {
+    if (onlineRestored.current || kind === 'unknown') return
+    onlineRestored.current = true
+    let stored = false
+    try { stored = window.sessionStorage.getItem(ONLINE_KEY) === '1' } catch { /* default off */ }
+    setOnlineState(restoredOnline(stored, kind))
+  }, [kind])
+  useEffect(() => {
+    if (onlineMustDrop(online, kind, onlineConfirmedFor, runStartTime)) {
+      setOnline(false)
+      toast({ title: 'Online switched off', description: 'A production run is on: changes are saved to the configuration only, unless you switch Online on again and confirm.' })
+    }
+  }, [online, kind, onlineConfirmedFor, runStartTime]) // eslint-disable-line react-hooks/exhaustive-deps
+  const requestOnline = (v: boolean) => {
+    if (v && kind === 'production' && onlineConfirmedFor !== runStartTime) { setConfirmOnline(true); return }
+    setOnline(v)
+  }
 
 
   // Auto-refresh tick (and an immediate redraw when the theme changes)
@@ -378,7 +445,8 @@ export default function ParamTuner() {
   const pendingRef = useRef(pending)
   pendingRef.current = pending
   const [typing, setTyping] = useState(false)
-  const handleSaveAll = async () => {
+  const [saving, setSaving] = useState(false)
+  const saveAll = async () => {
     // A value still being typed is committed first (its field loses focus).
     if (typing && document.activeElement instanceof HTMLElement) {
       document.activeElement.blur()
@@ -388,12 +456,20 @@ export default function ParamTuner() {
     if (entries.length === 0) return
     let savedCount = 0
     let writtenCount = 0
+    const group = `${Date.now()}`
     for (const [regKey, rawVal] of entries) {
       const r = settings[regKey]
       const res = await applyRegister(regKey, rawVal, r?.name ?? regKey)
       if (!res) continue
-      if (res.written) writtenCount++
-      if (r) logChange(regKey, r.value_dec, rawVal, res.written, 'manual')
+      if (res.written) {
+        writtenCount++
+        // The board runs with it now.
+        setRunningSettings((prev) => (prev && prev[regKey] ? { ...prev, [regKey]: { ...prev[regKey], value_dec: rawVal } } : prev))
+      }
+      if (r) {
+        logChange(regKey, r.value_dec, rawVal, res.written, 'manual', group)
+        if (fieldChanges(dpp, r.address, r.value_dec, rawVal).some((c) => c.spec?.id === 'thr')) markDone('thr')
+      }
       storeLocal(regKey, rawVal)
       setPending(prev => { const n = { ...prev }; delete n[regKey]; return n })
       savedCount++
@@ -407,9 +483,15 @@ export default function ParamTuner() {
         title: 'Saved',
         description: online
           ? `${plural(savedCount, 'setting')} saved, ${writtenCount} written to the board`
-          : `${plural(savedCount, 'setting')} saved`,
+          : `${plural(savedCount, 'setting')} saved to the configuration (applies at the next run)`,
       })
     }
+  }
+  /** One Save all at a time (a double click must not write, and log, everything twice). */
+  const handleSaveAll = async () => {
+    if (saving) return
+    setSaving(true)
+    try { await saveAll() } finally { setSaving(false) }
   }
 
   const pendingCount = Object.keys(pending).length
@@ -432,6 +514,7 @@ export default function ParamTuner() {
    * applies it under the usual rules. The rest of a shared register is kept.
    */
   const handleUndo = (e: HistoryEntry) => {
+    if (e.dpp && e.dpp !== dpp) { toast({ title: 'Cannot undo', description: `This change was made with ${e.dpp} firmware; the board now runs ${dpp}.`, variant: 'destructive' }); return }
     const saved = settings[e.regKey]?.value_dec
     if (saved === undefined) { toast({ title: 'Cannot undo', description: `${e.name} is not in this board's settings.`, variant: 'destructive' }); return }
     const current = pending[e.regKey] ?? saved
@@ -492,12 +575,31 @@ export default function ParamTuner() {
     lostPerS: rates.now ? rates.now.lost : null,
     fitReliable: fitUsable,
     fitText: fitUsable && fit ? `FWHM ${fit.fwhm.toFixed(2)} ${fit.unit} at ${fit.centroid.toFixed(0)} ${fit.unit}.` : null,
+    fwtmRatio: fitUsable && fit ? fit.fwtmRatio : null,
+    thresholdSet,
     presetSaved,
   }
 
 
   return (
     <div className="flex flex-col gap-6">
+      <AlertDialog open={confirmOnline} onOpenChange={setConfirmOnline}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Online during a production run?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Saved changes will reach the board, and so the data of the run being taken, at once. They are not in the run&apos;s
+              stored register file. This applies to this run only.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep Online off</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setOnlineConfirmedFor(runStartTime); setOnline(true) }}>
+              Online for this run
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AlertDialog open={!!switchAsk} onOpenChange={(o) => { if (!o) setSwitchAsk(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -519,7 +621,7 @@ export default function ParamTuner() {
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">Board</Label>
-          <Select value={selectedBoardId} onValueChange={(v) => askSwitch({ kind: 'board', value: v })}>
+          <Select value={selectedBoardId} onValueChange={(v) => askSwitch({ kind: 'board', value: v })} disabled={saving}>
             <SelectTrigger className="w-52 max-w-full" aria-label="Board">
               <SelectValue placeholder="Select board..." />
             </SelectTrigger>
@@ -538,6 +640,7 @@ export default function ParamTuner() {
           <Select
             value={selectedChannel.toString()}
             onValueChange={v => askSwitch({ kind: 'channel', value: v })}
+            disabled={saving}
           >
             <SelectTrigger className="w-36" aria-label="Channel">
               <SelectValue />
@@ -571,7 +674,7 @@ export default function ParamTuner() {
         <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} />
         {isRunning && !isAcquiring && (
           <span className="text-xs text-muted-foreground">
-            Production run: stop it from the Dashboard. Changes follow the usual rules.
+            Production run: stop it from the Dashboard. With Online on, saved changes reach this run's data at once (they are not in its stored register file).
           </span>
         )}
 
@@ -581,7 +684,7 @@ export default function ParamTuner() {
         <div className="ml-auto flex items-center gap-2 rounded-md border px-3 py-1.5">
           <Zap className={`h-4 w-4 ${online ? 'text-success' : 'text-muted-foreground'}`} />
           <Label htmlFor="tuner-online" className="text-sm font-medium">Online</Label>
-          <Switch id="tuner-online" checked={online} onCheckedChange={setOnline} />
+          <Switch id="tuner-online" checked={online} onCheckedChange={requestOnline} />
           <span className="text-xs text-muted-foreground max-w-[16rem]">
             {online
               ? isRunning
@@ -607,7 +710,8 @@ export default function ParamTuner() {
               <GuidedFlow
                 psd={isPSD}
                 status={guide}
-                storageKey={`lunadaq:tuner-guide:${selectedBoardId}:${selectedChannel}`}
+                storageKey={`lunadaq:tuner-guide:${selectedBoardId}:${selectedChannel}:${dpp}`}
+                onConfirm={(id) => markDone(id)}
                 onSelectTrace={(code, name) => {
                   if (boardConfigValue === null) return
                   void handleBoardConfigChange(setBits(boardConfigValue, [12, 13], code), `Trace 1: ${name}`)
@@ -631,6 +735,8 @@ export default function ParamTuner() {
             running={isRunning}
             online={online}
             boardConfig={boardConfigValue}
+            runningConfig={runningConfig}
+            filterKey={`${filterKey}|${changeMark}`}
             onBoardConfigChange={handleBoardConfigChange}
             preSamples={preRaw !== null ? preRaw * 4 : null}
             recordSamples={recordRaw !== null ? recordRaw * 8 : null}
@@ -664,7 +770,7 @@ export default function ParamTuner() {
               {pendingCount > 0 && (
                 <Button variant="ghost" onClick={() => setPending({})}>Discard</Button>
               )}
-              <Button onClick={handleSaveAll} disabled={pendingCount === 0 && !typing}>
+              <Button onClick={handleSaveAll} disabled={(pendingCount === 0 && !typing) || saving}>
                 Save all
                 {pendingCount > 0 && (
                   <Badge variant="secondary" className="ml-2 text-xs">
@@ -711,7 +817,7 @@ export default function ParamTuner() {
               onUndo={handleUndo}
               onLoadValues={handleLoadValues}
               onClearHistory={() => { clearHistory(selectedBoardId, selectedChannel); setHistory([]) }}
-              onPresetSaved={() => setPresetSaved(true)}
+              onPresetSaved={() => markDone('preset')}
             />
           </CardContent>
         </Card>

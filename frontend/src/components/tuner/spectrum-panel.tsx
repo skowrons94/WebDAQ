@@ -64,7 +64,15 @@ export function spectrumSince(cur: SpectrumData, snap: SpectrumData | null): { y
 }
 
 type Roi = { center: number; half: number }
-export type FitSummary = { fwhm: number; centroid: number; unit: string; reliable: boolean }
+/** Below this many counts in the peak, no fit value is shown or used. */
+export const MIN_COUNTS = 50
+
+/** Peaks the panel may pick by itself: lines (narrow against their position) with enough counts, strongest first. */
+export function autoPickable<T extends { x: number; fwhm: number; net: number }>(cands: T[]): T[] {
+  return cands.filter((c) => c.x > 0 && c.fwhm < 0.25 * c.x && c.net >= MIN_COUNTS)
+}
+
+export type FitSummary = { fwhm: number; centroid: number; unit: string; reliable: boolean; fwtmRatio: number }
 type Reference = { centroid: number; fwhm: number; unit: string }
 
 const roiKey = (b: string, ch: number, dpp = '') => `lunadaq:tuner-roi:${b}:${ch}:${dpp}`
@@ -115,9 +123,10 @@ export function SpectrumPanel({
   const snapshot = useRef<SpectrumData | null>(null)
   const pendingSnapshot = useRef(false)
   const autoPicked = useRef(false)
+  const refind = useRef(false)
   const unit = calibrated ? 'keV' : 'ch'
   useEffect(() => {
-    onFit?.(fit ? { fwhm: fit.fwhm, centroid: fit.centroid, unit, reliable: !fit.warning } : null)
+    onFit?.(fit ? { fwhm: fit.fwhm, centroid: fit.centroid, unit, reliable: !fit.warning && fit.net >= MIN_COUNTS, fwtmRatio: fit.fwtmRatio } : null)
   }, [fit, unit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Region and reference belong to the board, channel and firmware: a channel
@@ -153,6 +162,8 @@ export function SpectrumPanel({
     else pendingSnapshot.current = true
     setSince({ at: Date.now(), label: changeLabel ?? null })
     setNote(null)
+    // The peak may move (gain) or widen: let the next fits find it again.
+    refind.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [changeMark])
 
@@ -210,14 +221,25 @@ export function SpectrumPanel({
         let r = roi
         // Pick the strongest real line by itself (narrow against its position):
         // a continuum (scintillator Compton edges) gives no automatic pick.
-        const line = cands.find((c) => c.x > 0 && c.fwhm < 0.25 * c.x)
+        const lines = autoPickable(cands)
+        const line = lines[0]
         if (!r && !autoPicked.current && line) {
           autoPicked.current = true
           r = { center: line.x, half: Math.max(3 * line.fwhm, 4 * (cur.xmax - cur.xmin) / cur.nbins) }
           setRoi(r)
         }
         if (!r) { setFit(null); return }
-        const f = pf.fitPeak(x, shown, r.center - r.half, r.center + r.half, { variance })
+        let f = pf.fitPeak(x, shown, r.center - r.half, r.center + r.half, { variance })
+        // After a change the peak may have moved out of the region: take the
+        // line nearest to where it was, and fit there.
+        if (refind.current && (!f || f.warning) && lines.length) {
+          const near = lines.slice().sort((a, b) => Math.abs(a.x - r!.center) - Math.abs(b.x - r!.center))[0]
+          if (Math.abs(near.x - r.center) < Math.max(4 * r.half, 0.15 * r.center)) {
+            r = { center: near.x, half: Math.max(3 * near.fwhm, r.half) }
+            setRoi(r)
+            f = pf.fitPeak(x, shown, r.center - r.half, r.center + r.half, { variance })
+          }
+        }
         if (!alive) return
         setFit(f)
         // The first good fit of the session is the reference.
@@ -228,8 +250,11 @@ export function SpectrumPanel({
             writeJson(refKey(boardId, channel, fw), next)
             return next
           })
-          // Follow the peak: narrow a wide region to ±4 FWHM around it.
-          if (r.half > 6 * f.fwhm) setRoi({ center: f.centroid, half: 4 * f.fwhm })
+          // Follow the peak: re-centre, and narrow or widen to ±4 FWHM when the
+          // region is more than 50 % off that, or the peak is off-centre.
+          refind.current = false
+          const want = 4 * f.fwhm
+          if (Math.abs(r.half - want) > 0.5 * want || Math.abs(f.centroid - r.center) > f.fwhm) setRoi({ center: f.centroid, half: want })
         }
         // Zoom on the region with the fitted curve.
         const z = zoomRef.current
@@ -275,7 +300,7 @@ export function SpectrumPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jsrootLoaded, refreshTick, boardId, channel, psd, calibrated, logY, mode, roi])
 
-  const fewCounts = !!fit && fit.net < 50
+  const fewCounts = !!fit && fit.net < MIN_COUNTS
   const resolutionPct = fit && fit.centroid > 0 ? (100 * fit.fwhm) / fit.centroid : null
   const sinceText = useMemo(() => {
     if (mode === 'whole') return 'Whole run'
@@ -344,21 +369,26 @@ export function SpectrumPanel({
             <div ref={zoomRef} className="h-48 w-full rounded-lg border" data-testid="tuner-roi" />
             {fit ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm" data-testid="tuner-fit">
-                <dt className="text-muted-foreground">FWHM</dt>
                 {fewCounts ? (
-                  <dd className="font-mono tabular-nums text-muted-foreground" title="Fewer than 50 counts in the peak">—</dd>
+                  <>
+                    <dt className="text-muted-foreground">FWHM</dt>
+                    <dd className="font-mono tabular-nums text-muted-foreground" title={`Fewer than ${MIN_COUNTS} counts in the peak`}>—</dd>
+                  </>
                 ) : (
-                  <dd className="font-mono font-semibold tabular-nums">
-                    {fmt(fit.fwhm, unit)}{Number.isFinite(fit.fwhmErr) && fit.fwhmErr < fit.fwhm ? ` ± ${fmt(fit.fwhmErr, '').trim()}` : ''}
-                    {resolutionPct != null && <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">({resolutionPct.toFixed(resolutionPct < 1 ? 2 : 1)} %)</span>}
-                  </dd>
+                  <>
+                    <dt className="text-muted-foreground">FWHM</dt>
+                    <dd className="font-mono font-semibold tabular-nums">
+                      {fmt(fit.fwhm, unit)}{Number.isFinite(fit.fwhmErr) && fit.fwhmErr < fit.fwhm ? ` ± ${fmt(fit.fwhmErr, '').trim()}` : ''}
+                      {resolutionPct != null && <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">({resolutionPct.toFixed(resolutionPct < 1 ? 2 : 1)} %)</span>}
+                    </dd>
+                    <dt className="text-muted-foreground">FWTM</dt>
+                    <dd className="font-mono tabular-nums">{fmt(fit.fwtm, unit)} <span className="font-sans text-xs text-muted-foreground">(FWTM/FWHM {fit.fwtmRatio.toFixed(2)}, Gauss 1.82)</span></dd>
+                    <dt className="text-muted-foreground">Low tail</dt>
+                    <dd className="font-mono tabular-nums">{(fit.tailFraction * 100).toFixed(0)} %</dd>
+                    <dt className="text-muted-foreground">Centroid</dt>
+                    <dd className="font-mono tabular-nums">{fmt(fit.centroid, unit)}</dd>
+                  </>
                 )}
-                <dt className="text-muted-foreground">FWTM</dt>
-                <dd className="font-mono tabular-nums">{fmt(fit.fwtm, unit)} <span className="font-sans text-xs text-muted-foreground">(FWTM/FWHM {fit.fwtmRatio.toFixed(2)}, Gauss 1.82)</span></dd>
-                <dt className="text-muted-foreground">Low tail</dt>
-                <dd className="font-mono tabular-nums">{(fit.tailFraction * 100).toFixed(0)} %</dd>
-                <dt className="text-muted-foreground">Centroid</dt>
-                <dd className="font-mono tabular-nums">{fmt(fit.centroid, unit)}</dd>
                 <dt className="text-muted-foreground">Counts</dt>
                 <dd className="font-mono tabular-nums">{Math.round(fit.net).toLocaleString()}</dd>
                 {!fewCounts && reference && reference.unit === unit && Math.abs(reference.centroid - fit.centroid) < Math.max(3 * fit.fwhm, roi?.half ?? 0) && (

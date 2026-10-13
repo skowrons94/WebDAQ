@@ -126,7 +126,7 @@ export function controlsFor(dpp: string): ControlSpec[] {
       { id: 'rescale', address: 0x1080, bits: [0, 5], label: 'Trapezoid rescaling', unit: 'raw', group: 'energy',
         help: fdoc('Trapezoid Rescaling', dpp) || 'Power-of-two scaling of the trapezoid to the energy range.' },
       { id: 'finegain', address: 0x10c4, label: 'Fine gain', unit: 'raw', group: 'energy',
-        help: doc('Fine Gain') },
+        help: doc('Fine Gain', 'Changing it moves the peaks: check the calibration afterwards.') },
       { id: 'blmean', address: 0x1080, bits: [20, 22], label: 'Baseline mean', unit: 'enum', group: 'baseline',
         options: getFieldOptions('Baseline Averaging Window', dpp) ?? undefined, help: fdoc('Baseline Averaging Window', dpp) },
       { id: 'pho', address: 0x1078, label: 'Peak hold-off', unit: 'step', group: 'pileup',

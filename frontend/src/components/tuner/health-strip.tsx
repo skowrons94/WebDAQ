@@ -26,7 +26,7 @@ export function healthWarnings(r: ChannelRates, windowNs: number, psd: boolean):
   if (satFrac > 0.01) {
     out.push({
       severity: satFrac > 0.1 ? 'error' : 'warn',
-      text: `${Math.round(satFrac * 100)} % of pulses clip the ADC (saturated events are not in the spectrum): move the DC offset for more headroom, or use the 2 Vpp range.`,
+      text: `${Math.round(satFrac * 100)} % of pulses clip the ADC (saturated events are not in the spectrum): move the DC offset for more headroom, or use the 2 Vpp input range (DAQ page, next run).`,
     })
   }
   if (puFrac > 0.01 && puFrac > 2 * exp) {
@@ -86,7 +86,7 @@ export function HealthStrip({
         <div className={cell}><span className={k}>Rate</span><span className={v}>{formatRate(rates.event)}</span></div>
         <div className={cell}>
           <span className={k}>Pile-up</span>
-          <span className={v}>{(pu * 100).toFixed(1)} %<span className="ml-1 font-sans text-xs font-normal text-muted-foreground">(exp. {(exp * 100).toFixed(1)} %)</span></span>
+          <span className={v}>{(pu * 100).toFixed(1)} %<span className="ml-1 font-sans text-xs font-normal text-muted-foreground" title={psd ? 'Approximate for DPP-PSD: 1 − e^(−R·(offset + long gate)), to be verified on hardware' : '1 − e^(−2·R·T), T = rise + sampling delay + peak hold-off'}>({psd ? '≈ ' : ''}exp. {(exp * 100).toFixed(1)} %{psd ? ', approximate' : ''})</span></span>
         </div>
         <div className={cell}>
           <span className={k}>Saturated</span>
@@ -98,7 +98,7 @@ export function HealthStrip({
         </div>
         <div className={cell}>
           <span className={k}>Dead time</span>
-          <span className="text-xs text-muted-foreground" title="The server does not report dead time without Graphite; planned server addition">not reported</span>
+          <span className="text-xs text-muted-foreground" title="Not available from the server">not reported</span>
         </div>
       </div>
       {warnings.length > 0 && (
@@ -116,10 +116,15 @@ export function HealthStrip({
 }
 
 /**
- * The pile-up window T from the channel's settings: for DPP-PHA the
- * trapezoid's rise, the energy sampling delay and the peak hold-off; for
- * DPP-PSD the gate (offset + long gate).
+ * The pile-up window T from the channel's settings, for expectedPileup's
+ * 1 − e^(−2·R·T):
+ *  - DPP-PHA: the trapezoid's rise, the energy sampling delay and the peak
+ *    hold-off after the trigger; both pulses are tagged, hence the factor 2.
+ *  - DPP-PSD: APPROXIMATE, to be verified on hardware. A pulse is tagged when
+ *    another falls inside its gate (offset before the trigger, long gate −
+ *    offset after), so about 1 − e^(−R·(offset + long gate)): the lower, more
+ *    sensitive form. Returned as half the gate so the shared formula gives it.
  */
 export function pileupWindow(psd: boolean, v: { riseNs: number; samplingDelayNs: number; peakHoldNs: number; longGateNs: number; gateOffsetNs: number }): number {
-  return psd ? v.gateOffsetNs + v.longGateNs : v.riseNs + v.samplingDelayNs + v.peakHoldNs
+  return psd ? (v.gateOffsetNs + v.longGateNs) / 2 : v.riseNs + v.samplingDelayNs + v.peakHoldNs
 }

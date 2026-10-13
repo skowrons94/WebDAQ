@@ -24,6 +24,10 @@ export interface GuideStatus {
   lostPerS: number | null
   fitReliable: boolean
   fitText: string | null
+  /** FWTM/FWHM of the fitted peak (1.82 for a pure Gaussian). */
+  fwtmRatio: number | null
+  /** The threshold was changed or confirmed on this channel in this session. */
+  thresholdSet: boolean
   presetSaved: boolean
 }
 
@@ -37,13 +41,15 @@ interface Step {
   target: string
   /** Analog probe code for trace 1 that this step reads, if any. */
   trace?: { code: number; name: string }
+  /** A button that confirms the present setting for this step. */
+  confirm?: string
   check: (s: GuideStatus) => { v: Verdict; text: string }
 }
 
 const unknown = (text: string) => ({ v: 'unknown' as const, text })
 
 const polarity: Step = {
-  id: 'dc', title: 'Polarity & DC offset', target: 'tuner-dc', trace: { code: 0, name: 'Input' },
+  id: 'dc', title: 'Polarity and DC offset', target: 'tuner-dc', trace: { code: 0, name: 'Input' },
   what: 'With trace 1 on Input, set "Negative input" to the pulse direction and move the DC offset so the baseline leaves room for the largest pulses and nothing clips.',
   check: (s) => {
     if (!s.showsInput || s.headroomPct === null) return unknown('Needs the Input trace with waveforms on.')
@@ -56,13 +62,15 @@ const polarity: Step = {
 const threshold: Step = {
   id: 'thr', title: 'Threshold', target: 'tuner-thr',
   what: 'Lower the threshold until the rate starts to climb steeply (noise triggers), then raise it again by about a third. Watch rate, pile-up and losses in the strip above.',
+  confirm: 'This threshold is right',
   check: (s) => {
     if (!s.running || s.pileupPct === null) return unknown('Needs a run.')
     if ((s.lostPerS ?? 0) > 0) return { v: 'warn', text: 'Events are being lost: raise the threshold.' }
     if (s.expectedPileupPct !== null && s.pileupPct > 1 && s.pileupPct > 2 * s.expectedPileupPct) {
       return { v: 'warn', text: `Pile-up ${s.pileupPct.toFixed(1)} % against ${s.expectedPileupPct.toFixed(1)} % expected: noise triggers?` }
     }
-    return { v: 'ok', text: 'No excess pile-up, nothing lost.' }
+    if (!s.thresholdSet) return unknown('No excess pile-up, nothing lost. Change the threshold, or confirm it, to tick this step.')
+    return { v: 'ok', text: 'Threshold set; no excess pile-up, nothing lost.' }
   },
 }
 
@@ -71,7 +79,7 @@ const PHA: Step[] = [
   threshold,
   {
     id: 'pz', title: 'Decay / pole-zero', target: 'tuner-decay', trace: { code: 3, name: 'Trapezoid' },
-    what: 'With trace 1 on Trapezoid, set the decay time to the preamplifier\'s: after the trapezoid the trace must come back to the baseline (pole-zero residual near 0 %), with a flat top.',
+    what: 'With trace 1 on Trapezoid, set the decay time to the preamplifier\'s: after the trapezoid the trace must come back to the baseline (pole-zero residual near 0 %), with a flat top. Judge it at the rise time you will use: with short rise times the residual is small for any decay time.',
     check: (s) => {
       if (!s.showsTrapezoid || s.pzResidualPct === null) return unknown('Needs the Trapezoid trace, with its tail in the record.')
       if (s.flatTopOk === false) return { v: 'warn', text: 'No flat top on the trapezoid: lengthen the flat top first.' }
@@ -80,16 +88,20 @@ const PHA: Step[] = [
     },
   },
   {
-    id: 'rise', title: 'Rise & flat top', target: 'tuner-rise',
+    id: 'rise', title: 'Rise and flat top', target: 'tuner-rise',
     what: 'Pick a peak on the spectrum and try a few rise times, comparing the FWHM "since last change" for each. The flat top must cover the slowest pulses: a longer flat top must not move the peak.',
     check: (s) => {
       if (s.trapezoidFits === false) return { v: 'warn', text: 'The trapezoid does not fit the record.' }
-      if (s.flatTopOk === false) return { v: 'warn', text: 'The trapezoid has no flat top (ballistic deficit).' }
-      return s.fitReliable ? { v: 'ok', text: s.fitText ?? 'Peak fitted.' } : unknown('Pick a peak on the spectrum.')
+      if (s.flatTopOk === false) return { v: 'warn', text: 'The trapezoid has no flat top: lengthen it, or check the pole-zero.' }
+      if (!s.fitReliable) return unknown('Pick a peak on the spectrum.')
+      // Earned: a near-Gaussian peak (no long tail) with the pole-zero right.
+      const pzOk = s.pzResidualPct !== null && Math.abs(s.pzResidualPct) <= 1 && s.flatTopOk === true
+      if (s.fwtmRatio !== null && s.fwtmRatio > 2.5) return { v: 'warn', text: `${s.fitText ?? ''} FWTM/FWHM ${s.fwtmRatio.toFixed(2)}: a tail (pole-zero, ballistic deficit or charge trapping).` }
+      return pzOk ? { v: 'ok', text: s.fitText ?? 'Peak fitted.' } : unknown(`${s.fitText ?? 'Peak fitted.'} Check the pole-zero on the trapezoid trace to tick this step.`)
     },
   },
   {
-    id: 'peaking', title: 'Sampling delay & peak mean', target: 'tuner-peaking',
+    id: 'peaking', title: 'Sampling delay and peak mean', target: 'tuner-peaking',
     what: 'The energy is sampled inside the flat top: the sampling delay must be shorter than the flat top; peak mean averages a few samples there.',
     check: (s) => (s.samplingInFlatTop === null ? unknown('—') : s.samplingInFlatTop ? { v: 'ok', text: 'Sampled inside the flat top.' } : { v: 'warn', text: 'Sampling delay beyond the flat top.' }),
   },
@@ -111,7 +123,7 @@ const PSD: Step[] = [
   {
     id: 'lgate', title: 'Long gate', target: 'tuner-lgate',
     what: 'Long enough to collect the slow component (best Q-long resolution on the fitted peak), short enough to keep pile-up low.',
-    check: (s) => (s.shortBelowLong === false ? { v: 'warn', text: 'Short gate ≥ long gate.' } : s.fitReliable ? { v: 'ok', text: s.fitText ?? 'Peak fitted.' } : unknown('Pick a peak on the spectrum.')),
+    check: (s) => (s.shortBelowLong === false ? { v: 'warn', text: 'Short gate ≥ long gate.' } : s.fitReliable ? unknown(`${s.fitText ?? 'Peak fitted.'} Compare it for a few long gates.`) : unknown('Pick a peak on the spectrum.')),
   },
   {
     id: 'sgate', title: 'Short gate', target: 'tuner-sgate',
@@ -145,12 +157,14 @@ function Mark({ v }: { v: Verdict }) {
  * configuration change, as with the trace menu).
  */
 export default function GuidedFlow({
-  psd, status, storageKey, onSelectTrace,
+  psd, status, storageKey, onSelectTrace, onConfirm,
 }: {
   psd: boolean
   status: GuideStatus
   storageKey: string
   onSelectTrace: (code: number, name: string) => void
+  /** The operator confirms the present setting of a step (by step id). */
+  onConfirm?: (stepId: string) => void
 }) {
   const steps = [...(psd ? PSD : PHA), SAVE]
   const [i, setI] = useState(0)
@@ -214,6 +228,9 @@ export default function GuidedFlow({
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" onClick={show}>Show me</Button>
+          {step.confirm && onConfirm && res.v !== 'ok' && (
+            <Button size="sm" variant="outline" onClick={() => onConfirm(step.id)}>{step.confirm}</Button>
+          )}
           {step.trace && !(step.trace.code === 0 ? status.showsInput : status.showsTrapezoid) && (
             <Button size="sm" variant="outline" onClick={() => onSelectTrace(step.trace!.code, step.trace!.name)}>
               Trace 1: {step.trace.name} (next run)

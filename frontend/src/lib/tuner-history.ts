@@ -15,6 +15,10 @@ export interface HistoryEntry {
   regKey: string
   name: string
   label: string
+  /** Firmware the change was made with: register keys mean different things in PHA and PSD. */
+  dpp?: string
+  /** Entries saved together by one Save all share a group. */
+  group?: string
   /** The control (ControlSpec.id) and its bits when the entry is one field of a shared register. */
   field?: string
   bits?: [number, number]
@@ -48,8 +52,13 @@ const read = <T,>(k: string, fallback: T): T => {
 const write = (k: string, v: unknown) => { try { window.localStorage.setItem(k, JSON.stringify(v)) } catch { /* full or blocked: the log is a convenience */ } }
 const newId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 
-export function loadHistory(boardId: string, channel: number): HistoryEntry[] {
-  return read<HistoryEntry[]>(HISTORY_KEY, []).filter((e) => e.boardId === boardId && e.channel === channel)
+export function loadHistory(boardId: string, channel: number, dpp: string): HistoryEntry[] {
+  return filterHistory(read<HistoryEntry[]>(HISTORY_KEY, []), boardId, channel, dpp)
+}
+
+/** The entries of one board, channel and firmware (entries without a firmware are from before it was recorded: left out). */
+export function filterHistory(all: HistoryEntry[], boardId: string, channel: number, dpp: string): HistoryEntry[] {
+  return all.filter((e) => e.boardId === boardId && e.channel === channel && e.dpp === dpp)
 }
 
 export function addHistory(e: Omit<HistoryEntry, 'id' | 'at'>): HistoryEntry {

@@ -49,7 +49,7 @@ export function deriveRunBadge(s: RunFields, opts: { boardFailed?: boolean } = {
   }
   if (tuning) {
     return { ...base, state: 'tuning', label: 'Tuning',
-      title: 'Tuning, not saved: the Tuner is acquiring with data saving off. This is not a production run and nothing is written.' }
+      title: 'Tuning, not saved: the Tuner is acquiring with data saving off. This is not a production run: no data is saved to disk.' }
   }
   if (running) return { ...base, state: 'running', label: 'Running', title: 'Acquisition is running' }
   return { ...base, state: 'stopped', label: 'Stopped', title: 'No run in progress' }
