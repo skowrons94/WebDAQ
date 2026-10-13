@@ -294,6 +294,8 @@ export default function ParamTuner() {
   // without a production run; switch it off when one is on, unless the
   // operator confirmed Online for that very run.
   const kind = runKind(runKnown, isRunning, isAcquiring || tunerOwnsRun(runStartTime))
+  // Start or Stop in progress.
+  const [busy, setBusy] = useState(false)
   const [onlineConfirmedFor, setOnlineConfirmedFor] = useState<string | null>(null)
   const [confirmOnline, setConfirmOnline] = useState(false)
   const onlineRestored = useRef(false)
@@ -305,11 +307,13 @@ export default function ParamTuner() {
     setOnlineState(restoredOnline(stored, kind))
   }, [kind])
   useEffect(() => {
+    // Never while the Tuner's own Start is in progress.
+    if (busy) return
     if (onlineMustDrop(online, kind, onlineConfirmedFor, runStartTime)) {
       setOnline(false)
       toast({ title: 'Online switched off', description: 'A production run is on: changes are saved to the configuration only, unless you switch Online on again and confirm.' })
     }
-  }, [online, kind, onlineConfirmedFor, runStartTime]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [online, kind, onlineConfirmedFor, runStartTime, busy]) // eslint-disable-line react-hooks/exhaustive-deps
   const requestOnline = (v: boolean) => {
     if (v && kind === 'production' && onlineConfirmedFor !== runStartTime) { setConfirmOnline(true); return }
     setOnline(v)
@@ -326,7 +330,6 @@ export default function ParamTuner() {
 
   // --- Handlers ---
 
-  const [busy, setBusy] = useState(false)
   const handleStart = async () => {
     if (busy) return
     setBusy(true)
@@ -342,6 +345,10 @@ export default function ParamTuner() {
         await restoreTunerSaveFlag({ evenIfNotStarted: true })
         throw error
       }
+      // The run is the Tuner's before anything calls it running: otherwise
+      // the production-run guard would switch Online off during the start-time
+      // wait below.
+      setIsAcquiring(true)
       // Set the state here; the shared poll catches up (never awaited: a
       // hung poll must not keep the Tuner from knowing its own run).
       useRunControlStore.getState().setIsRunning(true)
@@ -353,7 +360,6 @@ export default function ParamTuner() {
         new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
       ])
       markTunerRunStarted(startTime)
-      setIsAcquiring(true)
       toast({ title: 'Started', description: 'Acquisition started (data saving disabled)' })
     } catch {
       toast({ title: 'Error', description: 'Failed to start acquisition', variant: 'destructive' })

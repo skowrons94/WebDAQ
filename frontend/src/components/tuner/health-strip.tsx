@@ -121,9 +121,10 @@ export function HealthStrip({
  *  - DPP-PHA: the trapezoid's rise, the energy sampling delay and the peak
  *    hold-off after the trigger; both pulses are tagged, hence the factor 2.
  *  - DPP-PSD: APPROXIMATE, to be verified on hardware. A pulse is tagged when
- *    another falls inside its gate (offset before the trigger, long gate −
- *    offset after), so about 1 − e^(−R·(offset + long gate)): the lower, more
- *    sensitive form. Returned as half the gate so the shared formula gives it.
+ *    another falls inside its gate window, taken here as gate offset + long
+ *    gate (T = offset + L), counted once: 1 − e^(−R·(offset + L)), the lower,
+ *    more sensitive form of the expectation. Returned as (offset + L) / 2 so
+ *    the shared 1 − e^(−2·R·T) gives it.
  */
 export function pileupWindow(psd: boolean, v: { riseNs: number; samplingDelayNs: number; peakHoldNs: number; longGateNs: number; gateOffsetNs: number }): number {
   return psd ? (v.gateOffsetNs + v.longGateNs) / 2 : v.riseNs + v.samplingDelayNs + v.peakHoldNs

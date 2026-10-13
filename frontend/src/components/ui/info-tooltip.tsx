@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils"
  *
  * Deliberately dependency-free (no popover library): the panel is a positioned
  * sibling shown via CSS, and `title` carries the same text for anything that
- * cannot render the panel.
+ * cannot render the panel. It is not laid out while hidden, and when shown it
+ * is centred on the icon but kept 16 px inside the viewport (phones).
  */
 export function InfoTooltip({
   text,
@@ -24,8 +25,21 @@ export function InfoTooltip({
   /** Which side of the icon the panel opens on. */
   side?: "top" | "bottom"
 }) {
+  const ref = React.useRef<HTMLSpanElement>(null)
+  const [pos, setPos] = React.useState<{ left: number; width: number } | null>(null)
+  const place = () => {
+    const el = ref.current
+    if (!el || typeof window === "undefined") return
+    const r = el.getBoundingClientRect()
+    const vw = document.documentElement.clientWidth || window.innerWidth
+    const width = Math.min(256, vw - 32)
+    const centred = r.left + r.width / 2 - width / 2
+    const left = Math.max(16, Math.min(centred, vw - 16 - width))
+    setPos({ left: left - r.left, width })
+  }
   return (
-    <span className={cn("relative inline-flex group/tip align-middle", className)}>
+    <span ref={ref} onMouseEnter={place} onFocus={place}
+      className={cn("relative inline-flex group/tip align-middle", className)}>
       <button
         type="button"
         // Not a submit button inside any enclosing form, and reachable by keyboard
@@ -44,12 +58,12 @@ export function InfoTooltip({
       </button>
       <span
         role="tooltip"
+        style={pos ? { left: pos.left, width: pos.width } : undefined}
         className={cn(
-          "pointer-events-none absolute left-1/2 z-50 w-[min(16rem,calc(100vw-32px))] -translate-x-1/2 rounded-md border",
+          "pointer-events-none absolute z-50 rounded-md border",
+          !pos && "left-1/2 w-[min(16rem,calc(100vw-32px))] -translate-x-1/2",
           "bg-popover p-2.5 text-xs leading-snug text-popover-foreground shadow-md",
-          "invisible opacity-0 transition-opacity duration-100",
-          "group-hover/tip:visible group-hover/tip:opacity-100",
-          "group-focus-within/tip:visible group-focus-within/tip:opacity-100",
+          "hidden group-hover/tip:block group-focus-within/tip:block",
           side === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
         )}
       >
