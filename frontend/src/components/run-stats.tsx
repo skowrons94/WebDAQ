@@ -5,7 +5,7 @@ import { deriveRunBadge } from '@/hooks/use-run-badge'
 import { useRunStatus } from '@/hooks/use-run-status'
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 import { useTheme } from "next-themes"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -22,7 +22,7 @@ import {
 } from "@/lib/api"
 import {
   rateUnit, byteRateUnit, maxMagnitude, formatTick, formatValue,
-  CHART_MARGIN, LEGEND_PROPS, yAxisLabel, xAxisLabel,
+  CHART_MARGIN, yAxisLabel, xAxisLabel,
 } from "@/lib/chart-format"
 
 // Shape returned by GET /experiment/stats — present only while a run is active.
@@ -391,8 +391,8 @@ export default function RunStats() {
               aria-pressed={isActive}
               title={`Show the rates of board ${board.id}`}
               className={`rounded-lg border p-3 text-left transition-colors ${
-                isActive ? "border-primary bg-muted/50" : "hover:bg-muted/30"
-              } ${live?.failed ? "border-destructive" : ""}`}
+                isActive ? "bg-muted/50 ring-1 ring-foreground/20" : "hover:bg-muted/30"
+              } ${live?.failed ? "border-destructive" : isActive ? "border-foreground/50" : ""}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">
@@ -443,7 +443,7 @@ export default function RunStats() {
               const value = totals[m.key]
               const highlight = m.key !== "event_rate" && value > 0
               return (
-                <Card key={m.key} className={metric === m.key ? "border-primary" : ""}>
+                <Card key={m.key} className={metric === m.key ? "border-foreground/50 ring-1 ring-foreground/20" : ""}>
                   <CardContent className="p-3">
                     <p className="text-xs text-muted-foreground">{m.axis}</p>
                     <p className={`text-lg font-semibold tabular-nums ${
@@ -632,7 +632,7 @@ export default function RunStats() {
                 <Tooltip
                   // Themed, and the values in the text colour: series colours as
                   // text fell below 3:1, and the default white box was unreadable
-                  // in dark mode. The legend carries the colours.
+                  // in dark mode. The channel buttons carry the colours.
                   contentStyle={{
                     fontSize: 12,
                     background: 'hsl(var(--popover))',
@@ -643,15 +643,14 @@ export default function RunStats() {
                   formatter={(v: number, name: string) => [formatValue(v, unit), name]}
                   labelFormatter={(v) => `t = ${v} s`}
                 />
-                {/* Legend text in the text colour (series colours as text were
-                    below 3:1); the line swatch carries the colour. */}
-                <Legend {...LEGEND_PROPS} formatter={(value) => <span className="text-foreground">{value}</span>} />
+                {/* No chart legend: the channel buttons above carry the colours
+                    (it was the third copy of the same key). */}
                 {selected.map((channel) => (
                   <Line
                     key={channel}
                     type="monotone"
                     dataKey={`ch${channel}`}
-                    name={`Channel ${channel}`}
+                    name={`ch ${channel}`}
                     stroke={colourOf(channel)}
                     strokeWidth={2}
                     dot={false}
