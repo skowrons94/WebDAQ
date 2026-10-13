@@ -2,7 +2,7 @@
  * Numbers read off a digitizer trace (Tuner P4): baseline, pulse, clipping and
  * headroom on the input; flat-top flatness and pole-zero residual on the
  * trapezoid. Pure functions on sample arrays, so they can be tested and reused
- * by the scans.
+ * by the guided checklist.
  */
 
 export interface InputMetrics {
@@ -25,6 +25,10 @@ export interface TrapezoidMetrics {
   pzResidualPct: number | null
   /** The falling edge does not end inside the record. */
   cutOff: boolean
+  /** Samples of the top within 2 % of its height. */
+  flatSamples: number
+  /** The top is flat for at least half the flat-top setting (no rounded, ballistic-deficit top). */
+  flatTopOk: boolean
 }
 
 const mean = (a: ArrayLike<number>, i0: number, i1: number) => {
@@ -78,7 +82,7 @@ export function inputMetrics(x: ArrayLike<number>, opts: { preSamples: number | 
   }
 }
 
-export function trapezoidMetrics(x: ArrayLike<number>, opts: { preSamples: number | null; sampleNs: number; riseNs: number }): TrapezoidMetrics | null {
+export function trapezoidMetrics(x: ArrayLike<number>, opts: { preSamples: number | null; sampleNs: number; riseNs: number; flatNs?: number | null }): TrapezoidMetrics | null {
   const n = x.length
   if (n < 16) return null
   const [a, b] = preRange(n, opts.preSamples)
@@ -94,15 +98,20 @@ export function trapezoidMetrics(x: ArrayLike<number>, opts: { preSamples: numbe
   const iPk = up ? iHi : iLo
   const height = sign * ((up ? hi : lo) - base)
   if (!(height > 0)) return null
-  // Flat top: the contiguous run around the peak above 90 % of the height.
+  // Top: the contiguous run around the peak above 90 % of the height (edges
+  // included), and the part of it within 2 % of the height (the flat top).
   const above = (i: number) => sign * (x[i] - base) >= 0.9 * height
   let p0 = iPk, p1 = iPk
   while (p0 > 0 && above(p0 - 1)) p0--
   while (p1 < n - 1 && above(p1 + 1)) p1++
-  // Slope over the middle 80 % of the flat top (least squares).
+  let flatSamples = 0
+  for (let i = p0; i <= p1; i++) if (sign * (x[i] - base) >= 0.98 * height) flatSamples++
+  const setFlat = opts.flatNs && opts.flatNs > 0 ? opts.flatNs / opts.sampleNs : null
+  const flatTopOk = setFlat !== null ? flatSamples >= Math.max(3, 0.5 * setFlat) : flatSamples >= 3
+  // Slope over the middle 80 % of the top (least squares); only on a real flat top.
   const len = p1 - p0 + 1
   let slopePctPerUs = 0
-  if (len >= 5) {
+  if (flatTopOk && len >= 5) {
     const q0 = p0 + Math.floor(len * 0.1), q1 = p1 - Math.floor(len * 0.1)
     let sx = 0, sy = 0, sxx = 0, sxy = 0, m = 0
     for (let i = q0; i <= q1; i++) {
@@ -112,16 +121,23 @@ export function trapezoidMetrics(x: ArrayLike<number>, opts: { preSamples: numbe
     const slopePerSample = (m * sxy - sx * sy) / Math.max(1e-9, m * sxx - sx * sx)
     slopePctPerUs = (slopePerSample / height) * 100 * (1000 / opts.sampleNs)
   }
-  // After the falling edge (one rise time after the flat top, +10 %).
-  const fallSamples = Math.ceil((opts.riseNs / opts.sampleNs) * 1.1) + 2
-  const t0 = p1 + fallSamples
-  const cutOff = t0 >= n - 3
+  // Pole-zero residual: on the tail once the trapezoid has fallen, not on the
+  // falling edge (which lasts rise + charge-collection time). Start where the
+  // trace first drops below 3 % of the height; if it never does (an
+  // overshoot), use the last part of the record, at least two rise times
+  // after the top. Nothing when neither is in the record.
+  const riseSamples = Math.ceil(opts.riseNs / opts.sampleNs)
+  const tailLen = Math.max(8, Math.floor(n * 0.1))
+  let t0 = -1
+  for (let i = p1 + 1; i < n; i++) if (sign * (x[i] - base) < 0.03 * height) { t0 = i + Math.max(2, Math.floor(riseSamples * 0.1)); break }
+  if (t0 < 0 && n - tailLen >= p1 + 2 * riseSamples) t0 = n - tailLen
+  const cutOff = t0 < 0 || t0 + 4 > n
   let pz: number | null = null
   if (!cutOff) {
-    const t1 = Math.min(n, t0 + Math.max(8, Math.floor(n * 0.15)))
+    const t1 = Math.min(n, t0 + tailLen)
     pz = ((sign * (mean(x, t0, t1) - base)) / height) * 100
   }
-  return { height, flatSlopePctPerUs: slopePctPerUs, pzResidualPct: pz, cutOff }
+  return { height, flatSlopePctPerUs: slopePctPerUs, pzResidualPct: pz, cutOff, flatSamples, flatTopOk }
 }
 
 /** The median of the finite values (robust against the odd pile-up trace). */

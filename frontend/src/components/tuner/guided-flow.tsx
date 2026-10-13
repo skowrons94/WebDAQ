@@ -4,23 +4,26 @@ import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Check, AlertTriangle, Circle, ChevronLeft, ChevronRight } from 'lucide-react'
 
-/** What the page knows about the channel, for the step checks. */
+/** What the page measures about the channel, for the step checks. */
 export interface GuideStatus {
-  tunerRun: boolean
+  running: boolean
   /** Trace 1 shows the input / the trapezoid. */
   showsInput: boolean
   showsTrapezoid: boolean
   headroomPct: number | null
   clippedTraces: number | null
   pzResidualPct: number | null
+  /** The trapezoid shows a flat top (null: not measured). */
+  flatTopOk: boolean | null
   trapezoidFits: boolean | null
   samplingInFlatTop: boolean | null
   shortBelowLong: boolean | null
   saturatedPct: number | null
-  thresholdScanned: boolean
-  riseScanned: boolean
-  gatesScanned: boolean
+  pileupPct: number | null
+  expectedPileupPct: number | null
+  lostPerS: number | null
   fitReliable: boolean
+  fitText: string | null
   presetSaved: boolean
 }
 
@@ -34,7 +37,6 @@ interface Step {
   target: string
   /** Analog probe code for trace 1 that this step reads, if any. */
   trace?: { code: number; name: string }
-  scanTab?: 'threshold' | 'shaping' | 'psd'
   check: (s: GuideStatus) => { v: Verdict; text: string }
 }
 
@@ -42,18 +44,26 @@ const unknown = (text: string) => ({ v: 'unknown' as const, text })
 
 const polarity: Step = {
   id: 'dc', title: 'Polarity & DC offset', target: 'tuner-dc', trace: { code: 0, name: 'Input' },
-  what: 'With trace 1 on Input, set "Negative input" to the pulse direction and move the DC offset so the baseline leaves room for the largest pulses (15 % or more of full scale) and nothing clips.',
+  what: 'With trace 1 on Input, set "Negative input" to the pulse direction and move the DC offset so the baseline leaves room for the largest pulses and nothing clips.',
   check: (s) => {
     if (!s.showsInput || s.headroomPct === null) return unknown('Needs the Input trace with waveforms on.')
     if ((s.clippedTraces ?? 0) > 0) return { v: 'warn', text: 'Some traces clip: more headroom.' }
+    if ((s.saturatedPct ?? 0) > 1) return { v: 'warn', text: `${s.saturatedPct!.toFixed(1)} % of pulses saturate: more headroom.` }
     if (s.headroomPct < 15) return { v: 'warn', text: `Headroom ${s.headroomPct.toFixed(0)} %: move the DC offset.` }
     return { v: 'ok', text: `Headroom ${s.headroomPct.toFixed(0)} %, no clipping.` }
   },
 }
 const threshold: Step = {
-  id: 'thr', title: 'Threshold', target: 'tuner-scans', scanTab: 'threshold',
-  what: 'Run the threshold scan (in a Tuner run) to find where noise starts, and apply its suggestion.',
-  check: (s) => (s.thresholdScanned ? { v: 'ok', text: 'Threshold scanned this session.' } : unknown(s.tunerRun ? 'Run the threshold scan.' : 'Start a Tuner run, then scan.')),
+  id: 'thr', title: 'Threshold', target: 'tuner-thr',
+  what: 'Lower the threshold until the rate starts to climb steeply (noise triggers), then raise it again by about a third. Watch rate, pile-up and losses in the strip above.',
+  check: (s) => {
+    if (!s.running || s.pileupPct === null) return unknown('Needs a run.')
+    if ((s.lostPerS ?? 0) > 0) return { v: 'warn', text: 'Events are being lost: raise the threshold.' }
+    if (s.expectedPileupPct !== null && s.pileupPct > 1 && s.pileupPct > 2 * s.expectedPileupPct) {
+      return { v: 'warn', text: `Pile-up ${s.pileupPct.toFixed(1)} % against ${s.expectedPileupPct.toFixed(1)} % expected: noise triggers?` }
+    }
+    return { v: 'ok', text: 'No excess pile-up, nothing lost.' }
+  },
 }
 
 const PHA: Step[] = [
@@ -61,19 +71,21 @@ const PHA: Step[] = [
   threshold,
   {
     id: 'pz', title: 'Decay / pole-zero', target: 'tuner-decay', trace: { code: 3, name: 'Trapezoid' },
-    what: 'With trace 1 on Trapezoid, set the decay time to the preamplifier\'s: the trapezoid must come back to the baseline (pole-zero residual near 0 %) with a flat top.',
+    what: 'With trace 1 on Trapezoid, set the decay time to the preamplifier\'s: after the trapezoid the trace must come back to the baseline (pole-zero residual near 0 %), with a flat top.',
     check: (s) => {
-      if (!s.showsTrapezoid || s.pzResidualPct === null) return unknown('Needs the Trapezoid trace.')
+      if (!s.showsTrapezoid || s.pzResidualPct === null) return unknown('Needs the Trapezoid trace, with its tail in the record.')
+      if (s.flatTopOk === false) return { v: 'warn', text: 'No flat top on the trapezoid: lengthen the flat top first.' }
       const r = Math.abs(s.pzResidualPct)
       return r <= 1 ? { v: 'ok', text: `Residual ${s.pzResidualPct.toFixed(1)} %.` } : { v: 'warn', text: `Residual ${s.pzResidualPct.toFixed(1)} %: adjust the decay time.` }
     },
   },
   {
-    id: 'rise', title: 'Rise & flat top', target: 'tuner-scans', scanTab: 'shaping',
-    what: 'Pick a peak on the spectrum, run the rise-time scan and apply the minimum. The flat top must cover the slowest pulses (no ballistic deficit: a longer flat top does not move the peak).',
+    id: 'rise', title: 'Rise & flat top', target: 'tuner-rise',
+    what: 'Pick a peak on the spectrum and try a few rise times, comparing the FWHM "since last change" for each. The flat top must cover the slowest pulses: a longer flat top must not move the peak.',
     check: (s) => {
       if (s.trapezoidFits === false) return { v: 'warn', text: 'The trapezoid does not fit the record.' }
-      return s.riseScanned ? { v: 'ok', text: 'Rise time scanned this session.' } : unknown('Run the rise-time scan.')
+      if (s.flatTopOk === false) return { v: 'warn', text: 'The trapezoid has no flat top (ballistic deficit).' }
+      return s.fitReliable ? { v: 'ok', text: s.fitText ?? 'Peak fitted.' } : unknown('Pick a peak on the spectrum.')
     },
   },
   {
@@ -93,18 +105,18 @@ const PSD: Step[] = [
   threshold,
   {
     id: 'goff', title: 'Gate offset', target: 'tuner-goff',
-    what: 'The gates open "gate offset" before the trigger: the whole pulse rise must be inside. Check on the Input trace (the Long Gate digital probe shows the gate where the board provides it).',
+    what: 'The gates open "gate offset" before the trigger: the whole pulse rise must be inside. Check on the Input trace (the Long gate digital probe shows the gate where the board provides it).',
     check: () => unknown('Judged on the trace.'),
   },
   {
     id: 'lgate', title: 'Long gate', target: 'tuner-lgate',
     what: 'Long enough to collect the slow component (best Q-long resolution on the fitted peak), short enough to keep pile-up low.',
-    check: (s) => (s.shortBelowLong === false ? { v: 'warn', text: 'Short gate ≥ long gate.' } : s.fitReliable ? { v: 'ok', text: 'Peak fitted.' } : unknown('Pick a peak on the spectrum.')),
+    check: (s) => (s.shortBelowLong === false ? { v: 'warn', text: 'Short gate ≥ long gate.' } : s.fitReliable ? { v: 'ok', text: s.fitText ?? 'Peak fitted.' } : unknown('Pick a peak on the spectrum.')),
   },
   {
-    id: 'sgate', title: 'Short gate (FoM)', target: 'tuner-scans', scanTab: 'psd',
-    what: 'Run the PSD gate scan with a neutron source and apply the best figure of merit.',
-    check: (s) => (s.gatesScanned ? { v: 'ok', text: 'Gates scanned this session.' } : unknown('Run the PSD gate scan.')),
+    id: 'sgate', title: 'Short gate', target: 'tuner-sgate',
+    what: 'With a neutron source, change the short gate in small steps and compare the neutron/gamma separation on the PSD plot (Histograms).',
+    check: (s) => (s.shortBelowLong === null ? unknown('—') : s.shortBelowLong ? unknown('Judged on the PSD plot.') : { v: 'warn', text: 'Short gate ≥ long gate.' }),
   },
   {
     id: 'csens', title: 'Charge sensitivity', target: 'tuner-csens',
@@ -126,35 +138,51 @@ function Mark({ v }: { v: Verdict }) {
 }
 
 /**
- * P8: "Tune this channel" — a fixed order of steps, each with what to do,
- * where on the page, and a check from what the page measures. Steps can be
- * skipped; nothing is written by the flow itself except the trace choice when
- * asked (a configuration change, as with the trace menu).
+ * P8: "Tune this channel" — a checklist of manual steps in a fixed order,
+ * each with what to do, where on the page, and a check from what the page
+ * measures. A step shows its verdict once it has been visited. Nothing is
+ * written by the checklist itself except the trace choice when asked (a
+ * configuration change, as with the trace menu).
  */
 export default function GuidedFlow({
-  psd, status, storageKey, onSelectTrace, onScanTab,
+  psd, status, storageKey, onSelectTrace,
 }: {
   psd: boolean
   status: GuideStatus
   storageKey: string
   onSelectTrace: (code: number, name: string) => void
-  onScanTab: (tab: 'threshold' | 'shaping' | 'psd') => void
 }) {
   const steps = [...(psd ? PSD : PHA), SAVE]
   const [i, setI] = useState(0)
+  // Steps visited so far: only those show a verdict in the list.
+  const [visited, setVisited] = useState<Set<number>>(new Set([0]))
   useEffect(() => {
-    try { const v = Number(window.sessionStorage.getItem(storageKey)); setI(Number.isFinite(v) && v >= 0 && v < steps.length ? v : 0) } catch { setI(0) }
+    let k = 0
+    let seen: number[] = []
+    try {
+      const v = Number(window.sessionStorage.getItem(storageKey))
+      k = Number.isFinite(v) && v >= 0 && v < steps.length ? v : 0
+      seen = JSON.parse(window.sessionStorage.getItem(`${storageKey}:seen`) ?? '[]')
+    } catch { /* tab only */ }
+    setI(k)
+    setVisited(new Set([...seen, k]))
   }, [storageKey]) // eslint-disable-line react-hooks/exhaustive-deps
   const go = (n: number) => {
     const k = Math.max(0, Math.min(steps.length - 1, n))
     setI(k)
-    try { window.sessionStorage.setItem(storageKey, String(k)) } catch { /* tab only */ }
+    setVisited((v) => {
+      const next = new Set(v).add(k)
+      try {
+        window.sessionStorage.setItem(storageKey, String(k))
+        window.sessionStorage.setItem(`${storageKey}:seen`, JSON.stringify(Array.from(next)))
+      } catch { /* tab only */ }
+      return next
+    })
   }
   const step = steps[i]
   const res = step.check(status)
 
   const show = () => {
-    if (step.scanTab) onScanTab(step.scanTab)
     const el = document.getElementById(step.target)
     if (!el) return
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -167,7 +195,7 @@ export default function GuidedFlow({
     <div className="space-y-3" data-testid="guided-flow">
       <ol className="flex flex-wrap gap-1.5" aria-label="Tuning steps">
         {steps.map((s, k) => {
-          const r = s.check(status)
+          const r = visited.has(k) ? s.check(status) : { v: 'unknown' as const }
           return (
             <li key={s.id}>
               <button type="button" onClick={() => go(k)} aria-current={k === i ? 'step' : undefined}

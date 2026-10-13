@@ -32,9 +32,9 @@ export function spectrumAxisTitle(psd: boolean, calibrated: boolean): string {
 }
 
 /** A spectrum as plain numbers: bin contents without under/overflow, and the axis. */
-export interface SpectrumData { y: Float64Array; nbins: number; xmin: number; xmax: number }
+interface SpectrumData { y: Float64Array; nbins: number; xmin: number; xmax: number }
 
-export function spectrumOf(h: { fArray?: ArrayLike<number>; fXaxis?: { fNbins?: number; fXmin?: number; fXmax?: number } } | null): SpectrumData | null {
+function spectrumOf(h: { fArray?: ArrayLike<number>; fXaxis?: { fNbins?: number; fXmin?: number; fXmax?: number } } | null): SpectrumData | null {
   const arr = h?.fArray, ax = h?.fXaxis
   if (!arr || !ax?.fNbins) return null
   const n = ax.fNbins
@@ -56,20 +56,19 @@ export function spectrumSince(cur: SpectrumData, snap: SpectrumData | null): { y
     const d = cur.y[i] - snap.y[i]
     if (d < 0) dropped -= d
     y[i] = Math.max(0, d)
-    v[i] = cur.y[i] + snap.y[i]
+    // The new counts are Poisson on their own: variance = the difference.
+    v[i] = Math.max(d, 1)
   }
   // Counts going down means the server started the spectrum again.
   return dropped > 0 ? null : { y, variance: v }
 }
 
-export type Roi = { center: number; half: number }
+type Roi = { center: number; half: number }
 export type FitSummary = { fwhm: number; centroid: number; unit: string; reliable: boolean }
 type Reference = { centroid: number; fwhm: number; unit: string }
 
-const roiKey = (b: string, ch: number) => `lunadaq:tuner-roi:${b}:${ch}`
-const refKey = (b: string, ch: number) => `lunadaq:tuner-ref:${b}:${ch}`
-/** The peak region chosen on the spectrum for this channel (this tab), if any. */
-export function readRoi(boardId: string, channel: number): Roi | null { return readJson<Roi>(roiKey(boardId, channel)) }
+const roiKey = (b: string, ch: number, dpp = '') => `lunadaq:tuner-roi:${b}:${ch}:${dpp}`
+const refKey = (b: string, ch: number, dpp = '') => `lunadaq:tuner-ref:${b}:${ch}:${dpp}`
 const readJson = <T,>(k: string): T | null => { try { const s = window.sessionStorage.getItem(k); return s ? JSON.parse(s) as T : null } catch { return null } }
 const writeJson = (k: string, v: unknown) => { try { if (v === null) window.sessionStorage.removeItem(k); else window.sessionStorage.setItem(k, JSON.stringify(v)) } catch { /* tab only */ } }
 
@@ -121,12 +120,15 @@ export function SpectrumPanel({
     onFit?.(fit ? { fwhm: fit.fwhm, centroid: fit.centroid, unit, reliable: !fit.warning } : null)
   }, [fit, unit]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const setRoi = (r: Roi | null) => { setRoiState(r); writeJson(roiKey(boardId, channel), r) }
+  // Region and reference belong to the board, channel and firmware: a channel
+  // that changes detector (PHA → PSD) starts afresh.
+  const fw = psd ? 'psd' : 'pha'
+  const setRoi = (r: Roi | null) => { setRoiState(r); writeJson(roiKey(boardId, channel, fw), r) }
 
   // A new channel: its own region, reference and a fresh start.
   useEffect(() => {
-    setRoiState(readJson<Roi>(roiKey(boardId, channel)))
-    setReference(readJson<Reference>(refKey(boardId, channel)))
+    setRoiState(readJson<Roi>(roiKey(boardId, channel, fw)))
+    setReference(readJson<Reference>(refKey(boardId, channel, fw)))
     snapshot.current = null
     latest.current = null
     autoPicked.current = false
@@ -134,7 +136,7 @@ export function SpectrumPanel({
     setFit(null)
     setCandidates([])
     setNote(null)
-  }, [boardId, channel])
+  }, [boardId, channel, fw])
 
   useEffect(() => {
     let alive = true
@@ -195,7 +197,7 @@ export function SpectrumPanel({
         h.fArray = arr
         h.fEntries = sum
         if (h.fXaxis) h.fXaxis.fTitle = spectrumAxisTitle(psd, calibrated)
-        if (h.fYaxis) h.fYaxis.fTitle = 'Counts'
+        if (h.fYaxis) h.fYaxis.fTitle = 'Counts / bin'
         await window.JSROOT.redraw(el, h, logY ? 'hist;logy' : 'hist')
 
         // Peaks and the fit: loaded on first use.
@@ -223,9 +225,11 @@ export function SpectrumPanel({
           setReference((prev) => {
             if (prev && prev.unit === unit && Math.abs(prev.centroid - f.centroid) < Math.max(3 * f.fwhm, r!.half)) return prev
             const next = { centroid: f.centroid, fwhm: f.fwhm, unit }
-            writeJson(refKey(boardId, channel), next)
+            writeJson(refKey(boardId, channel, fw), next)
             return next
           })
+          // Follow the peak: narrow a wide region to ±4 FWHM around it.
+          if (r.half > 6 * f.fwhm) setRoi({ center: f.centroid, half: 4 * f.fwhm })
         }
         // Zoom on the region with the fitted curve.
         const z = zoomRef.current
@@ -243,7 +247,7 @@ export function SpectrumPanel({
             hz.fXaxis.fXmin = cur.xmin + i0 * w
             hz.fXaxis.fXmax = cur.xmin + i1 * w
             hz.fXaxis.fTitle = spectrumAxisTitle(psd, calibrated)
-            hz.fYaxis.fTitle = k > 1 ? `Counts / ${k} bins` : 'Counts'
+            hz.fYaxis.fTitle = k > 1 ? `Counts / bin (${k} bins grouped)` : 'Counts / bin'
             for (let i = i0; i < i1; i++) hz.fArray[Math.floor((i - i0) / k) + 1] += shown[i]
             const canvas = window.JSROOT.create('TCanvas')
             canvas.fName = `tuner_roi_c_${boardId}_${channel}`
@@ -271,6 +275,7 @@ export function SpectrumPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jsrootLoaded, refreshTick, boardId, channel, psd, calibrated, logY, mode, roi])
 
+  const fewCounts = !!fit && fit.net < 50
   const resolutionPct = fit && fit.centroid > 0 ? (100 * fit.fwhm) / fit.centroid : null
   const sinceText = useMemo(() => {
     if (mode === 'whole') return 'Whole run'
@@ -340,10 +345,14 @@ export function SpectrumPanel({
             {fit ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm" data-testid="tuner-fit">
                 <dt className="text-muted-foreground">FWHM</dt>
-                <dd className="font-mono font-semibold tabular-nums">
-                  {fmt(fit.fwhm, unit)}{Number.isFinite(fit.fwhmErr) && fit.fwhmErr < fit.fwhm ? ` ± ${fmt(fit.fwhmErr, '').trim()}` : ''}
-                  {resolutionPct != null && <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">({resolutionPct.toFixed(resolutionPct < 1 ? 2 : 1)} %)</span>}
-                </dd>
+                {fewCounts ? (
+                  <dd className="font-mono tabular-nums text-muted-foreground" title="Fewer than 50 counts in the peak">—</dd>
+                ) : (
+                  <dd className="font-mono font-semibold tabular-nums">
+                    {fmt(fit.fwhm, unit)}{Number.isFinite(fit.fwhmErr) && fit.fwhmErr < fit.fwhm ? ` ± ${fmt(fit.fwhmErr, '').trim()}` : ''}
+                    {resolutionPct != null && <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">({resolutionPct.toFixed(resolutionPct < 1 ? 2 : 1)} %)</span>}
+                  </dd>
+                )}
                 <dt className="text-muted-foreground">FWTM</dt>
                 <dd className="font-mono tabular-nums">{fmt(fit.fwtm, unit)} <span className="font-sans text-xs text-muted-foreground">(FWTM/FWHM {fit.fwtmRatio.toFixed(2)}, Gauss 1.82)</span></dd>
                 <dt className="text-muted-foreground">Low tail</dt>
@@ -352,13 +361,13 @@ export function SpectrumPanel({
                 <dd className="font-mono tabular-nums">{fmt(fit.centroid, unit)}</dd>
                 <dt className="text-muted-foreground">Counts</dt>
                 <dd className="font-mono tabular-nums">{Math.round(fit.net).toLocaleString()}</dd>
-                {reference && reference.unit === unit && Math.abs(reference.centroid - fit.centroid) < Math.max(3 * fit.fwhm, roi?.half ?? 0) && (
+                {!fewCounts && reference && reference.unit === unit && Math.abs(reference.centroid - fit.centroid) < Math.max(3 * fit.fwhm, roi?.half ?? 0) && (
                   <>
                     <dt className="text-muted-foreground">Session</dt>
                     <dd className="text-sm">
                       start {fmt(reference.fwhm, unit)} → now <span className="font-semibold">{fmt(fit.fwhm, unit)}</span>
                       <button type="button" className="ml-2 text-xs text-muted-foreground underline"
-                        onClick={() => { const r = { centroid: fit.centroid, fwhm: fit.fwhm, unit }; setReference(r); writeJson(refKey(boardId, channel), r) }}>
+                        onClick={() => { const r = { centroid: fit.centroid, fwhm: fit.fwhm, unit }; setReference(r); writeJson(refKey(boardId, channel, fw), r) }}>
                         use now as start
                       </button>
                     </dd>

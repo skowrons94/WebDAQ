@@ -27,7 +27,9 @@ import { getBits, setBits, type BoardTiming } from '@/components/tuner/units'
  *  docs list e.g. PHA "Peaking" twice), unless the board is set to one. */
 function probeChoices(opts: RegisterOption[], current: number | null): RegisterOption[] {
   const seen = new Set<string>()
-  return opts.filter((o) => {
+  // Sentence case ("Long gate", "Pile up"), acronyms kept ("Shaped TRG").
+  const sentence = (l: string) => l.split(' ').map((w, i) => (i > 0 && /^[A-Z][a-z]+$/.test(w) ? w.toLowerCase() : w)).join(' ')
+  return opts.map((o) => ({ ...o, label: sentence(o.label) })).filter((o) => {
     if (o.value === current) { seen.add(o.label); return true }
     if (/^reserved$/i.test(o.label) || seen.has(o.label)) return false
     seen.add(o.label)
@@ -149,7 +151,7 @@ export function WaveformPanel(p: Props) {
               const m = inputMetrics(samples, { preSamples: p.preSamples, adcMax: p.timing.adcMax, negative: p.negative })
               if (m) inputHist.current = [...inputHist.current, m].slice(-10)
             } else if (showsTrapezoid && p.riseNs) {
-              const m = trapezoidMetrics(samples, { preSamples: p.preSamples, sampleNs, riseNs: p.riseNs })
+              const m = trapezoidMetrics(samples, { preSamples: p.preSamples, sampleNs, riseNs: p.riseNs, flatNs: p.flatNs })
               if (m) trapHist.current = [...trapHist.current, m].slice(-10)
             }
             const ih = inputHist.current, th = trapHist.current
@@ -168,6 +170,8 @@ export function WaveformPanel(p: Props) {
                 flatSlopePctPerUs: median(th.map((m) => m.flatSlopePctPerUs)) ?? 0,
                 pzResidualPct: median(th.map((m) => m.pzResidualPct ?? NaN)),
                 cutOff: th.some((m) => m.cutOff),
+                flatSamples: median(th.map((m) => m.flatSamples)) ?? 0,
+                flatTopOk: th.filter((m) => m.flatTopOk).length * 2 >= th.length,
               } : null,
             })
             if (ih.length) p.onBaseline?.(median(ih.map((m) => m.baseline)))
@@ -359,7 +363,9 @@ function TraceReadout({
   const t = metrics?.trap
   if (showsTrapezoid && t) {
     rows.push(
-      <Ok key="flat" ok={Math.abs(t.flatSlopePctPerUs) < 1}>
+      !t.flatTopOk
+        ? <Ok key="flat" ok={false}>No flat top: the top is rounded (ballistic deficit). Lengthen the flat top.</Ok>
+        : <Ok key="flat" ok={Math.abs(t.flatSlopePctPerUs) < 1}>
         Flat-top slope {t.flatSlopePctPerUs >= 0 ? '+' : ''}{t.flatSlopePctPerUs.toFixed(2)} %/µs
       </Ok>,
       t.pzResidualPct === null || t.cutOff

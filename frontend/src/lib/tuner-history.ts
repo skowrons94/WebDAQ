@@ -4,7 +4,7 @@
  * with the resolution at the time, so any step can be undone; presets keep a
  * channel's settings by name, per firmware.
  */
-import { controlsFor, getBits, setBits, type ControlSpec } from '@/components/tuner/units'
+import { baseAddress, controlsFor, getBits, setBits, type ControlSpec } from '@/components/tuner/units'
 import { findRegKey, type BoardSettings } from '@/components/tuner/controls-panel'
 
 export interface HistoryEntry {
@@ -15,11 +15,15 @@ export interface HistoryEntry {
   regKey: string
   name: string
   label: string
+  /** The control (ControlSpec.id) and its bits when the entry is one field of a shared register. */
+  field?: string
+  bits?: [number, number]
+  /** Field values when `bits` is set, else whole register values. */
   from: number
   to: number
   /** Written to the board (else configuration only, from the next run). */
   written: boolean
-  source: 'manual' | 'scan' | 'undo' | 'preset' | 'run'
+  source: 'manual' | 'undo' | 'preset' | 'run'
   /** The fitted FWHM when the change was made (before it took effect). */
   fwhmBefore: number | null
   unit: string | null
@@ -129,4 +133,31 @@ export function valuesFromDump(dpp: string, registers: Record<string, { channel:
     out[spec.id] = spec.bits ? getBits(raw, spec.bits) : raw
   }
   return Object.keys(out).length ? out : null
+}
+
+/**
+ * The Tuner controls that differ between two values of one register: a
+ * register such as 0x1080 holds several fields (polarity, baseline mean,
+ * peak mean...), and each is logged (and undone) on its own. A register the
+ * Tuner has no control for comes back as one whole-register change.
+ */
+export function fieldChanges(dpp: string, address: string, from: number, to: number): { spec: ControlSpec | null; from: number; to: number }[] {
+  const specs = controlsFor(dpp).filter((s) => s.address === baseAddress(address))
+  const out: { spec: ControlSpec | null; from: number; to: number }[] = specs
+    .map((spec) => ({ spec, from: spec.bits ? getBits(from, spec.bits) : from, to: spec.bits ? getBits(to, spec.bits) : to }))
+    .filter((c) => c.from !== c.to)
+  // Bits no control covers changed too: log the whole register as well.
+  const covered = specs.reduce((m, s) => (s.bits ? m | Number(((BigInt(1) << BigInt(s.bits[1] - s.bits[0] + 1)) - BigInt(1)) << BigInt(s.bits[0])) : 0xffffffff), 0) >>> 0
+  if (((from ^ to) & ~covered) >>> 0 || (!specs.length && from !== to)) out.push({ spec: null, from, to })
+  return out
+}
+
+/** The register value Undo stages: only the entry's field is put back, the rest stays as it is now. */
+export function undoTarget(e: Pick<HistoryEntry, 'bits' | 'from'>, currentRaw: number): number {
+  return e.bits ? setBits(currentRaw, e.bits, e.from) : e.from
+}
+
+/** Whether the entry's field (or register) no longer holds the value the entry set. */
+export function changedSince(e: Pick<HistoryEntry, 'bits' | 'to'>, currentRaw: number): boolean {
+  return (e.bits ? getBits(currentRaw, e.bits) : currentRaw) !== e.to
 }

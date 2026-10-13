@@ -128,6 +128,24 @@ function group(x: ArrayLike<number>, y: ArrayLike<number>, k: number, v?: ArrayL
   return { x: gx, y: gy, v: gv }
 }
 
+/** Spectrum bins per fit bin, from a rough FWHM (in bins) of the region's highest peak. */
+export function groupFor(yRoi: ArrayLike<number>, n: number): number {
+  const sm = smooth(yRoi, Math.max(1, Math.round(n / 400)))
+  const e = Math.max(2, Math.floor(n * 0.1))
+  let bl = 0, br = 0
+  for (let i = 0; i < e; i++) { bl += sm[i]; br += sm[n - 1 - i] }
+  const bg = Math.max(bl, br) / e
+  let im = 0
+  for (let i = 0; i < n; i++) if (sm[i] > sm[im]) im = i
+  const h = sm[im] - bg
+  if (!(h > 0)) return 1
+  let a = im, b = im
+  while (a > 0 && sm[a] - bg > h / 2) a--
+  while (b < n - 1 && sm[b] - bg > h / 2) b++
+  const fwhmBins = Math.max(1, b - a)
+  return Math.max(1, Math.min(Math.floor(fwhmBins / 6), Math.floor(n / 12)))
+}
+
 type Model = (p: number[], x: number) => number
 
 /** Levenberg–Marquardt on weighted least squares; returns params, covariance and χ². */
@@ -251,8 +269,10 @@ export function fitPeak(
   const idx: number[] = []
   for (let i = 0; i < x.length; i++) if (x[i] >= lo && x[i] <= hi) idx.push(i)
   if (idx.length < 8) return null
-  // At most ~80 bins in the region (more counts per bin, steadier weights).
-  const k = Math.max(1, Math.floor(idx.length / 80))
+  // Group bins by the peak's own width: at least 6 fit bins per FWHM (and
+  // at least 12 in the region), so a narrow peak is never grouped into a
+  // couple of bins and a wide one gets enough counts per bin.
+  const k = groupFor(Float64Array.from(idx, (i) => y[i]), idx.length)
   const g = group(Float64Array.from(idx, (i) => x[i]), Float64Array.from(idx, (i) => y[i]), k,
     opts.variance ? Float64Array.from(idx, (i) => opts.variance![i]) : undefined)
   const xs = g.x, ys = g.y
@@ -348,8 +368,20 @@ export function fitPeak(
   for (let i = 0; i < n; i++) net += ys[i] - (p[3] + p[4] * (xs[i] - mu0))
   if (!Number.isFinite(fwhm) || fwhm <= 0) return null
   const fwhmErr = err(2) * (fwhm / p[2])
-  const warning = net < 200 ? 'Few counts in the peak: wait for more.'
-    : fwhm < 2 * binW ? 'The peak is narrower than two bins: rebin finer for a reliable width.'
+  // A continuum (Compton edge, shoulder) is not a peak: wide against its
+  // position, or hardly above its own background.
+  const bgAtPeak = Math.max(1, p[3] + p[4] * (p[1] - mu0))
+  // A line falls off on both sides: the region's edges sit well below its top
+  // (an edge has its high side at the top's level).
+  const eN = Math.max(1, Math.floor(n * 0.1))
+  let eL = 0, eR = 0, top = -Infinity
+  for (let i = 0; i < eN; i++) { eL += ys[i]; eR += ys[n - 1 - i] }
+  for (let i = 0; i < n; i++) top = Math.max(top, ys[i])
+  const fallsBothSides = top - Math.max(eL, eR) / eN > 0.5 * p[0]
+  const continuum = (p[1] > 0 && fwhm / p[1] >= 0.3) || p[0] < 3 * Math.sqrt(bgAtPeak) || p[0] < 0.3 * bgAtPeak || !fallsBothSides
+  const warning = continuum ? 'This looks like a continuum (an edge or a shoulder), not a peak: pick a line.'
+    : net < 200 ? 'Few counts in the peak: wait for more.'
+    : k === 1 && fwhm < 2 * binW ? 'The peak spans fewer than two spectrum bins: use a smaller rebin factor (Histograms) for a reliable width.'
     : !(fwhmErr < 0.3 * fwhm) ? 'The width is poorly determined: wait for more counts or adjust the region.'
     : chi2ndf > 5 ? 'Poor fit: a neighbouring peak in the region, or the region too narrow.'
     : null

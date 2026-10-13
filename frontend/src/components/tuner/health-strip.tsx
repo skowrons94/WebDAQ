@@ -5,17 +5,18 @@ import { formatRate } from '@/components/tuner/format'
 import type { ChannelRates } from '@/components/tuner/use-channel-rates'
 
 /**
- * Expected pile-up fraction for a Poisson rate R in a window T:
- * P(another pulse within T) = 1 − e^(−R·T).
+ * Expected flagged pile-up fraction for a Poisson rate R and a pile-up
+ * window T: a pulse is flagged when another arrives within T before or
+ * after it (both are flagged), so 1 − e^(−2·R·T).
  */
 export function expectedPileup(ratePerS: number, windowNs: number): number {
   if (!(ratePerS > 0) || !(windowNs > 0)) return 0
-  return 1 - Math.exp(-ratePerS * windowNs * 1e-9)
+  return 1 - Math.exp(-2 * ratePerS * windowNs * 1e-9)
 }
 
 export interface HealthWarning { text: string; severity: 'warn' | 'error' }
 
-/** The warnings the strip raises for a reading (exported for the scans and tests). */
+/** The warnings the strip raises for a reading (exported for tests). */
 export function healthWarnings(r: ChannelRates, windowNs: number, psd: boolean): HealthWarning[] {
   const out: HealthWarning[] = []
   if (r.event <= 0) return out
@@ -53,7 +54,7 @@ export function HealthStrip({
   rates, windowNs, psd, running,
 }: {
   rates: ChannelRates | null
-  /** Pile-up window from the registers: max(2·rise + flat, peak hold-off) for PHA, long gate for PSD. */
+  /** Pile-up window from the registers: rise + sampling delay + peak hold-off for PHA, gate offset + long gate for PSD. */
   windowNs: number
   psd: boolean
   running: boolean
@@ -112,4 +113,13 @@ export function HealthStrip({
       )}
     </div>
   )
+}
+
+/**
+ * The pile-up window T from the channel's settings: for DPP-PHA the
+ * trapezoid's rise, the energy sampling delay and the peak hold-off; for
+ * DPP-PSD the gate (offset + long gate).
+ */
+export function pileupWindow(psd: boolean, v: { riseNs: number; samplingDelayNs: number; peakHoldNs: number; longGateNs: number; gateOffsetNs: number }): number {
+  return psd ? v.gateOffsetNs + v.longGateNs : v.riseNs + v.samplingDelayNs + v.peakHoldNs
 }

@@ -58,6 +58,8 @@ interface Props {
   isOnlineTunable: (regKey: string) => boolean
   /** Measured baseline from the input trace, to compare with the DC offset estimate. */
   measuredBaseline?: number | null
+  /** True while a value is typed but not yet committed. */
+  onTyping?: (typing: boolean) => void
 }
 
 /**
@@ -66,7 +68,7 @@ interface Props {
  * `pending` and written with "Save all".
  */
 export function ControlsPanel({
-  dpp, channel, timing, settings, pending, onChange, online, isOnlineTunable, measuredBaseline,
+  dpp, channel, timing, settings, pending, onChange, online, isOnlineTunable, measuredBaseline, onTyping,
 }: Props) {
   const specs = useMemo(() => controlsFor(dpp), [dpp])
   const rows = specs
@@ -76,6 +78,9 @@ export function ControlsPanel({
   // Typed text, until it is committed (blur or Enter).
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   useEffect(() => { setDrafts({}) }, [channel, dpp])
+  // Tell the page while something is typed but not committed (Save all commits it).
+  const typing = Object.keys(drafts).length > 0
+  useEffect(() => { onTyping?.(typing) }, [typing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const rawOf = (key: string) => pending[key] ?? settings[key]?.value_dec ?? 0
   const valueOf = (spec: ControlSpec, key: string) => controlValue(spec, rawOf(key))
@@ -131,6 +136,9 @@ export function ControlsPanel({
                 if (measuredBaseline != null && Math.abs(measuredBaseline - r.baseline) > timing.adcMax * 0.1) {
                   notes.push({ text: `The trace shows the baseline at ${Math.round(measuredBaseline)} LSB: trust the trace.`, warn: true })
                 }
+              }
+              if ((spec.id === 'rise' || spec.id === 'decay') && changed) {
+                notes.push({ text: 'The energy gain depends on the rise and decay times: the peaks move, so check the calibration after this change.', warn: true })
               }
               if (spec.id === 'peaking') {
                 const flat = byId('flat')

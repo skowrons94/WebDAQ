@@ -38,7 +38,7 @@ function DiffTable({ diffs, timing, aLabel, bLabel }: { diffs: ControlDiff[]; ti
  * changes: "Save all" applies them under the usual rules.
  */
 export default function HistoryPanel({
-  boardId, boardName, channel, dpp, timing, settings, pending, entries, currentFwhm, busy,
+  boardId, boardName, channel, dpp, timing, settings, pending, entries, currentFwhm,
   onUndo, onLoadValues, onClearHistory, onPresetSaved,
 }: {
   boardId: string
@@ -50,7 +50,6 @@ export default function HistoryPanel({
   pending: Record<string, number>
   entries: HistoryEntry[]
   currentFwhm: { fwhm: number; unit: string } | null
-  busy: boolean
   onUndo: (e: HistoryEntry) => void
   onLoadValues: (values: Record<string, number>, source: string) => void
   onClearHistory: () => void
@@ -110,7 +109,7 @@ export default function HistoryPanel({
           {entries.length > 0 && <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onClearHistory}>Clear list</Button>}
         </div>
         {list.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Changes sent from the Tuner to this channel are listed here, with the resolution at the time, and can be undone.</p>
+          <p className="text-sm text-muted-foreground">Changes saved from the Tuner for this channel are listed here, with the resolution at the time when they reached the board. Undo stages the old value.</p>
         ) : (
           <ol className="max-h-72 space-y-1.5 overflow-auto pr-1">
             {list.map((e, i) => {
@@ -121,11 +120,11 @@ export default function HistoryPanel({
                   <span className="flex-1">
                     {e.label}
                     <span className="block text-xs text-muted-foreground">
-                      {e.written ? 'on the board' : 'from the next run'}
-                      {e.fwhmBefore != null && ` · FWHM ${e.fwhmBefore.toFixed(2)}${after != null ? ` → ${after.toFixed(2)}` : ''} ${e.unit ?? ''}`}
+                      {e.written ? 'on the board' : 'from the next run · not applied yet'}
+                      {e.written && e.fwhmBefore != null && ` · FWHM ${e.fwhmBefore.toFixed(2)}${after != null ? ` → ${after.toFixed(2)}` : ''} ${e.unit ?? ''}`}
                     </span>
                   </span>
-                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy} onClick={() => onUndo(e)}>Undo</Button>
+                  <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onUndo(e)}>Undo</Button>
                 </li>
               )
             })}
@@ -147,7 +146,7 @@ export default function HistoryPanel({
             {presets.map((p) => (
               <li key={p.id} className="flex flex-wrap items-center gap-1.5 text-sm">
                 <span className="flex-1 truncate">{p.name}</span>
-                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" disabled={busy} onClick={() => onLoadValues(p.values, `preset ${p.name}`)}>Load</Button>
+                <Button variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => onLoadValues(p.values, `preset ${p.name}`)}>Load</Button>
                 <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setCompare(compare === p.id ? null : p.id)}>{compare === p.id ? 'Hide' : 'Compare'}</Button>
                 <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => { deletePreset(p.id); setPresets(loadPresets(dpp)); if (compare === p.id) setCompare(null) }}>Delete</Button>
               </li>
@@ -175,7 +174,7 @@ export default function HistoryPanel({
           <>
             <DiffTable diffs={diffValues(dpp, now, runValues)} timing={timing} aLabel="Now" bLabel={`Run ${run}`} />
             {diffValues(dpp, now, runValues).length > 0 && (
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => onLoadValues(runValues, `run ${run}`)}>Load run {run}&apos;s values</Button>
+              <Button size="sm" variant="outline" onClick={() => onLoadValues(runValues, `run ${run}`)}>Load run {run}&apos;s values</Button>
             )}
             <p className="text-xs text-muted-foreground">From the register file stored with the run (what was configured, not read back from the board).</p>
           </>

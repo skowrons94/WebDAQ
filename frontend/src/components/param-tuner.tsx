@@ -25,33 +25,29 @@ import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/use-toast'
 import { Zap } from 'lucide-react'
 import { loadJSROOT } from '@/lib/load-jsroot'
+import { useJsrootTheme } from '@/lib/jsroot-theme'
 import { ControlsPanel, findRegKey, type BoardSettings } from '@/components/tuner/controls-panel'
-import { HealthStrip } from '@/components/tuner/health-strip'
+import { HealthStrip, expectedPileup, pileupWindow } from '@/components/tuner/health-strip'
 import { WaveformPanel } from '@/components/tuner/waveform-panel'
 import { SpectrumPanel } from '@/components/tuner/spectrum-panel'
 import { useChannelRates } from '@/components/tuner/use-channel-rates'
 import { baseAddress, boardTiming, controlsFor, formatControl, getBits, setBits, toDisplay } from '@/components/tuner/units'
-import { cancelActiveScan, onScanRecordChange, scanActive, scanRecordState, type ScanRecordState } from '@/components/tuner/scan-engine'
-import { ScanRecoveryDialog } from '@/components/tuner/scan-recovery'
 import { useRunBadge } from '@/hooks/use-run-badge'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { addHistory, clearHistory, loadHistory, registersFor, type HistoryEntry } from '@/lib/tuner-history'
+import { addHistory, changedSince, clearHistory, fieldChanges, loadHistory, registersFor, undoTarget, type HistoryEntry } from '@/lib/tuner-history'
 import type { TraceReadout } from '@/components/tuner/waveform-panel'
 import type { FitSummary } from '@/components/tuner/spectrum-panel'
 import type { GuideStatus } from '@/components/tuner/guided-flow'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import dynamic from 'next/dynamic'
 
-// Scans (and the fit code they use) load only when a scan can run.
-const loadingScan = () => <p className="text-sm text-muted-foreground">Loading…</p>
-const ThresholdScan = dynamic(() => import('@/components/tuner/threshold-scan'), { ssr: false, loading: loadingScan })
-const ShapingScan = dynamic(() => import('@/components/tuner/shaping-scan'), { ssr: false, loading: loadingScan })
-const PsdFomScan = dynamic(() => import('@/components/tuner/psd-fom'), { ssr: false, loading: loadingScan })
-const HistoryPanel = dynamic(() => import('@/components/tuner/history-panel'), { ssr: false, loading: loadingScan })
-const GuidedFlow = dynamic(() => import('@/components/tuner/guided-flow'), { ssr: false, loading: loadingScan })
+// History and the guided checklist load on demand.
+const loadingPanel = () => <p className="text-sm text-muted-foreground">Loading…</p>
+const HistoryPanel = dynamic(() => import('@/components/tuner/history-panel'), { ssr: false, loading: loadingPanel })
+const GuidedFlow = dynamic(() => import('@/components/tuner/guided-flow'), { ssr: false, loading: loadingPanel })
 
 type BoardData = {
   id: string
@@ -64,6 +60,7 @@ type BoardData = {
 }
 
 const ONLINE_KEY = 'lunadaq:tuner-online'
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export default function ParamTuner() {
   const [boards, setBoards] = useState<BoardData[]>([])
@@ -74,6 +71,8 @@ export default function ParamTuner() {
   const [pending, setPending] = useState<Record<string, number>>({})
   const [isAcquiring, setIsAcquiring] = useState(false)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
+  // The trace and spectrum canvases follow dark mode whichever page loaded JSROOT first.
+  const darkCharts = useJsrootTheme(jsrootLoaded)
   const [refreshTick, setRefreshTick] = useState(0)
   const [measuredBaseline, setMeasuredBaseline] = useState<number | null>(null)
   // From the app's shared run-status poller (hooks/use-run-status.ts).
@@ -121,7 +120,9 @@ export default function ParamTuner() {
   const peakHoldNs = !isPSD && reg(0x1078) !== null ? toDisplay(reg(0x1078)!, 'step', timing) : 0
   const longGateNs = isPSD && reg(0x1058) !== null ? toDisplay(reg(0x1058)!, 'sample', timing) : 0
   // The window in which a second pulse piles up (design §P2).
-  const pileupWindowNs = isPSD ? longGateNs : Math.max(2 * (riseNs ?? 0) + (flatNs ?? 0), peakHoldNs)
+  const samplingDelayNs = !isPSD && reg(0x1064) !== null ? toDisplay(reg(0x1064)!, 'step', timing) : 0
+  const gateOffsetNs = isPSD && reg(0x105c) !== null ? toDisplay(reg(0x105c)!, 'sample', timing) : 0
+  const pileupWindowNs = pileupWindow(isPSD, { riseNs: riseNs ?? 0, samplingDelayNs, peakHoldNs, longGateNs, gateOffsetNs })
 
   const rates = useChannelRates(selectedBoardId, selectedChannel, isRunning)
 
@@ -129,15 +130,6 @@ export default function ParamTuner() {
   const [changeMark, setChangeMark] = useState(0)
   const [changeLabel, setChangeLabel] = useState<string | null>(null)
   const noteBoardChange = (label: string) => { setChangeLabel(label); setChangeMark((m) => m + 1) }
-  // A scan is writing to the board: the rest of the page waits.
-  const [scanBusy, setScanBusyState] = useState(false)
-  const [scanTab, setScanTab] = useState<'threshold' | 'shaping' | 'psd'>('threshold')
-  const [scanned, setScanned] = useState<Record<string, boolean>>({})
-  useEffect(() => { setScanTab('threshold') }, [isPSD])
-  const setScanBusy = (b: boolean) => {
-    setScanBusyState(b)
-    if (!b) setScanned((m) => ({ ...m, [scanTab]: true }))
-  }
 
   // Change log (P7) and what the guided flow (P8) reads.
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -151,12 +143,19 @@ export default function ParamTuner() {
     if (selectedBoardId) setHistory(loadHistory(selectedBoardId, selectedChannel))
     setFit(null); setTrace(null)
   }, [selectedBoardId, selectedChannel])
-  const logChange = (regKey: string, from: number, to: number, label: string, written: boolean, source: HistoryEntry['source']) => {
+  /** Log a register change, one entry per Tuner field it touched (so Undo puts back only that field). */
+  const logChange = (regKey: string, from: number, to: number, written: boolean, source: HistoryEntry['source']) => {
     const f = fitRef.current
-    addHistory({
-      boardId: selectedBoardId, channel: selectedChannel, regKey, name: settings[regKey]?.name ?? regKey,
-      label, from, to, written, source, fwhmBefore: f?.reliable ? f.fwhm : null, unit: f?.reliable ? f.unit : null,
-    })
+    const r = settings[regKey]
+    if (!r) return
+    for (const c of fieldChanges(dpp, r.address, from, to)) {
+      addHistory({
+        boardId: selectedBoardId, channel: selectedChannel, regKey, name: c.spec?.label ?? r.name,
+        label: c.spec ? `${c.spec.label} ${formatControl(c.spec, c.from, timing)} → ${formatControl(c.spec, c.to, timing)}` : `${r.name} ${from} → ${to}`,
+        field: c.spec?.id, bits: c.spec?.bits,
+        from: c.from, to: c.to, written, source, fwhmBefore: f?.reliable ? f.fwhm : null, unit: f?.reliable ? f.unit : null,
+      })
+    }
     setHistory(loadHistory(selectedBoardId, selectedChannel))
   }
 
@@ -249,43 +248,14 @@ export default function ParamTuner() {
     if (runKnown && isRunning && tunerOwnsRun(runStartTime)) setIsAcquiring(true)
   }, [runKnown, isRunning, runStartTime])
 
-  // Scans and other automatic writes: only in the run the Tuner started
-  // itself, and only while the server answers ("No answer" stops a scan; its
-  // values are restored, or offered for restore once the server is back).
-  const unreachable = useRunStatus((s) => s.unreachable)
-  const tunerLive = runKnown && !unreachable && isRunning && isAcquiring && tunerOwnsRun(runStartTime)
-  const tunerLiveRef = useRef(tunerLive)
-  tunerLiveRef.current = tunerLive
-  const isTunerLive = () => tunerLiveRef.current
 
-  // The scan record (this browser): another tab scanning, or a scan that
-  // ended without a confirmed restore. Followed across tabs.
-  const [scanState, setScanState] = useState<ScanRecordState>('none')
-  const [recoveryOpen, setRecoveryOpen] = useState(false)
-  useEffect(() => {
-    const check = () => setScanState(scanRecordState())
-    check()
-    const off = onScanRecordChange(check)
-    const id = setInterval(check, 3000)
-    return () => { off(); clearInterval(id) }
-  }, [])
-  // An interrupted scan: ask (once the server answers) before restoring.
-  const asked = useRef(false)
-  useEffect(() => {
-    if (!runKnown || unreachable) return
-    if ((scanState === 'interrupted' || scanState === 'expired') && !asked.current && !scanActive()) {
-      asked.current = true
-      setRecoveryOpen(true)
-    }
-    if (scanState === 'none') asked.current = false
-  }, [runKnown, unreachable, scanState])
-
-  // Auto-refresh tick
+  // Auto-refresh tick (and an immediate redraw when the theme changes)
   useEffect(() => {
     if (!jsrootLoaded || !selectedBoardId) return
+    setRefreshTick(t => t + 1)
     const interval = setInterval(() => setRefreshTick(t => t + 1), 2000)
     return () => clearInterval(interval)
-  }, [jsrootLoaded, selectedBoardId])
+  }, [jsrootLoaded, selectedBoardId, darkCharts])
 
   // --- Handlers ---
 
@@ -331,12 +301,6 @@ export default function ParamTuner() {
     if (!isAcquiring || busy) return
     setBusy(true)
     try {
-      // A scan first: cancel it and put its values back on the board while
-      // the run is still on, then stop.
-      if (scanActive()) {
-        toast({ title: 'Stopping the scan…', description: 'Its starting values are restored before the run stops.' })
-        await cancelActiveScan('Stopped from the Tuner.')
-      }
       await stopRun()
       useRunControlStore.getState().setIsRunning(false)
       noteRunAction()
@@ -411,8 +375,16 @@ export default function ParamTuner() {
     })
   }
 
+  const pendingRef = useRef(pending)
+  pendingRef.current = pending
+  const [typing, setTyping] = useState(false)
   const handleSaveAll = async () => {
-    const entries = Object.entries(pending)
+    // A value still being typed is committed first (its field loses focus).
+    if (typing && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+      await new Promise((r) => setTimeout(r, 50))
+    }
+    const entries = Object.entries(pendingRef.current)
     if (entries.length === 0) return
     let savedCount = 0
     let writtenCount = 0
@@ -421,20 +393,21 @@ export default function ParamTuner() {
       const res = await applyRegister(regKey, rawVal, r?.name ?? regKey)
       if (!res) continue
       if (res.written) writtenCount++
-      if (r) logChange(regKey, r.value_dec, rawVal, describeChange(regKey, r.value_dec, rawVal), res.written, 'manual')
+      if (r) logChange(regKey, r.value_dec, rawVal, res.written, 'manual')
       storeLocal(regKey, rawVal)
       setPending(prev => { const n = { ...prev }; delete n[regKey]; return n })
       savedCount++
     }
     if (writtenCount > 0 && isRunning) {
-      noteBoardChange(entries.map(([k]) => settings[k]?.name ?? k).slice(0, 3).join(', ') + (entries.length > 3 ? '…' : ''))
+      const names = entries.flatMap(([k, v]) => settings[k] ? fieldChanges(dpp, settings[k].address, settings[k].value_dec, v).map((c) => (c.spec?.label ?? settings[k].name).toLowerCase()) : [])
+      noteBoardChange(names.slice(0, 3).join(', ') + (names.length > 3 ? '…' : ''))
     }
     if (savedCount > 0) {
       toast({
         title: 'Saved',
         description: online
-          ? `${savedCount} setting(s) saved, ${writtenCount} written to the board`
-          : `${savedCount} setting(s) saved`,
+          ? `${plural(savedCount, 'setting')} saved, ${writtenCount} written to the board`
+          : `${plural(savedCount, 'setting')} saved`,
       })
     }
   }
@@ -453,35 +426,32 @@ export default function ParamTuner() {
     else doSwitch(sw)
   }
 
-  /** "Trapezoid rise time 400 → 4000 ns" for the change log. */
-  const describeChange = (regKey: string, from: number, to: number): string => {
-    const r = settings[regKey]
-    if (!r) return regKey
-    const specs = controlsFor(dpp).filter((s) => s.address === baseAddress(r.address))
-    const parts = specs
-      .map((s) => ({ s, a: s.bits ? getBits(from, s.bits) : from, b: s.bits ? getBits(to, s.bits) : to }))
-      .filter((x) => x.a !== x.b)
-      .map((x) => `${x.s.label} ${formatControl(x.s, x.a, timing)} → ${formatControl(x.s, x.b, timing)}`)
-    return parts.length ? parts.join(', ') : `${r.name} ${from} → ${to}`
-  }
 
-  /** Undo stages the old value (like a preset); "Save all" applies it under the usual rules. */
+  /**
+   * Undo stages the old value of that one field (like a preset): "Save all"
+   * applies it under the usual rules. The rest of a shared register is kept.
+   */
   const handleUndo = (e: HistoryEntry) => {
     const saved = settings[e.regKey]?.value_dec
     if (saved === undefined) { toast({ title: 'Cannot undo', description: `${e.name} is not in this board's settings.`, variant: 'destructive' }); return }
+    const current = pending[e.regKey] ?? saved
+    const target = undoTarget(e, current)
     setPending(prev => {
       const n = { ...prev }
-      if (saved === e.from) delete n[e.regKey]; else n[e.regKey] = e.from
+      if (saved === target) delete n[e.regKey]; else n[e.regKey] = target
       return n
     })
-    if (saved !== e.to) {
+    const spec = e.field ? controlsFor(dpp).find((c) => c.id === e.field) : undefined
+    const show = (v: number) => (spec ? formatControl(spec, v, timing) : String(v))
+    const now = e.bits ? getBits(current, e.bits) : current
+    if (changedSince(e, current)) {
       toast({
         title: 'Undo staged: changed since',
-        description: `${e.name} was changed after this step: it is now ${describeChange(e.regKey, e.to, saved).replace(/^.*?→ /, '')}, not the value this step set. The old value is staged anyway: check it, then "Save all".`,
+        description: `${e.name} is now ${show(now)}, not the ${show(e.to)} this step set. ${show(e.from)} is staged anyway: check it, then "Save all".`,
         variant: 'destructive',
       })
     } else {
-      toast({ title: 'Undo staged', description: `${describeChange(e.regKey, saved, e.from)}: press "Save all" to apply.` })
+      toast({ title: 'Undo staged', description: `${e.name} ${show(now)} → ${show(e.from)}: press "Save all" to apply.` })
     }
   }
 
@@ -505,52 +475,29 @@ export default function ParamTuner() {
   const shortNs = isPSD && reg(0x1054) !== null ? toDisplay(reg(0x1054)!, 'sample', timing) : null
   const recordNs = recordRaw !== null ? recordRaw * 8 * timing.sampleNs : null
   const preNs = preRaw !== null ? preRaw * 4 * timing.sampleNs : 0
+  const fitUsable = !!fit?.reliable
   const guide: GuideStatus = {
-    tunerRun: tunerLive,
+    running: isRunning,
     showsInput, showsTrapezoid,
     headroomPct: trace?.input ? (100 * trace.input.headroom) / timing.adcMax : null,
     clippedTraces: trace ? trace.clipped : null,
     pzResidualPct: trace?.trap?.pzResidualPct ?? null,
+    flatTopOk: trace?.trap ? trace.trap.flatTopOk : null,
     trapezoidFits: !isPSD && riseNs !== null && flatNs !== null && recordNs !== null ? preNs + 2 * riseNs + flatNs <= recordNs : null,
     samplingInFlatTop: peakingNs !== null && flatNs !== null ? peakingNs < flatNs : null,
     shortBelowLong: shortNs !== null && longGateNs ? shortNs < longGateNs : null,
     saturatedPct: rates.now && rates.now.event > 0 ? (100 * rates.now.satu) / rates.now.event : null,
-    thresholdScanned: !!scanned.threshold,
-    riseScanned: !!scanned.shaping,
-    gatesScanned: !!scanned.psd,
-    fitReliable: !!fit?.reliable,
+    pileupPct: rates.now && rates.now.event > 0 ? (100 * rates.now.pileup) / rates.now.event : null,
+    expectedPileupPct: rates.now ? 100 * expectedPileup(rates.now.event, pileupWindowNs) : null,
+    lostPerS: rates.now ? rates.now.lost : null,
+    fitReliable: fitUsable,
+    fitText: fitUsable && fit ? `FWHM ${fit.fwhm.toFixed(2)} ${fit.unit} at ${fit.centroid.toFixed(0)} ${fit.unit}.` : null,
     presetSaved,
   }
 
-  /** A scan's suggestion, applied as one change: to the board in the Tuner's run. */
-  const applyFromScan = async (regKey: string, raw: number, label: string) => {
-    try {
-      const before = settings[regKey]?.value_dec
-      const r = await applySettingRaw(selectedBoardId, regKey, raw, tunerLiveRef.current)
-      if (before !== undefined) logChange(regKey, before, raw, label, r.written, 'scan')
-      storeLocal(regKey, raw)
-      setPending(prev => { const n = { ...prev }; delete n[regKey]; return n })
-      if (r.written) noteBoardChange(label)
-      toast({ title: 'Applied', description: r.written ? `${label} (on the board now)` : `${label} (from the next run)` })
-    } catch {
-      toast({ title: 'Not applied', description: `${label}: the server did not accept the change.`, variant: 'destructive' })
-    }
-  }
 
   return (
     <div className="flex flex-col gap-6">
-      <ScanRecoveryDialog
-        open={recoveryOpen}
-        onOpenChange={setRecoveryOpen}
-        isLive={isTunerLive}
-        context="tuner"
-        onDone={async () => {
-          setScanState(scanRecordState())
-          if (selectedBoardId) {
-            try { setSettings(await getBoardSettings(selectedBoardId)) } catch { /* keep what is shown */ }
-          }
-        }}
-      />
       <AlertDialog open={!!switchAsk} onOpenChange={(o) => { if (!o) setSwitchAsk(null) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -572,7 +519,7 @@ export default function ParamTuner() {
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">Board</Label>
-          <Select value={selectedBoardId} onValueChange={(v) => askSwitch({ kind: 'board', value: v })} disabled={scanBusy}>
+          <Select value={selectedBoardId} onValueChange={(v) => askSwitch({ kind: 'board', value: v })}>
             <SelectTrigger className="w-52 max-w-full" aria-label="Board">
               <SelectValue placeholder="Select board..." />
             </SelectTrigger>
@@ -589,7 +536,6 @@ export default function ParamTuner() {
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">Channel</Label>
           <Select
-            disabled={scanBusy}
             value={selectedChannel.toString()}
             onValueChange={v => askSwitch({ kind: 'channel', value: v })}
           >
@@ -608,7 +554,7 @@ export default function ParamTuner() {
 
         <Button
           onClick={handleStart}
-          disabled={isAcquiring || isRunning || !runKnown || busy || scanBusy}
+          disabled={isAcquiring || isRunning || !runKnown || busy}
           variant="success"
         >
           Start
@@ -627,11 +573,6 @@ export default function ParamTuner() {
           <span className="text-xs text-muted-foreground">
             Production run: stop it from the Dashboard. Changes follow the usual rules.
           </span>
-        )}
-        {isAcquiring && (
-          <Badge variant="outline" className="text-warning border-warning">
-            Tuner run · not saved to disk
-          </Badge>
         )}
 
         {/* Online mode: changes go to the board as well as to its configuration.
@@ -667,7 +608,6 @@ export default function ParamTuner() {
                 psd={isPSD}
                 status={guide}
                 storageKey={`lunadaq:tuner-guide:${selectedBoardId}:${selectedChannel}`}
-                onScanTab={setScanTab}
                 onSelectTrace={(code, name) => {
                   if (boardConfigValue === null) return
                   void handleBoardConfigChange(setBits(boardConfigValue, [12, 13], code), `Trace 1: ${name}`)
@@ -718,12 +658,13 @@ export default function ParamTuner() {
               online={online}
               isOnlineTunable={isOnlineTunable}
               measuredBaseline={measuredBaseline}
+              onTyping={setTyping}
             />
             <div className="flex items-center justify-end gap-2 border-t pt-4">
               {pendingCount > 0 && (
                 <Button variant="ghost" onClick={() => setPending({})}>Discard</Button>
               )}
-              <Button onClick={handleSaveAll} disabled={pendingCount === 0 || scanBusy}>
+              <Button onClick={handleSaveAll} disabled={pendingCount === 0 && !typing}>
                 Save all
                 {pendingCount > 0 && (
                   <Badge variant="secondary" className="ml-2 text-xs">
@@ -750,59 +691,6 @@ export default function ParamTuner() {
         />
       )}
 
-      {selectedBoard && (
-        <Card id="tuner-scans" tabIndex={-1}>
-          <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-            <CardTitle>Scans <span className="text-sm font-normal text-muted-foreground">Ch {selectedChannel}</span></CardTitle>
-            <Tabs value={scanTab} onValueChange={(v) => !scanBusy && setScanTab(v as typeof scanTab)}>
-              <TabsList>
-                <TabsTrigger value="threshold" disabled={scanBusy}>Threshold</TabsTrigger>
-                {isPSD
-                  ? <TabsTrigger value="psd" disabled={scanBusy}>PSD gates</TabsTrigger>
-                  : <TabsTrigger value="shaping" disabled={scanBusy}>Rise time</TabsTrigger>}
-              </TabsList>
-            </Tabs>
-          </CardHeader>
-          <CardContent>
-            {(scanState === 'active-elsewhere' || ((scanState === 'interrupted' || scanState === 'expired') && !scanBusy)) ? (
-              <div className="space-y-2 text-sm" data-testid="scans-blocked">
-                {scanState === 'active-elsewhere' ? (
-                  <p>A scan is running in another Tuner tab or window. Scans run one at a time: finish or cancel it there.</p>
-                ) : (
-                  <>
-                    <p className="text-warning">An earlier scan ended without confirming that its values were put back. Scans (and a production Start) wait until it is resolved.</p>
-                    <Button size="sm" variant="outline" onClick={() => setRecoveryOpen(true)}>Review and restore…</Button>
-                  </>
-                )}
-              </div>
-            ) : tunerLive ? (
-              scanTab === 'shaping' && !isPSD ? (
-                <ShapingScan boardId={selectedBoardId} channel={selectedChannel} settings={settings} timing={timing}
-                  isLive={isTunerLive} onBusy={setScanBusy} onApply={applyFromScan} />
-              ) : scanTab === 'psd' && isPSD ? (
-                <PsdFomScan boardId={selectedBoardId} channel={selectedChannel} settings={settings} timing={timing}
-                  isLive={isTunerLive} onBusy={setScanBusy} onApply={applyFromScan} />
-              ) : (
-                <ThresholdScan
-                  boardId={selectedBoardId}
-                  channel={selectedChannel}
-                  psd={isPSD}
-                  settings={settings}
-                  isLive={isTunerLive}
-                  onBusy={setScanBusy}
-                  onApply={applyFromScan}
-                />
-              )
-            ) : (
-              <p className="text-sm text-muted-foreground" data-testid="scans-locked">
-                {isRunning
-                  ? 'Scans write to the board, so they run only in a run started here. A production run is never scanned.'
-                  : 'Scans write to the board while it acquires: press Start above (Tuner run, not saved), then scan.'}
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {selectedBoard && (
         <Card id="tuner-history" tabIndex={-1}>
@@ -820,7 +708,6 @@ export default function ParamTuner() {
               pending={pending}
               entries={history}
               currentFwhm={fit?.reliable ? { fwhm: fit.fwhm, unit: fit.unit } : null}
-              busy={scanBusy}
               onUndo={handleUndo}
               onLoadValues={handleLoadValues}
               onClearHistory={() => { clearHistory(selectedBoardId, selectedChannel); setHistory([]) }}
