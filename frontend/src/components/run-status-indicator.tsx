@@ -55,15 +55,21 @@ export function useElapsed(isRunning: boolean, startTime: string | null): number
 export function RunStatusIndicator({ className }: { className?: string }) {
   // The state comes from the one shared poller (hooks/use-run-status.ts), so
   // the header can never disagree with the dashboard or /alerts.
-  const { known, isRunning, startTime, boardError } = useRunStatus()
+  const { known, isRunning, startTime, boardError, unreachable } = useRunStatus()
   const elapsed = useElapsed(isRunning, startTime)
 
   // Until the first poll answers, show nothing rather than "Stopped" — claiming
   // the DAQ is idle before we know is worse than showing nothing at all.
-  if (!known) return null
+  if (!known && !unreachable) return null
 
-  const state = boardError && isRunning ? "error" : isRunning ? "running" : "stopped"
-  const label = state === "error" ? "CAEN Error" : state === "running" ? "Running" : "Stopped"
+  // No answer (the last poll failed or hung): never keep claiming "Running"
+  // or "Stopped" from an old answer — say that the state is not known.
+  const state = unreachable
+    ? "warning"
+    : boardError && isRunning ? "error" : isRunning ? "running" : "stopped"
+  const label = state === "warning"
+    ? "No answer"
+    : state === "error" ? "CAEN Error" : state === "running" ? "Running" : "Stopped"
 
   return (
     <div
@@ -73,7 +79,9 @@ export function RunStatusIndicator({ className }: { className?: string }) {
       role="status"
       aria-live="polite"
       title={
-        state === "error"
+        state === "warning"
+          ? "The DAQ server did not answer the last run-status request; the run state is unknown until it does"
+          : state === "error"
           ? "A board reported a FAIL aggregate during this run — data may be incomplete"
           : state === "running"
             ? "Acquisition is running"
@@ -82,7 +90,7 @@ export function RunStatusIndicator({ className }: { className?: string }) {
     >
       <StatusBadge state={state} label={label} size="md" />
       {/* Tabular numerals so the digits do not jitter as the clock ticks. */}
-      {isRunning && (
+      {isRunning && !unreachable && (
         <span className="font-mono text-sm tabular-nums whitespace-nowrap">
           {formatElapsed(elapsed)}
         </span>

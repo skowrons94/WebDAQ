@@ -43,7 +43,7 @@ export function RunBar() {
   const router = useRouter()
   const pathname = usePathname()
   const setDashboardTab = useDashboardTabStore((s) => s.setTab)
-  const { known, isRunning, startTime, runNumber, boardError, totalRate } = useRunStatus()
+  const { known, isRunning, startTime, runNumber, boardError, totalRate, unreachable } = useRunStatus()
   const elapsed = useElapsed(isRunning, startTime)
   const currentEnabled = useVisualizationStore((s) => s.settings.currentEnabled !== false)
   const [beam, setBeam] = useState<number | null>(null)
@@ -87,8 +87,9 @@ export function RunBar() {
     }
   }
 
-  const state = !known ? 'unknown' : boardError && isRunning ? 'error' : isRunning ? 'running' : 'stopped'
-  const label = state === 'error' ? 'CAEN Error' : undefined
+  // "No answer" outranks everything: a last-known "Running" is not shown as fact.
+  const state = unreachable ? 'warning' : !known ? 'unknown' : boardError && isRunning ? 'error' : isRunning ? 'running' : 'stopped'
+  const label = state === 'warning' ? 'No answer' : state === 'error' ? 'CAEN Error' : undefined
   const beamText = beam !== null && Number.isFinite(beam) ? `${beam.toFixed(2)} µA` : null
 
   return (
@@ -110,12 +111,14 @@ export function RunBar() {
                 <span className="truncate text-sm text-muted-foreground">Next: run {runNumber}</span>
               )
             )}
-            {isRunning && (
+            {isRunning && !unreachable && (
               <span className="font-mono text-sm tabular-nums">{formatElapsed(elapsed)}</span>
             )}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {isRunning && totalRate !== null ? `${formatRate(totalRate)} total` : isRunning ? 'Rate …' : 'No run in progress'}
+            {unreachable
+              ? `No answer from the server${isRunning ? ' (last known: running)' : ''}`
+              : isRunning && totalRate !== null ? `${formatRate(totalRate)} total` : isRunning ? 'Rate …' : 'No run in progress'}
             {beamText && <> · beam {beamText}</>}
           </p>
         </div>

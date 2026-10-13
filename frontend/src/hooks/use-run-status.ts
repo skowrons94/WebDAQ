@@ -8,6 +8,7 @@ import {
   getStartTime,
 } from '@/lib/api'
 import useRunControlStore, { type RunControlState } from '@/store/run-control-store'
+import { restoreTunerSaveFlag } from '@/lib/tuner-save'
 
 /**
  * One poller for the run state, shared by every component that calls
@@ -15,44 +16,83 @@ import useRunControlStore, { type RunControlState } from '@/store/run-control-st
  * indicator is on every page, so in practice: always, once logged in) and
  * stops when the last one unmounts.
  *
- * Errors keep the last known state on screen (a momentary hiccup must not flip
- * the UI to "Stopped"); `unreachable` says the last poll failed.
+ * Three rules keep it from ever freezing or lying:
+ * - Every poll has a deadline (POLL_DEADLINE_MS). A request that hangs (a
+ *   half-open connection, a server stuck in a long call) is dropped: the store
+ *   says `unreachable`, and the next tick sends a fresh poll instead of waiting
+ *   on the stuck one forever.
+ * - A poll sent before a Start or Stop (noteRunAction) cannot overwrite the
+ *   state that action set: its answer may describe the world before the action.
+ * - A failed field keeps its last value (a missing start time does not zero
+ *   the timers); the run state itself is only ever set from a real answer.
  */
 const POLL_MS = 2000
+export const POLL_DEADLINE_MS = 4000
 
 interface ChannelLike { event_rate?: number }
 interface BoardLike { failed?: boolean; board_failures?: number; channels?: ChannelLike[] }
 
+class Timeout extends Error {}
+
+/** Resolve with the promise, or reject with Timeout after `ms`. The request
+ *  itself cannot be cancelled here (api.ts takes no signal); it is abandoned. */
+function withDeadline<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const id = setTimeout(() => reject(new Timeout('deadline')), ms)
+    p.then(
+      (v) => { clearTimeout(id); resolve(v) },
+      (e) => { clearTimeout(id); reject(e) },
+    )
+  })
+}
+
 let subscribers = 0
 let timer: ReturnType<typeof setInterval> | null = null
-let inFlight: Promise<void> | null = null
+/** The poll currently waiting for an answer (at most one per tick). */
+let inFlight: { promise: Promise<void>; startedAt: number; generation: number } | null = null
+/** Bumped by every Start/Stop; a poll remembers the value it started with. */
+let actionGeneration = 0
+
+/** Call when a Start or Stop has just changed the run on the server. Answers
+ *  to polls sent earlier are then ignored, and a fresh poll is sent. */
+export function noteRunAction(): void {
+  actionGeneration += 1
+  void refreshRunStatus()
+}
 
 async function pollOnce(): Promise<void> {
+  const generation = actionGeneration
+  const stale = () => generation !== actionGeneration
   const store = useRunControlStore.getState()
+  const settle = <T,>(p: Promise<T>) => withDeadline(p, POLL_DEADLINE_MS).then(
+    (v) => ({ ok: true as const, v }),
+    (e) => ({ ok: false as const, e }),
+  )
   const [running, start, runNumber] = await Promise.all([
-    getRunStatus().catch(() => null),
-    getStartTime().catch(() => null),
-    getCurrentRunNumber().catch(() => null),
+    settle(getRunStatus()),
+    settle(getStartTime()),
+    settle(getCurrentRunNumber()),
   ])
-  if (running === null) {
+  if (stale()) return
+  if (!running.ok) {
+    // No answer about the run: say so, keep the last known values on screen.
     store.update({ unreachable: true })
     return
   }
-  const isRunning = Boolean(running)
-  const patch: Partial<RunControlState> = {
-    known: true,
-    unreachable: false,
-    isRunning,
-    startTime: isRunning && typeof start === 'string' ? start : null,
-  }
-  if (typeof runNumber === 'number') patch.runNumber = runNumber
+  const isRunning = Boolean(running.v)
+  const patch: Partial<RunControlState> = { known: true, unreachable: false, isRunning }
+  if (!isRunning) patch.startTime = null
+  else if (start.ok && typeof start.v === 'string') patch.startTime = start.v
+  // (a failed start-time read during a run keeps the previous value)
+  if (runNumber.ok && typeof runNumber.v === 'number') patch.runNumber = runNumber.v
 
   // Rates only while a run is on: /experiment/stats carries every channel of
   // every board, and the server answers [] when nothing is running.
   if (isRunning) {
-    const stats = await getExperimentStats().catch(() => null)
-    if (Array.isArray(stats)) {
-      const boards = stats as BoardLike[]
+    const stats = await settle(getExperimentStats())
+    if (stale()) return
+    if (stats.ok && Array.isArray(stats.v)) {
+      const boards = stats.v as BoardLike[]
       patch.boardError = boards.some((b) => Boolean(b.failed) || (b.board_failures ?? 0) > 0)
       patch.totalRate = boards.reduce(
         (acc, b) => acc + (b.channels ?? []).reduce((s, c) => s + (Number(c.event_rate) || 0), 0),
@@ -62,16 +102,37 @@ async function pollOnce(): Promise<void> {
   } else {
     patch.boardError = false
     patch.totalRate = null
+    // A Tuner run that ended by any path (Dashboard, run bar, another tab):
+    // put data saving back the way the Tuner found it.
+    void restoreTunerSaveFlag()
   }
   store.update(patch)
 }
 
-/** Ask now (after Start or Stop) instead of waiting for the next tick. */
+/**
+ * Ask now. If a poll is already waiting it is reused, unless it was sent
+ * before the latest Start/Stop (then a fresh one goes out) or it has passed
+ * its deadline (then it is abandoned). Never awaited by Start, Stop or the
+ * Tuner: they set the state themselves and let this catch up.
+ */
 export function refreshRunStatus(): Promise<void> {
-  if (!inFlight) {
-    inFlight = pollOnce().finally(() => { inFlight = null })
+  const now = Date.now()
+  // A poll settles within two deadlines (status, then rates); the age check
+  // only guards against a poll that somehow never settles.
+  if (inFlight && inFlight.generation === actionGeneration
+      && now - inFlight.startedAt < 2 * POLL_DEADLINE_MS + 500) {
+    return inFlight.promise
   }
-  return inFlight
+  const entry: NonNullable<typeof inFlight> = {
+    promise: Promise.resolve(),
+    startedAt: now,
+    generation: actionGeneration,
+  }
+  entry.promise = pollOnce()
+    .catch(() => { useRunControlStore.getState().update({ unreachable: true }) })
+    .finally(() => { if (inFlight === entry) inFlight = null })
+  inFlight = entry
+  return entry.promise
 }
 
 function subscribe() {

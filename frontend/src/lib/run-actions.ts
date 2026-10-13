@@ -9,7 +9,9 @@ import {
   stopStatsRun,
 } from '@/lib/api'
 import { pauseAlertNonBlocking } from '@/lib/grafana-api'
-import { refreshRunStatus } from '@/hooks/use-run-status'
+import { noteRunAction } from '@/hooks/use-run-status'
+import { restoreTunerSaveFlag, tunerSaveRecordPending } from '@/lib/tuner-save'
+import useRunControlStore from '@/store/run-control-store'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 
@@ -30,10 +32,23 @@ export interface StopRunResult {
  */
 export async function stopRunSequence(saveData?: boolean): Promise<StopRunResult> {
   const warnings: string[] = []
-  const saving = saveData ?? Boolean(await getSaveData().catch(() => true))
+  // Read with a deadline: a hung request must not hold up a Stop. Unknown
+  // counts as "saving", so the current log and stats.csv are closed.
+  const saving = saveData ?? Boolean(await Promise.race([
+    getSaveData().catch(() => true),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(true), 4000)),
+  ]))
   const currentEnabled = useVisualizationStore.getState().settings.currentEnabled !== false
 
   await stopRun()
+  // The DAQ is stopped: say so now, and ignore any poll sent before the stop
+  // (its answer would put "Running" back for a moment).
+  useRunControlStore.getState().update({ isRunning: false, startTime: null, known: true })
+  noteRunAction()
+  // A run the Tuner started had saving switched off: switch it back.
+  if ((await restoreTunerSaveFlag()) === null && tunerSaveRecordPending()) {
+    warnings.push('data saving was not switched back on after the Tuner run')
+  }
 
   if (saving) {
     if (currentEnabled) {
@@ -53,6 +68,5 @@ export async function stopRunSequence(saveData?: boolean): Promise<StopRunResult
   }
 
   useGrafanaAlertsStore.getState().autoManageUids.forEach((uid) => pauseAlertNonBlocking(uid))
-  await refreshRunStatus().catch(() => undefined)
   return { warnings }
 }
