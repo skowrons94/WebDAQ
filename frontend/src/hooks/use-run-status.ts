@@ -86,11 +86,14 @@ let timer: ReturnType<typeof setInterval> | null = null
 let inFlight: { promise: Promise<void>; startedAt: number; generation: number } | null = null
 /** Bumped by every Start/Stop; a poll remembers the value it started with. */
 let actionGeneration = 0
+/** Consecutive polls that saw the DAQ stopped. */
+let stoppedStreak = 0
 
 /** Call when a Start or Stop has just changed the run on the server. Answers
  *  to polls sent earlier are then ignored, and a fresh poll is sent. */
 export function noteRunAction(): void {
   actionGeneration += 1
+  stoppedStreak = 0
   void refreshRunStatus()
 }
 
@@ -123,6 +126,7 @@ async function pollOnce(): Promise<void> {
   // Rates only while a run is on: /experiment/stats carries every channel of
   // every board, and the server answers [] when nothing is running.
   if (isRunning) {
+    stoppedStreak = 0
     const stats = await settle(getExperimentStats())
     if (stale()) return
     if (stats.ok && Array.isArray(stats.v)) {
@@ -136,9 +140,13 @@ async function pollOnce(): Promise<void> {
   } else {
     patch.boardError = false
     patch.totalRate = null
+    patch.stopFailed = false
     // A Tuner run that ended by any path (Dashboard, run bar, another tab):
-    // put data saving back the way the Tuner found it.
-    void restoreTunerSaveFlag()
+    // put data saving back the way the Tuner found it. Two "stopped" answers
+    // in a row are required, so a poll answered across a Tuner start (in
+    // another tab) cannot restore saving during the Tuner's run.
+    stoppedStreak += 1
+    if (stoppedStreak >= 2) void restoreTunerSaveFlag()
   }
   store.update(patch)
 }

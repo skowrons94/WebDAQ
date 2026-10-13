@@ -20,6 +20,9 @@ export interface RunControlState {
   totalRate: number | null;
   /** The last poll could not reach the server. */
   unreachable: boolean;
+  /** A Stop failed while the run still shows as going: Force reset is offered
+   *  (dashboard Run control and the phone run bar). Cleared when it stops. */
+  stopFailed: boolean;
   setIsRunning: (isRunning: boolean) => void;
   setStartTime: (startTime: string | null) => void;
   setRunNumber: (runNumber: number | null) => void;
@@ -34,6 +37,7 @@ const useRunControlStore = create<RunControlState>((set) => ({
   boardError: false,
   totalRate: null,
   unreachable: false,
+  stopFailed: false,
   setIsRunning: (isRunning) => set({ isRunning, known: true }),
   setStartTime: (startTime) => set({ startTime }),
   setRunNumber: (runNumber) => set({ runNumber }),

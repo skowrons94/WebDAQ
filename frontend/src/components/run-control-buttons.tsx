@@ -48,8 +48,6 @@ import {
   getStartTime,
   startAcquisitionCurrent,
   addRunMetadata,
-  stopAcquisitionCurrent,
-  stopStatsRun,
   reset,
   resetDeviceCurrent,
   resetTotalAccumulatedCharge,
@@ -67,7 +65,7 @@ import useRunControlStore from '@/store/run-control-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
 import { unpauseAlertNonBlocking } from '@/lib/grafana-api'
-import { stopRunSequence } from '@/lib/run-actions'
+import { forceResetSequence, stopRunSequence } from '@/lib/run-actions'
 import { noteRunAction } from '@/hooks/use-run-status'
 import { StopRunBody } from '@/components/stop-run-body'
 
@@ -119,15 +117,20 @@ export function RunControlButtons({
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [starting, setStarting] = useState(false)
+  // Also a ref: a double click lands before React re-renders the disabled
+  // button, so the guard must not wait for state.
+  const startingRef = useRef(false)
+  const setStartBusy = (busy: boolean) => { startingRef.current = busy; setStarting(busy) }
   // Saving was off at Start: the operator chooses before anything is sent.
   const [savingOffOpen, setSavingOffOpen] = useState(false)
   // The saving setting this start was confirmed with (used by startRunProcess,
   // also when it runs later from the overwrite dialog).
   const pendingSave = useRef(saveData)
   const turnOnRef = useRef<HTMLButtonElement>(null)
-  // The last Stop failed while the run still shows as going: offer the forced reset.
-  const [stopFailed, setStopFailed] = useState(false)
-  useEffect(() => { if (!isRunning) setStopFailed(false) }, [isRunning])
+  // The last Stop failed while the run still shows as going: offer the forced
+  // reset. Shared with the phone run bar (store), cleared once the DAQ stops.
+  const stopFailed = useRunControlStore((st) => st.stopFailed)
+  const setStopFailed = (v: boolean) => useRunControlStore.getState().update({ stopFailed: v })
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   // Shown in the Reset total charge confirmation, so the operator sees what
   // is about to be zeroed.
@@ -172,14 +175,17 @@ export function RunControlButtons({
    * Initiates the run start process with validation and confirmation dialogs
    */
   const handleStartRun = async () => {
-    if (runNumber === null || starting) {
-      if (runNumber === null) toast({
+    // One start at a time, from the first click on (also during the saving read).
+    if (startingRef.current) return
+    if (runNumber === null) {
+      toast({
         title: 'Error',
         description: 'Run number is not set. Please set a run number before starting.',
         variant: 'destructive',
       })
       return
     }
+    setStartBusy(true)
     // Saving may have been switched off from anywhere (the Tuner, another
     // computer): ask the server, not this page's copy. Off is never started
     // silently: the operator chooses, with "turn it on" as the default.
@@ -193,16 +199,37 @@ export function RunControlButtons({
       // No answer: use the page's copy; an "off" still gets the question below.
     }
     if (!serverSave) {
+      // The (modal) dialog decides; its buttons take the guard again.
+      setStartBusy(false)
       setSavingOffOpen(true)
       return
     }
     await beginStart(true)
   }
 
+  /** From the saving-off dialog: the operator's choice, once. */
+  const startFromDialog = (save: boolean) => {
+    setSavingOffOpen(false)
+    if (startingRef.current) return
+    setStartBusy(true)
+    void beginStart(save)
+  }
+
+  /** From the overwrite dialog: guarded like Start itself. */
+  const startAfterOverwrite = async () => {
+    if (startingRef.current) return
+    setStartBusy(true)
+    try {
+      await startRunProcess()
+    } finally {
+      setStartBusy(false)
+    }
+  }
+
   /** Set up and start with the saving setting the operator confirmed. */
   const beginStart = async (save: boolean) => {
     pendingSave.current = save
-    setStarting(true)
+    setStartBusy(true)
     try {
       await setRunNumber(runNumber!)
       const directoryExists = await checkRunDirectoryExists()
@@ -211,6 +238,7 @@ export function RunControlButtons({
 
       // Only confirm when the run directory already exists (would be overwritten).
       if (directoryExists) {
+        setStartBusy(false)
         setShowOverrideDialog(true)
         return
       }
@@ -228,7 +256,7 @@ export function RunControlButtons({
         variant: 'destructive',
       })
     } finally {
-      setStarting(false)
+      setStartBusy(false)
     }
   }
 
@@ -394,21 +422,25 @@ export function RunControlButtons({
    */
   const handleForceReset = async () => {
     try {
-      const result = await reset()
-      if (result === -1) throw new Error('reset refused')
-      await stopAcquisitionCurrent().catch((e) => console.error('current stop:', e?.message ?? e))
-      await stopStatsRun().catch((e) => console.error('stats stop:', e?.message ?? e))
-      useRunControlStore.getState().update({ isRunning: false, startTime: null, known: true })
+      const { warnings, nextRun } = await forceResetSequence(runNumber, saveData)
       onIsRunningChange(false)
       onStartTimeChange(null)
-      noteRunAction()
-      setStopFailed(false)
-      toast({ title: 'Acquisition reset', description: 'The DAQ is stopped. Check the run in the Logbook: it may be incomplete.' })
+      if (nextRun !== null) onRunNumberChange(nextRun)
+      toast({
+        title: 'Acquisition reset',
+        description: [
+          `The DAQ is stopped. Run ${runNumber ?? ''} may be incomplete: check it in the Logbook.`,
+          nextRun !== null ? `The next run is ${nextRun}.` : '',
+          warnings.length ? `Also: ${warnings.join('; ')}.` : '',
+        ].filter(Boolean).join(' '),
+        variant: warnings.length ? 'destructive' : undefined,
+      })
     } catch (error) {
       console.error('Force reset failed:', (error as Error)?.message ?? error)
       toast({ title: 'Reset failed', description: 'The acquisition could not be reset. See Troubleshoot, or stop the server.', variant: 'destructive' })
     }
   }
+
 
   /**
    * Stops any running acquisition and resets the current measurement device.
@@ -614,7 +646,9 @@ export function RunControlButtons({
                     The CAEN acquisition is torn down and the server&apos;s running flag is
                     cleared, whatever state they are in; the current log and stats.csv are
                     closed. The run{runNumber !== null ? ` ${runNumber}` : ''} may be incomplete: its last
-                    data may be missing, and it may not be closed in the Logbook.
+                    data may be missing, and it may not be closed in the Logbook. The
+                    auto-managed Grafana alerts are paused, and with saving on the run number
+                    moves on{runNumber !== null ? ` to ${runNumber + 1}` : ''}, so the next Start does not overwrite it.
                   </p>
                 </>
               }
@@ -758,14 +792,14 @@ export function RunControlButtons({
             <Button
               variant="outline"
               className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => { setSavingOffOpen(false); void beginStart(false) }}
+              onClick={() => startFromDialog(false)}
             >
               Start without saving
             </Button>
             <Button
               ref={turnOnRef}
               variant="success"
-              onClick={() => { setSavingOffOpen(false); void beginStart(true) }}
+              onClick={() => startFromDialog(true)}
             >
               Turn saving on and start
             </Button>
@@ -785,7 +819,7 @@ export function RunControlButtons({
           </p>
         }
         confirmLabel={`Overwrite and start run ${runNumber}`}
-        onConfirm={startRunProcess}
+        onConfirm={startAfterOverwrite}
       />
     </Card>
   )

@@ -2,7 +2,8 @@
 
 import { useRunStatus, noteRunAction } from '@/hooks/use-run-status'
 import useRunControlStore from '@/store/run-control-store'
-import { markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerRunStarted } from '@/lib/tuner-save'
+import { markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerOwnsRun, tunerRunRecordStarted } from '@/lib/tuner-save'
+import { getStartTime } from '@/lib/api'
 import { StatusBadge } from '@/components/ui/status-badge'
 import React, { useState, useEffect, useRef } from 'react'
 import {
@@ -301,11 +302,14 @@ export default function ParamTuner() {
     }
   }, [isRunning, isAcquiring])
 
-  // After a reload, a Tuner acquisition still going is still the Tuner's.
+  // After a reload, a Tuner acquisition still going is still the Tuner's --
+  // but only the very run it started (same server start time). A record left
+  // by an older Tuner run never makes a production run stoppable from here.
   const runKnown = useRunStatus((s) => s.known)
+  const runStartTime = useRunStatus((s) => s.startTime)
   useEffect(() => {
-    if (runKnown && isRunning && tunerRunStarted()) setIsAcquiring(true)
-  }, [runKnown, isRunning])
+    if (runKnown && isRunning && tunerOwnsRun(runStartTime)) setIsAcquiring(true)
+  }, [runKnown, isRunning, runStartTime])
 
   // Auto-refresh tick
   useEffect(() => {
@@ -388,7 +392,13 @@ export default function ParamTuner() {
       // hung poll must not keep the Tuner from knowing its own run).
       useRunControlStore.getState().setIsRunning(true)
       noteRunAction()
-      markTunerRunStarted()
+      // The server's start time identifies this run (for a reload, and so an
+      // old record can never claim another run). Read with a deadline.
+      const startTime = await Promise.race([
+        getStartTime().then((t: unknown) => (typeof t === 'string' ? t : null)).catch(() => null),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000)),
+      ])
+      markTunerRunStarted(startTime)
       setIsAcquiring(true)
       toast({ title: 'Started', description: 'Acquisition started (data saving disabled)' })
     } catch {
@@ -409,7 +419,7 @@ export default function ParamTuner() {
       noteRunAction()
       const restored = await restoreTunerSaveFlag()
       setIsAcquiring(false)
-      if (restored === null && tunerRunStarted()) {
+      if (restored === null && tunerRunRecordStarted()) {
         toast({ title: 'Data saving not restored', description: 'Check "Save to disk" on the Dashboard before the next run.', variant: 'destructive' })
       }
       toast({ title: 'Stopped', description: 'Acquisition stopped' })

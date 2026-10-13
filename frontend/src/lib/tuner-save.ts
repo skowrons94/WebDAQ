@@ -9,12 +9,28 @@ import { setSaveData } from '@/lib/api'
 
 const KEY = 'lunadaq:tuner-saved-save-flag'
 
-interface Record_ { original: boolean; started: boolean }
+interface Record_ {
+  original: boolean
+  started: boolean
+  /** The server's start_time of the Tuner's run: only that run is the Tuner's. */
+  startTime: string | null
+  /** When the record was written (ms), to expire one whose run never started. */
+  createdAt: number
+}
+
+/** A record whose run never started (the tab closed during Start) expires. */
+export const UNSTARTED_RECORD_TTL_MS = 2 * 60 * 1000
 
 function read(): Record_ | null {
   try {
     const v = JSON.parse(window.localStorage.getItem(KEY) || 'null')
-    return v && typeof v.original === 'boolean' ? { original: v.original, started: Boolean(v.started) } : null
+    if (!v || typeof v.original !== 'boolean') return null
+    return {
+      original: v.original,
+      started: Boolean(v.started),
+      startTime: typeof v.startTime === 'string' ? v.startTime : null,
+      createdAt: typeof v.createdAt === 'number' ? v.createdAt : 0,
+    }
   } catch {
     return null
   }
@@ -22,26 +38,41 @@ function read(): Record_ | null {
 function write(r: Record_) {
   try { window.localStorage.setItem(KEY, JSON.stringify(r)) } catch { /* see restore */ }
 }
+function expired(r: Record_): boolean {
+  return !r.started && Date.now() - r.createdAt > UNSTARTED_RECORD_TTL_MS
+}
 
 /** Before switching saving off: remember what it was. */
 export function rememberTunerSaveFlag(original: boolean): void {
-  write({ original, started: false })
+  write({ original, started: false, startTime: null, createdAt: Date.now() })
 }
 
-/** The Tuner's acquisition has started: from now on any stop restores. */
-export function markTunerRunStarted(): void {
+/** The Tuner's acquisition has started, with this server start_time. */
+export function markTunerRunStarted(startTime: string | null): void {
   const r = read()
-  if (r) write({ ...r, started: true })
+  if (r) write({ ...r, started: true, startTime })
 }
 
-/** Saving is switched off by the Tuner and not yet put back. */
+/** Saving is switched off by a Tuner run (started, or starting just now). */
 export function tunerSaveRecordPending(): boolean {
-  return typeof window !== 'undefined' && read() !== null
+  if (typeof window === 'undefined') return false
+  const r = read()
+  return r !== null && !expired(r)
 }
 
-/** A Tuner acquisition was started from this browser and not yet stopped. */
-export function tunerRunStarted(): boolean {
-  return read()?.started === true
+/**
+ * The run with this start_time is the one the Tuner started from this
+ * browser. A record from an older Tuner run (stopped elsewhere while this
+ * browser was closed) never claims a later production run.
+ */
+export function tunerOwnsRun(startTime: string | null): boolean {
+  const r = typeof window === 'undefined' ? null : read()
+  return !!r && r.started && r.startTime !== null && startTime !== null && r.startTime === startTime
+}
+
+/** A Tuner run was started from this browser and saving not yet put back. */
+export function tunerRunRecordStarted(): boolean {
+  return typeof window !== 'undefined' && read()?.started === true
 }
 
 let restoring: Promise<boolean | null> | null = null
@@ -54,8 +85,9 @@ let restoring: Promise<boolean | null> | null = null
 export function restoreTunerSaveFlag(opts: { evenIfNotStarted?: boolean } = {}): Promise<boolean | null> {
   const r = typeof window === 'undefined' ? null : read()
   // Not yet started: the Tuner is between "saving off" and "start"; a stop
-  // seen now is the state before its run, not the end of it.
-  if (r === null || (!r.started && !opts.evenIfNotStarted)) return Promise.resolve(null)
+  // seen now is the state before its run, not the end of it -- unless the
+  // record is minutes old (the tab closed during Start): then it is restored.
+  if (r === null || (!r.started && !opts.evenIfNotStarted && !expired(r))) return Promise.resolve(null)
   const original = r.original
   if (!restoring) {
     restoring = setSaveData(original)

@@ -13,7 +13,8 @@ import { formatElapsed, useElapsed } from '@/components/run-status-indicator'
 import { useRunStatus } from '@/hooks/use-run-status'
 import { getDataCurrent, getSaveData } from '@/lib/api'
 import { StopRunBody } from '@/components/stop-run-body'
-import { stopRunSequence } from '@/lib/run-actions'
+import { forceResetSequence, stopRunSequence } from '@/lib/run-actions'
+import useRunControlStore from '@/store/run-control-store'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 
@@ -44,7 +45,7 @@ export function RunBar() {
   const router = useRouter()
   const pathname = usePathname()
   const setDashboardTab = useDashboardTabStore((s) => s.setTab)
-  const { known, isRunning, startTime, runNumber, boardError, totalRate, unreachable } = useRunStatus()
+  const { known, isRunning, startTime, runNumber, boardError, totalRate, unreachable, stopFailed } = useRunStatus()
   const elapsed = useElapsed(isRunning, startTime)
   const currentEnabled = useVisualizationStore((s) => s.settings.currentEnabled !== false)
   const [beam, setBeam] = useState<number | null>(null)
@@ -63,6 +64,7 @@ export function RunBar() {
   }, [currentEnabled])
 
   const stop = async () => {
+    if (stopping) return
     setStopping(true)
     try {
       const { warnings } = await stopRunSequence()
@@ -72,10 +74,29 @@ export function RunBar() {
         variant: warnings.length ? 'destructive' : undefined,
       })
     } catch (error) {
-      console.error('Failed to stop run:', error)
-      toast({ title: 'The run is still going', description: 'Failed to stop the run. Please try again.', variant: 'destructive' })
+      console.error('Failed to stop run:', (error as Error)?.message ?? error)
+      useRunControlStore.getState().update({ stopFailed: true })
+      toast({ title: 'The run is still going', description: 'Failed to stop the run. Try again; if it keeps failing, use "Force reset".', variant: 'destructive' })
     } finally {
       setStopping(false)
+    }
+  }
+
+  const forceReset = async () => {
+    try {
+      const { warnings, nextRun } = await forceResetSequence(runNumber)
+      toast({
+        title: 'Acquisition reset',
+        description: [
+          `The DAQ is stopped. Run ${runNumber ?? ''} may be incomplete: check it in the Logbook.`,
+          nextRun !== null ? `The next run is ${nextRun}.` : '',
+          warnings.length ? `Also: ${warnings.join('; ')}.` : '',
+        ].filter(Boolean).join(' '),
+        variant: warnings.length ? 'destructive' : undefined,
+      })
+    } catch (error) {
+      console.error('Force reset failed:', (error as Error)?.message ?? error)
+      toast({ title: 'Reset failed', description: 'The acquisition could not be reset. See Troubleshoot, or stop the server.', variant: 'destructive' })
     }
   }
 
@@ -155,6 +176,34 @@ export function RunBar() {
           </Button>
         )}
       </div>
+      {/* After a failed Stop: the same forced reset the dashboard offers. */}
+      {stopFailed && isRunning && (
+        <div className="mt-2 flex items-center justify-between gap-2 border-t pt-2" role="alert">
+          <p className="text-xs font-semibold text-destructive">The run did not stop.</p>
+          <ConfirmAction
+            trigger={
+              <Button variant="outline" className="h-11 shrink-0 border-destructive text-destructive hover:text-destructive">
+                Force reset…
+              </Button>
+            }
+            title="Force a reset of the acquisition?"
+            description={
+              <>
+                <p className="font-semibold text-destructive">Use this only when Stop keeps failing.</p>
+                <p>
+                  The CAEN acquisition is torn down and the server&apos;s running flag is cleared,
+                  whatever state they are in; the current log and stats.csv are closed and the
+                  auto-managed alerts paused. Run{runNumber !== null ? ` ${runNumber}` : ''} may be
+                  incomplete. With saving on, the run number moves on, so the next Start does not
+                  overwrite it.
+                </p>
+              </>
+            }
+            confirmLabel="Force reset acquisition"
+            onConfirm={forceReset}
+          />
+        </div>
+      )}
     </div>
   )
 }
