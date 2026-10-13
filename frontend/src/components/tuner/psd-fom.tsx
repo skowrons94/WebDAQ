@@ -38,7 +38,10 @@ async function measureFom(boardId: string, channel: number, lo: number, hi: numb
         if (last.counts >= target && last.fom !== null) return { ...last, seconds }
       }
     }
-    if (seconds >= maxS) return { ...(last ?? { fom: null, gamma: null, neutron: null, counts: 0, reason: 'No data.' }), seconds }
+    if (seconds >= maxS) {
+      const r = last ?? { fom: null, gamma: null, neutron: null, counts: 0, reason: 'No data.' }
+      return { ...r, seconds, reason: r.reason ?? `Only ${Math.round(r.counts)} events: rough.` }
+    }
   }
 }
 
@@ -126,7 +129,11 @@ export default function PsdFomScan({
 
   if (!sKey || !lKey || s0 === null || l0 === null) return <p className="text-sm text-muted-foreground">No gate registers for this channel.</p>
   const ok = points.filter((p) => p.result.fom !== null)
-  const best = ok.length ? ok.reduce((a, b) => (b.result.fom! > a.result.fom! ? b : a)) : null
+  // Prefer pairs measured with enough events; few-event FoMs are noisy.
+  const enough = ok.filter((p) => p.result.counts >= 0.5 * (Number(target) || 3000))
+  const pool = enough.length ? enough : ok
+  const best = pool.length ? pool.reduce((a, b) => (b.result.fom! > a.result.fom! ? b : a)) : null
+  const rough = !!best && !enough.length
   const longs = Array.from(new Set(points.map((p) => p.value.long)))
 
   return (
@@ -183,7 +190,7 @@ export default function PsdFomScan({
       )}
       {!running && points.length > 0 && (
         <div className="rounded-md border bg-muted/40 p-3 text-sm" role="status" data-testid="psd-result">
-          {best ? <p>Best FoM <strong>{best.result.fom!.toFixed(2)}</strong> at short {best.value.short} ns, long {best.value.long} ns.</p>
+          {best ? <p>Best FoM <strong>{best.result.fom!.toFixed(2)}</strong> at short {best.value.short} ns, long {best.value.long} ns.{rough && ' Few events per pair: treat it as rough, or scan again with more time per step.'}</p>
             : <p>No pair separated two populations: is there a neutron source, and is the band right?</p>}
           <div className="mt-2 flex flex-wrap gap-2">
             {best && (best.value.short !== s0 * ns || best.value.long !== l0 * ns) && (

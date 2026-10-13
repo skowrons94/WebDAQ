@@ -112,18 +112,21 @@ export default function ShapingScan({
   const abort = useRef<AbortController | null>(null)
   const roi = readRoi(boardId, channel)
 
-  useEffect(() => {
-    if (riseUs === null) return
-    setFrom(String(Math.max(0.1, +(riseUs / 2).toFixed(2))))
-    setTo(String(+(riseUs * 3).toFixed(2)))
-    setPoints([]); setBest(null)
-  }, [boardId, channel, riseUs === null]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => abort.current?.abort(), [])
-
   // The trapezoid (pre-trigger + 2 rise + flat top) must fit in the record.
   const recordNs = recKey ? settings[recKey].value_dec * 8 * timing.sampleNs : Infinity
   const preNs = preKey ? settings[preKey].value_dec * 4 * timing.sampleNs : 0
   const flatNs = flatKey ? settings[flatKey].value_dec * step : 0
+  useEffect(() => {
+    if (riseUs === null) return
+    // 1 to 8 µs (germanium) where the record allows, and the current value in range.
+    const maxFitUs = (recordNs - preNs - flatNs) / 2000
+    const hi = Math.max(riseUs, Math.min(8, Number.isFinite(maxFitUs) ? Math.floor(maxFitUs * 10) / 10 : 8))
+    setFrom(String(+Math.min(1, riseUs).toFixed(2)))
+    setTo(String(+hi.toFixed(2)))
+    setPoints([]); setBest(null)
+  }, [boardId, channel, riseUs === null]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => abort.current?.abort(), [])
+
   const fits = (us: number) => preNs + 2 * us * 1000 + flatNs <= recordNs
   const all = (() => {
     const a = Number(from), b = Number(to), k = Math.round(Number(n))
