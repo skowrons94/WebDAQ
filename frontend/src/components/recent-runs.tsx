@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { formatElapsed } from '@/components/run-status-indicator'
 import { useRunStatus } from '@/hooks/use-run-status'
+import { useRunBadge } from '@/hooks/use-run-badge'
 import { getRunMetadataAll } from '@/lib/api'
 
 interface RunRow {
@@ -29,6 +30,9 @@ const SHOWN = 5
 export function RecentRuns() {
   const isRunning = useRunStatus((s) => s.isRunning)
   const runNumber = useRunStatus((s) => s.runNumber)
+  // The live run is named by the header's rule: "Board failure" wins over
+  // "Running", and a Tuner acquisition says "Tuning".
+  const badge = useRunBadge()
   const [runs, setRuns] = useState<RunRow[] | null>(null)
   const [failed, setFailed] = useState(false)
 
@@ -86,7 +90,7 @@ export function RecentRuns() {
                       )}
                     </span>
                     {live ? (
-                      <StatusBadge state="running" label="Running" />
+                      <StatusBadge state={badge.state} label={badge.label} title={badge.title} />
                     ) : seconds !== null ? (
                       <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
                         {formatElapsed(seconds)}

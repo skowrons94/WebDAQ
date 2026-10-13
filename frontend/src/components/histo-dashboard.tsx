@@ -487,6 +487,50 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
 }
 
 // Main Enhanced Dashboard Component
+/**
+ * Axis titles for a spectrum: "Energy (keV)" on a calibrated axis, "ADC channel"
+ * on a raw one (an uncalibrated spectrum spans 0 … 2^n channels, rebinned or
+ * not), and "Counts / bin". Bigger tick labels on a narrow (phone) canvas: at
+ * JSROOT's default they were about 7 px.
+ */
+function labelHistogramAxes(histogram: any, showTitles: boolean, widthPx: number) {
+  const x = histogram?.fXaxis
+  const y = histogram?.fYaxis
+  if (!x || !y) return
+  const xmax = Number(x.fXmax)
+  const raw = Number(x.fXmin) === 0 && Number.isInteger(xmax) && xmax >= 256 && (xmax & (xmax - 1)) === 0
+  x.fTitle = showTitles ? (x.fTitle || (raw ? "ADC channel" : "Energy (keV)")) : ""
+  y.fTitle = showTitles ? (y.fTitle || "Counts / bin") : ""
+  const narrow = widthPx > 0 && widthPx < 520
+  for (const axis of [x, y]) {
+    axis.fLabelSize = narrow ? 0.045 : 0.03
+    axis.fTitleSize = narrow ? 0.045 : 0.035
+  }
+  x.fTitleOffset = 1.2
+  y.fTitleOffset = 1.5
+}
+
+/**
+ * --chart-1 ("220 70% 50%") as "rrggbb", or null when it cannot be read.
+ * JSROOT's dark mode inverts the whole SVG (filter: invert(100%)), so there
+ * the colour is passed pre-inverted and shows as the dark theme's token.
+ */
+function seriesHex(inverted = false): string | null {
+  if (typeof window === "undefined") return null
+  const v = getComputedStyle(document.documentElement).getPropertyValue("--chart-1").trim()
+  const m = v.match(/^([\d.]+)\s+([\d.]+)%\s+([\d.]+)%$/)
+  if (!m) return null
+  const h = Number(m[1]) / 360, sat = Number(m[2]) / 100, l = Number(m[3]) / 100
+  const f = (n: number) => {
+    const k = (n + h * 12) % 12
+    const a = sat * Math.min(l, 1 - l)
+    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+    const v = Math.round(c * 255)
+    return (inverted ? 255 - v : v).toString(16).padStart(2, "0")
+  }
+  return `${f(0)}${f(8)}${f(4)}`
+}
+
 export default function EnhancedHistogramDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
@@ -539,7 +583,9 @@ export default function EnhancedHistogramDashboard() {
   }, [histograms])
 
   const { toast } = useToast()
-  const { theme } = useTheme()
+  // resolvedTheme, not theme: with the OS theme ("system") theme is neither
+  // "light" nor "dark", and the canvases stayed white on a dark page.
+  const { resolvedTheme: theme } = useTheme()
 
   // Drag and drop sensors
   const sensors = useSensors(
@@ -650,6 +696,10 @@ export default function EnhancedHistogramDashboard() {
     dashboardSettings.showLabels,
     dashboardSettings.showIntegrals,
     dashboardSettings.rebinFactor,
+    // A theme change redraws: JSROOT's DarkMode and the series colour are
+    // read when a canvas is built.
+    theme,
+    dashboardSettings.theme,
   ])
 
   // Initialize a single histogram
@@ -760,12 +810,17 @@ export default function EnhancedHistogramDashboard() {
     )
     const histogram = window.JSROOT.parse(histogramData)
 
+    // The card header names the histogram: no second title on the canvas.
+    // "Show labels" now means the axis titles, with units.
+    // Fallback colours when the theme token cannot be read (the draw option
+    // below overrides them).
     histogram.fLineColor = 4
     histogram.fFillColor = 4
     histogram.fFillStyle = 3001
-    histogram.fTitle = dashboardSettings.showLabels ? config.label : ""
+    histogram.fTitle = ""
     histogram.fName = `hist_${config.id}`
     histogram.fStats = 0
+    labelHistogramAxes(histogram, dashboardSettings.showLabels, element.clientWidth)
 
     const existingCanvas = canvasObjects.current[config.id]
     const existingHist = existingCanvas?.fPrimitives?.arr?.find(
@@ -821,7 +876,15 @@ export default function EnhancedHistogramDashboard() {
       canvas.fName = `canvas_${config.id}`
       canvas.fTitle = config.label
       canvas.fLogy = dashboardSettings.isLogScale ? 1 : 0
-      canvas.fPrimitives.Add(histogram, "hist nostat")
+      // Room for the axis titles, which the default margins clip.
+      if (dashboardSettings.showLabels) {
+        canvas.fLeftMargin = 0.15
+        canvas.fBottomMargin = 0.15
+      }
+      // The series colour comes from the theme's chart token (--chart-1), as a
+      // JSROOT draw option: translucent fill, solid line.
+      const series = seriesHex(Boolean(window.JSROOT.settings?.DarkMode))
+      canvas.fPrimitives.Add(histogram, series ? `hist nostat fill_${series}55 line_${series}` : "hist nostat")
       if (dashboardSettings.showROIs && config.rois.length > 0) {
         addROIOverlaysToCanvas(canvas, config, histogram)
       }
@@ -1377,7 +1440,7 @@ export default function EnhancedHistogramDashboard() {
                       saveDashboardSettings({ ...dashboardSettings, showLabels: checked as boolean })
                     }
                   />
-                  <Label>Show labels</Label>
+                  <Label>Show axis titles</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">

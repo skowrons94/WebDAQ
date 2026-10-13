@@ -22,8 +22,8 @@ import {
 } from '@/lib/grafana-api'
 import { getGrafanaSettings } from '@/lib/api'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
-import { useRunStatus } from '@/hooks/use-run-status'
-import { StatusBadge, runState } from '@/components/ui/status-badge'
+import { useRunBadge } from '@/hooks/use-run-badge'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 interface AlertRule {
   uid: string
@@ -38,8 +38,8 @@ type FilterMode = 'all' | 'active' | 'paused'
 export default function GrafanaAlertManager() {
   const { toast } = useToast()
   const { autoManageUids, toggleAutoManage } = useGrafanaAlertsStore()
-  const isRunning = useRunStatus((state) => state.isRunning)
-  const runKnown = useRunStatus((state) => state.known)
+  // The header's rule: Board failure wins over Running; a Tuner run says so.
+  const runBadge = useRunBadge()
 
   const [alerts, setAlerts] = useState<AlertRule[]>([])
   const [loading, setLoading] = useState(true)
@@ -224,7 +224,7 @@ export default function GrafanaAlertManager() {
             {/* The same shared state as the header (hooks/use-run-status.ts):
                 this page used to read a flag only the dashboard set, and said
                 "Stopped" during a run. */}
-            <StatusBadge className="mt-1" size="md" state={runState(runKnown ? isRunning : null)} />
+            <StatusBadge className="mt-1" size="md" state={runBadge.state} label={runBadge.label} title={runBadge.title} />
           </div>
           <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
             <Zap className="h-4 w-4" />

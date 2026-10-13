@@ -162,16 +162,18 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
 
     const runTypeFilter = (table.getColumn("run_type")?.getFilterValue() as string) ?? "all"
     const flagFilter = (table.getColumn("flag")?.getFilterValue() as string) ?? "all"
+    const dateFilter = (table.getColumn("start_time")?.getFilterValue() as string) ?? "all"
 
     const totalRows = table.getCoreRowModel().rows.length
     const filteredRows = table.getFilteredRowModel().rows.length
     const filtersActive =
-        Boolean(globalFilterValue) || runTypeFilter !== "all" || flagFilter !== "all"
+        Boolean(globalFilterValue) || runTypeFilter !== "all" || flagFilter !== "all" || dateFilter !== "all"
 
     const clearFilters = () => {
         setGlobalFilterValue("")
         table.getColumn("run_type")?.setFilterValue(undefined)
         table.getColumn("flag")?.setFilterValue(undefined)
+        table.getColumn("start_time")?.setFilterValue(undefined)
     }
 
     return (
@@ -181,7 +183,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                 <div className="relative flex-1 min-w-[14rem] max-w-md">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search runs, targets, notes…"
+                        placeholder="Search runs, run names, notes…"
                         value={globalFilterValue}
                         onChange={(e) => setGlobalFilterValue(e.target.value)}
                         className="pl-8 pr-8"
@@ -231,6 +233,24 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                         <SelectItem value="good">Good</SelectItem>
                         <SelectItem value="unknown">Unknown</SelectItem>
                         <SelectItem value="bad">Bad</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {/* Date filter: reviewing yesterday's shift without scrolling. */}
+                <Select
+                    value={dateFilter}
+                    onValueChange={(v) =>
+                        table.getColumn("start_time")?.setFilterValue(v === "all" ? undefined : v)
+                    }
+                >
+                    <SelectTrigger className="w-36 h-9" aria-label="Filter by start date">
+                        <SelectValue placeholder="Date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Any date</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="yesterday">Yesterday</SelectItem>
+                        <SelectItem value="7d">Last 7 days</SelectItem>
                     </SelectContent>
                 </Select>
 
@@ -312,9 +332,10 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                                     {rest.map((cell) => {
                                         const meta = cell.column.columnDef.meta as { label?: string } | undefined
                                         const raw = meta?.label ?? COLUMN_LABELS[cell.column.id] ?? cell.column.id
-                                        // Sentence case on the card ("Start time"), acronyms kept (TV, PV).
+                                        // Sentence case on the card ("Start time"); acronyms and
+                                        // units (TV, "(kV)", "(µC)") kept as they are.
                                         const label = raw.split(' ').map((w: string, i: number) =>
-                                            i === 0 || w === w.toUpperCase() ? w : w.toLowerCase()).join(' ')
+                                            i > 0 && /^[A-Z][a-z]+$/.test(w) ? w.toLowerCase() : w).join(' ')
                                         return (
                                             <div key={cell.id} className="contents">
                                                 <dt className="text-muted-foreground">{label}</dt>

@@ -5,6 +5,7 @@ import { AuthGate } from '@/components/auth-gate';
 import { RunControl } from '@/components/run-control';
 import dynamic from 'next/dynamic';
 import { TabLoading } from '@/components/ui/tab-loading';
+import { ScrollFade } from '@/components/ui/scroll-fade';
 
 // The overview is what opens; every other tab (recharts, dnd-kit, the JSROOT
 // dashboards) is loaded when first shown, which keeps /dashboard's first load
@@ -55,7 +56,9 @@ function DashboardContent() {
   return (
       <Layout>
         <Tabs value={tab} onValueChange={setTab} orientation='vertical'>
-          <div className="flex max-w-full items-center overflow-x-auto pb-1">
+          {/* A fade at the cut edge, so a phone's strip (cut at "Histogra")
+              says there are more tabs; the padding lets the last one clear it. */}
+          <ScrollFade className="max-w-full" innerClassName="flex items-center pb-1 max-sm:pr-8">
             <TabsList className="min-w-max">
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                   {/* The boards' own health sits beside the overview: during a run
@@ -69,7 +72,7 @@ function DashboardContent() {
                 {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
                 {(settings.showPSD ?? true) && <TabsTrigger value="psd">PSD</TabsTrigger>}
               </TabsList>
-            </div>
+            </ScrollFade>
           <TabsContent value="health">
               <BoardHealth />
             </TabsContent>

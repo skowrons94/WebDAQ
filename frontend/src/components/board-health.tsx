@@ -1,6 +1,7 @@
 'use client'
 
 import { StatusBadge } from '@/components/ui/status-badge'
+import { useRunBadge } from '@/hooks/use-run-badge'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, AlertTriangle, HeartPulse, Pause, RefreshCw } from 'lucide-react'
 
@@ -146,7 +147,11 @@ export default function BoardHealth() {
       for (const key of Object.keys(lastProgress.current)) {
         if (!present.has(key)) delete lastProgress.current[key]
       }
-      setRows(next.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })))
+      // Failed boards first (then by id): the one that needs attention is the
+      // first card, not the fourth.
+      setRows(next.sort((a, b) =>
+        Number(Boolean(b.counters.failed)) - Number(Boolean(a.counters.failed))
+        || a.id.localeCompare(b.id, undefined, { numeric: true })))
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Could not read the board counters')
       setStale(true)
@@ -165,6 +170,8 @@ export default function BoardHealth() {
   }, [poll])
 
   const running = diagnostics?.running ?? false
+  const anyFailed = rows.some((r) => r.counters.failed)
+  const runBadge = useRunBadge()
 
   return (
     <div className="space-y-4">
@@ -176,7 +183,11 @@ export default function BoardHealth() {
           What each board has read, written and lost during this run
         </div>
         <div className="flex items-center gap-2">
-          <StatusBadge state={running ? 'running' : 'stopped'} label={running ? 'Run in progress' : 'No run'} />
+          {/* The header's rule: a FAIL on any board wins over "Run in progress". */}
+          <StatusBadge
+            state={!running ? 'stopped' : anyFailed ? 'error' : runBadge.tuning ? 'tuning' : 'running'}
+            label={!running ? 'No run' : anyFailed ? 'Board failure' : runBadge.tuning ? runBadge.label : 'Run in progress'}
+          />
           <Button variant="outline" size="icon" onClick={poll} title="Refresh now">
             <RefreshCw className="h-4 w-4" />
           </Button>

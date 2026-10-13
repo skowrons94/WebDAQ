@@ -42,6 +42,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
 import { useStatsStore } from '@/store/stats-store'
+import { useRunBadge } from '@/hooks/use-run-badge'
 import {
   getFileBandwidth,
   getConnectedCurrent,
@@ -141,6 +142,25 @@ const CURRENT_MODULE_LABELS: Record<string, string> = {
 const PICOAMMETER_MODULES = new Set(['tetramm', 'rbd9103'])
 
 
+/**
+ * A monitored reading with fixed decimals, never "0.00000e+0": zero is "0",
+ * ordinary magnitudes get 3 significant decimals at most, and only a really
+ * tiny or huge value falls back to exponent notation.
+ */
+export function formatReading(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  const abs = Math.abs(value)
+  if (abs === 0) return '0'
+  if (abs < 1e-3 || abs >= 1e7) return value.toExponential(2)
+  if (abs >= 1000) return value.toFixed(0)
+  if (abs >= 100) return value.toFixed(1)
+  if (abs >= 1) return value.toFixed(2)
+  return value.toFixed(3)
+}
+
+/** "uA" as typed in a stats path → "µA". */
+const displayUnit = (unit: string) => unit.replace(/^u(?=[A-Za-z])/, 'µ')
+
 interface CardHolderProps {
   isRunning: boolean
   timer: number
@@ -162,7 +182,9 @@ const RUN_SLIDER_SPAN = 25
 // the row padding, before the following row begins, so no clipped preview of
 // the next row appears beneath the pull handle.
 const STATUS_PANEL_HEIGHTS = [220, 428, 636] as const
-const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[0]
+// Two rows by default (one row hid the voltage and beam-current cards, and any
+// further board, under the handle); the panel is never taller than its cards.
+const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[1]
 const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height-v3'
 
 export function CardHolder({
@@ -235,6 +257,14 @@ export function CardHolder({
     height => height >= minimumStatusPanelHeight,
   )
   const [isResizingStatusPanel, setIsResizingStatusPanel] = useState(false)
+  // The cards' own height, and how many cards are below the panel's edge (the
+  // count goes on the handle). Measured; both only matter from xl up.
+  const statusGridRef = useRef<HTMLDivElement>(null)
+  const [statusContentHeight, setStatusContentHeight] = useState<number>(0)
+  const [hiddenStatusCards, setHiddenStatusCards] = useState(0)
+  const shownStatusPanelHeight = statusContentHeight > 0
+    ? Math.min(displayedStatusPanelHeight, statusContentHeight)
+    : displayedStatusPanelHeight
   const statusPanelDragRef = useRef<{
     pointerId: number
     startY: number
@@ -322,6 +352,21 @@ export function CardHolder({
       viewport.scrollTo({ top: viewport.scrollTop + (c.top - v.top) - 16, behavior: 'smooth' })
     }
   }, [failingBoards, isRunning])
+
+  useEffect(() => {
+    const grid = statusGridRef.current
+    if (!grid) return
+    const measure = () => {
+      setStatusContentHeight(grid.scrollHeight)
+      const cards = Array.from(grid.children) as HTMLElement[]
+      setHiddenStatusCards(cards.filter((c) => c.offsetTop + c.offsetHeight > shownStatusPanelHeight + 1).length)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(grid)
+    return () => ro.disconnect()
+  })
 
   // Load stats paths on mount
   useEffect(() => {
@@ -735,6 +780,91 @@ export function CardHolder({
     (settings.showMetrics && visibleMetrics.length > 0) ||
     (settings.showStats && enabledStatsPaths.length > 0)
 
+  const renderBoardCard = (board: BoardInfo) => {
+    const status = boardStatus[board.id];
+    const connectivity = boardConnectivity[board.id];
+    const isOk = !status || !status.failed;
+    const isConnected = connectivity?.connected ?? false;
+
+    // Running and connected: Running. A FAIL during the run: error.
+    // Stopped and connected: Ready. Not connected: error.
+    const badge: { state: StatusState; label: string } = !isConnected
+      ? { state: "error", label: "Disconnected" }
+      : isRunning
+        // The server reports only that the board set its FAIL flag, and in
+        // how many data blocks — there is no failure type to decode.
+        ? (!isOk ? { state: "error", label: "Board failure" } : { state: "running", label: "Running" })
+        : { state: "ready", label: "Ready" }
+
+    const waveformsOn = boardWaveforms[board.id] ?? false
+
+    return (
+      <Card
+        key={`board-status-${board.id}`}
+        data-board-fail={isRunning && !isOk ? 'true' : undefined}
+        className={isRunning && !isOk ? 'ring-2 ring-destructive' : undefined}
+      >
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+          <div className="flex flex-col min-w-0">
+            <CardTitle className="text-sm font-semibold">Board {board.id}</CardTitle>
+            <p className="text-xs text-muted-foreground truncate">{board.name}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isConnected ? (
+              <Wifi className="h-4 w-4 text-success" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-destructive" />
+            )}
+            {isOk ? (
+              <CheckCircle className="h-4 w-4 text-success" />
+            ) : (
+              <XCircle className="h-4 w-4 text-destructive" />
+            )}
+            <Cpu className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <StatusBadge state={badge.state} label={badge.label} size="md" />
+            {/* The next step, from where the failure is seen. */}
+            {isRunning && !isOk && (
+              <Link href="/troubleshoot" className="truncate text-xs font-medium text-destructive underline underline-offset-2">
+                What to do
+              </Link>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground truncate">
+            {[board.dpp, `${board.chan} ch`, board.link_type].filter(Boolean).join(' · ')}
+          </p>
+          <div className="flex items-center justify-between border-t pt-2">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <AudioWaveform className="h-3.5 w-3.5" />
+              Waveforms
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium w-6 text-right">
+                {waveformsOn ? 'On' : 'Off'}
+              </span>
+              <Switch
+                checked={waveformsOn}
+                onCheckedChange={(checked) => handleBoardWaveformToggle(String(board.id), checked)}
+                disabled={isRunning}
+                aria-label={`Toggle waveforms for board ${board.id}`}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // A board that failed during this run goes first, ahead of the run status:
+  // on a phone it was the fourth card, below the fold.
+  const boardFailedNow = (board: BoardInfo) => isRunning && Boolean(boardStatus[board.id]?.failed)
+  const failedBoards = settings.showStatus ? boards.filter(boardFailedNow) : []
+  const healthyBoards = boards.filter((b) => !boardFailedNow(b))
+  const runBadge = useRunBadge({ boardFailed: failedBoards.length > 0 })
+
   return (
     <div className="h-full">
       {(settings.showStatus || hasMonitoringCards) && (
@@ -760,9 +890,11 @@ export function CardHolder({
                   ? ''
                   : 'transition-[height] duration-150 ease-out')}
                 viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
-                style={{ height: displayedStatusPanelHeight }}
+                style={{ height: shownStatusPanelHeight }}
               >
-                <div className="grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:auto-rows-[11.5rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
+                <div ref={statusGridRef} className="relative grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:auto-rows-[11.5rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
+        {failedBoards.map(renderBoardCard)}
+
         {/* Run Status Card */}
         {settings.showStatus && (
           <Card>
@@ -824,7 +956,9 @@ export function CardHolder({
                     </button>
                   )
                 )}
-                <StatusBadge state={isRunning ? "running" : "stopped"} size="md" />
+                {/* The header's rule (hooks/use-run-badge.ts): a board FAIL wins
+                    over "Running", and a Tuner acquisition is not a production run. */}
+                <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} size="md" />
               </div>
               <p className="truncate text-xs text-muted-foreground">
                 {isRunning
@@ -1055,76 +1189,8 @@ export function CardHolder({
           )
         })()}
 
-        {/* Board Status Cards */}
-        {settings.showStatus && boards.map((board) => {
-          const status = boardStatus[board.id];
-          const connectivity = boardConnectivity[board.id];
-          const isOk = !status || !status.failed;
-          const isConnected = connectivity?.connected ?? false;
-
-          // Running and connected: Running. A FAIL during the run: error.
-          // Stopped and connected: Ready. Not connected: error.
-          const badge: { state: StatusState; label: string } = !isConnected
-            ? { state: "error", label: "Disconnected" }
-            : isRunning
-              // The server reports only that the board set its FAIL flag, and in
-              // how many data blocks — there is no failure type to decode.
-              ? (!isOk ? { state: "error", label: "Board failure" } : { state: "running", label: "Running" })
-              : { state: "ready", label: "Ready" }
-
-          const waveformsOn = boardWaveforms[board.id] ?? false
-
-          return (
-            <Card
-              key={`board-status-${board.id}`}
-              data-board-fail={isRunning && !isOk ? 'true' : undefined}
-              className={isRunning && !isOk ? 'ring-2 ring-destructive' : undefined}
-            >
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <div className="flex flex-col min-w-0">
-                  <CardTitle className="text-sm font-semibold">Board {board.id}</CardTitle>
-                  <p className="text-xs text-muted-foreground truncate">{board.name}</p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {isConnected ? (
-                    <Wifi className="h-4 w-4 text-success" />
-                  ) : (
-                    <WifiOff className="h-4 w-4 text-destructive" />
-                  )}
-                  {isOk ? (
-                    <CheckCircle className="h-4 w-4 text-success" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-destructive" />
-                  )}
-                  <Cpu className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <StatusBadge state={badge.state} label={badge.label} size="md" />
-                <p className="text-xs text-muted-foreground truncate">
-                  {[board.dpp, `${board.chan} ch`, board.link_type].filter(Boolean).join(' · ')}
-                </p>
-                <div className="flex items-center justify-between border-t pt-2">
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <AudioWaveform className="h-3.5 w-3.5" />
-                    Waveforms
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium w-6 text-right">
-                      {waveformsOn ? 'On' : 'Off'}
-                    </span>
-                    <Switch
-                      checked={waveformsOn}
-                      onCheckedChange={(checked) => handleBoardWaveformToggle(String(board.id), checked)}
-                      disabled={isRunning}
-                      aria-label={`Toggle waveforms for board ${board.id}`}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+        {/* Board Status Cards. Failed boards were placed first (above). */}
+        {settings.showStatus && healthyBoards.map(renderBoardCard)}
 
         {/* No boards yet: say so where they would be, with the way to add one. */}
         {settings.showStatus && boardsLoaded && boards.length === 0 && (
@@ -1195,8 +1261,8 @@ export function CardHolder({
             <CardContent>
               <div className="text-2xl font-bold">
                 {metricValues[metric.id] !== undefined
-                  ? (Number(metricValues[metric.id])).toFixed(2)
-                  : 'Loading...'} {metric.unit}
+                  ? formatReading(Number(metricValues[metric.id]))
+                  : 'Loading...'} {metric.unit && displayUnit(metric.unit)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Last updated: {new Date().toLocaleTimeString()}
@@ -1218,10 +1284,14 @@ export function CardHolder({
               <CardContent>
                 <div className="text-2xl font-bold">
                   {currentValues[path.path]?.value !== undefined && currentValues[path.path]?.value !== null
-                    ? (() => {
-                        const value = Number(currentValues[path.path].value);
-                        return value < 1 ? value.toExponential(5) : value.toFixed(3);
-                      })()
+                    ? <>
+                        {formatReading(Number(currentValues[path.path].value))}
+                        {path.unit && (
+                          <span className="ml-1 text-base font-semibold text-muted-foreground">
+                            {displayUnit(path.unit)}
+                          </span>
+                        )}
+                      </>
                     : 'N/A'}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1239,7 +1309,9 @@ export function CardHolder({
             <button
               type="button"
               role="separator"
-              aria-label="Resize overview status cards"
+              aria-label={hiddenStatusCards > 0
+                ? `Resize overview status cards (${hiddenStatusCards} more below)`
+                : 'Resize overview status cards'}
               aria-orientation="horizontal"
               aria-valuemin={expandForBeam ? 2 : 1}
               aria-valuemax={3}
@@ -1254,11 +1326,16 @@ export function CardHolder({
               onPointerUp={handleStatusResizeEnd}
               onPointerCancel={handleStatusResizeEnd}
               onKeyDown={handleStatusResizeKey}
-              className={`absolute -bottom-3 left-1/2 z-10 hidden h-6 w-16 xl:flex -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`absolute -bottom-3 left-1/2 z-10 hidden h-6 min-w-16 gap-1 px-2 xl:flex -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
               }`}
             >
               <GripHorizontal className="h-4 w-4 text-muted-foreground" />
+              {hiddenStatusCards > 0 && (
+                <span className="whitespace-nowrap text-xs font-medium text-muted-foreground" aria-hidden="true">
+                  +{hiddenStatusCards} card{hiddenStatusCards === 1 ? '' : 's'}
+                </span>
+              )}
             </button>
           </div>
         </section>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, ArrowUpDown, ArrowUpRight } from "lucide-react"
+import { MoreHorizontal, ArrowUpDown, ArrowUpRight, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -39,7 +39,8 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { addRunMetadata, updateRunFlag, updateRunNotes } from "@/lib/api"
+import { addRunMetadata, updateRunFlag, updateRunNotes, type AlertEvent } from "@/lib/api"
+import { alertCount } from "@/lib/run-alerts"
 import { useForm } from "react-hook-form"
 
 export type RunMetadata = {
@@ -88,7 +89,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="run_number"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Run Number</FormLabel>
+                            <FormLabel>Run number</FormLabel>
                             <FormControl>
                                 <Input type="number" {...field} value={field.value} onChange={e => field.onChange(parseInt(e.target.value))} />
                             </FormControl>
@@ -101,7 +102,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="target_name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Run Name</FormLabel>
+                            <FormLabel>Run name</FormLabel>
                             <FormControl>
                                 <Input {...field} />
                             </FormControl>
@@ -114,7 +115,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="terminal_voltage"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Terminal Voltage</FormLabel>
+                            <FormLabel>Terminal voltage (kV)</FormLabel>
                             <FormControl>
                                 <Input {...field} />
                             </FormControl>
@@ -127,7 +128,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="probe_voltage"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Probe Voltage</FormLabel>
+                            <FormLabel>Probe voltage (kV)</FormLabel>
                             <FormControl>
                                 <Input {...field} />
                             </FormControl>
@@ -140,7 +141,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="run_type"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Run Type</FormLabel>
+                            <FormLabel>Run type</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                     <SelectTrigger>
@@ -169,6 +170,8 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
 
 interface ColumnsProps {
     onDataUpdate?: () => void;
+    /** Alert events by run number: a run that had any is flagged. */
+    alertsByRun?: Map<number, AlertEvent[]>;
 }
 
 // Reusable sortable header with friendly label.
@@ -190,6 +193,22 @@ const sortableHeader = (label: string) =>
         )
     }
 
+/** Runs that started today, yesterday or in the last 7 days (local time). */
+export function startedWithin(start: string | null | undefined, range: string | undefined): boolean {
+    if (!range || range === "all") return true
+    if (!start) return false
+    const t = new Date(start).getTime()
+    if (Number.isNaN(t)) return false
+    const midnight = new Date()
+    midnight.setHours(0, 0, 0, 0)
+    const day = 24 * 3600 * 1000
+    const today = midnight.getTime()
+    if (range === "today") return t >= today
+    if (range === "yesterday") return t >= today - day && t < today
+    if (range === "7d") return t >= today - 6 * day
+    return true
+}
+
 const RUN_TYPE_LABEL: Record<string, string> = {
     longrun: "Long Run",
     scan: "Scan",
@@ -198,47 +217,58 @@ const RUN_TYPE_LABEL: Record<string, string> = {
 }
 
 export const COLUMN_LABELS: Record<string, string> = {
-    run_number: "Run Number",
-    start_time: "Start Time",
-    end_time: "End Time",
+    run_number: "Run number",
+    start_time: "Start time",
+    end_time: "End time",
     duration: "Duration",
-    accumulated_charge: "Accumulated Charge",
-    target_name: "Run Name",
-    terminal_voltage: "Terminal Voltage",
-    probe_voltage: "Probe Voltage",
-    run_type: "Run Type",
+    accumulated_charge: "Accumulated charge (µC)",
+    target_name: "Run name",
+    terminal_voltage: "Terminal voltage (kV)",
+    probe_voltage: "Probe voltage (kV)",
+    run_type: "Run type",
     flag: "Flag",
     notes: "Notes",
     actions: "Actions",
 }
 
-export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<RunMetadata>[] => [
+export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}): ColumnDef<RunMetadata>[] => [
     {
         accessorKey: "run_number",
         meta: { label: COLUMN_LABELS.run_number },
         header: sortableHeader("Run #"),
-        cell: ({ row }) => (
-            <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="h-8 w-full justify-center gap-1.5 px-2 font-mono"
-            >
-                <Link
-                    href={`/logbook/${row.original.run_number}`}
-                    aria-label={`Open logbook entry for run ${row.original.run_number}`}
+        cell: ({ row }) => {
+            // A run during which an alert fired (a board failure, a stall…) is
+            // marked: otherwise it reads as clean as any other.
+            const alerts = alertsByRun?.get(row.original.run_number)?.length ?? 0
+            const label = `Open logbook entry for run ${row.original.run_number}`
+                + (alerts ? ` (${alertCount(alerts)} during this run)` : "")
+            return (
+                <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-full justify-center gap-1.5 px-2 font-mono"
                 >
-                    {row.original.run_number}
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-            </Button>
-        ),
+                    <Link
+                        href={`/logbook/${row.original.run_number}`}
+                        aria-label={label}
+                        title={alerts ? `${alertCount(alerts)} during this run` : undefined}
+                    >
+                        {alerts > 0 && <AlertTriangle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />}
+                        {row.original.run_number}
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                </Button>
+            )
+        },
         size: 80,
     },
     {
         accessorKey: "start_time",
         meta: { label: COLUMN_LABELS.start_time },
         header: sortableHeader("Start"),
+        // Date filter (drives the date dropdown): local calendar days.
+        filterFn: (row, columnId, value) => startedWithin(row.getValue(columnId) as string, value as string),
         cell: ({ row }) => {
             if (!row.original.start_time) return <div className="text-muted-foreground">—</div>
             const date = new Date(row.original.start_time)
@@ -299,7 +329,7 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
     {
         accessorKey: "accumulated_charge",
         meta: { label: COLUMN_LABELS.accumulated_charge },
-        header: sortableHeader("Charge"),
+        header: sortableHeader("Charge (µC)"),
         cell: ({ row }) => (
             <div className="text-right tabular-nums text-sm">
                 {row.original.accumulated_charge != null
@@ -311,7 +341,7 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
     {
         accessorKey: "target_name",
         meta: { label: COLUMN_LABELS.target_name },
-        header: sortableHeader("Target"),
+        header: sortableHeader("Run name"),
         cell: ({ row }) => (
             <div className="text-sm font-medium">{row.original.target_name || "—"}</div>
         ),
@@ -319,7 +349,7 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
     {
         accessorKey: "terminal_voltage",
         meta: { label: COLUMN_LABELS.terminal_voltage },
-        header: sortableHeader("Terminal V"),
+        header: sortableHeader("Terminal voltage (kV)"),
         cell: ({ row }) => (
             <div className="text-right tabular-nums text-sm">
                 {row.original.terminal_voltage ?? "—"}
@@ -329,7 +359,7 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
     {
         accessorKey: "probe_voltage",
         meta: { label: COLUMN_LABELS.probe_voltage },
-        header: sortableHeader("Probe V"),
+        header: sortableHeader("Probe voltage (kV)"),
         cell: ({ row }) => (
             <div className="text-right tabular-nums text-sm">
                 {row.original.probe_voltage ?? "—"}
@@ -378,7 +408,9 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                     ? "text-success bg-success/10 border-success"
                     : flag === "bad"
                         ? "text-destructive bg-destructive/10 border-destructive"
-                        : "text-warning bg-warning/10 border-warning"
+                        // "Unknown" is the default of every run, not a warning:
+                        // neutral, so a real "Bad" (or an alert) stands out.
+                        : "text-muted-foreground bg-muted/50 border-border"
 
             return (
                 <Select value={flag} onValueChange={handleFlagChange}>
@@ -387,7 +419,7 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="good" className="text-success">Good</SelectItem>
-                        <SelectItem value="unknown" className="text-warning">Unknown</SelectItem>
+                        <SelectItem value="unknown">Unknown</SelectItem>
                         <SelectItem value="bad" className="text-destructive">Bad</SelectItem>
                     </SelectContent>
                 </Select>

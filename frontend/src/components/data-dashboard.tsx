@@ -15,15 +15,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReloadIcon } from "@radix-ui/react-icons"
-import { Boxes, CalendarClock, Database, FileText, Gauge, HardDrive, Zap } from "lucide-react"
+import { AlertTriangle, Boxes, CalendarClock, Copy, Database, FileText, Gauge, HardDrive, Zap } from "lucide-react"
+import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { MarkdownPreview, RunNotesEditor } from "@/components/run-notes-editor"
 import {
   getRuns, getRunDetail, getRunCurrent, getRunStats, getConversionStatus, startConversion,
   type RunSummary, type RunDetail, type CurrentData, type RunStatsData,
-  type ConversionStatus, type ConversionOptions,
+  type ConversionStatus, type ConversionOptions, type AlertEvent,
 } from "@/lib/api"
+import { alertCount, getAlertsByRun } from "@/lib/run-alerts"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   currentUnit, maxMagnitude, formatTick, formatValue,
@@ -857,12 +859,12 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
         <CardContent>
           <Field label="Run number" value={detail.run_number} />
           <Field label="Type" value={detail.run_type} />
-          <Field label="Target" value={detail.target_name} />
+          <Field label="Run name" value={detail.target_name} />
           <Field label="Started" value={formatTime(detail.start_time)} />
           <Field label="Stopped" value={formatTime(detail.end_time)} />
           <Field label="Duration" value={formatDuration(detail.duration_s)} />
-          <Field label="Terminal voltage" value={detail.terminal_voltage} />
-          <Field label="Probe voltage" value={detail.probe_voltage} />
+          <Field label="Terminal voltage" value={detail.terminal_voltage != null ? `${detail.terminal_voltage} kV` : undefined} />
+          <Field label="Probe voltage" value={detail.probe_voltage != null ? `${detail.probe_voltage} kV` : undefined} />
           <Field label="User ID" value={detail.user_id} />
           <Field
             label="Accumulated charge"
@@ -954,6 +956,17 @@ function LogbookRunHeader({
       ?? detail.run_type.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
     : "Unspecified run type"
 
+  // The alerts that fired during this run (they carry its number): a run with
+  // a board failure must not read as a clean "completed run".
+  const [alerts, setAlerts] = useState<AlertEvent[] | null>(null)
+  useEffect(() => {
+    let active = true
+    getAlertsByRun()
+      .then((byRun) => { if (active) setAlerts(byRun.get(detail.run_number) ?? []) })
+      .catch(() => { if (active) setAlerts(null) })
+    return () => { active = false }
+  }, [detail.run_number, detail.complete])
+
   return (
     <section className="overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card to-muted/40 shadow-sm">
       <div className="p-5 sm:p-6">
@@ -967,6 +980,9 @@ function LogbookRunHeader({
               <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
               {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
               {!detail.complete && <StatusBadge state="running" label="In progress" />}
+              {alerts && alerts.length > 0 && (
+                <StatusBadge state="error" label={`${alertCount(alerts.length)} during this run`} />
+              )}
             </div>
             <p className="mt-2 text-base font-medium">
               {detail.target_name || "Untitled run"}
@@ -983,7 +999,8 @@ function LogbookRunHeader({
             icon={CalendarClock}
             label="Duration"
             value={formatDuration(detail.duration_s)}
-            detail={detail.complete ? "completed run" : "still in progress"}
+            detail={!detail.complete ? "still in progress"
+              : alerts && alerts.length ? `completed, with ${alertCount(alerts.length)}` : "completed run"}
           />
           <SummaryMetric
             icon={Zap}
@@ -1008,14 +1025,115 @@ function LogbookRunHeader({
             detail={detail.board_info.map((board) => board.configured_name ?? board.model_name).join(", ") || "no board snapshot"}
           />
         </div>
+
+        {alerts && alerts.length > 0 && (
+          <div className="mt-4 rounded-xl border border-destructive/50 bg-destructive/5 p-3.5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              {alertCount(alerts.length)} during this run
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm">
+              {alerts.slice(0, 5).map((a) => (
+                <li key={a.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                    {new Date(a.at * 1000).toLocaleTimeString()}
+                  </span>
+                  <span className="font-medium">{a.title}</span>
+                  {a.lines[0] && <span className="text-xs text-muted-foreground">{a.lines[0]}</span>}
+                </li>
+              ))}
+            </ul>
+            <Link href="/troubleshoot" className="mt-2 inline-block text-xs font-medium underline underline-offset-2">
+              {alerts.length > 5 ? `All ${alerts.length} in Troubleshoot` : "Open Troubleshoot"}
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   )
 }
 
+/**
+ * The run directory as a path someone can paste into a shell: the server's
+ * working directory (from the server-control route, read only) plus the
+ * run's relative "data/runN". When the working directory is not an absolute
+ * path, the relative one is shown as it is.
+ */
+function useRunPath(directory: string): string {
+  const [cwd, setCwd] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    fetch("/api/server-control")
+      .then((r) => r.json())
+      .then((d) => { if (active && typeof d?.currentDirectory === "string") setCwd(d.currentDirectory) })
+      .catch(() => { /* the relative path is still right */ })
+    return () => { active = false }
+  }, [])
+  if (!directory) return ""
+  if (/^([A-Za-z]:[\\/]|\/)/.test(directory)) return directory
+  if (cwd && /^([A-Za-z]:[\\/]|\/)/.test(cwd)) return `${cwd.replace(/[\\/]+$/, "")}/${directory}`
+  return directory
+}
+
+function RunFilesCard({ detail }: { detail: RunDetail }) {
+  const files = detail.files
+  const path = useRunPath(detail.directory)
+  const { toast } = useToast()
+  const SHOWN = 8
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(path)
+      toast({ title: "Path copied", description: path })
+    } catch {
+      toast({ title: "Could not copy", description: "Select the path and copy it by hand.", variant: "destructive" })
+    }
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Database className="h-4 w-4 text-primary" />
+          Data products
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-2 flex items-start gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
+          <code className="min-w-0 flex-1 break-all text-xs" title="Run directory">{path || "—"}</code>
+          {path && (
+            <Button variant="ghost" size="icon" className="-my-1 h-7 w-7 shrink-0" onClick={copy}
+                    aria-label="Copy the run directory path" title="Copy path">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        {files.data.length > 0 ? (
+          <ul className="mb-2 space-y-0.5 text-xs" aria-label="Data files">
+            {files.data.slice(0, SHOWN).map((f) => (
+              <li key={f.name} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate font-mono" title={f.name}>{f.name}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">{formatBytes(f.bytes)}</span>
+              </li>
+            ))}
+            {files.data.length > SHOWN && (
+              <li className="text-muted-foreground">
+                and {files.data.length - SHOWN} more ({formatBytes(files.data.slice(SHOWN).reduce((sum, f) => sum + f.bytes, 0))})
+              </li>
+            )}
+          </ul>
+        ) : (
+          <p className="mb-2 text-xs text-muted-foreground">No data files (saving was off, or nothing was written).</p>
+        )}
+        <Field label="Data files" value={`${files.data.length} (${formatBytes(files.data.reduce((sum, file) => sum + file.bytes, 0))})`} />
+        <Field label="Current log" value={files.current ? formatBytes(files.current.bytes) : undefined} />
+        <Field label="Board snapshots" value={files.board_config.length || undefined} />
+        <Field label="ROOT output" value={files.root.length ? files.root.map((file) => file.name).join(", ") : undefined} />
+      </CardContent>
+    </Card>
+  )
+}
+
 function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
   const sw = detail.software_versions ?? {}
-  const files = detail.files
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -1052,27 +1170,13 @@ function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Field label="Terminal voltage" value={detail.terminal_voltage} />
-          <Field label="Probe voltage" value={detail.probe_voltage} />
-          <Field label="Recorded by user" value={detail.user_id} />
+          <Field label="Terminal voltage" value={detail.terminal_voltage != null ? `${detail.terminal_voltage} kV` : undefined} />
+          <Field label="Probe voltage" value={detail.probe_voltage != null ? `${detail.probe_voltage} kV` : undefined} />
+          <Field label="User ID" value={detail.user_id} />
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Database className="h-4 w-4 text-primary" />
-            Data products
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Field label="Data files" value={`${files.data.length} (${formatBytes(files.data.reduce((sum, file) => sum + file.bytes, 0))})`} />
-          <Field label="Current log" value={files.current ? formatBytes(files.current.bytes) : undefined} />
-          <Field label="Board snapshots" value={files.board_config.length || undefined} />
-          <Field label="ROOT output" value={files.root.length ? files.root.map((file) => file.name).join(", ") : undefined} />
-          <Field label="Directory" value={<span className="font-mono">{detail.directory}</span>} />
-        </CardContent>
-      </Card>
+      <RunFilesCard detail={detail} />
 
       <Card className="lg:col-span-3">
         <CardHeader className="pb-3">

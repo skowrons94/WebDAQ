@@ -11,6 +11,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { useToast } from '@/components/ui/use-toast'
 import { formatElapsed, useElapsed } from '@/components/run-status-indicator'
 import { useRunStatus } from '@/hooks/use-run-status'
+import { deriveRunBadge } from '@/hooks/use-run-badge'
 import { getDataCurrent, getSaveData } from '@/lib/api'
 import { StopRunBody } from '@/components/stop-run-body'
 import { forceResetSequence, stopRunSequence } from '@/lib/run-actions'
@@ -110,9 +111,10 @@ export function RunBar() {
     }
   }
 
-  // "No answer" outranks everything: a last-known "Running" is not shown as fact.
-  const state = unreachable ? 'warning' : !known ? 'unknown' : boardError && isRunning ? 'error' : isRunning ? 'running' : 'stopped'
-  const label = state === 'warning' ? 'No answer' : state === 'error' ? 'CAEN Error' : undefined
+  // "No answer" outranks everything: a last-known "Running" is not shown as
+  // fact. Board failure outranks Running, and a Tuner acquisition says so
+  // (hooks/use-run-badge.ts, the same rule as the header).
+  const badge = deriveRunBadge({ known, isRunning, startTime, boardError, unreachable })
   const beamText = beam !== null && Number.isFinite(beam) ? `${beam.toFixed(2)} µA` : null
 
   return (
@@ -124,7 +126,7 @@ export function RunBar() {
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <StatusBadge state={state} label={label} />
+            <StatusBadge state={badge.state} label={badge.label} title={badge.title} />
             {runNumber !== null && (
               isRunning ? (
                 <Link href={`/logbook/${runNumber}`} className="truncate text-sm font-semibold underline-offset-2 hover:underline">
@@ -141,6 +143,7 @@ export function RunBar() {
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
             {unreachable
               ? `No answer from the server${isRunning ? ' (last known: running)' : ''}`
+              : badge.failed ? 'A board reported a failure · see Troubleshoot'
               : isRunning && totalRate !== null ? `${formatRate(totalRate)} total` : isRunning ? 'Rate …' : 'No run in progress'}
             {beamText && <> · beam {beamText}</>}
           </p>

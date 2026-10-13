@@ -571,7 +571,7 @@ export function RunControlButtons({
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="tv">TV (kV)</Label>
+            <Label htmlFor="tv">Terminal voltage (kV)</Label>
             <Input
               id="tv"
               type="text"
@@ -581,7 +581,7 @@ export function RunControlButtons({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="pv">PV (kV)</Label>
+            <Label htmlFor="pv">Probe voltage (kV)</Label>
             <Input
               id="pv"
               type="text"
@@ -622,6 +622,18 @@ export function RunControlButtons({
             onConfirm={handleStopRun}
           />
         </div>
+
+        {/* Not a block — a run can start without them — but the Logbook entry
+            would read "Untitled run" / "Unspecified run type". */}
+        {!isRunning && (!targetName.trim() || !runType) && (
+          <p className="-mt-2 text-xs text-muted-foreground" role="note">
+            {!targetName.trim() && !runType
+              ? 'No run name or run type: the Logbook entry will be untitled and of unspecified type.'
+              : !runType
+                ? 'No run type: the Logbook entry will say "Unspecified run type".'
+                : 'No run name: the Logbook entry will say "Untitled run".'}
+          </p>
+        )}
 
         {stopFailed && isRunning && (
           <div className="rounded-md border border-destructive bg-destructive/10 p-3" role="alert">

@@ -104,7 +104,7 @@ export function NotificationBell() {
             </span>
           )}
           <span className="sr-only">
-            {unseen > 0 ? `${unseen} unread alerts` : 'Alerts'}
+            {unseen > 0 ? `${unseen} unread alert${unseen === 1 ? '' : 's'}` : 'Alerts'}
           </span>
         </Button>
       </DropdownMenuTrigger>

@@ -62,9 +62,12 @@ type Props = {
   boards: ConfiguredBoard[]
   /** Fill the add-board form with a discovered board, for the operator to confirm. */
   onUse: (board: DiscoveredBoard, suggestedId: string) => void
+  /** Add a discovered board as it is, in one step (needs its DPP firmware). */
+  onAdd?: (board: DiscoveredBoard, suggestedId: string) => Promise<void>
 }
 
-export function BoardScan({ boards, onUse }: Props) {
+export function BoardScan({ boards, onUse, onAdd }: Props) {
+  const [adding, setAdding] = useState<string | null>(null)
   const { toast } = useToast()
   const [status, setStatus] = useState<ScanStatus | null>(null)
   const [optionsOpen, setOptionsOpen] = useState(false)
@@ -193,8 +196,10 @@ export function BoardScan({ boards, onUse }: Props) {
             <p className="text-sm text-muted-foreground">{status.message}</p>
           )}
 
+          {/* With boards found, the scan's notes (a link type with nothing on
+              it, such as no A4818 bridge) are information, not a warning. */}
           {status?.errors?.map((error, i) => (
-            <p key={i} className="text-sm text-warning">{error}</p>
+            <p key={i} className={`text-sm ${status.found.length > 0 ? 'text-muted-foreground' : 'text-warning'}`}>{error}</p>
           ))}
 
           {status && status.found.length > 0 ? (
@@ -244,16 +249,41 @@ export function BoardScan({ boards, onUse }: Props) {
                     )}
                   </dl>
 
-                  <Button
-                    size="sm"
-                    variant={configured ? "ghost" : "default"}
-                    className="mt-3 w-full"
-                    disabled={configured}
-                    onClick={() => onUse(board, suggestedIdFor(board))}
-                  >
-                    <Plus className="mr-1.5 h-3.5 w-3.5" />
-                    {configured ? 'Already added' : 'Use these settings'}
-                  </Button>
+                  {configured ? (
+                    <Button size="sm" variant="ghost" className="mt-3 w-full" disabled>
+                      Already added
+                    </Button>
+                  ) : (
+                    // One step when the firmware is known: Add this board.
+                    // "Use these settings" still fills the form to check first.
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {onAdd && board.dpp && (
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          disabled={adding !== null}
+                          onClick={async () => {
+                            const key = `${board.link_type}-${board.link_num}-${board.id}-${board.vme}`
+                            setAdding(key)
+                            try { await onAdd(board, suggestedIdFor(board)) } finally { setAdding(null) }
+                          }}
+                        >
+                          <Plus className="mr-1.5 h-3.5 w-3.5" />
+                          Add this board
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant={onAdd && board.dpp ? 'outline' : 'default'}
+                        className="flex-1"
+                        disabled={adding !== null}
+                        onClick={() => onUse(board, suggestedIdFor(board))}
+                      >
+                        {!(onAdd && board.dpp) && <Plus className="mr-1.5 h-3.5 w-3.5" />}
+                        Use these settings
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 )
               })}

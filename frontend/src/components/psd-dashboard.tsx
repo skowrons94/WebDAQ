@@ -1,6 +1,7 @@
 'use client'
 
 import { useRunStatus } from '@/hooks/use-run-status'
+import { useRunBadge } from '@/hooks/use-run-badge'
 import { StatusBadge } from '@/components/ui/status-badge'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { getBoardConfiguration, getPsd } from '@/lib/api'
@@ -26,6 +27,7 @@ export default function PSDDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   // From the app's shared run-status poller (hooks/use-run-status.ts).
   const isRunning = useRunStatus((s) => s.isRunning)
+  const runBadge = useRunBadge()
   const runNumber = useRunStatus((s) => s.runNumber)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [updateTrigger, setUpdateTrigger] = useState(0)
@@ -251,7 +253,7 @@ export default function PSDDashboard() {
                 <CardTitle className="flex justify-between items-center">
                   <span>{board.name} (ID: {board.id}) - PSD Histograms</span>
                   <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
-                    <StatusBadge state={isRunning ? 'running' : 'stopped'} />
+                    <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} />
                     {runNumber && <span>Run {runNumber}</span>}
                   </div>
                 </CardTitle>
