@@ -623,6 +623,18 @@ export function RunControlButtons({
           />
         </div>
 
+        {/* Not a block — a run can start without them — but the Logbook entry
+            would read "Untitled run" / "Unspecified run type". */}
+        {!isRunning && (!targetName.trim() || !runType) && (
+          <p className="-mt-2 text-xs text-muted-foreground" role="note">
+            {!targetName.trim() && !runType
+              ? 'No run name or run type: the Logbook entry will be untitled and of unspecified type.'
+              : !runType
+                ? 'No run type: the Logbook entry will say "Unspecified run type".'
+                : 'No run name: the Logbook entry will say "Untitled run".'}
+          </p>
+        )}
+
         {stopFailed && isRunning && (
           <div className="rounded-md border border-destructive bg-destructive/10 p-3" role="alert">
             <p className="mb-2 text-sm font-semibold text-destructive">The run did not stop.</p>

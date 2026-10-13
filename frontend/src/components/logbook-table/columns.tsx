@@ -390,7 +390,9 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
                     ? "text-success bg-success/10 border-success"
                     : flag === "bad"
                         ? "text-destructive bg-destructive/10 border-destructive"
-                        : "text-warning bg-warning/10 border-warning"
+                        // "Unknown" is the default of every run, not a warning:
+                        // neutral, so a real "Bad" (or an alert) stands out.
+                        : "text-muted-foreground bg-muted/50 border-border"
 
             return (
                 <Select value={flag} onValueChange={handleFlagChange}>
@@ -399,7 +401,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="good" className="text-success">Good</SelectItem>
-                        <SelectItem value="unknown" className="text-warning">Unknown</SelectItem>
+                        <SelectItem value="unknown">Unknown</SelectItem>
                         <SelectItem value="bad" className="text-destructive">Bad</SelectItem>
                     </SelectContent>
                 </Select>
