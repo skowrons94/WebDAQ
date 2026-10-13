@@ -38,12 +38,46 @@ class Timeout extends Error {}
  *  itself cannot be cancelled here (api.ts takes no signal); it is abandoned. */
 function withDeadline<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const id = setTimeout(() => reject(new Timeout('deadline')), ms)
+    let abandoned = false
+    const id = setTimeout(() => {
+      abandoned = true
+      openAbandoned += 1
+      if (openAbandoned >= ABANDONED_LIMIT) degraded = true
+      reject(new Timeout('deadline'))
+    }, ms)
+    const settle = () => {
+      clearTimeout(id)
+      if (abandoned) {
+        // A request we had given up on has come back: the server (or the
+        // network) is answering again, so normal polling resumes.
+        openAbandoned -= 1
+        degraded = false
+      }
+    }
     p.then(
-      (v) => { clearTimeout(id); resolve(v) },
-      (e) => { clearTimeout(id); reject(e) },
+      (v) => { settle(); resolve(v) },
+      (e) => { settle(); reject(e) },
     )
   })
+}
+
+/**
+ * Bound on the pile-up during a long outage. Each abandoned request may stay
+ * open in the browser until the connection gives up. Once ABANDONED_LIMIT of
+ * them are open, no full polls are sent: one probe every PROBE_MS instead,
+ * and normal polling resumes as soon as a probe succeeds or any abandoned
+ * request settles.
+ */
+const ABANDONED_LIMIT = 2
+const PROBE_MS = 10_000
+let openAbandoned = 0
+let degraded = false
+let lastProbeAt = 0
+let probing = false
+
+/** Test hook / diagnostics: how many timed-out requests are still open. */
+export function runStatusBackoff() {
+  return { openAbandoned, degraded }
 }
 
 let subscribers = 0
@@ -117,6 +151,18 @@ async function pollOnce(): Promise<void> {
  */
 export function refreshRunStatus(): Promise<void> {
   const now = Date.now()
+  if (degraded) {
+    // Backed off: stay "No answer", one probe per PROBE_MS.
+    useRunControlStore.getState().update({ unreachable: true })
+    if (probing || now - lastProbeAt < PROBE_MS) return Promise.resolve()
+    lastProbeAt = now
+    probing = true
+    return withDeadline(getRunStatus(), POLL_DEADLINE_MS)
+      .then(() => { degraded = false })
+      .catch(() => { /* still no answer: keep backing off */ })
+      .finally(() => { probing = false })
+      .then(() => (degraded ? undefined : refreshRunStatus()))
+  }
   // A poll settles within two deadlines (status, then rates); the age check
   // only guards against a poll that somehow never settles.
   if (inFlight && inFlight.generation === actionGeneration
