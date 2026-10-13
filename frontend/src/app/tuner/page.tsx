@@ -15,7 +15,7 @@ function TunerPageContent() {
                         <div className="mb-6">
                             <h1 className="text-2xl font-semibold">Parameter tuner</h1>
                             <p className="text-muted-foreground mt-2">
-                                Interactive waveform and spectrum tuning — data saving disabled during acquisition
+                                Tune one channel at a time against its live trace, rates and spectrum. A run started here is not saved to disk; a production run keeps saving as usual.
                             </p>
                         </div>
                         <ParamTuner />

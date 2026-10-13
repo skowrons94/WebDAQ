@@ -5,17 +5,12 @@ import useRunControlStore from '@/store/run-control-store'
 import { markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerOwnsRun, tunerRunRecordStarted } from '@/lib/tuner-save'
 import { getStartTime } from '@/lib/api'
 import { StatusBadge } from '@/components/ui/status-badge'
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   getBoardConfiguration,
   getBoardSettings,
   applySetting,
   getOnlineRegisters,
-  getHistogram,
-  getWaveform1,
-  getWaveform2,
-  getProbe1,
-  getProbe2,
   startRun,
   stopRun,
   getSaveData,
@@ -23,15 +18,19 @@ import {
 } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { useToast } from '@/components/ui/use-toast'
 import { Zap } from 'lucide-react'
 import { loadJSROOT } from '@/lib/load-jsroot'
+import { ControlsPanel, findRegKey, type BoardSettings } from '@/components/tuner/controls-panel'
+import { HealthStrip } from '@/components/tuner/health-strip'
+import { WaveformPanel } from '@/components/tuner/waveform-panel'
+import { SpectrumPanel } from '@/components/tuner/spectrum-panel'
+import { useChannelRates } from '@/components/tuner/use-channel-rates'
+import { baseAddress, boardTiming, getBits, toDisplay } from '@/components/tuner/units'
 
 type BoardData = {
   id: string
@@ -43,140 +42,35 @@ type BoardData = {
   chan: string
 }
 
-interface RegisterData {
-  name: string
-  value_dec: number
-  value_hex: string
-  channel: number
-  address: string
-}
-
-interface BoardSettings {
-  [key: string]: RegisterData
-}
-
-const PHA_TRACE1_OPTIONS = [
-  { value: 0, label: 'Input' },
-  { value: 1, label: 'RC-CR' },
-  { value: 2, label: 'RC-CR2' },
-  { value: 3, label: 'Trapezoid' },
-]
-
-const PHA_TRACE2_OPTIONS = [
-  { value: 0, label: 'Input' },
-  { value: 1, label: 'Threshold' },
-  { value: 2, label: 'Trapezoid - Baseline' },
-  { value: 3, label: 'Baseline' },
-]
-
-const PSD_TRACE1_OPTIONS = [
-  { value: 0, label: 'Input' },
-  { value: 1, label: 'CFD' },
-  { value: 2, label: 'Input' },
-  { value: 3, label: 'Reserved' },
-]
-
-const PSD_TRACE2_OPTIONS = [
-  { value: 0, label: 'Baseline' },
-  { value: 1, label: 'Baseline' },
-  { value: 2, label: 'CFD' },
-  { value: 3, label: 'Reserved' },
-]
-
-const DIGITAL_PROBE_OPTIONS = [
-  { value: 0,  label: 'Peaking' },
-  { value: 1,  label: 'RC-CR2 Crossing' },
-  { value: 3,  label: 'Pile-up' },
-  { value: 6,  label: 'Baseline Freeze' },
-  { value: 7,  label: 'Trigger Hold-Off' },
-  { value: 10, label: 'RC-CR Crossing' },
-]
-
-const TRIGGER_REG_NAMES = [
-  'Trigger Threshold',
-  'Input Rise Time',
-  'Trigger Hold-Off Width',
-  'Trigger Hold-off Width',
-  'DC Offset',
-]
-
-const TRAPEZOID_REG_NAMES = [
-  'Trapezoid Rise Time',
-  'Trapezoid Flat Top',
-  'Trapezoid Decay Time',
-  'Decay Time',
-  'Trapezoid Peaking Time',
-  'Peaking Time',
-]
-
-function isTriggerReg(name: string): boolean {
-  return TRIGGER_REG_NAMES.some(n => name.toLowerCase().includes(n.toLowerCase()))
-}
-
-function isTrapezoidReg(name: string): boolean {
-  return TRAPEZOID_REG_NAMES.some(n => name.toLowerCase().includes(n.toLowerCase()))
-}
-
-// ── Unit conversion helpers ──────────────────────────────────
-
-const TIME_REG_KEYWORDS = [
-  'Trapezoid Rise Time',
-  'Trapezoid Flat Top',
-  'Peaking Time',
-  'Decay Time',
-  'Input Rise Time',
-  'Trigger Hold-Off',
-]
-
-function getNsPerSample(boardName: string): number {
-  if (boardName.includes('1730')) return 8
-  if (boardName.includes('1725')) return 16
-  if (boardName.includes('1724')) return 10
-  return 1
-}
-
-function isTimeReg(name: string): boolean {
-  return TIME_REG_KEYWORDS.some(t => name.toLowerCase().includes(t.toLowerCase()))
-}
-
-function isDcOffsetReg(name: string): boolean {
-  return name.toLowerCase().includes('dc offset')
-}
-
-// Safe 32-bit bit-field setter using BigInt to avoid signed overflow
-function setFieldInRegister(regVal: number, start: number, end: number, fieldVal: number): number {
-  const width = end - start + 1
-  const maskBig = (BigInt(1) << BigInt(width)) - BigInt(1)
-  const shiftedMask = maskBig << BigInt(start)
-  const result =
-    (BigInt(regVal >>> 0) & ~shiftedMask) |
-    ((BigInt(fieldVal) & maskBig) << BigInt(start))
-  return Number(result & BigInt(0xFFFFFFFF))
-}
+const ONLINE_KEY = 'lunadaq:tuner-online'
 
 export default function ParamTuner() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [selectedBoardId, setSelectedBoardId] = useState<string>('')
   const [selectedChannel, setSelectedChannel] = useState<number>(0)
   const [settings, setSettings] = useState<BoardSettings>({})
-  const [pendingValues, setPendingValues] = useState<{ [key: string]: string }>({})
+  // Unsaved register values (raw), keyed by register key; written by "Save all".
+  const [pending, setPending] = useState<Record<string, number>>({})
   const [isAcquiring, setIsAcquiring] = useState(false)
-  const [waveformNum, setWaveformNum] = useState<1 | 2>(1)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
+  const [measuredBaseline, setMeasuredBaseline] = useState<number | null>(null)
   // From the app's shared run-status poller (hooks/use-run-status.ts).
   const isRunning = useRunStatus((s) => s.isRunning)
   // Online mode: write each change to the board as well as to its configuration,
   // so the effect shows up in the trace and the spectrum straight away. Off by
   // default — a session that only edits the configuration must stay possible.
-  const [online, setOnline] = useState(false)
+  // Kept for the browser tab, so leaving the page and coming back keeps it.
+  const [online, setOnlineState] = useState(false)
+  useEffect(() => {
+    try { setOnlineState(window.sessionStorage.getItem(ONLINE_KEY) === '1') } catch { /* default off */ }
+  }, [])
+  const setOnline = (v: boolean) => {
+    setOnlineState(v)
+    try { window.sessionStorage.setItem(ONLINE_KEY, v ? '1' : '0') } catch { /* tab-only setting */ }
+  }
   // Registers this board accepts while acquiring, keyed by address ("0x106C").
   const [onlineRegisters, setOnlineRegisters] = useState<Record<string, string>>({})
-
-  const waveformRef = useRef<HTMLDivElement>(null)
-  const histogramRef = useRef<HTMLDivElement>(null)
-  // (probe painters and waveform key tracking are no longer needed — we rebuild
-  // a fresh TCanvas every tick which cleanly replaces all primitives.)
   const { toast } = useToast()
 
   // --- Derived values ---
@@ -184,43 +78,30 @@ export default function ParamTuner() {
   // everywhere in the UI.
   const selectedBoard = boards.find(b => String(b.id) === String(selectedBoardId))
   const channelCount = selectedBoard ? Number(selectedBoard.chan) || 0 : 0
-  const isPSD = selectedBoard ? selectedBoard.dpp.toUpperCase().includes('PSD') : false
-  const nsPerSample = selectedBoard ? getNsPerSample(selectedBoard.name) : 1
+  const dpp = selectedBoard?.dpp ?? 'DPP-PHA'
+  const isPSD = dpp.toUpperCase().includes('PSD')
+  const timing = useMemo(() => boardTiming(selectedBoard?.name ?? ''), [selectedBoard?.name])
 
-  // Per-channel registers (address < 0x8000)
-  const channelRegs = Object.entries(settings).filter(
-    ([, reg]) => reg.channel === selectedChannel && parseInt(reg.address, 16) < 0x8000
-  )
+  const boardConfigKey = Object.entries(settings).find(([, r]) => parseInt(r.address, 16) === 0x8000)?.[0] ?? null
+  const boardConfigValue = boardConfigKey ? (pending[boardConfigKey] ?? settings[boardConfigKey].value_dec) : null
 
-  // Board Configuration register (global)
-  const boardConfigEntry = Object.entries(settings).find(
-    ([, reg]) => reg.name?.includes('Board Configuration')
-  )
-  const boardConfigReg = boardConfigEntry?.[1] ?? null
-  const boardConfigKey = boardConfigEntry?.[0] ?? null
+  /** A channel register's current (pending or saved) raw value, by channel-0 address. */
+  const reg = (address: number): number | null => {
+    const k = findRegKey(settings, selectedChannel, address)
+    return k ? (pending[k] ?? settings[k].value_dec) : null
+  }
+  const algo = reg(0x1080)
+  const negative = algo !== null && getBits(algo, [16, 16]) === 1
+  const recordRaw = reg(0x1020)
+  const preRaw = reg(0x1038)
+  const riseNs = !isPSD && reg(0x105c) !== null ? toDisplay(reg(0x105c)!, 'step', timing) : null
+  const flatNs = !isPSD && reg(0x1060) !== null ? toDisplay(reg(0x1060)!, 'step', timing) : null
+  const peakHoldNs = !isPSD && reg(0x1078) !== null ? toDisplay(reg(0x1078)!, 'step', timing) : 0
+  const longGateNs = isPSD && reg(0x1058) !== null ? toDisplay(reg(0x1058)!, 'sample', timing) : 0
+  // The window in which a second pulse piles up (design §P2).
+  const pileupWindowNs = isPSD ? longGateNs : Math.max(2 * (riseNs ?? 0) + (flatNs ?? 0), peakHoldNs)
 
-  const dualTrace = boardConfigReg ? ((boardConfigReg.value_dec >> 11) & 1) === 1 : false
-  const trace1Val = boardConfigReg ? (boardConfigReg.value_dec >> 12) & 0x3 : 0
-  const trace2Val = boardConfigReg ? (boardConfigReg.value_dec >> 14) & 0x3 : 0
-  const digitalProbeVal = boardConfigReg ? (boardConfigReg.value_dec >> 20) & 0xF : 0
-
-  // DPP Algorithm Control (not "2") for Invert Input (bit 16)
-  const dppCtrlEntry = Object.entries(settings).find(
-    ([, reg]) =>
-      reg.channel === selectedChannel &&
-      reg.name?.includes('DPP Algorithm Control') &&
-      !reg.name.includes('2')
-  )
-  const dppCtrlReg = dppCtrlEntry?.[1] ?? null
-  const dppCtrlKey = dppCtrlEntry?.[0] ?? null
-
-  const invertInput = dppCtrlReg ? ((dppCtrlReg.value_dec >> 16) & 1) === 1 : false
-
-  const triggerRegs = channelRegs.filter(([, r]) => isTriggerReg(r.name))
-  const trapezoidRegs = channelRegs.filter(([, r]) => isTrapezoidReg(r.name))
-
-  const traceOptions1 = isPSD ? PSD_TRACE1_OPTIONS : PHA_TRACE1_OPTIONS
-  const traceOptions2 = isPSD ? PSD_TRACE2_OPTIONS : PHA_TRACE2_OPTIONS
+  const rates = useChannelRates(selectedBoardId, selectedChannel, isRunning)
 
   // --- Effects ---
 
@@ -251,7 +132,7 @@ export default function ParamTuner() {
   useEffect(() => {
     if (!selectedBoardId) return
     setSelectedChannel(0)
-    setPendingValues({})
+    setPending({})
     const load = async () => {
       try {
         const data = await getBoardSettings(selectedBoardId)
@@ -318,58 +199,6 @@ export default function ParamTuner() {
     return () => clearInterval(interval)
   }, [jsrootLoaded, selectedBoardId])
 
-  // Fetch and render waveform
-  useEffect(() => {
-    if (!jsrootLoaded || !selectedBoardId) return
-    const el = waveformRef.current
-    if (!el || !window.JSROOT) return
-    const fetch = async () => {
-      try {
-        const [waveData, p1Data, p2Data] = await Promise.all([
-          waveformNum === 1
-            ? getWaveform1(selectedBoardId, selectedChannel.toString())
-            : getWaveform2(selectedBoardId, selectedChannel.toString()),
-          getProbe1(selectedBoardId, selectedChannel.toString()).catch(() => null),
-          getProbe2(selectedBoardId, selectedChannel.toString()).catch(() => null),
-        ])
-
-        const parsed = window.JSROOT.parse(waveData)
-        // Build a fresh TCanvas every tick so probe overlays never accumulate from
-        // previous frames (the old draw(... "same") path stacked them).
-        const canvas = window.JSROOT.create('TCanvas')
-        canvas.fName = `tuner_wave_${selectedBoardId}_${selectedChannel}_${waveformNum}`
-        canvas.fPrimitives.Add(parsed, 'hist')
-        if (p1Data) {
-          const p1 = window.JSROOT.parse(p1Data)
-          p1.fLineColor = 3 // kGreen
-          canvas.fPrimitives.Add(p1, 'hist same')
-        }
-        if (p2Data) {
-          const p2 = window.JSROOT.parse(p2Data)
-          p2.fLineColor = 2 // kRed
-          canvas.fPrimitives.Add(p2, 'hist same')
-        }
-        await window.JSROOT.redraw(el, canvas)
-      } catch {}
-    }
-    fetch()
-  }, [jsrootLoaded, refreshTick, selectedBoardId, selectedChannel, waveformNum])
-
-  // Fetch and render histogram
-  useEffect(() => {
-    if (!jsrootLoaded || !selectedBoardId) return
-    const el = histogramRef.current
-    if (!el || !window.JSROOT) return
-    const fetch = async () => {
-      try {
-        const data = await getHistogram(selectedBoardId, selectedChannel.toString())
-        const parsed = window.JSROOT.parse(data)
-        window.JSROOT.redraw(el, parsed, 'hist')
-      } catch {}
-    }
-    fetch()
-  }, [jsrootLoaded, refreshTick, selectedBoardId, selectedChannel])
-
   // --- Handlers ---
 
   const [busy, setBusy] = useState(false)
@@ -433,11 +262,9 @@ export default function ParamTuner() {
   // Whether a register can be written to a live board — the allowlist is keyed
   // by the channel-0 form of the address (0x1A6C -> 0x106C).
   const isOnlineTunable = (regKey: string): boolean => {
-    const reg = settings[regKey]
-    if (!reg) return false
-    const address = parseInt(reg.address, 16)
-    const base = address >= 0x1000 && address <= 0x1FFF ? address & 0xF0FF : address
-    return `0x${base.toString(16).toUpperCase().padStart(4, '0')}` in onlineRegisters
+    const r = settings[regKey]
+    if (!r) return false
+    return `0x${baseAddress(r.address).toString(16).toUpperCase().padStart(4, '0')}` in onlineRegisters
   }
 
   /**
@@ -465,88 +292,44 @@ export default function ParamTuner() {
     }
   }
 
-  const handleDualTraceToggle = async (enabled: boolean) => {
-    const cfg = boardConfigReg
-    const cfgKey = boardConfigKey
-    if (!cfg || !cfgKey) return
-    const newValue = enabled
-      ? cfg.value_dec | (1 << 11)
-      : cfg.value_dec & ~(1 << 11)
-    if (!(await applyRegister(cfgKey, newValue, 'Dual Trace'))) return
-    setSettings(prev => ({
-      ...prev,
-      [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-    }))
-    if (!enabled) setWaveformNum(1)
+  const storeLocal = (regKey: string, rawValue: number) => {
+    setSettings(prev => {
+      const r = prev[regKey]
+      if (!r) return prev
+      return { ...prev, [regKey]: { ...r, value_dec: rawValue, value_hex: `0x${(rawValue >>> 0).toString(16).toUpperCase()}` } }
+    })
   }
 
-  const handleTraceTypeChange = async (traceNumber: 1 | 2, newTraceVal: number) => {
-    const cfg = boardConfigReg
-    const cfgKey = boardConfigKey
-    if (!cfg || !cfgKey) return
-    let newValue = cfg.value_dec
-    if (traceNumber === 1) {
-      newValue = (newValue & ~(0x3 << 12)) | (newTraceVal << 12)
-    } else {
-      newValue = (newValue & ~(0x3 << 14)) | (newTraceVal << 14)
-    }
-    if (!(await applyRegister(cfgKey, newValue, `Trace ${traceNumber}`))) return
-    setSettings(prev => ({
-      ...prev,
-      [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-    }))
+  // Trace and probe selection (Board Configuration): written at once, as before.
+  const handleBoardConfigChange = async (newValue: number, label: string) => {
+    if (!boardConfigKey) return
+    if (!(await applyRegister(boardConfigKey, newValue, label))) return
+    storeLocal(boardConfigKey, newValue)
+    setPending(prev => { const n = { ...prev }; delete n[boardConfigKey]; return n })
   }
 
-  const handleDigitalProbeChange = async (newVal: number) => {
-    const cfg = boardConfigReg
-    const cfgKey = boardConfigKey
-    if (!cfg || !cfgKey) return
-    const newValue = (cfg.value_dec & ~(0xF << 20)) | (newVal << 20)
-    if (!(await applyRegister(cfgKey, newValue, 'Digital Probe'))) return
-    setSettings(prev => ({
-      ...prev,
-      [cfgKey]: { ...cfg, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-    }))
-  }
-
-  const handleSettingChange = (regKey: string, value: string) => {
-    setPendingValues(prev => ({ ...prev, [regKey]: value }))
+  const handleChange = (regKey: string, newRaw: number) => {
+    setPending(prev => {
+      const n = { ...prev }
+      if (settings[regKey] && settings[regKey].value_dec === newRaw) delete n[regKey]
+      else n[regKey] = newRaw
+      return n
+    })
   }
 
   const handleSaveAll = async () => {
-    const entries = Object.entries(pendingValues)
+    const entries = Object.entries(pending)
     if (entries.length === 0) return
     let savedCount = 0
     let writtenCount = 0
-    for (const [regKey, value] of entries) {
-      const reg = settings[regKey]
-      // Convert display value back to raw register value
-      let rawVal: number
-      if (reg && isDcOffsetReg(reg.name)) {
-        rawVal = Math.round((parseFloat(value) / 100) * 65535)
-      } else if (reg && isTimeReg(reg.name) && nsPerSample > 1) {
-        rawVal = Math.round(parseFloat(value) / nsPerSample)
-      } else {
-        rawVal = parseInt(value, 10)
-      }
-      if (isNaN(rawVal)) continue
-      if (!(await applyRegister(regKey, rawVal, reg?.name ?? regKey))) continue
+    for (const [regKey, rawVal] of entries) {
+      const r = settings[regKey]
+      if (!(await applyRegister(regKey, rawVal, r?.name ?? regKey))) continue
       if (online && isOnlineTunable(regKey)) writtenCount++
-      setSettings(prev => {
-        const r = prev[regKey]
-        if (!r) return prev
-        return {
-          ...prev,
-          [regKey]: {
-            ...r,
-            value_dec: rawVal,
-            value_hex: `0x${rawVal.toString(16).toUpperCase()}`,
-          },
-        }
-      })
+      storeLocal(regKey, rawVal)
+      setPending(prev => { const n = { ...prev }; delete n[regKey]; return n })
       savedCount++
     }
-    setPendingValues({})
     if (savedCount > 0) {
       toast({
         title: 'Saved',
@@ -557,76 +340,7 @@ export default function ParamTuner() {
     }
   }
 
-  const handleInvertInputToggle = async (enabled: boolean) => {
-    const ctrl = dppCtrlReg
-    const ctrlKey = dppCtrlKey
-    if (!ctrl || !ctrlKey) return
-    const newValue = setFieldInRegister(ctrl.value_dec, 16, 16, enabled ? 1 : 0)
-    if (!(await applyRegister(ctrlKey, newValue, 'Invert Input'))) return
-    setSettings(prev => ({
-      ...prev,
-      [ctrlKey]: { ...ctrl, value_dec: newValue, value_hex: `0x${newValue.toString(16).toUpperCase()}` },
-    }))
-  }
-
-  const getRegValue = (regKey: string): string => {
-    // Pending values are already in display units (user typed them)
-    if (pendingValues[regKey] !== undefined) return pendingValues[regKey]
-    const reg = settings[regKey]
-    if (!reg) return ''
-    const raw = reg.value_dec
-    if (isDcOffsetReg(reg.name)) return ((raw / 65535) * 100).toFixed(1)
-    if (isTimeReg(reg.name) && nsPerSample > 1) return (raw * nsPerSample).toString()
-    return raw.toString()
-  }
-
-  const renderSettingRow = (regKey: string, reg: RegisterData) => {
-    const unit = isDcOffsetReg(reg.name) ? '%' : (isTimeReg(reg.name) && nsPerSample > 1 ? 'ns' : '')
-    const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
-    const tunable = isOnlineTunable(regKey)
-    return (
-      <div key={regKey} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        {/* Label above the input on a phone, beside it from sm up. */}
-        <Label htmlFor={`tuner-${regKey}`} className="w-full shrink-0 text-sm sm:w-44">{reg.name}</Label>
-        <Input
-          id={`tuner-${regKey}`}
-          className="w-32 h-8 text-sm"
-          type="number"
-          step={step}
-          value={getRegValue(regKey)}
-          onChange={e => handleSettingChange(regKey, e.target.value)}
-        />
-        {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
-        {/* In Online mode, say up front which parameters reach the board and
-            which only reach the configuration — better than finding out per save. */}
-        {online && (
-          tunable ? (
-            <span
-              className="flex items-center gap-1 text-xs text-success"
-              title="Written to the board as soon as you save"
-            >
-              <Zap className="h-3 w-3" />
-              live
-            </span>
-          ) : (
-            <span
-              className="text-xs text-muted-foreground"
-              title="Not safe to change while the board is acquiring — saved to the configuration, applied at the next run"
-            >
-              next run
-            </span>
-          )
-        )}
-        {pendingValues[regKey] !== undefined && (
-          <Badge variant="outline" className="text-xs text-warning border-warning">
-            unsaved
-          </Badge>
-        )}
-      </div>
-    )
-  }
-
-  const pendingCount = Object.keys(pendingValues).length
+  const pendingCount = Object.keys(pending).length
 
   return (
     <div className="flex flex-col gap-6">
@@ -641,7 +355,7 @@ export default function ParamTuner() {
             <SelectContent>
               {boards.map(b => (
                 <SelectItem key={b.id} value={b.id}>
-                  {b.name} (ID: {b.id})
+                  {b.name} (ID: {b.id}) · {b.dpp}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -654,7 +368,8 @@ export default function ParamTuner() {
             value={selectedChannel.toString()}
             onValueChange={v => {
               setSelectedChannel(parseInt(v))
-              setPendingValues({})
+              setPending({})
+              setMeasuredBaseline(null)
             }}
           >
             <SelectTrigger className="w-36" aria-label="Channel">
@@ -686,15 +401,15 @@ export default function ParamTuner() {
           Stop
         </Button>
 
-        <StatusBadge state={isRunning ? 'running' : 'stopped'} />
+        <StatusBadge state={isRunning ? 'running' : 'stopped'} label={isAcquiring ? 'Tuning' : undefined} />
         {isRunning && !isAcquiring && (
           <span className="text-xs text-muted-foreground">
-            Run in progress: stop it from the Dashboard
+            Production run: stop it from the Dashboard. Changes follow the usual rules.
           </span>
         )}
         {isAcquiring && (
           <Badge variant="outline" className="text-warning border-warning">
-            Tuner active · saving disabled
+            Tuner run · not saved to disk
           </Badge>
         )}
 
@@ -715,170 +430,54 @@ export default function ParamTuner() {
         </div>
       </div>
 
+      <HealthStrip rates={rates.now} windowNs={pileupWindowNs} psd={isPSD} running={isRunning} />
+
       {/* Main content: waveform (left) + settings (right) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Waveform panel */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex flex-wrap items-center justify-between gap-2">
-              <span>Waveform</span>
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant={waveformNum === 1 ? 'default' : 'outline'}
-                  onClick={() => setWaveformNum(1)}
-                >
-                  Waveform 1
-                </Button>
-                {dualTrace && (
-                  <Button
-                    size="sm"
-                    variant={waveformNum === 2 ? 'default' : 'outline'}
-                    onClick={() => setWaveformNum(2)}
-                  >
-                    Waveform 2
-                  </Button>
-                )}
-              </div>
-            </CardTitle>
-            <div className="flex flex-col gap-3 mt-1">
-              {/* Dual Trace, the trace types and the digital probe all live in
-                  Board Configuration (0x8000), which describes the shape of the
-                  readout for the whole board. It cannot be rewritten under a
-                  running acquisition, so these are saved and applied at the next
-                  run even in Online mode. Say so here rather than after the fact. */}
-              {online && (
-                <p className="text-xs text-muted-foreground">
-                  These select what the board digitises into the trace — they belong to
-                  Board Configuration and take effect at the next run, not live.
-                </p>
-              )}
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="dual-trace-switch"
-                  checked={dualTrace}
-                  onCheckedChange={handleDualTraceToggle}
-                />
-                <Label htmlFor="dual-trace-switch" className="text-sm cursor-pointer">
-                  Dual trace
-                </Label>
-              </div>
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm w-14">Trace 1:</Label>
-                  <Select
-                    value={trace1Val.toString()}
-                    onValueChange={v => handleTraceTypeChange(1, parseInt(v))}
-                  >
-                    <SelectTrigger className="w-44 h-8 text-xs" aria-label="Trace 1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {traceOptions1.map(o => (
-                        <SelectItem key={o.value} value={o.value.toString()}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                {dualTrace && (
-                  <div className="flex items-center gap-2">
-                    <Label className="text-sm w-14">Trace 2:</Label>
-                    <Select
-                      value={trace2Val.toString()}
-                      onValueChange={v => handleTraceTypeChange(2, parseInt(v))}
-                    >
-                      <SelectTrigger className="w-44 h-8 text-xs" aria-label="Trace 2">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {traceOptions2.map(o => (
-                          <SelectItem key={o.value} value={o.value.toString()}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Label className="text-sm w-28">Digital probe:</Label>
-                  <Select
-                    value={digitalProbeVal.toString()}
-                    onValueChange={v => handleDigitalProbeChange(parseInt(v))}
-                  >
-                    <SelectTrigger className="w-44 h-8 text-xs" aria-label="Digital probe">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DIGITAL_PROBE_OPTIONS.map(o => (
-                        <SelectItem key={o.value} value={o.value.toString()}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div ref={waveformRef} className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-sm" />
-          </CardContent>
-        </Card>
+        {selectedBoardId ? (
+          <WaveformPanel
+            boardId={selectedBoardId}
+            dpp={dpp}
+            channel={selectedChannel}
+            timing={timing}
+            jsrootLoaded={jsrootLoaded}
+            refreshTick={refreshTick}
+            running={isRunning}
+            online={online}
+            boardConfig={boardConfigValue}
+            onBoardConfigChange={handleBoardConfigChange}
+            preSamples={preRaw !== null ? preRaw * 4 : null}
+            recordSamples={recordRaw !== null ? recordRaw * 8 : null}
+            riseNs={riseNs}
+            flatNs={flatNs}
+            negative={negative}
+            onBaseline={setMeasuredBaseline}
+          />
+        ) : <Card><CardContent className="py-10 text-sm text-muted-foreground">No board configured: add one on the Boards page.</CardContent></Card>}
 
         {/* Settings panel */}
         <Card>
           <CardHeader>
-            <CardTitle>Settings — Ch {selectedChannel}</CardTitle>
+            <CardTitle>Settings — Ch {selectedChannel} <span className="text-sm font-normal text-muted-foreground">{dpp}</span></CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Trigger Settings */}
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Trigger settings
-              </h4>
-              <div className="space-y-3">
-                {triggerRegs.length > 0 ? (
-                  triggerRegs.map(([k, r]) => renderSettingRow(k, r))
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No trigger settings found for channel {selectedChannel}.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Trapezoid Settings */}
-            <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Trapezoid settings
-              </h4>
-              <div className="space-y-3">
-                {trapezoidRegs.length > 0 ? (
-                  trapezoidRegs.map(([k, r]) => renderSettingRow(k, r))
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    No trapezoid settings found for channel {selectedChannel}.
-                  </p>
-                )}
-                {dppCtrlReg && (
-                  <div className="flex items-center gap-3 pt-1">
-                    <Label className="text-sm w-44 shrink-0">Invert input</Label>
-                    <Switch aria-label="Invert input" checked={invertInput} onCheckedChange={handleInvertInputToggle} />
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <Separator />
-
-            <div className="flex justify-end">
+            <ControlsPanel
+              dpp={dpp}
+              channel={selectedChannel}
+              timing={timing}
+              settings={settings}
+              pending={pending}
+              onChange={handleChange}
+              online={online}
+              isOnlineTunable={isOnlineTunable}
+              measuredBaseline={measuredBaseline}
+            />
+            <div className="flex items-center justify-end gap-2 border-t pt-4">
+              {pendingCount > 0 && (
+                <Button variant="ghost" onClick={() => setPending({})}>Discard</Button>
+              )}
               <Button onClick={handleSaveAll} disabled={pendingCount === 0}>
-                Save All
+                Save all
                 {pendingCount > 0 && (
                   <Badge variant="secondary" className="ml-2 text-xs">
                     {pendingCount}
@@ -890,22 +489,16 @@ export default function ParamTuner() {
         </Card>
       </div>
 
-      {/* Energy Spectrum */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            Energy Spectrum
-            {selectedBoard && (
-              <span className="text-muted-foreground font-normal ml-2 text-base">
-                {selectedBoard.name} — Channel {selectedChannel}
-              </span>
-            )}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div ref={histogramRef} className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-sm" />
-        </CardContent>
-      </Card>
+      {selectedBoard && (
+        <SpectrumPanel
+          boardId={selectedBoardId}
+          boardName={selectedBoard.name}
+          channel={selectedChannel}
+          psd={isPSD}
+          jsrootLoaded={jsrootLoaded}
+          refreshTick={refreshTick}
+        />
+      )}
     </div>
   )
 }
