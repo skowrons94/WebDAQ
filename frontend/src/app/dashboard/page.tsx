@@ -1,16 +1,19 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import useAuthStore from '@/store/auth-store';
+import { useEffect, useMemo } from 'react';
+import { AuthGate } from '@/components/auth-gate';
 import { RunControl } from '@/components/run-control';
-import BoardHealth from '@/components/board-health';
-import RunStats from '@/components/run-stats';
-import { Stats } from '@/components/stats';
-import HistogramDashboard from '@/components/histo-dashboard';
-import WaveformDashboard from '@/components/wave-dashboard';
-import PSDDashboard from '@/components/psd-dashboard';
+import dynamic from 'next/dynamic';
+import { TabLoading } from '@/components/ui/tab-loading';
+
+// The overview is what opens; every other tab (recharts, dnd-kit, the JSROOT
+// dashboards) is loaded when first shown, which keeps /dashboard's first load
+// small on a phone or a slow control-room link.
+const BoardHealth = dynamic(() => import('@/components/board-health'), { ssr: false, loading: TabLoading });
+const RunStats = dynamic(() => import('@/components/run-stats'), { ssr: false, loading: TabLoading });
+const HistogramDashboard = dynamic(() => import('@/components/histo-dashboard'), { ssr: false, loading: TabLoading });
+const WaveformDashboard = dynamic(() => import('@/components/wave-dashboard'), { ssr: false, loading: TabLoading });
+const PSDDashboard = dynamic(() => import('@/components/psd-dashboard'), { ssr: false, loading: TabLoading });
 import { Layout } from '@/components/dashboard-layout';
 import {
   Tabs,
@@ -21,27 +24,11 @@ import {
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 
-
-const queryClient = new QueryClient()
-
-export default function DashboardPage() {
-  const token = useAuthStore((state) => state.token);
+function DashboardContent() {
   const { settings } = useVisualizationStore()
-  const router = useRouter();
   // Shared with the command palette, so a jump to a tab works from this page too.
   const tab = useDashboardTabStore((state) => state.tab)
   const setTab = useDashboardTabStore((state) => state.setTab)
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    if (mounted && !token) {
-      router.push('/auth/login');
-    }
-  }, [mounted, token, router]);
 
   // Which tabs exist right now. A ?tab= naming a view that is switched off in
   // Appearance would otherwise select a tab with no trigger and no content, and
@@ -65,12 +52,7 @@ export default function DashboardPage() {
     if (!availableTabs.includes(tab)) setTab('overview')
   }, [availableTabs, tab, setTab]);
 
-  if (!mounted || !token) {
-    return null;
-  }
-
   return (
-    <QueryClientProvider client={queryClient}>
       <Layout>
         <Tabs value={tab} onValueChange={setTab} orientation='vertical'>
           <div className="flex max-w-full items-center overflow-x-auto pb-1">
@@ -78,11 +60,11 @@ export default function DashboardPage() {
                 <TabsTrigger value="overview">Overview</TabsTrigger>
                   {/* The boards' own health sits beside the overview: during a run
                       it answers the question the overview raises. */}
-                  <TabsTrigger value="health">Board Health</TabsTrigger>
+                  <TabsTrigger value="health">Board health</TabsTrigger>
                 {/* Rates come right after the overview: during a run they are
                     what tells you the detectors are alive, so they are looked at
                     far more often than the spectra. */}
-                <TabsTrigger value="runstats">Data Rates</TabsTrigger>
+                <TabsTrigger value="runstats">Data rates</TabsTrigger>
                 {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
                 {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
                 {(settings.showPSD ?? true) && <TabsTrigger value="psd">PSD</TabsTrigger>}
@@ -114,6 +96,15 @@ export default function DashboardPage() {
           </TabsContent>
         </Tabs>
       </Layout>
-    </QueryClientProvider>
   );
+}
+
+// AuthGate renders the dashboard only after hydration and with a token
+// (components/auth-gate.tsx); it replaces the page's own mounted flag.
+export default function DashboardPage() {
+  return (
+    <AuthGate>
+      <DashboardContent />
+    </AuthGate>
+  )
 }

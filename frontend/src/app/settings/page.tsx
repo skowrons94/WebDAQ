@@ -1,17 +1,12 @@
 'use client'
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { AuthGate } from '@/components/auth-gate'
 import { useEffect, useState } from 'react';
 import useAuthStore from '@/store/auth-store';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/components/ui/use-toast';
 import { Layout } from '@/components/dashboard-layout';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
 import { VisualizationSettings } from '@/components/visualization-settings';
 import { CurrentModuleSettings } from '@/components/current-module-settings';
@@ -19,20 +14,11 @@ import { NotificationSettings } from '@/components/notification-settings';
 import { ElogSettings } from '@/components/elog/elog-settings';
 import { GrafanaSettings } from '@/components/grafana-settings';
 
-const queryClient = new QueryClient()
 
-export default function SettingsPage() {
+function SettingsPageContent() {
     const router = useRouter();
-    const token = useAuthStore((state) => state.token);
     const clearToken = useAuthStore((state) => state.clearToken);
-    const { toast } = useToast()
     const [activeView, setActiveView] = useState('boards');
-
-    useEffect(() => {
-        if (!token) {
-            router.push('/auth/login');
-        }
-    }, [token, router]);
 
     // Allow deep-linking to a section, e.g. /settings?view=current from the
     // command palette. Read from the URL on the client to avoid needing a
@@ -48,10 +34,6 @@ export default function SettingsPage() {
         clearToken();
         router.push('/');
     };
-
-    if (!token) {
-        return null;
-    }
 
     const renderActiveView = () => {
         switch (activeView) {
@@ -92,7 +74,7 @@ export default function SettingsPage() {
     };
 
     return (
-        <QueryClientProvider client={queryClient}>
+        <>
             <Layout>
                 <div className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col gap-4 rounded-lg border bg-muted/40 p-3 sm:p-4 md:gap-8 md:p-10">
                     <div className="mx-auto grid w-full max-w-6xl gap-2">
@@ -139,6 +121,16 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </Layout>
-        </QueryClientProvider>
+        </>
+    )
+}
+
+// AuthGate: rendered only after hydration and only with a token (see
+// components/auth-gate.tsx); it also provides the app's one QueryClient.
+export default function SettingsPage() {
+    return (
+        <AuthGate>
+            <SettingsPageContent />
+        </AuthGate>
     )
 }

@@ -16,20 +16,6 @@ import { stopRunSequence } from '@/lib/run-actions'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 
-const PHONE_QUERY = '(max-width: 767px)'
-
-function useIsPhone(): boolean {
-  const [phone, setPhone] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia(PHONE_QUERY)
-    const update = () => setPhone(mq.matches)
-    update()
-    mq.addEventListener('change', update)
-    return () => mq.removeEventListener('change', update)
-  }, [])
-  return phone
-}
-
 /** Hz → "812 Hz", "12.4 kHz", "1.20 MHz". */
 export function formatRate(hz: number): string {
   if (hz >= 1e6) return `${(hz / 1e6).toFixed(2)} MHz`
@@ -49,15 +35,10 @@ export function formatRate(hz: number): string {
  *   saving and the overwrite check all live there), it does not start a run
  *   by itself.
  *
- * Mounted only on a phone-width screen, so it costs desktops no polling.
+ * The layout mounts it (lazily) only on a phone-width screen, so it costs
+ * desktops neither code nor polling.
  */
 export function RunBar() {
-  const phone = useIsPhone()
-  if (!phone) return null
-  return <RunBarInner />
-}
-
-function RunBarInner() {
   const { toast } = useToast()
   const router = useRouter()
   const pathname = usePathname()

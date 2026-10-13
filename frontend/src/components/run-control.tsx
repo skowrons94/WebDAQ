@@ -23,7 +23,15 @@ import {
 import { CardHolder } from '@/components/card-holder'
 import { RunControlButtons } from '@/components/run-control-buttons'
 import { DAQState } from '@/components/daq-state'
-import { BeamControlPanel } from '@/components/beam-control-panel'
+import dynamic from 'next/dynamic'
+import { TabLoading } from '@/components/ui/tab-loading'
+
+// The beam chart (recharts) arrives after the status cards and the run
+// controls, which are what has to be on screen first.
+const BeamControlPanel = dynamic(
+  () => import('@/components/beam-control-panel').then((m) => m.BeamControlPanel),
+  { ssr: false, loading: TabLoading },
+)
 import { RecentRuns } from '@/components/recent-runs'
 import { cn } from '@/lib/utils'
 

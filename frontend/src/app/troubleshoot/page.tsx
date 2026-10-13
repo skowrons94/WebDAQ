@@ -1,22 +1,10 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import useAuthStore from '@/store/auth-store'
+import { AuthGate } from '@/components/auth-gate'
 import { Layout } from '@/components/dashboard-layout'
 import ActivityLog from '@/components/activity-log'
 
-export default function TroubleshootPage() {
-  const token = useAuthStore((state) => state.token)
-  const router = useRouter()
-
-  useEffect(() => {
-    if (!token) {
-      router.push('/auth/login')
-    }
-  }, [token, router])
-
-  if (!token) return null
+function TroubleshootPageContent() {
 
   return (
     <Layout>
@@ -25,4 +13,14 @@ export default function TroubleshootPage() {
       </div>
     </Layout>
   )
+}
+
+// AuthGate: rendered only after hydration and only with a token (see
+// components/auth-gate.tsx); it also provides the app's one QueryClient.
+export default function TroubleshootPage() {
+    return (
+        <AuthGate>
+            <TroubleshootPageContent />
+        </AuthGate>
+    )
 }

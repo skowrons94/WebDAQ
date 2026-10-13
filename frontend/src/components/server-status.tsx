@@ -6,7 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Trash2, Plus, Play, Square, FolderOpen, FileText, FlaskConical, Loader2, AlertCircle } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
-import { ConfirmAction } from '@/components/ui/confirm-action'
+import dynamic from 'next/dynamic'
+
+// Loaded on first use: this component is in every page's header and on the
+// login page, and the dialog is needed only when something is about to stop.
+const ConfirmAction = dynamic(
+    () => import('@/components/ui/confirm-action').then((m) => m.ConfirmAction),
+    { ssr: false },
+)
 import useRunControlStore from '@/store/run-control-store'
 import { cn } from '@/lib/utils'
 
@@ -584,7 +591,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                     )}
                 </div>
             )}
-            <ConfirmAction
+            {confirmStopServer && <ConfirmAction
                 open={confirmStopServer}
                 onOpenChange={setConfirmStopServer}
                 title="Stop the DAQ server?"
@@ -604,8 +611,8 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                 }
                 confirmLabel={runActive ? 'Stop server during the run' : 'Stop server'}
                 onConfirm={handleStop}
-            />
-            <ConfirmAction
+            />}
+            {confirmRemoveDir !== null && <ConfirmAction
                 open={confirmRemoveDir !== null}
                 onOpenChange={(o) => { if (!o) setConfirmRemoveDir(null) }}
                 title={`Remove "${confirmRemoveDir?.label ?? ''}" from the list?`}
@@ -617,7 +624,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                 }
                 confirmLabel="Remove from list"
                 onConfirm={() => { if (confirmRemoveDir) void deleteDirectory(confirmRemoveDir.id) }}
-            />
+            />}
         </div>
     )
 }

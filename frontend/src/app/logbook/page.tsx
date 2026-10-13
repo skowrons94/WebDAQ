@@ -1,36 +1,17 @@
 'use client'
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { useEffect } from 'react';
-import useAuthStore from '@/store/auth-store';
-import { useRouter } from 'next/navigation';
-import { useToast } from '@/components/ui/use-toast';
+import { AuthGate } from '@/components/auth-gate'
 import { Layout } from '@/components/dashboard-layout';
 import {Logbook} from '@/components/logbook-table/logbook-page';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ElogPanel } from '@/components/elog/elog-panel';
 
-const queryClient = new QueryClient()
 
-export default  function LogbookPage() {
-    const router = useRouter();
-    const token = useAuthStore((state) => state.token);
-    const clearToken = useAuthStore((state) => state.clearToken);
-    const { toast } = useToast()
-
-    useEffect(() => {
-        if (!token) {
-            router.push('/auth/login');
-        }
-    }, [token, router]);
-
-    if (!token) {
-        return null;
-    }
+function LogbookPageContent() {
     
 
     return (
-        <QueryClientProvider client={queryClient}>
+        <>
             <Layout>
                 {/* Two logbooks live here: the run metadata WebDAQ records itself,
                     and the collaboration's ELOG. */}
@@ -47,6 +28,16 @@ export default  function LogbookPage() {
                     </TabsContent>
                 </Tabs>
             </Layout>
-        </QueryClientProvider>
+        </>
+    )
+}
+
+// AuthGate: rendered only after hydration and only with a token (see
+// components/auth-gate.tsx); it also provides the app's one QueryClient.
+export default function LogbookPage() {
+    return (
+        <AuthGate>
+            <LogbookPageContent />
+        </AuthGate>
     )
 }

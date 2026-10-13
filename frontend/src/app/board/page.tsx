@@ -1,31 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
+import { AuthGate } from '@/components/auth-gate'
 import { Board } from '@/components/board'
-import useAuthStore from '@/store/auth-store';
-import { useRouter } from 'next/navigation';
-import { useToast } from '@/components/ui/use-toast';
 import { Layout } from '@/components/dashboard-layout';
 
-export default function BoardPage() {
-    const router = useRouter();
-    const token = useAuthStore((state) => state.token);
-    const clearToken = useAuthStore((state) => state.clearToken);
-    const { toast } = useToast()
-
-    useEffect(() => {
-        if (!token) {
-            router.push('/auth/login');
-        }
-    }, [token, router]);
-
-    if (!token) {
-        return null;
-    }
+function BoardPageContent() {
     
     return (
         <Layout>
             <Board />
         </Layout>
     );
+}
+
+// AuthGate: rendered only after hydration and only with a token (see
+// components/auth-gate.tsx); it also provides the app's one QueryClient.
+export default function BoardPage() {
+    return (
+        <AuthGate>
+            <BoardPageContent />
+        </AuthGate>
+    )
 }

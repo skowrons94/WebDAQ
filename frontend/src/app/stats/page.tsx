@@ -1,8 +1,8 @@
 'use client'
 
+import { EmptyState, ErrorState } from '@/components/ui/empty-state'
 import { useCallback, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import useAuthStore from '@/store/auth-store'
+import { AuthGate } from '@/components/auth-gate'
 import { Eye, EyeOff, Gauge, Pencil, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,14 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useStatsStore } from '@/store/stats-store'
 import {
   getStatsPaths,
@@ -55,18 +48,7 @@ function formatValue(value: number): string {
   return value.toFixed(3)
 }
 
-export default function StatsPage() {
-  // Same guard as every other page: this one was missing it, so a signed-out
-  // user landed on a rendered shell whose every request 401'd — the page looked
-  // broken instead of sending them to log in.
-  const token = useAuthStore((state) => state.token)
-  const router = useRouter()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => {
-    if (mounted && !token) router.push('/auth/login')
-  }, [mounted, token, router])
-
+function StatsPageContent() {
   const { toast } = useToast()
   const { paths, currentValues, setCurrentValue, setPaths } = useStatsStore()
   const [isLoading, setIsLoading] = useState(false)
@@ -279,10 +261,6 @@ export default function StatsPage() {
 
   const enabledCount = paths.filter(p => p.enabled).length
 
-  // Render nothing until the token is confirmed, so a signed-out visitor never
-  // sees the shell flash before the redirect.
-  if (!mounted || !token) return null
-
   return (
     <Layout>
       <div className="space-y-6 p-6">
@@ -336,28 +314,32 @@ export default function StatsPage() {
         </div>
 
         {error && (
-          <Card className="border-destructive">
-            <CardContent className="flex items-center justify-between gap-4 pt-6">
-              <p className="text-sm text-destructive">{error}</p>
+          <ErrorState
+            title="Something went wrong"
+            action={
               <Button onClick={() => setLocalError(null)} variant="ghost" size="sm">
                 Dismiss
               </Button>
-            </CardContent>
-          </Card>
+            }
+          >
+            {error}
+          </ErrorState>
         )}
 
         {/* Metrics — the reason for the page, so they come first */}
         {paths.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed py-16 text-center">
-            <Gauge className="h-8 w-8 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              No metrics yet. Browse what Graphite is collecting and pick the ones to watch.
-            </p>
-            <Button onClick={() => setBrowserOpen(true)} size="sm" variant="outline">
-              <Plus className="mr-2 h-4 w-4" />
-              Add metric
-            </Button>
-          </div>
+          <EmptyState
+            icon={Gauge}
+            title="No metrics yet"
+            action={
+              <Button onClick={() => setBrowserOpen(true)} size="sm" variant="outline">
+                <Plus className="mr-2 h-4 w-4" />
+                Add metric
+              </Button>
+            }
+          >
+            Browse what Graphite is collecting and pick the ones to watch.
+          </EmptyState>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {paths.map((path) => {
@@ -528,25 +510,30 @@ export default function StatsPage() {
           />
         )}
 
-        <AlertDialog open={!!pathToDelete} onOpenChange={(open) => !open && setPathToDelete(null)}>
-          <AlertDialogContent>
-            <AlertDialogTitle>Remove this metric?</AlertDialogTitle>
-            <AlertDialogDescription>
+        <ConfirmAction
+          open={!!pathToDelete}
+          onOpenChange={(open) => !open && setPathToDelete(null)}
+          title="Remove this metric?"
+          description={
+            <p>
               It disappears from this page. The data itself stays in Graphite, so you can add it
               back at any time.
-            </AlertDialogDescription>
-            <div className="flex justify-end gap-2">
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => pathToDelete && handleDeletePath(pathToDelete)}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Remove
-              </AlertDialogAction>
-            </div>
-          </AlertDialogContent>
-        </AlertDialog>
+            </p>
+          }
+          confirmLabel="Remove metric"
+          onConfirm={() => { if (pathToDelete) void handleDeletePath(pathToDelete) }}
+        />
       </div>
     </Layout>
+  )
+}
+
+// The sign-in check (and the QueryClient) is AuthGate's: this page's own
+// polling starts only once a token is known.
+export default function StatsPage() {
+  return (
+    <AuthGate>
+      <StatsPageContent />
+    </AuthGate>
   )
 }

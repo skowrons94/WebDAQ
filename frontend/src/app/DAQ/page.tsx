@@ -1,9 +1,6 @@
 'use client';
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import useAuthStore from '@/store/auth-store';
+import { AuthGate } from '@/components/auth-gate'
 import CalibrationDashboard from '@/components/calib-dashboard';
 import CAENDashboard from '@/components/caen-dashboard';
 import BoardInfoPanel from '@/components/board-info';
@@ -16,25 +13,12 @@ import { Layout } from '@/components/dashboard-layout'; import {
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 
 
-const queryClient = new QueryClient()
 
-export default function DashboardPage() {
-  const token = useAuthStore((state) => state.token);
+function DaqPageContent() {
   const { settings } = useVisualizationStore()
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!token) {
-      router.push('/auth/login');
-    }
-  }, [token, router]);
-
-  if (!token) {
-    return null;
-  }
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <Layout>
         <Tabs defaultValue="caen" orientation='vertical'>        
             <div className="flex items-center">
@@ -57,6 +41,16 @@ export default function DashboardPage() {
           </TabsContent>
         </Tabs>
       </Layout>
-    </QueryClientProvider>
+    </>
   );
+}
+
+// AuthGate: rendered only after hydration and only with a token (see
+// components/auth-gate.tsx); it also provides the app's one QueryClient.
+export default function DashboardPage() {
+    return (
+        <AuthGate>
+            <DaqPageContent />
+        </AuthGate>
+    )
 }

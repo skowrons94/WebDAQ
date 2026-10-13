@@ -49,7 +49,11 @@ import { ModeToggle } from '@/components/ui/mode-toggle'
 import { NotificationBell } from '@/components/notification-bell'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { RunBar } from '@/components/run-bar'
+import dynamic from 'next/dynamic'
+import { useIsPhone } from '@/hooks/use-is-phone'
+
+// Phones only, so desktops never download it.
+const RunBar = dynamic(() => import('@/components/run-bar').then((m) => m.RunBar), { ssr: false })
 import { ServerStatus } from '@/components/server-status'
 import { RunStatusIndicator } from '@/components/run-status-indicator'
 
@@ -76,6 +80,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const [open, setOpen] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
+    const phone = useIsPhone()
 
     // A nav entry is active when the current path matches it exactly or is a
     // nested route beneath it (e.g. /settings/foo highlights Settings).
@@ -322,7 +327,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <footer className="mt-auto flex h-16 items-center justify-center bg-background text-sm text-muted-foreground">
                 <span>LUNADAQ</span>
             </footer>
-            <RunBar />
+            {phone && <RunBar />}
         </div>
     )
 }

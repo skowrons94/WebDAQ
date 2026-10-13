@@ -1,28 +1,26 @@
 "use client"
 
-import { useEffect } from "react"
+import { AuthGate } from '@/components/auth-gate'
 import Link from "next/link"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 
 import { Layout } from "@/components/dashboard-layout"
-import { RunDetailView } from "@/components/data-dashboard"
+import dynamic from "next/dynamic"
+import { TabLoading } from "@/components/ui/tab-loading"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import useAuthStore from "@/store/auth-store"
 
-export default function LogbookRunPage() {
-  const token = useAuthStore((state) => state.token)
-  const router = useRouter()
+// The run page (react-markdown, recharts) loads after the shell.
+const RunDetailView = dynamic(
+  () => import("@/components/data-dashboard").then((m) => m.RunDetailView),
+  { ssr: false, loading: TabLoading },
+)
+
+function LogbookRunPageContent() {
   const params = useParams<{ run_number: string }>()
   const runNumber = Number(params.run_number)
   const validRunNumber = Number.isInteger(runNumber) && runNumber >= 0
-
-  useEffect(() => {
-    if (!token) router.push("/auth/login")
-  }, [token, router])
-
-  if (!token) return null
 
   return (
     <Layout>
@@ -49,4 +47,14 @@ export default function LogbookRunPage() {
       </div>
     </Layout>
   )
+}
+
+// AuthGate: rendered only after hydration and only with a token (see
+// components/auth-gate.tsx); it also provides the app's one QueryClient.
+export default function LogbookRunPage() {
+    return (
+        <AuthGate>
+            <LogbookRunPageContent />
+        </AuthGate>
+    )
 }
