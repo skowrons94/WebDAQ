@@ -816,11 +816,11 @@ export function CardHolder({
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <HardDrive className="h-3.5 w-3.5" />
-                  File Bandwidth
+                  File bandwidth
                 </span>
                 <span className="font-semibold">
                   {fileBandwidth < 0.1
-                    ? `${(fileBandwidth * 1024).toFixed(2)} KB/s`
+                    ? `${(fileBandwidth * 1024).toFixed(2)} kB/s`
                     : `${fileBandwidth.toFixed(2)} MB/s`}
                 </span>
               </div>
@@ -913,7 +913,7 @@ export function CardHolder({
           return (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-semibold">DAQ Status</CardTitle>
+                <CardTitle className="text-sm font-semibold">DAQ status</CardTitle>
                 <Server className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -921,7 +921,7 @@ export function CardHolder({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <Save className="h-3.5 w-3.5" />
-                      Data Saving
+                      Data saving
                     </span>
                     <span className="flex items-center gap-1 font-semibold">
                       {dataSavingEnabled ? 'On' : 'Off'}

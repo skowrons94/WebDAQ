@@ -1,5 +1,8 @@
 "use client"
 
+import { StatusBadge } from '@/components/ui/status-badge'
+import { ConfirmAction } from '@/components/ui/confirm-action'
+import { useRunStatus } from '@/hooks/use-run-status'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,6 +30,8 @@ type BoardData = z.infer<typeof formSchema>
 type Connectivity = { connected: boolean; ready: boolean; failed: boolean }
 
 export function Board() {
+  // Removing a board mid-run would pull it out from under the acquisition.
+  const runActive = useRunStatus((st) => st.isRunning)
   const [boards, setBoards] = useState<BoardData[]>([])
   const [connectivity, setConnectivity] = useState<Record<string, Connectivity>>({})
   const { toast } = useToast()
@@ -162,10 +167,10 @@ export function Board() {
                 {boards.map((board) => {
                   const conn = connectivity[String(board.id)]
                   const status = conn?.failed
-                    ? { label: "Failed", dot: "bg-destructive", text: "text-destructive" }
+                    ? { label: "Failed", state: "error" as const }
                     : conn?.connected
-                      ? { label: "Connected", dot: "bg-success", text: "text-success" }
-                      : { label: "Disconnected", dot: "bg-gray-400", text: "text-muted-foreground" }
+                      ? { label: "Connected", state: "ready" as const }
+                      : { label: "Disconnected", state: "off" as const }
                   return (
                     <div
                       key={board.id}
@@ -181,10 +186,7 @@ export function Board() {
                             <p className="text-xs text-muted-foreground">{board.dpp}</p>
                           </div>
                         </div>
-                        <span className={`flex items-center gap-1.5 text-xs font-medium ${status.text}`}>
-                          <span className={`inline-block h-2 w-2 rounded-full ${status.dot}`} />
-                          {status.label}
-                        </span>
+                        <StatusBadge state={status.state} label={status.label} />
                       </div>
 
                       <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
@@ -198,15 +200,30 @@ export function Board() {
                         <dd className="text-right font-mono">{board.link_num}</dd>
                       </dl>
 
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-3 w-full text-destructive hover:text-destructive"
-                        onClick={() => handleRemoveBoard(board.id)}
-                      >
-                        <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-                        Remove
-                      </Button>
+                      <ConfirmAction
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="mt-3 w-full text-destructive hover:text-destructive"
+                            disabled={runActive}
+                            title={runActive ? "Boards cannot be removed while a run is going" : undefined}
+                          >
+                            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                            Remove
+                          </Button>
+                        }
+                        title={`Remove board ${board.id}?`}
+                        description={
+                          <p>
+                            Board {board.id} ({board.dpp}) leaves the DAQ configuration and the next
+                            run does not read it. Its energy calibration file is deleted, so the
+                            board has to be calibrated again if it is added back.
+                          </p>
+                        }
+                        confirmLabel={`Remove board ${board.id}`}
+                        onConfirm={() => handleRemoveBoard(board.id)}
+                      />
                     </div>
                   )
                 })}
@@ -221,7 +238,7 @@ export function Board() {
         {/* Add a new board */}
         <Card className="w-full mx-auto" ref={addFormRef}>
           <CardHeader>
-            <CardTitle>Add CAEN Board</CardTitle>
+            <CardTitle>Add a CAEN board</CardTitle>
             <CardDescription>Enter the details of the CAEN board you want to add.</CardDescription>
           </CardHeader>
           <CardContent>

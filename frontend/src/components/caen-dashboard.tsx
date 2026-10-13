@@ -1669,7 +1669,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                     checked={channelEnabled[ch] ?? false}
                     onCheckedChange={enabled => handleChannelToggle(ch, enabled)}
                   />
-                  <Badge variant={channelEnabled[ch] ? "default" : "secondary"} className="text-xs px-2">
+                  <Badge variant={channelEnabled[ch] ? "default" : "secondary"} className={channelEnabled[ch] ? "border-transparent bg-info px-2 text-xs text-info-foreground hover:bg-info/90" : "px-2 text-xs"}>
                     {channelEnabled[ch] ? "ON" : "OFF"}
                   </Badge>
                 </div>

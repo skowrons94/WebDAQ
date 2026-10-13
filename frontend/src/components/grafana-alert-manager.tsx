@@ -1,5 +1,6 @@
 'use client'
 
+import { EmptyState, ErrorState } from '@/components/ui/empty-state'
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { Bell, BellOff, Check, ExternalLink, Pencil, RefreshCw, Shield, X, Zap } from 'lucide-react'
@@ -304,26 +305,25 @@ export default function GrafanaAlertManager() {
           </CardContent>
         </Card>
       ) : error ? (
-        <Card className="border-destructive">
-          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-            <p className="text-lg font-bold text-destructive">Connection Error</p>
-            <p className="text-sm text-muted-foreground">{error}</p>
-            <div className="flex gap-2">
+        <ErrorState
+          title="Grafana could not be reached"
+          action={
+            <>
               <Button onClick={() => loadAlerts()} variant="outline" size="sm">
                 Retry
               </Button>
               <Button variant="outline" size="sm" asChild>
                 <Link href="/settings?view=grafana">Grafana settings</Link>
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+            </>
+          }
+        >
+          {error}
+        </ErrorState>
       ) : filteredAlerts.length === 0 ? (
-        <Card>
-          <CardContent className="py-16 text-center text-muted-foreground">
-            No alerts found{search ? ` matching "${search}"` : ''}.
-          </CardContent>
-        </Card>
+        <EmptyState title={search ? `No Grafana alerts match "${search}"` : 'No Grafana alerts'}>
+          Alert rules are defined in Grafana; the ones it reports appear here.
+        </EmptyState>
       ) : (
         <Card>
           <CardContent className="p-0">
@@ -416,6 +416,7 @@ export default function GrafanaAlertManager() {
                                 className="h-7 w-7"
                                 onClick={() => handleThresholdSave(alert.uid)}
                                 disabled={isPending}
+                                aria-label="Save threshold"
                               >
                                 <Check className="h-3.5 w-3.5 text-success" />
                               </Button>
@@ -424,6 +425,7 @@ export default function GrafanaAlertManager() {
                                 variant="ghost"
                                 className="h-7 w-7"
                                 onClick={() => setEditingUid(null)}
+                                aria-label="Cancel editing"
                               >
                                 <X className="h-3.5 w-3.5 text-muted-foreground" />
                               </Button>
@@ -440,6 +442,7 @@ export default function GrafanaAlertManager() {
                                   setEditingUid(alert.uid)
                                   setEditingValue(alert.threshold!.toString())
                                 }}
+                                aria-label={`Edit the threshold of ${alert.title ?? 'this alert'}`}
                               >
                                 <Pencil className="h-3 w-3" />
                               </Button>
@@ -458,6 +461,8 @@ export default function GrafanaAlertManager() {
                                 : 'text-muted-foreground'
                             }`}
                             onClick={() => toggleAutoManage(alert.uid)}
+                            aria-pressed={isAuto}
+                            aria-label="Auto-manage with the run"
                             title={
                               isAuto
                                 ? 'Remove from auto-manage'

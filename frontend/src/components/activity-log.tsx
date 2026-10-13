@@ -1,5 +1,6 @@
 'use client'
 
+import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useCallback, useEffect, useState } from 'react'
 import {
   CheckCheck, Loader2, MailWarning, RefreshCw, Trash2, Wrench,
@@ -198,36 +199,37 @@ export default function ActivityLog() {
                 <CheckCheck className="mr-1.5 h-3.5 w-3.5" />
                 Mark all read
               </Button>
-              {confirmClear ? (
-                <span className="flex items-center gap-1">
-                  <Button variant="destructive" size="sm"
-                          onClick={async () => {
-                            try {
-                              const { removed } = await clearAlertEvents()
-                              await refresh()
-                              toast({ title: `Deleted ${removed} event(s)` })
-                            } catch {
-                              toast({ title: 'Nothing was deleted',
-                                      description: 'The DAQ server did not answer.',
-                                      variant: 'destructive' })
-                            } finally {
-                              setConfirmClear(false)
-                            }
-                          }}>
-                    Delete all {summary?.total ?? 0}
+              <ConfirmAction
+                open={confirmClear}
+                onOpenChange={setConfirmClear}
+                trigger={
+                  <Button variant="ghost" size="sm" className="text-destructive"
+                          title="Delete the whole history"
+                          aria-label="Delete the whole history"
+                          disabled={!summary?.total}>
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setConfirmClear(false)}>
-                    Cancel
-                  </Button>
-                </span>
-              ) : (
-                <Button variant="ghost" size="sm" className="text-destructive"
-                        title="Delete the whole history"
-                        disabled={!summary?.total}
-                        onClick={() => setConfirmClear(true)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              )}
+                }
+                title={`Delete all ${summary?.total ?? 0} events?`}
+                description={
+                  <p>
+                    The whole alert history is deleted from the DAQ server: what happened
+                    overnight cannot be looked up afterwards. Alerts keep working.
+                  </p>
+                }
+                confirmLabel={`Delete all ${summary?.total ?? 0}`}
+                onConfirm={async () => {
+                  try {
+                    const { removed } = await clearAlertEvents()
+                    await refresh()
+                    toast({ title: `Deleted ${removed} event(s)` })
+                  } catch {
+                    toast({ title: 'Nothing was deleted',
+                            description: 'The DAQ server did not answer.',
+                            variant: 'destructive' })
+                  }
+                }}
+              />
             </div>
           </div>
         </CardHeader>

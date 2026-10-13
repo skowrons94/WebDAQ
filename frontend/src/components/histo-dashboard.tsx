@@ -1,5 +1,6 @@
 "use client"
 
+import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { getBoardConfiguration, getHistogram, setRebinFactor } from "@/lib/api"
 // The dashboard's configuration lives on the DAQ server (conf/histograms.json).
@@ -305,10 +306,18 @@ const ROIDialog = ({ isOpen, onClose, histogramId, roi, onSave, onDelete }: ROID
           <div className="flex justify-between w-full">
             <div>
               {roi && onDelete && (
-                <Button variant="destructive" onClick={handleDelete}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
+                <ConfirmAction
+                  trigger={
+                    <Button variant="destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  }
+                  title={`Delete the ROI "${roi.name}"?`}
+                  description={<p>The region and its integral leave this histogram and the overview cards. The spectrum is not affected.</p>}
+                  confirmLabel="Delete ROI"
+                  onConfirm={handleDelete}
+                />
               )}
             </div>
             <div className="flex gap-2">
@@ -447,10 +456,18 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
           <div className="flex justify-between w-full">
             <div>
               {histogram && onDelete && (
-                <Button variant="destructive" onClick={handleDelete}>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Delete
-                </Button>
+                <ConfirmAction
+                  trigger={
+                    <Button variant="destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  }
+                  title={`Delete the histogram "${histogram.label}"?`}
+                  description={<p>The plot and all its ROIs are removed from the dashboard. The data being acquired is not affected; the histogram can be added again.</p>}
+                  confirmLabel="Delete histogram"
+                  onConfirm={handleDelete}
+                />
               )}
             </div>
             <div className="flex gap-2">

@@ -1,5 +1,6 @@
 'use client'
 
+import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -151,19 +152,23 @@ export function MetricsSettings() {
                                                 </div>
                                             </div>
                                         </div>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            onClick={() => {
+                                        <ConfirmAction
+                                            trigger={
+                                                <Button variant="ghost" size="icon" aria-label={`Remove ${metric.metricName}`}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            }
+                                            title={`Remove ${metric.metricName}?`}
+                                            description={<p>Its card leaves the dashboard. The metric itself is not touched and can be added again.</p>}
+                                            confirmLabel="Remove metric"
+                                            onConfirm={() => {
                                                 removeMetric(metric.id)
                                                 toast({
-                                                    title: "Metric Removed",
+                                                    title: "Metric removed",
                                                     description: `${metric.metricName} has been removed from your dashboard.`
                                                 })
                                             }}
-                                        >
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        />
                                     </div>
                                 ))}
                             </div>

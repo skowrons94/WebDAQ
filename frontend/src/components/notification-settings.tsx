@@ -1,5 +1,6 @@
 'use client'
 
+import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useEffect, useState } from 'react'
 import {
   Bell, CheckCircle, Loader2, Plug, Plus, Trash2, XCircle,
@@ -480,10 +481,23 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
             </Badge>
           )}
         </div>
-        <Button variant="ghost" size="sm" className="text-destructive" disabled={busy}
-                onClick={onDelete}>
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <ConfirmAction
+          trigger={
+            <Button variant="ghost" size="icon" className="text-destructive" disabled={busy}
+                    aria-label={`Delete the alert "${rule.name}"`} title="Delete this alert">
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          }
+          title={`Delete the alert "${rule.name}"?`}
+          description={
+            <p>
+              Nobody is notified for this condition ({rule.type}) any more, and its
+              settings are lost. To pause it instead, switch it off.
+            </p>
+          }
+          confirmLabel="Delete alert"
+          onConfirm={onDelete}
+        />
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
