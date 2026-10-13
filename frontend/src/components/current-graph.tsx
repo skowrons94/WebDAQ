@@ -284,7 +284,7 @@ export default function CurrentGraph({
         {summary && (
           <div className="flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-baseline gap-2">
-              <span className="text-sm font-medium">Current on Target</span>
+              <span className="text-sm font-medium">Current on target</span>
               <span className="text-xs text-muted-foreground">({unit})</span>
             </div>
             {historyControl}

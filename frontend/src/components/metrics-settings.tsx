@@ -27,7 +27,7 @@ export function MetricsSettings() {
             const parsedMultiplier = Number(newMetric.multiplier);
             if (isNaN(parsedMultiplier)) {
                 toast({
-                    title: "Invalid Multiplier",
+                    title: "Invalid multiplier",
                     description: "Please enter a valid number for the multiplier.",
                     variant: "destructive"
                 });
@@ -47,7 +47,7 @@ export function MetricsSettings() {
                 multiplier: '1'
             });
             toast({
-                title: "Metric Added",
+                title: "Metric added",
                 description: `${newMetric.metricName} has been added to your dashboard.`
             });
         }
@@ -56,7 +56,7 @@ export function MetricsSettings() {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Metrics Configuration</CardTitle>
+                <CardTitle>Metrics configuration</CardTitle>
                 <CardDescription>Add and manage metrics to be shown in your dashboard.</CardDescription>
             </CardHeader>
             <CardContent>
@@ -65,7 +65,7 @@ export function MetricsSettings() {
                     <div className="space-y-4">
                         <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <Label htmlFor="entityName">Entity Name</Label>
+                                <Label htmlFor="entityName">Entity name</Label>
                                 <Input
                                     id="entityName"
                                     value={newMetric.entityName}
@@ -74,7 +74,7 @@ export function MetricsSettings() {
                                 />
                             </div>
                             <div>
-                                <Label htmlFor="metricName">Metric Name</Label>
+                                <Label htmlFor="metricName">Metric name</Label>
                                 <Input
                                     id="metricName"
                                     value={newMetric.metricName}
@@ -105,7 +105,7 @@ export function MetricsSettings() {
 
                         <div className="space-y-4">
                             <div>
-                                <Label>Refresh Interval (seconds)</Label>
+                                <Label>Refresh interval (seconds)</Label>
                                 <Slider
                                     value={[newMetric.refreshInterval]}
                                     onValueChange={(value) => setNewMetric({ ...newMetric, refreshInterval: value[0] })}
@@ -126,7 +126,7 @@ export function MetricsSettings() {
                     {/* Existing Metrics List */}
                     {metrics.length > 0 && (
                         <div className="mt-8">
-                            <h3 className="text-lg font-semibold mb-4">Added Metrics</h3>
+                            <h3 className="text-lg font-semibold mb-4">Added metrics</h3>
                             <div className="space-y-3">
                                 {metrics.map((metric) => (
                                     <div key={metric.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">

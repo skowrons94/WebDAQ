@@ -16,7 +16,7 @@ export function VisualizationSettings() {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Visualization Settings</CardTitle>
+                <CardTitle>Visualization settings</CardTitle>
                 <CardDescription>
                     Customize how the main dashboard is displayed
                 </CardDescription>
@@ -44,7 +44,7 @@ export function VisualizationSettings() {
                     </div>
                     <div className="flex items-center justify-between p-2">
                         <div className="flex flex-col">
-                            <Label htmlFor="currentEnabled">Enable Current Acquisition</Label>
+                            <Label htmlFor="currentEnabled">Enable current acquisition</Label>
                             <span className="text-xs text-muted-foreground">
                                 When off, the current plot, device card and charge cards are hidden and the picoammeter is not started with a run
                             </span>
@@ -57,7 +57,7 @@ export function VisualizationSettings() {
                     </div>
                     <p className="text-xl font-bold">Show/Hide tabs</p>
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showStats">Show Stats</Label>
+                        <Label htmlFor="showStats">Show stats</Label>
                         <Switch
                             id="showStats"
                             checked={settings.showStats}
@@ -66,7 +66,7 @@ export function VisualizationSettings() {
                     </div>
 
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showHistograms">Show Histograms</Label>
+                        <Label htmlFor="showHistograms">Show histograms</Label>
                         <Switch
                             id="showHistograms"
                             checked={settings.showHistograms}
@@ -75,7 +75,7 @@ export function VisualizationSettings() {
                     </div>
 
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showWaveforms">Show Waveforms</Label>
+                        <Label htmlFor="showWaveforms">Show waveforms</Label>
                         <Switch
                             id="showWaveforms"
                             checked={settings.showWaveforms}
@@ -94,7 +94,7 @@ export function VisualizationSettings() {
                     <p className="text-lg font-bold">Show/Hide cards in dashboard</p>
 
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showStatus">Show Run status</Label>
+                        <Label htmlFor="showStatus">Show run status</Label>
                         <Switch
                             id="showStatus"
                             checked={settings.showStatus}
@@ -102,7 +102,7 @@ export function VisualizationSettings() {
                         />
                     </div>
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showCurrent">Show Current and Accumulated charge</Label>
+                        <Label htmlFor="showCurrent">Show current and accumulated charge</Label>
                         <Switch
                             id="showCurrent"
                             checked={settings.showCurrent}
@@ -110,7 +110,7 @@ export function VisualizationSettings() {
                         />
                     </div>
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showROIs">Show Monitored ROIs</Label>
+                        <Label htmlFor="showROIs">Show monitored ROIs</Label>
                         <Switch
                             id="showROIs"
                             checked={settings.showROIs}
@@ -118,7 +118,7 @@ export function VisualizationSettings() {
                         />
                     </div>
                     <div className="flex items-center justify-between p-2">
-                        <Label htmlFor="showMetrics">Show Monitored Metrics</Label>
+                        <Label htmlFor="showMetrics">Show monitored metrics</Label>
                         <Switch
                             id="showMetrics"
                             checked={settings.showMetrics}

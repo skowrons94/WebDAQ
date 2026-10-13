@@ -135,7 +135,7 @@ export function BeamControlPanel({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>Beam Control position</DropdownMenuLabel>
+          <DropdownMenuLabel>Beam control position</DropdownMenuLabel>
           <DropdownMenuRadioGroup
             value={placement}
             onValueChange={(value) => onPlacementChange(value as BeamPanelPlacement)}
@@ -154,7 +154,7 @@ export function BeamControlPanel({
 
   return (
     <CurrentGraph
-      title="Beam Control"
+      title="Beam control"
       description={null}
       summary={summary}
       headerActions={headerActions}

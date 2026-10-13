@@ -182,7 +182,7 @@ export function Stats() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div>
-            <CardTitle className="text-sm font-semibold">Graphite Server Configuration</CardTitle>
+            <CardTitle className="text-sm font-semibold">Graphite server configuration</CardTitle>
           </div>
           <Button
             variant="outline"
@@ -196,7 +196,7 @@ export function Stats() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="stats-graphite-host">Graphite Host</Label>
+                <Label htmlFor="stats-graphite-host">Graphite host</Label>
                 <Input
                   id="stats-graphite-host"
                   value={graphiteHost}
@@ -205,7 +205,7 @@ export function Stats() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="stats-graphite-port">Graphite Port</Label>
+                <Label htmlFor="stats-graphite-port">Graphite port</Label>
                 <Input
                   id="stats-graphite-port"
                   value={graphitePort}

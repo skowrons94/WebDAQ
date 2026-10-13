@@ -257,11 +257,11 @@ const ROIDialog = ({ isOpen, onClose, histogramId, roi, onSave, onDelete }: ROID
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="roi-low">Low Value</Label>
+              <Label htmlFor="roi-low">Low value</Label>
               <Input id="roi-low" type="number" value={low} onChange={(e) => setLow(Number(e.target.value))} />
             </div>
             <div className="flex flex-col gap-2">
-              <Label htmlFor="roi-high">High Value</Label>
+              <Label htmlFor="roi-high">High value</Label>
               <Input id="roi-high" type="number" value={high} onChange={(e) => setHigh(Number(e.target.value))} />
             </div>
           </div>
@@ -438,7 +438,7 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="custom-label">Custom Label</Label>
+            <Label htmlFor="custom-label">Custom label</Label>
             <Input
               id="custom-label"
               value={customLabel}
@@ -1134,7 +1134,7 @@ export default function EnhancedHistogramDashboard() {
     useHistogramStore.getState().clearZoom()
 
     toast({
-      title: "Zoom Reset",
+      title: "Zoom reset",
       description: "All histograms have been reset to default zoom.",
     })
   }
@@ -1189,11 +1189,11 @@ export default function EnhancedHistogramDashboard() {
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={addHistogram} variant="outline">
               <Plus className="h-4 w-4 mr-2" />
-              Add Histogram
+              Add histogram
             </Button>
             <Button onClick={resetAllZoom} variant="outline">
               <RotateCcw className="h-4 w-4 mr-2" />
-              Reset Zoom
+              Reset zoom
             </Button>
             <Button
               onClick={() => saveDashboardSettings({ ...dashboardSettings, isLogScale: !dashboardSettings.isLogScale })}
@@ -1246,12 +1246,12 @@ export default function EnhancedHistogramDashboard() {
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <div className="text-muted-foreground mb-4">
               <Grid2X2 className="h-12 w-12 mx-auto mb-2" />
-              <h3 className="text-lg font-semibold">No Histograms Added</h3>
-              <p className="text-sm">Click "Add Histogram" to get started with your dashboard.</p>
+              <h3 className="text-lg font-semibold">No histograms added</h3>
+              <p className="text-sm">Click "Add histogram" to get started with your dashboard.</p>
             </div>
             <Button onClick={addHistogram}>
               <Plus className="h-4 w-4 mr-2" />
-              Add Your First Histogram
+              Add your first histogram
             </Button>
           </div>
         )}
@@ -1309,12 +1309,12 @@ export default function EnhancedHistogramDashboard() {
         <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Dashboard Settings</DialogTitle>
+              <DialogTitle>Dashboard settings</DialogTitle>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex flex-col gap-2">
-                  <Label>Grid Columns</Label>
+                  <Label>Grid columns</Label>
                   <Slider
                     value={[dashboardSettings.gridCols]}
                     onValueChange={(value) => saveDashboardSettings({ ...dashboardSettings, gridCols: value[0] })}
@@ -1326,7 +1326,7 @@ export default function EnhancedHistogramDashboard() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label>Update Interval (ms)</Label>
+                  <Label>Update interval (ms)</Label>
                   <Input
                     type="number"
                     value={dashboardSettings.updateInterval}
@@ -1345,7 +1345,7 @@ export default function EnhancedHistogramDashboard() {
 
               {/* Rebin Factor in Settings */}
               <div className="flex flex-col gap-2">
-                <Label>Rebin Factor</Label>
+                <Label>Rebin factor</Label>
                 <Input
                   type="number"
                   value={dashboardSettings.rebinFactor}
@@ -1367,7 +1367,7 @@ export default function EnhancedHistogramDashboard() {
                       saveDashboardSettings({ ...dashboardSettings, isLogScale: checked as boolean })
                     }
                   />
-                  <Label>Logarithmic Scale</Label>
+                  <Label>Logarithmic scale</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -1377,7 +1377,7 @@ export default function EnhancedHistogramDashboard() {
                       saveDashboardSettings({ ...dashboardSettings, showLabels: checked as boolean })
                     }
                   />
-                  <Label>Show Labels</Label>
+                  <Label>Show labels</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -1397,7 +1397,7 @@ export default function EnhancedHistogramDashboard() {
                       saveDashboardSettings({ ...dashboardSettings, showIntegrals: checked as boolean })
                     }
                   />
-                  <Label>Show Integrals</Label>
+                  <Label>Show integrals</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -1407,7 +1407,7 @@ export default function EnhancedHistogramDashboard() {
                       saveDashboardSettings({ ...dashboardSettings, autoUpdate: checked as boolean })
                     }
                   />
-                  <Label>Auto Update</Label>
+                  <Label>Auto update</Label>
                 </div>
               </div>
             </div>

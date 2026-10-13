@@ -31,7 +31,7 @@ export default function LoginPage() {
     const handleLogin = async (data: { username?: string; password?: string }) => {
         if (!data.username || !data.password) {
             toast({
-                title: 'Login Failed',
+                title: 'Login failed',
                 description: 'Username and Password are required.',
                 variant: 'destructive',
             });
@@ -45,7 +45,7 @@ export default function LoginPage() {
             // Only the message: the error object carries the request, password included.
             console.error('Login error:', (error as Error)?.message ?? 'unknown error');
             toast({
-                title: 'Login Failed',
+                title: 'Login failed',
                 description: 'Please check your credentials and try again.',
                 variant: 'destructive',
             });

@@ -194,7 +194,7 @@ export function RunControl() {
               // beam chart. Tablet and desktop order unchanged.
               'order-1 grid h-full gap-4 md:order-2 xl:order-1',
               beamPlacement === 'beside-controls'
-                ? 'grid-rows-[auto_1fr]'
+                ? 'grid-rows-[auto_auto_1fr]'
                 : 'xl:grid-cols-[minmax(0,2fr)_minmax(22rem,1fr)] xl:items-start',
             )}>
               <RunControlButtons
@@ -211,6 +211,10 @@ export function RunControl() {
                 onIsRunningChange={setIsRunning}
                 onRunNumberChange={setRunNumberState}
               />
+
+              {/* Each recent run one click from its Logbook page, right under
+                  the run controls (it was at the very bottom of the page). */}
+              <RecentRuns />
 
               <DAQState
                 runNumber={runNumber}
@@ -233,8 +237,6 @@ export function RunControl() {
             {beamSlot('beside-controls', 'order-2 h-full md:order-1 xl:order-2')}
           </div>
 
-          {/* Each recent run one click from its Logbook page. */}
-          <RecentRuns />
       </div>
     </div>
   )

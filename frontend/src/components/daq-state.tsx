@@ -269,7 +269,7 @@ export function DAQState({
       <Dialog open={showParametersDialog} onOpenChange={setShowParametersDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Adjust Acquisition Parameters</DialogTitle>
+            <DialogTitle>Adjust acquisition parameters</DialogTitle>
             <DialogDescription>
               Set the acquisition parameters for the DAQ.
             </DialogDescription>
@@ -278,7 +278,7 @@ export function DAQState({
           <div className="flex flex-col gap-4">
             {/* Run Number Input */}
             <div className="grid grid-cols-1 items-center gap-4">
-              <Label htmlFor="runNumber">Run Number</Label>
+              <Label htmlFor="runNumber">Run number</Label>
               <Input
                 id="runNumber"
                 type="number"
@@ -304,7 +304,7 @@ export function DAQState({
                 onCheckedChange={handleSaveDataChange}
                 disabled={isRunning}
               />
-              <Label htmlFor="saveData">Save Data</Label>
+              <Label htmlFor="saveData">Save data</Label>
             </div>
             
             {/* Limit File Size Checkbox */}
@@ -315,13 +315,13 @@ export function DAQState({
                 onCheckedChange={handleLimitFileSizeChange}
                 disabled={isRunning}
               />
-              <Label htmlFor="limitFileSize">Limit File Size</Label>
+              <Label htmlFor="limitFileSize">Limit file size</Label>
             </div>
             
             {/* File Size Limit Input (conditional) */}
             {limitFileSize && (
               <div className="flex flex-col gap-2">
-                <Label htmlFor="fileSizeLimit">File Size Limit (MB)</Label>
+                <Label htmlFor="fileSizeLimit">File size limit (MB)</Label>
                 <Input
                   id="fileSizeLimit"
                   type="number"
@@ -384,7 +384,7 @@ export function DAQState({
 
               {autoRestartEnabled && (
                 <div className="flex flex-col gap-2">
-                  <Label htmlFor="autoRestartDelay">Restart Delay (seconds)</Label>
+                  <Label htmlFor="autoRestartDelay">Restart delay (seconds)</Label>
                   <Input
                     id="autoRestartDelay"
                     type="number"

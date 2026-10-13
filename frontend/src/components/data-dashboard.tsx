@@ -171,7 +171,7 @@ function CurrentTab({ runNumber }: { runNumber: number }) {
     <div className="space-y-6">
       {/* Integrated charge — the headline number */}
       <div>
-        <h4 className="text-sm font-semibold mb-1">Integrated Charge</h4>
+        <h4 className="text-sm font-semibold mb-1">Integrated charge</h4>
         <p className="text-xs text-muted-foreground mb-3">
           Trapezoidal integration of the measured current over{" "}
           {formatDuration(data.integration?.duration_s ?? null)}, computed on all{" "}
@@ -203,7 +203,7 @@ function CurrentTab({ runNumber }: { runNumber: number }) {
       {/* The current itself */}
       <div>
         <div className="flex items-baseline justify-between mb-3">
-          <h4 className="text-sm font-semibold">Beam Current</h4>
+          <h4 className="text-sm font-semibold">Beam current</h4>
           <span className="text-xs text-muted-foreground">
             {data.downsampled
               ? `showing ${chartData.length.toLocaleString()} of ${data.n_samples.toLocaleString()} samples`
@@ -328,7 +328,7 @@ function StatsTab({ runNumber }: { runNumber: number }) {
   return (
     <div className="space-y-4">
       <div className="flex items-baseline justify-between">
-        <h4 className="text-sm font-semibold">Monitored Metrics</h4>
+        <h4 className="text-sm font-semibold">Monitored metrics</h4>
         <span className="text-xs text-muted-foreground">
           {data.downsampled
             ? `showing ${series[0].points.length.toLocaleString()} of `
@@ -449,7 +449,7 @@ function BoardsTab({ detail }: { detail: RunDetail }) {
       {detail.board_configs.length > 0 && (
         <div>
           <div className="flex items-baseline justify-between gap-4 mb-1">
-            <h4 className="text-sm font-semibold">Register Configuration</h4>
+            <h4 className="text-sm font-semibold">Register configuration</h4>
             <Input
               value={filter}
               onChange={e => setFilter(e.target.value)}
@@ -1123,7 +1123,7 @@ function RunDetailTabs({
           <TabsList className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl p-1 sm:grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="notes">Notes</TabsTrigger>
-            <TabsTrigger value="current">Beam Current</TabsTrigger>
+            <TabsTrigger value="current">Beam current</TabsTrigger>
             <TabsTrigger value="stats">Stats</TabsTrigger>
             <TabsTrigger value="boards">Boards</TabsTrigger>
             <TabsTrigger value="convert">Convert</TabsTrigger>
@@ -1172,7 +1172,7 @@ function RunDetailTabs({
       <Tabs defaultValue="overview">
         <TabsList className="grid w-full max-w-2xl grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="current">Beam Current</TabsTrigger>
+          <TabsTrigger value="current">Beam current</TabsTrigger>
           <TabsTrigger value="stats">Stats</TabsTrigger>
           <TabsTrigger value="boards">Boards</TabsTrigger>
           <TabsTrigger value="convert">Convert</TabsTrigger>

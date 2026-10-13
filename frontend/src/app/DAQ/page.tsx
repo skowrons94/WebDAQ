@@ -25,7 +25,7 @@ function DaqPageContent() {
             <TabsList>
                 <TabsTrigger value="caen">Configuration</TabsTrigger>
                 <TabsTrigger value="calibration">Calibration</TabsTrigger>
-                <TabsTrigger value="hardware">Hardware Info</TabsTrigger>
+                <TabsTrigger value="hardware">Hardware info</TabsTrigger>
               </TabsList>
             </div>
           <TabsContent value="caen">

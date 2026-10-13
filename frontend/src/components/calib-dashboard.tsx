@@ -98,7 +98,7 @@ export default function CalibrationDashboard() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Calibration Dashboard</h1>
+      <h1 className="text-2xl font-bold mb-4">Calibration dashboard</h1>
       {boards.map((board) => (
         <Card key={board.id} className="mb-4">
           <CardHeader>

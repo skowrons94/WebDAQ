@@ -41,7 +41,7 @@ export function Logbook() {
 
     return (
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6">
-            <h1 className="text-3xl font-bold mb-4">Experiment Logbook</h1>
+            <h1 className="text-3xl font-bold mb-4">Experiment logbook</h1>
             <p className="mb-4 text-sm text-muted-foreground">
                 Select a run number to open its complete logbook entry, including saved data and acquisition provenance.
             </p>

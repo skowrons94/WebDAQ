@@ -264,7 +264,7 @@ export default function PSDDashboard() {
                         onCheckedChange={(checked: boolean) => handleSelectAllChannels(board.id, checked)}
                       />
                       <Label htmlFor={`select-all-${board.id}`} className="text-sm font-medium">
-                        Select All Channels
+                        Select all channels
                       </Label>
                     </div>
                     <div className="text-sm text-muted-foreground">

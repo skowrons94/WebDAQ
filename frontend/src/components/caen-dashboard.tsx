@@ -406,13 +406,13 @@ export default function Dashboard() {
           boards share a time origin. Keep them in their own sub-dashboards. */}
       <Tabs defaultValue="boards">
         <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger value="boards">Board Settings</TabsTrigger>
+          <TabsTrigger value="boards">Board settings</TabsTrigger>
           <TabsTrigger value="sync">Synchronization</TabsTrigger>
         </TabsList>
 
         <TabsContent value="boards" className="space-y-6">
           <div>
-            <Label className="text-lg font-semibold">Select Board</Label>
+            <Label className="text-lg font-semibold">Select board</Label>
             <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
               <SelectTrigger className="w-full max-w-md">
                 <SelectValue placeholder="Select a board..." />
@@ -584,7 +584,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
     <Card className={chained ? "border-success/50" : undefined}>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
-          Acquisition Control
+          Acquisition control
           <Badge variant={chained ? "default" : "secondary"}>
             {chained ? "Synchronised" : "Independent"}
           </Badge>
@@ -1655,7 +1655,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       {/* ── Channel Enable ── */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle>Channel Enable</CardTitle>
+          <CardTitle>Channel enable</CardTitle>
         </CardHeader>
         <CardContent>
           {channels.length === 0 ? (
@@ -1683,7 +1683,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       {uniqueTriggerNames.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle>Trigger Settings</CardTitle>
+            <CardTitle>Trigger settings</CardTitle>
           </CardHeader>
           <CardContent>
             {enabledChannels.length === 0 ? (
@@ -1739,8 +1739,8 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       {/* ── General / Channel tabs ── */}
       <Tabs defaultValue="general">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="general">General Settings</TabsTrigger>
-          <TabsTrigger value="channels">Channel Settings</TabsTrigger>
+          <TabsTrigger value="general">General settings</TabsTrigger>
+          <TabsTrigger value="channels">Channel settings</TabsTrigger>
         </TabsList>
 
         {/* Board Settings */}
@@ -1758,7 +1758,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                 <Card>
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2">
-                      Board Settings
+                      Board settings
                       <Badge variant="outline" className="text-xs font-normal">
                         Essential settings
                       </Badge>
@@ -1789,7 +1789,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2">
-                  Board Settings
+                  Board settings
                   <Badge variant="outline" className="text-xs font-normal">All registers</Badge>
                 </CardTitle>
               </CardHeader>
@@ -1833,7 +1833,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               {channels.length > 1 && (
                 <Card className="border-dashed">
                   <CardHeader className="pb-3">
-                    <CardTitle>Copy Channel Settings</CardTitle>
+                    <CardTitle>Copy channel settings</CardTitle>
                     <p className="text-sm text-muted-foreground">
                       Copy every setting from one channel onto others. Values are written to
                       the board immediately.

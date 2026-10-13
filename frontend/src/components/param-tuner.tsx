@@ -750,7 +750,7 @@ export default function ParamTuner() {
                   onCheckedChange={handleDualTraceToggle}
                 />
                 <Label htmlFor="dual-trace-switch" className="text-sm cursor-pointer">
-                  Dual Trace
+                  Dual trace
                 </Label>
               </div>
               <div className="flex flex-wrap items-center gap-4">
@@ -793,7 +793,7 @@ export default function ParamTuner() {
                   </div>
                 )}
                 <div className="flex items-center gap-2">
-                  <Label className="text-sm w-28">Digital Probe:</Label>
+                  <Label className="text-sm w-28">Digital probe:</Label>
                   <Select
                     value={digitalProbeVal.toString()}
                     onValueChange={v => handleDigitalProbeChange(parseInt(v))}
@@ -827,7 +827,7 @@ export default function ParamTuner() {
             {/* Trigger Settings */}
             <div>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Trigger Settings
+                Trigger settings
               </h4>
               <div className="space-y-3">
                 {triggerRegs.length > 0 ? (
@@ -845,7 +845,7 @@ export default function ParamTuner() {
             {/* Trapezoid Settings */}
             <div>
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-                Trapezoid Settings
+                Trapezoid settings
               </h4>
               <div className="space-y-3">
                 {trapezoidRegs.length > 0 ? (
@@ -857,7 +857,7 @@ export default function ParamTuner() {
                 )}
                 {dppCtrlReg && (
                   <div className="flex items-center gap-3 pt-1">
-                    <Label className="text-sm w-44 shrink-0">Invert Input</Label>
+                    <Label className="text-sm w-44 shrink-0">Invert input</Label>
                     <Switch checked={invertInput} onCheckedChange={handleInvertInputToggle} />
                   </div>
                 )}

@@ -311,11 +311,14 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                                 <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
                                     {rest.map((cell) => {
                                         const meta = cell.column.columnDef.meta as { label?: string } | undefined
-                                        const label = meta?.label ?? COLUMN_LABELS[cell.column.id] ?? cell.column.id
+                                        const raw = meta?.label ?? COLUMN_LABELS[cell.column.id] ?? cell.column.id
+                                        // Sentence case on the card ("Start time"), acronyms kept (TV, PV).
+                                        const label = raw.split(' ').map((w: string, i: number) =>
+                                            i === 0 || w === w.toUpperCase() ? w : w.toLowerCase()).join(' ')
                                         return (
                                             <div key={cell.id} className="contents">
                                                 <dt className="text-muted-foreground">{label}</dt>
-                                                <dd className="min-w-0 break-words [&>*]:!min-w-0 [&>*]:!w-auto">
+                                                <dd className="min-w-0 break-words text-left [&>*]:!min-w-0 [&>*]:!w-auto [&_*]:!text-left [&_*]:!justify-start">
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </dd>
                                             </div>
@@ -408,7 +411,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                         value={String(table.getState().pagination.pageSize)}
                         onValueChange={(v) => table.setPageSize(Number(v))}
                     >
-                        <SelectTrigger className="h-8 w-24">
+                        <SelectTrigger className="h-8 w-32" aria-label="Runs per page">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

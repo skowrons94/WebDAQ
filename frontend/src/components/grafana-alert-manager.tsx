@@ -188,7 +188,7 @@ export default function GrafanaAlertManager() {
                 <Shield className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle>Alert Manager</CardTitle>
+                <CardTitle>Alert manager</CardTitle>
                 <p className="text-sm text-muted-foreground">Grafana Alert Control Panel</p>
               </div>
             </div>

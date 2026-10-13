@@ -382,7 +382,7 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
 
             return (
                 <Select value={flag} onValueChange={handleFlagChange}>
-                    <SelectTrigger className={`w-24 h-8 ${flagClass}`}>
+                    <SelectTrigger className={`h-8 w-auto min-w-[6.5rem] gap-2 ${flagClass}`} aria-label={`Quality flag of run ${row.original.run_number}`}>
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -522,7 +522,7 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                     <Dialog open={open} onOpenChange={setOpen}>
                         <DialogContent className="sm:max-w-md">
                             <DialogHeader>
-                                <DialogTitle>Edit Run Metadata</DialogTitle>
+                                <DialogTitle>Edit run metadata</DialogTitle>
                                 <DialogDescription>
                                     Update the metadata for run #{data.run_number}
                                 </DialogDescription>

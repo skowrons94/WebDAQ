@@ -150,7 +150,7 @@ export default function BoardInfoPanel() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Acquisition Provenance</h3>
+          <h3 className="text-lg font-semibold">Acquisition provenance</h3>
           <p className="text-sm text-muted-foreground">
             Recorded with every run, and written to <span className="font-mono">metadata.json</span>{" "}
             next to the data.

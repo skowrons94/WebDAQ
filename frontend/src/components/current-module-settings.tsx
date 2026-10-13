@@ -374,7 +374,7 @@ export function CurrentModuleSettings() {
       {/* Module Selection */}
       <Card>
         <CardHeader>
-          <CardTitle>Current Measurement Module</CardTitle>
+          <CardTitle>Current measurement module</CardTitle>
           <CardDescription>
             Select where the beam current is read from — a picoammeter, or a value
             already monitored in Graphite
@@ -383,7 +383,7 @@ export function CurrentModuleSettings() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <Label htmlFor="module-select">Active Module</Label>
+              <Label htmlFor="module-select">Active module</Label>
               <Select
                 value={moduleType}
                 onValueChange={handleSwitchModule}
@@ -423,7 +423,7 @@ export function CurrentModuleSettings() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="tetramm">TetrAMM Settings</TabsTrigger>
           <TabsTrigger value="rbd9103">RBD 9103 Settings</TabsTrigger>
-          <TabsTrigger value="graphite">Monitored Value</TabsTrigger>
+          <TabsTrigger value="graphite">Monitored value</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tetramm">
@@ -459,7 +459,7 @@ export function CurrentModuleSettings() {
 
               {/* Device Settings */}
               <div className="space-y-2">
-                <Label htmlFor="tetram-chn">Number of Channels</Label>
+                <Label htmlFor="tetram-chn">Number of channels</Label>
                 <Select value={tetramChn} onValueChange={setTetramChn}>
                   <SelectTrigger id="tetram-chn">
                     <SelectValue />
@@ -474,7 +474,7 @@ export function CurrentModuleSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tetram-charge-chn">Charge Channel</Label>
+                <Label htmlFor="tetram-charge-chn">Charge channel</Label>
                 <Select value={tetramChargeChannel} onValueChange={setTetramChargeChannel}>
                   <SelectTrigger id="tetram-charge-chn">
                     <SelectValue />
@@ -504,7 +504,7 @@ export function CurrentModuleSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="tetram-nrsamp">Number of Samples</Label>
+                <Label htmlFor="tetram-nrsamp">Number of samples</Label>
                 <Input
                   id="tetram-nrsamp"
                   value={tetramNrSamp}
@@ -534,7 +534,7 @@ export function CurrentModuleSettings() {
             <CardContent className="space-y-4">
               {/* Connection Settings */}
               <div className="space-y-2">
-                <Label htmlFor="rbd-port">Serial Port</Label>
+                <Label htmlFor="rbd-port">Serial port</Label>
                 <div className="flex items-center gap-2">
                   {!manualPort ? (
                     <Select
@@ -608,7 +608,7 @@ export function CurrentModuleSettings() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="rbd-baudrate">Baud Rate</Label>
+                  <Label htmlFor="rbd-baudrate">Baud rate</Label>
                   <Select value={rbdBaudrate} onValueChange={setRbdBaudrate}>
                     <SelectTrigger id="rbd-baudrate">
                       <SelectValue />
@@ -620,7 +620,7 @@ export function CurrentModuleSettings() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="rbd-high-speed">Speed Mode</Label>
+                  <Label htmlFor="rbd-high-speed">Speed mode</Label>
                   <Select
                     value={rbdHighSpeed ? 'true' : 'false'}
                     onValueChange={(v) => setRbdHighSpeed(v === 'true')}
@@ -657,7 +657,7 @@ export function CurrentModuleSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="rbd-filter">Filter (Samples Averaging)</Label>
+                <Label htmlFor="rbd-filter">Filter (Samples averaging)</Label>
                 <Select value={rbdFilter} onValueChange={setRbdFilter}>
                   <SelectTrigger id="rbd-filter">
                     <SelectValue />
@@ -676,7 +676,7 @@ export function CurrentModuleSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="rbd-input-mode">Input Mode</Label>
+                <Label htmlFor="rbd-input-mode">Input mode</Label>
                 <Select value={rbdInputMode} onValueChange={setRbdInputMode}>
                   <SelectTrigger id="rbd-input-mode">
                     <SelectValue />
@@ -689,7 +689,7 @@ export function CurrentModuleSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="rbd-bias">Bias Voltage</Label>
+                <Label htmlFor="rbd-bias">Bias voltage</Label>
                 <Select value={rbdBias} onValueChange={setRbdBias}>
                   <SelectTrigger id="rbd-bias">
                     <SelectValue />
@@ -702,7 +702,7 @@ export function CurrentModuleSettings() {
               </div>
 
               <div className="space-y-2">
-                <Label>Charge Channel</Label>
+                <Label>Charge channel</Label>
                 <p className="text-xs text-muted-foreground">
                   The RBD 9103 is a single-channel picoammeter, so the beam current and accumulated
                   charge are always taken from its only input.
@@ -719,7 +719,7 @@ export function CurrentModuleSettings() {
         <TabsContent value="graphite">
           <Card>
             <CardHeader>
-              <CardTitle>Monitored Value Configuration</CardTitle>
+              <CardTitle>Monitored value configuration</CardTitle>
               <CardDescription>
                 Read the beam current from a value already monitored in Graphite — the
                 accelerator&apos;s own current readout, for instance — instead of from a
@@ -729,7 +729,7 @@ export function CurrentModuleSettings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="metric-path">Metric Path</Label>
+                <Label htmlFor="metric-path">Metric path</Label>
                 <Input
                   id="metric-path"
                   value={metricPath}
@@ -784,7 +784,7 @@ export function CurrentModuleSettings() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="metric-unit">Metric Unit</Label>
+                  <Label htmlFor="metric-unit">Metric unit</Label>
                   <Select value={metricScale} onValueChange={setMetricScale}>
                     <SelectTrigger id="metric-unit">
                       <SelectValue />
@@ -803,7 +803,7 @@ export function CurrentModuleSettings() {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="metric-interval">Poll Interval (s)</Label>
+                  <Label htmlFor="metric-interval">Poll interval (s)</Label>
                   <Input
                     id="metric-interval"
                     value={metricInterval}
@@ -829,7 +829,7 @@ export function CurrentModuleSettings() {
       {status && (
         <Card>
           <CardHeader>
-            <CardTitle>Module Status</CardTitle>
+            <CardTitle>Module status</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 text-sm">
@@ -881,7 +881,7 @@ export function CurrentModuleSettings() {
       {/* Graphite Server Configuration */}
       <Card>
         <CardHeader>
-          <CardTitle>Graphite Server Configuration</CardTitle>
+          <CardTitle>Graphite server configuration</CardTitle>
           <CardDescription>
             Where measured current is <strong>sent</strong> (Carbon plaintext ingest,
             usually port 2003). Reading values back — the monitored-value module and the
@@ -891,7 +891,7 @@ export function CurrentModuleSettings() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="graphite-host">Graphite Host</Label>
+              <Label htmlFor="graphite-host">Graphite host</Label>
               <Input
                 id="graphite-host"
                 value={graphiteHost}
@@ -900,7 +900,7 @@ export function CurrentModuleSettings() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="graphite-port">Graphite Port</Label>
+              <Label htmlFor="graphite-port">Graphite port</Label>
               <Input
                 id="graphite-port"
                 value={graphitePort}

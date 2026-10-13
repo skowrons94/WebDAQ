@@ -308,6 +308,21 @@ export function CardHolder({
     setVisibleMetrics(metrics.filter(metric => metric.isVisible))
   }, [metrics])
 
+  // From xl up the cards sit in a scroller one row tall: a board that reports
+  // FAIL is scrolled into it (and ringed in red), never left below the fold.
+  const failingBoards = Object.entries(boardStatus).filter(([, st]) => st?.failed).map(([id]) => id).join(',')
+  useEffect(() => {
+    if (!failingBoards || !isRunning) return
+    const card = document.querySelector<HTMLElement>('[data-board-fail="true"]')
+    const viewport = card?.closest<HTMLElement>('[data-radix-scroll-area-viewport]')
+    if (!card || !viewport) return
+    const c = card.getBoundingClientRect()
+    const v = viewport.getBoundingClientRect()
+    if (c.top < v.top || c.bottom > v.bottom) {
+      viewport.scrollTo({ top: viewport.scrollTop + (c.top - v.top) - 16, behavior: 'smooth' })
+    }
+  }, [failingBoards, isRunning])
+
   // Load stats paths on mount
   useEffect(() => {
     const loadStatsPaths = async () => {
@@ -737,17 +752,17 @@ export function CardHolder({
                   </Link>
                 </Button>
               </div>
-              {/* Phones: no inner scroller and no fixed row height, so every
-                  card — and any board FAIL — is on the page, one under the
-                  other. From md up: the resizable panel as before. */}
+              {/* Below 1280 px (phones and tablets): no inner scroller and no
+                  fixed row height, so every card — and any board FAIL — is on
+                  the page. From xl up: the resizable panel as before. */}
               <ScrollArea
-                className={cn('max-md:!h-auto', isResizingStatusPanel
+                className={cn('max-xl:!h-auto', isResizingStatusPanel
                   ? ''
                   : 'transition-[height] duration-150 ease-out')}
                 viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
                 style={{ height: displayedStatusPanelHeight }}
               >
-                <div className="grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 md:auto-rows-[11.5rem] md:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] md:gap-6 md:[&>*]:h-full md:[&>*]:overflow-hidden md:[&>*]:snap-start">
+                <div className="grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:auto-rows-[11.5rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
         {/* Run Status Card */}
         {settings.showStatus && (
           <Card>
@@ -1060,7 +1075,11 @@ export function CardHolder({
           const waveformsOn = boardWaveforms[board.id] ?? false
 
           return (
-            <Card key={`board-status-${board.id}`}>
+            <Card
+              key={`board-status-${board.id}`}
+              data-board-fail={isRunning && !isOk ? 'true' : undefined}
+              className={isRunning && !isOk ? 'ring-2 ring-destructive' : undefined}
+            >
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <div className="flex flex-col min-w-0">
                   <CardTitle className="text-sm font-semibold">Board {board.id}</CardTitle>
@@ -1235,7 +1254,7 @@ export function CardHolder({
               onPointerUp={handleStatusResizeEnd}
               onPointerCancel={handleStatusResizeEnd}
               onKeyDown={handleStatusResizeKey}
-              className={`absolute -bottom-3 left-1/2 z-10 hidden h-6 w-16 md:flex -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`absolute -bottom-3 left-1/2 z-10 hidden h-6 w-16 xl:flex -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
               }`}
             >

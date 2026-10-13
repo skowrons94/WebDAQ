@@ -776,7 +776,7 @@ export default function WaveformDashboard() {
                         </div>
                       )}
                       <div className="flex items-center space-x-2">
-                        <Label className="text-sm min-w-24">Digital Probe:</Label>
+                        <Label className="text-sm min-w-24">Digital probe:</Label>
                         <Select
                           value={getCurrentDigitalProbeValue(board.id).toString()}
                           onValueChange={(value: string) => handleDigitalProbeChange(board.id, parseInt(value))}
@@ -805,7 +805,7 @@ export default function WaveformDashboard() {
                         onCheckedChange={(checked: boolean) => handleSelectAllChannels(board.id, checked)}
                       />
                       <Label htmlFor={`select-all-wave-${board.id}`} className="text-sm font-medium">
-                        Select All Channels
+                        Select all channels
                       </Label>
                     </div>
                     <div className="text-sm text-muted-foreground">

@@ -150,7 +150,7 @@ export function Board() {
         {/* Added boards — shown first, as a grid of status cards */}
         <Card className="w-full mx-auto">
           <CardHeader>
-            <CardTitle>Added CAEN Boards</CardTitle>
+            <CardTitle>Added CAEN boards</CardTitle>
             <CardDescription>
               Configured digitizers and their live connection status.
             </CardDescription>

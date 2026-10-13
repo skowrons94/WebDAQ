@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
     AlertTriangle,
     HeartPulse,
@@ -80,6 +80,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const [open, setOpen] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
+    const menuButtonRef = useRef<HTMLButtonElement>(null)
+    const firstNavRef = useRef<HTMLAnchorElement>(null)
+    // Closing the menu to open Search: focus goes to the search box, not back
+    // to the menu button.
+    const toSearch = useRef(false)
     const phone = useIsPhone()
 
     // A nav entry is active when the current path matches it exactly or is a
@@ -138,6 +143,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
                     <SheetTrigger asChild>
                         <Button
+                            ref={menuButtonRef}
                             variant="outline"
                             size="icon"
                             className="shrink-0 lg:hidden"
@@ -146,15 +152,27 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             <span className="sr-only">Open navigation menu</span>
                         </Button>
                     </SheetTrigger>
-                    <SheetContent side="left" className="flex w-[18rem] flex-col gap-6 overflow-y-auto sm:w-[20rem]">
+                    <SheetContent
+                        side="left"
+                        className="flex w-[18rem] flex-col gap-6 overflow-y-auto sm:w-[20rem]"
+                        // Focus starts on the first page in the menu, and goes
+                        // back to the menu button when it closes.
+                        onOpenAutoFocus={(e) => { e.preventDefault(); firstNavRef.current?.focus() }}
+                        onCloseAutoFocus={(e) => {
+                            if (toSearch.current) { toSearch.current = false; e.preventDefault(); return }
+                            e.preventDefault()
+                            menuButtonRef.current?.focus()
+                        }}
+                    >
                         <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
                             <MoonStarIcon className="h-7 w-7 text-primary" aria-hidden="true" />
                             LUNADAQ
                         </SheetTitle>
                         <nav aria-label="Main" className="grid gap-1 text-base font-medium">
-                            {NAV_ITEMS.map((item) => (
+                            {NAV_ITEMS.map((item, i) => (
                                 <SheetClose asChild key={item.href}>
                                     <Link
+                                        ref={i === 0 ? firstNavRef : undefined}
                                         href={item.href}
                                         aria-current={isActive(item.href) ? "page" : undefined}
                                         className={`flex min-h-11 items-center rounded-md px-2 ${
@@ -172,7 +190,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             <Button
                                 variant="outline"
                                 className="justify-start"
-                                onClick={() => { setMenuOpen(false); setOpen(true) }}
+                                onClick={() => { toSearch.current = true; setMenuOpen(false); setOpen(true) }}
                             >
                                 <Search className="mr-2 h-4 w-4" />
                                 Search…
