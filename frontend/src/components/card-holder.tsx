@@ -542,7 +542,12 @@ export function CardHolder({
         getConnectedCurrent().catch(() => null),
         getStatsRunStatus().catch(() => null),
       ])
-      if (save !== null && save !== undefined) setDataSavingEnabled(Boolean(save))
+      if (save !== null && save !== undefined) {
+        setDataSavingEnabled(Boolean(save))
+        // Keep the Run control's copy in step too: Start posts it back, and a
+        // stale "off" (left by a Tuner run, say) would start a run unsaved.
+        onSaveDataChange?.(Boolean(save))
+      }
       if (waves) setBoardWaveforms(waves)
       if (currentConnected !== null) setIsConnectedCurrent(Boolean(currentConnected))
       if (currentStatus) {
@@ -760,8 +765,14 @@ export function CardHolder({
                   : dataSavingEnabled
                     ? "Data is being written to disk"
                     : "Nothing will be written to disk"}>
-                <Label htmlFor="save-data-switch" className="text-xs font-medium text-muted-foreground">
-                  Save to disk
+                {/* Off is said in red: a run taken like this is not recorded. */}
+                <Label
+                  htmlFor="save-data-switch"
+                  className={cn("text-xs", dataSavingEnabled
+                    ? "font-medium text-muted-foreground"
+                    : "flex items-center gap-1 font-semibold text-destructive")}
+                >
+                  {dataSavingEnabled ? 'Save to disk' : <><XCircle className="h-3.5 w-3.5" aria-hidden="true" />Not saving</>}
                 </Label>
                 <Switch
                   id="save-data-switch"
@@ -923,9 +934,10 @@ export function CardHolder({
                       <Save className="h-3.5 w-3.5" />
                       Data saving
                     </span>
-                    <span className="flex items-center gap-1 font-semibold">
+                    {/* Saving off is the one "off" that loses data: red, not neutral. */}
+                    <span className={cn("flex items-center gap-1 font-semibold", !dataSavingEnabled && "text-destructive")}>
                       {dataSavingEnabled ? 'On' : 'Off'}
-                      {dataSavingEnabled ? okIcon : offIcon}
+                      {dataSavingEnabled ? okIcon : <XCircle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">

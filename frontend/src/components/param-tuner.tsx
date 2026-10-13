@@ -1,6 +1,8 @@
 'use client'
 
-import { useRunStatus, refreshRunStatus } from '@/hooks/use-run-status'
+import { useRunStatus, noteRunAction } from '@/hooks/use-run-status'
+import useRunControlStore from '@/store/run-control-store'
+import { markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerRunStarted } from '@/lib/tuner-save'
 import { StatusBadge } from '@/components/ui/status-badge'
 import React, { useState, useEffect, useRef } from 'react'
 import {
@@ -158,7 +160,6 @@ export default function ParamTuner() {
   const [settings, setSettings] = useState<BoardSettings>({})
   const [pendingValues, setPendingValues] = useState<{ [key: string]: string }>({})
   const [isAcquiring, setIsAcquiring] = useState(false)
-  const [savedSaveFlag, setSavedSaveFlagState] = useState<boolean | null>(null)
   const [waveformNum, setWaveformNum] = useState<1 | 2>(1)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
@@ -292,8 +293,19 @@ export default function ParamTuner() {
   useEffect(() => {
     if (!isAcquiring) { sawOwnRun.current = false; return }
     if (isRunning) sawOwnRun.current = true
-    else if (sawOwnRun.current) setIsAcquiring(false)
+    else if (sawOwnRun.current) {
+      // Ended elsewhere: data saving is put back by whoever saw the stop
+      // (lib/tuner-save.ts); make sure of it here too.
+      setIsAcquiring(false)
+      void restoreTunerSaveFlag()
+    }
   }, [isRunning, isAcquiring])
+
+  // After a reload, a Tuner acquisition still going is still the Tuner's.
+  const runKnown = useRunStatus((s) => s.known)
+  useEffect(() => {
+    if (runKnown && isRunning && tunerRunStarted()) setIsAcquiring(true)
+  }, [runKnown, isRunning])
 
   // Auto-refresh tick
   useEffect(() => {
@@ -356,32 +368,55 @@ export default function ParamTuner() {
 
   // --- Handlers ---
 
+  const [busy, setBusy] = useState(false)
   const handleStart = async () => {
+    if (busy) return
+    setBusy(true)
     try {
-      const original = await getSaveData()
-      setSavedSaveFlagState(original)
+      // Kept outside this component (lib/tuner-save.ts): however this
+      // acquisition ends, saving is put back.
+      const original = Boolean(await getSaveData())
+      rememberTunerSaveFlag(original)
       await setSaveData(false)
-      await startRun()
-      await refreshRunStatus()
+      try {
+        await startRun()
+      } catch (error) {
+        await restoreTunerSaveFlag({ evenIfNotStarted: true })
+        throw error
+      }
+      // Set the state here; the shared poll catches up (never awaited: a
+      // hung poll must not keep the Tuner from knowing its own run).
+      useRunControlStore.getState().setIsRunning(true)
+      noteRunAction()
+      markTunerRunStarted()
       setIsAcquiring(true)
       toast({ title: 'Started', description: 'Acquisition started (data saving disabled)' })
     } catch {
       toast({ title: 'Error', description: 'Failed to start acquisition', variant: 'destructive' })
+    } finally {
+      setBusy(false)
     }
   }
 
   // Stops only the acquisition the Tuner started itself (isAcquiring): a
   // production run started from the Dashboard is never the Tuner's to stop.
   const handleStop = async () => {
-    if (!isAcquiring) return
+    if (!isAcquiring || busy) return
+    setBusy(true)
     try {
       await stopRun()
-      void refreshRunStatus()
-      if (savedSaveFlag !== null) await setSaveData(savedSaveFlag)
+      useRunControlStore.getState().setIsRunning(false)
+      noteRunAction()
+      const restored = await restoreTunerSaveFlag()
       setIsAcquiring(false)
+      if (restored === null && tunerRunStarted()) {
+        toast({ title: 'Data saving not restored', description: 'Check "Save to disk" on the Dashboard before the next run.', variant: 'destructive' })
+      }
       toast({ title: 'Stopped', description: 'Acquisition stopped' })
     } catch {
       toast({ title: 'Error', description: 'Failed to stop acquisition', variant: 'destructive' })
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -627,7 +662,7 @@ export default function ParamTuner() {
 
         <Button
           onClick={handleStart}
-          disabled={isAcquiring || isRunning}
+          disabled={isAcquiring || isRunning || !runKnown || busy}
           variant="success"
         >
           Start
