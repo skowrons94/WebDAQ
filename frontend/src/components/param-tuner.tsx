@@ -31,7 +31,13 @@ import { WaveformPanel } from '@/components/tuner/waveform-panel'
 import { SpectrumPanel } from '@/components/tuner/spectrum-panel'
 import { useChannelRates } from '@/components/tuner/use-channel-rates'
 import { baseAddress, boardTiming, controlsFor, formatControl, getBits, setBits, toDisplay } from '@/components/tuner/units'
-import { recoverInterruptedScan } from '@/components/tuner/scan-engine'
+import { cancelActiveScan, onScanRecordChange, scanActive, scanRecordState, type ScanRecordState } from '@/components/tuner/scan-engine'
+import { ScanRecoveryDialog } from '@/components/tuner/scan-recovery'
+import { useRunBadge } from '@/hooks/use-run-badge'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { addHistory, clearHistory, loadHistory, registersFor, type HistoryEntry } from '@/lib/tuner-history'
 import type { TraceReadout } from '@/components/tuner/waveform-panel'
 import type { FitSummary } from '@/components/tuner/spectrum-panel'
@@ -87,6 +93,7 @@ export default function ParamTuner() {
   // Registers this board accepts while acquiring, keyed by address ("0x106C").
   const [onlineRegisters, setOnlineRegisters] = useState<Record<string, string>>({})
   const { toast } = useToast()
+  const runBadge = useRunBadge()
 
   // --- Derived values ---
   // Compare as strings: the id is a number in the server's JSON and a string
@@ -242,25 +249,36 @@ export default function ParamTuner() {
     if (runKnown && isRunning && tunerOwnsRun(runStartTime)) setIsAcquiring(true)
   }, [runKnown, isRunning, runStartTime])
 
-  // Scans and other automatic writes: only in the run the Tuner started itself.
-  const tunerLive = runKnown && isRunning && isAcquiring && tunerOwnsRun(runStartTime)
+  // Scans and other automatic writes: only in the run the Tuner started
+  // itself, and only while the server answers ("No answer" stops a scan; its
+  // values are restored, or offered for restore once the server is back).
+  const unreachable = useRunStatus((s) => s.unreachable)
+  const tunerLive = runKnown && !unreachable && isRunning && isAcquiring && tunerOwnsRun(runStartTime)
   const tunerLiveRef = useRef(tunerLive)
   tunerLiveRef.current = tunerLive
   const isTunerLive = () => tunerLiveRef.current
 
-  // A scan cut short by a reload or a closed tab: put its starting values back.
-  const recovered = useRef(false)
+  // The scan record (this browser): another tab scanning, or a scan that
+  // ended without a confirmed restore. Followed across tabs.
+  const [scanState, setScanState] = useState<ScanRecordState>('none')
+  const [recoveryOpen, setRecoveryOpen] = useState(false)
   useEffect(() => {
-    if (!runKnown || recovered.current) return
-    recovered.current = true
-    void recoverInterruptedScan(() => tunerLiveRef.current).then(async (name) => {
-      if (!name) return
-      toast({ title: `${name} was interrupted`, description: 'The values it started from are back in the configuration.' })
-      if (selectedBoardId) {
-        try { setSettings(await getBoardSettings(selectedBoardId)) } catch { /* keep what is shown */ }
-      }
-    })
-  }, [runKnown]) // eslint-disable-line react-hooks/exhaustive-deps
+    const check = () => setScanState(scanRecordState())
+    check()
+    const off = onScanRecordChange(check)
+    const id = setInterval(check, 3000)
+    return () => { off(); clearInterval(id) }
+  }, [])
+  // An interrupted scan: ask (once the server answers) before restoring.
+  const asked = useRef(false)
+  useEffect(() => {
+    if (!runKnown || unreachable) return
+    if ((scanState === 'interrupted' || scanState === 'expired') && !asked.current && !scanActive()) {
+      asked.current = true
+      setRecoveryOpen(true)
+    }
+    if (scanState === 'none') asked.current = false
+  }, [runKnown, unreachable, scanState])
 
   // Auto-refresh tick
   useEffect(() => {
@@ -313,6 +331,12 @@ export default function ParamTuner() {
     if (!isAcquiring || busy) return
     setBusy(true)
     try {
+      // A scan first: cancel it and put its values back on the board while
+      // the run is still on, then stop.
+      if (scanActive()) {
+        toast({ title: 'Stopping the scan…', description: 'Its starting values are restored before the run stops.' })
+        await cancelActiveScan('Stopped from the Tuner.')
+      }
       await stopRun()
       useRunControlStore.getState().setIsRunning(false)
       noteRunAction()
@@ -417,6 +441,18 @@ export default function ParamTuner() {
 
   const pendingCount = Object.keys(pending).length
 
+  // Switching board or channel drops staged edits: ask first.
+  const [switchAsk, setSwitchAsk] = useState<{ kind: 'board' | 'channel'; value: string } | null>(null)
+  const doSwitch = (sw: { kind: 'board' | 'channel'; value: string }) => {
+    if (sw.kind === 'board') setSelectedBoardId(sw.value)
+    else { setSelectedChannel(parseInt(sw.value)); setPending({}); setMeasuredBaseline(null) }
+  }
+  const askSwitch = (sw: { kind: 'board' | 'channel'; value: string }) => {
+    if ((sw.kind === 'board' ? sw.value === selectedBoardId : sw.value === String(selectedChannel))) return
+    if (Object.keys(pending).length > 0) setSwitchAsk(sw)
+    else doSwitch(sw)
+  }
+
   /** "Trapezoid rise time 400 → 4000 ns" for the change log. */
   const describeChange = (regKey: string, from: number, to: number): string => {
     const r = settings[regKey]
@@ -429,15 +465,24 @@ export default function ParamTuner() {
     return parts.length ? parts.join(', ') : `${r.name} ${from} → ${to}`
   }
 
-  const handleUndo = async (e: HistoryEntry) => {
-    const res = await applyRegister(e.regKey, e.from, e.name)
-    if (!res) return
-    const cur = settings[e.regKey]?.value_dec ?? e.to
-    storeLocal(e.regKey, e.from)
-    setPending(prev => { const n = { ...prev }; delete n[e.regKey]; return n })
-    logChange(e.regKey, cur, e.from, `Undo: ${describeChange(e.regKey, cur, e.from)}`, res.written, 'undo')
-    if (res.written && isRunning) noteBoardChange(`undo ${e.name}`)
-    toast({ title: 'Undone', description: res.written ? 'On the board now.' : 'Saved; applies from the next run.' })
+  /** Undo stages the old value (like a preset); "Save all" applies it under the usual rules. */
+  const handleUndo = (e: HistoryEntry) => {
+    const saved = settings[e.regKey]?.value_dec
+    if (saved === undefined) { toast({ title: 'Cannot undo', description: `${e.name} is not in this board's settings.`, variant: 'destructive' }); return }
+    setPending(prev => {
+      const n = { ...prev }
+      if (saved === e.from) delete n[e.regKey]; else n[e.regKey] = e.from
+      return n
+    })
+    if (saved !== e.to) {
+      toast({
+        title: 'Undo staged: changed since',
+        description: `${e.name} was changed after this step: it is now ${describeChange(e.regKey, e.to, saved).replace(/^.*?→ /, '')}, not the value this step set. The old value is staged anyway: check it, then "Save all".`,
+        variant: 'destructive',
+      })
+    } else {
+      toast({ title: 'Undo staged', description: `${describeChange(e.regKey, saved, e.from)}: press "Save all" to apply.` })
+    }
   }
 
   const handleLoadValues = (values: Record<string, number>, source: string) => {
@@ -494,11 +539,40 @@ export default function ParamTuner() {
 
   return (
     <div className="flex flex-col gap-6">
+      <ScanRecoveryDialog
+        open={recoveryOpen}
+        onOpenChange={setRecoveryOpen}
+        isLive={isTunerLive}
+        context="tuner"
+        onDone={async () => {
+          setScanState(scanRecordState())
+          if (selectedBoardId) {
+            try { setSettings(await getBoardSettings(selectedBoardId)) } catch { /* keep what is shown */ }
+          }
+        }}
+      />
+      <AlertDialog open={!!switchAsk} onOpenChange={(o) => { if (!o) setSwitchAsk(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{pendingCount} unsaved change{pendingCount === 1 ? '' : 's'} on channel {selectedChannel}</AlertDialogTitle>
+            <AlertDialogDescription>
+              Switching to {switchAsk?.kind === 'board' ? 'another board' : `channel ${switchAsk?.value}`} drops them. Keep them to stay here and save
+              (or discard) first.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep them</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { const sw = switchAsk; setSwitchAsk(null); setPending({}); if (sw) doSwitch(sw) }}>
+              Discard and switch
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {/* Top bar */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">Board</Label>
-          <Select value={selectedBoardId} onValueChange={setSelectedBoardId} disabled={scanBusy}>
+          <Select value={selectedBoardId} onValueChange={(v) => askSwitch({ kind: 'board', value: v })} disabled={scanBusy}>
             <SelectTrigger className="w-52 max-w-full" aria-label="Board">
               <SelectValue placeholder="Select board..." />
             </SelectTrigger>
@@ -517,11 +591,7 @@ export default function ParamTuner() {
           <Select
             disabled={scanBusy}
             value={selectedChannel.toString()}
-            onValueChange={v => {
-              setSelectedChannel(parseInt(v))
-              setPending({})
-              setMeasuredBaseline(null)
-            }}
+            onValueChange={v => askSwitch({ kind: 'channel', value: v })}
           >
             <SelectTrigger className="w-36" aria-label="Channel">
               <SelectValue />
@@ -552,7 +622,7 @@ export default function ParamTuner() {
           Stop
         </Button>
 
-        <StatusBadge state={isRunning ? 'running' : 'stopped'} label={isAcquiring ? 'Tuning' : undefined} />
+        <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} />
         {isRunning && !isAcquiring && (
           <span className="text-xs text-muted-foreground">
             Production run: stop it from the Dashboard. Changes follow the usual rules.
@@ -694,7 +764,18 @@ export default function ParamTuner() {
             </Tabs>
           </CardHeader>
           <CardContent>
-            {tunerLive ? (
+            {(scanState === 'active-elsewhere' || ((scanState === 'interrupted' || scanState === 'expired') && !scanBusy)) ? (
+              <div className="space-y-2 text-sm" data-testid="scans-blocked">
+                {scanState === 'active-elsewhere' ? (
+                  <p>A scan is running in another Tuner tab or window. Scans run one at a time: finish or cancel it there.</p>
+                ) : (
+                  <>
+                    <p className="text-warning">An earlier scan ended without confirming that its values were put back. Scans (and a production Start) wait until it is resolved.</p>
+                    <Button size="sm" variant="outline" onClick={() => setRecoveryOpen(true)}>Review and restore…</Button>
+                  </>
+                )}
+              </div>
+            ) : tunerLive ? (
               scanTab === 'shaping' && !isPSD ? (
                 <ShapingScan boardId={selectedBoardId} channel={selectedChannel} settings={settings} timing={timing}
                   isLive={isTunerLive} onBusy={setScanBusy} onApply={applyFromScan} />

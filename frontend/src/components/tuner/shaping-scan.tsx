@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { getExperimentStats, getHistogram } from '@/lib/api'
 import { binCenters, findPeaks, fitPeak } from '@/lib/peak-fit'
 import { findRegKey, type BoardSettings } from '@/components/tuner/controls-panel'
-import { linearSteps, runScan, ScanAborted, sleep, withDeadline, type ScanStep } from '@/components/tuner/scan-engine'
+import { linearSteps, outcomeToast, runScan, ScanAborted, sleep, withDeadline, type ScanStep } from '@/components/tuner/scan-engine'
 import { bestResolution } from '@/components/tuner/scan-analysis'
 import { ScanPlot } from '@/components/tuner/scan-plot'
 import { readRoi, spectrumOf, spectrumSince, type SpectrumData } from '@/components/tuner/spectrum-panel'
@@ -125,7 +125,7 @@ export default function ShapingScan({
     setTo(String(+hi.toFixed(2)))
     setPoints([]); setBest(null)
   }, [boardId, channel, riseUs === null]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => abort.current?.abort(), [])
+  useEffect(() => () => abort.current?.abort('Interrupted: the Tuner run ended, the server stopped answering, or the page changed.'), [])
 
   const fits = (us: number) => preNs + 2 * us * 1000 + flatNs <= recordNs
   const all = (() => {
@@ -145,7 +145,7 @@ export default function ShapingScan({
     let scale = 1
     try {
       const out = await runScan<number, PeakStep>({
-        name: 'Rise-time scan', boardId, original: { [key]: raw },
+        name: 'Rise-time scan', boardId, original: [{ key, raw }],
         steps: steps.map((us) => ({ value: us, values: { [key]: Math.round((us * 1000) / step) } })),
         settleMs: 1500,
         measure: (signal) => measurePeak({
@@ -157,8 +157,9 @@ export default function ShapingScan({
       })
       setPoints(out.steps)
       const b = bestResolution(out.steps.map((s) => ({ x: s.value, fwhm: s.result.fwhm, fwhmErr: s.result.fwhmErr, pileupPct: s.result.pileupPct })))
-      setBest(b ? b.x : null)
-      if (!out.restored) toast({ title: 'Rise time not restored', description: `Set it back to ${riseUs} µs by hand.`, variant: 'destructive' })
+      setBest(b && !out.aborted ? b.x : null)
+      const t = outcomeToast(out, 'Rise-time scan', `The rise time is back at ${riseUs} µs.`)
+      if (t) toast(t)
     } catch (e) {
       toast({ title: 'Rise-time scan stopped', description: `${e instanceof ScanAborted ? e.message : 'The scan failed.'} The rise time is back at ${riseUs} µs.` })
     } finally {
@@ -190,7 +191,7 @@ export default function ShapingScan({
         <div className="flex flex-col gap-1"><Label htmlFor="rs-max" className="text-xs">Max s per step</Label>
           <Input id="rs-max" type="number" min={10} className="h-8 w-20" value={maxS} onChange={(e) => setMaxS(e.target.value)} disabled={running} /></div>
         {running
-          ? <Button variant="outline" onClick={() => abort.current?.abort()}>Cancel scan</Button>
+          ? <Button variant="outline" onClick={() => abort.current?.abort('Cancelled.')}>Cancel scan</Button>
           : <Button onClick={start} disabled={!steps.length || !roi}>Run rise-time scan</Button>}
         <span className="text-xs text-muted-foreground">
           {steps.length ? `${steps.join(', ')} µs · up to ${Math.round(steps.length * ((Number(maxS) || 60) + 2))} s` : 'Check the range.'}

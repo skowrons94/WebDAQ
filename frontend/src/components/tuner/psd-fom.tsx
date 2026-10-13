@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { getPsd } from '@/lib/api'
 import { figureOfMerit, th2Of, th2Since, type FomResult, type Th2Data } from '@/lib/psd-fom'
 import { findRegKey, type BoardSettings } from '@/components/tuner/controls-panel'
-import { linearSteps, runScan, ScanAborted, sleep, withDeadline, type ScanStep } from '@/components/tuner/scan-engine'
+import { linearSteps, outcomeToast, runScan, ScanAborted, sleep, withDeadline, type ScanStep } from '@/components/tuner/scan-engine'
 import { ScanPlot } from '@/components/tuner/scan-plot'
 import type { BoardTiming } from '@/components/tuner/units'
 
@@ -74,6 +74,7 @@ export default function PsdFomScan({
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [points, setPoints] = useState<ScanStep<Gates, FomStep>[]>([])
+  const [aborted, setAborted] = useState(false)
   const abort = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -88,7 +89,7 @@ export default function PsdFomScan({
     })
     return () => { alive = false }
   }, [boardId, channel, s0 === null, l0 === null]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => abort.current?.abort(), [])
+  useEffect(() => () => abort.current?.abort('Interrupted: the Tuner run ended, the server stopped answering, or the page changed.'), [])
 
   const grid: Gates[] = (() => {
     const sv = linearSteps(Number(sFrom), Number(sTo), Math.round(Number(sN)), ns)
@@ -106,20 +107,19 @@ export default function PsdFomScan({
     setProgress({ done: 0, total: grid.length })
     try {
       const out = await runScan<Gates, FomStep>({
-        name: 'PSD gate scan', boardId, original: { [lKey]: l0, [sKey]: s0 },
-        // Write order keeps short < long on the board at every moment.
-        steps: grid.map((g, i) => {
-          const prevShort = i ? grid[i - 1].short : s0 * ns
-          const L = Math.round(g.long / ns), S = Math.round(g.short / ns)
-          return { value: g, values: g.long > prevShort ? { [lKey]: L, [sKey]: S } : { [sKey]: S, [lKey]: L } }
-        }),
+        name: 'PSD gate scan', boardId, original: [{ key: lKey, raw: l0 }, { key: sKey, raw: s0 }],
+        // The engine orders each write (and the restore) so short < long holds on the board.
+        pair: { short: sKey, long: lKey },
+        steps: grid.map((g) => ({ value: g, values: { [lKey]: Math.round(g.long / ns), [sKey]: Math.round(g.short / ns) } })),
         settleMs: 1500,
         measure: (signal) => measureFom(boardId, channel, lo, hi, Math.max(200, Number(target) || 3000), Math.max(10, Number(maxS) || 40), signal),
         signal: ctl.signal, isLive,
         onStep: (done, next) => { setPoints(done); setProgress({ done: next, total: grid.length }) },
       })
       setPoints(out.steps)
-      if (!out.restored) toast({ title: 'Gates not restored', description: `Set short ${s0 * ns} ns and long ${l0 * ns} ns by hand.`, variant: 'destructive' })
+      setAborted(!!out.aborted)
+      const t = outcomeToast(out, 'PSD gate scan', `The gates are back at ${s0 * ns} / ${l0 * ns} ns.`)
+      if (t) toast(t)
     } catch (e) {
       toast({ title: 'PSD gate scan stopped', description: `${e instanceof ScanAborted ? e.message : 'The scan failed.'} The gates are back at ${s0 * ns} / ${l0 * ns} ns.` })
     } finally {
@@ -132,7 +132,7 @@ export default function PsdFomScan({
   // Prefer pairs measured with enough events; few-event FoMs are noisy.
   const enough = ok.filter((p) => p.result.counts >= 0.5 * (Number(target) || 3000))
   const pool = enough.length ? enough : ok
-  const best = pool.length ? pool.reduce((a, b) => (b.result.fom! > a.result.fom! ? b : a)) : null
+  const best = !aborted && pool.length ? pool.reduce((a, b) => (b.result.fom! > a.result.fom! ? b : a)) : null
   const rough = !!best && !enough.length
   const longs = Array.from(new Set(points.map((p) => p.value.long)))
 
@@ -155,7 +155,7 @@ export default function PsdFomScan({
           </div>
         ))}
         {running
-          ? <Button variant="outline" onClick={() => abort.current?.abort()}>Cancel scan</Button>
+          ? <Button variant="outline" onClick={() => abort.current?.abort('Cancelled.')}>Cancel scan</Button>
           : <Button onClick={start} disabled={!grid.length || !(hi > lo)}>Run PSD gate scan</Button>}
         <span className="text-xs text-muted-foreground">{grid.length ? `${grid.length} pairs · up to ${Math.round(grid.length * ((Number(maxS) || 40) + 2))} s` : 'Check the ranges (at most 16 pairs).'}</span>
       </div>

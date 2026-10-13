@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
 import { useToast } from '@/components/ui/use-toast'
 import { findRegKey, type BoardSettings } from '@/components/tuner/controls-panel'
-import { geometricSteps, measureRates, runScan, ScanAborted, type ScanStep } from '@/components/tuner/scan-engine'
+import { geometricSteps, measureRates, outcomeToast, runScan, ScanAborted, type ScanStep } from '@/components/tuner/scan-engine'
 import { noiseKnee, type KneeResult } from '@/components/tuner/scan-analysis'
 import { ScanPlot } from '@/components/tuner/scan-plot'
 import { getBits, setBits } from '@/components/tuner/units'
@@ -58,7 +58,7 @@ export default function ThresholdScan({
   }, [boardId, channel, current === null]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leaving the page cancels the scan; the engine still restores the value.
-  useEffect(() => () => abort.current?.abort(), [])
+  useEffect(() => () => abort.current?.abort('Interrupted: the Tuner run ended, the server stopped answering, or the page changed.'), [])
 
   const steps = (() => {
     const a = Number(from), b = Number(to), n = Math.round(Number(nSteps))
@@ -81,7 +81,7 @@ export default function ThresholdScan({
       const out = await runScan<number, ChannelRates>({
         name: 'Threshold scan',
         boardId,
-        original: { [regKey]: raw },
+        original: [{ key: regKey, raw }],
         steps: steps.map((t) => ({ value: t, values: { [regKey]: setBits(raw, THR_BITS, t) } })),
         settleMs: 1500,
         measure: (signal) => measureRates(boardId, channel, dwellS * 1000, signal),
@@ -95,10 +95,13 @@ export default function ThresholdScan({
           return null
         },
       })
-      const knee = noiseKnee(out.steps.map((s) => ({ threshold: s.value, rate: s.result.event, lost: s.result.lost })), !!out.stoppedEarly)
       setPoints(out.steps)
-      setResult({ ...knee, stoppedEarly: out.stoppedEarly, original: current })
-      if (!out.restored) toast({ title: 'Threshold not restored', description: `Set it back to ${current} LSB by hand.`, variant: 'destructive' })
+      if (!out.aborted) {
+        const knee = noiseKnee(out.steps.map((s) => ({ threshold: s.value, rate: s.result.event, lost: s.result.lost })), !!out.stoppedEarly)
+        setResult({ ...knee, stoppedEarly: out.stoppedEarly, original: current })
+      }
+      const t = outcomeToast(out, 'Threshold scan', `The threshold is back at ${current} LSB.`)
+      if (t) toast(t)
     } catch (e) {
       const why = e instanceof ScanAborted ? e.message : 'The scan failed.'
       toast({ title: 'Threshold scan stopped', description: `${why} The threshold is back at ${current} LSB.` })
@@ -136,7 +139,7 @@ export default function ThresholdScan({
           <Input id="thr-dwell" type="number" min={1} max={30} className="h-8 w-20" value={dwell} onChange={(e) => setDwell(e.target.value)} disabled={running} />
         </div>
         {running ? (
-          <Button variant="outline" onClick={() => abort.current?.abort()}>Cancel scan</Button>
+          <Button variant="outline" onClick={() => abort.current?.abort('Cancelled.')}>Cancel scan</Button>
         ) : (
           <Button onClick={start} disabled={!steps.length}>Run threshold scan</Button>
         )}

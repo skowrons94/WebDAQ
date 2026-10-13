@@ -68,6 +68,8 @@ import { unpauseAlertNonBlocking } from '@/lib/grafana-api'
 import { forceResetSequence, stopRunSequence } from '@/lib/run-actions'
 import { noteRunAction } from '@/hooks/use-run-status'
 import { StopRunBody } from '@/components/stop-run-body'
+import { scanBlocksStart, scanRecordState } from '@/components/tuner/scan-engine'
+import { ScanRecoveryDialog } from '@/components/tuner/scan-recovery'
 
 interface RunControlButtonsProps {
   /** Seconds since the run started, for the Stop confirmation. */
@@ -123,6 +125,18 @@ export function RunControlButtons({
   const setStartBusy = (busy: boolean) => { startingRef.current = busy; setStarting(busy) }
   // Saving was off at Start: the operator chooses before anything is sent.
   const [savingOffOpen, setSavingOffOpen] = useState(false)
+  // A Tuner scan running or not yet restored in this browser: Start waits
+  // (its values may still be in the board configuration the run would use).
+  const [scanRecoveryOpen, setScanRecoveryOpen] = useState(false)
+  const scanGuard = (): boolean => {
+    if (!scanBlocksStart()) return false
+    if (scanRecordState() === 'active-here') {
+      toast({ title: 'A Tuner scan is running', description: 'Finish or cancel it in the Tuner first: Start waits until its values are restored.', variant: 'destructive' })
+    } else {
+      setScanRecoveryOpen(true)
+    }
+    return true
+  }
   // The saving setting this start was confirmed with (used by startRunProcess,
   // also when it runs later from the overwrite dialog).
   const pendingSave = useRef(saveData)
@@ -177,6 +191,7 @@ export function RunControlButtons({
   const handleStartRun = async () => {
     // One start at a time, from the first click on (also during the saving read).
     if (startingRef.current) return
+    if (scanGuard()) return
     if (runNumber === null) {
       toast({
         title: 'Error',
@@ -264,6 +279,7 @@ export function RunControlButtons({
    * Core run start process that configures all systems and starts data acquisition
    */
   const startRunProcess = async () => {
+    if (scanGuard()) return
     if (runNumber === null) {
       toast({
         title: 'Error',
@@ -539,6 +555,8 @@ export function RunControlButtons({
   }
 
   return (
+    <>
+    <ScanRecoveryDialog open={scanRecoveryOpen} onOpenChange={setScanRecoveryOpen} isLive={() => false} context="start" />
     <Card id="run-control" className="scroll-mt-28">
       <CardHeader className="pb-4">
         <CardTitle>Run setup &amp; control</CardTitle>
@@ -834,6 +852,7 @@ export function RunControlButtons({
         onConfirm={startAfterOverwrite}
       />
     </Card>
+    </>
   )
 }
 
