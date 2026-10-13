@@ -21,7 +21,8 @@ import {
 } from '@/lib/grafana-api'
 import { getGrafanaSettings } from '@/lib/api'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
-import useRunControlStore from '@/store/run-control-store'
+import { useRunStatus } from '@/hooks/use-run-status'
+import { StatusBadge, runState } from '@/components/ui/status-badge'
 
 interface AlertRule {
   uid: string
@@ -36,7 +37,8 @@ type FilterMode = 'all' | 'active' | 'paused'
 export default function GrafanaAlertManager() {
   const { toast } = useToast()
   const { autoManageUids, toggleAutoManage } = useGrafanaAlertsStore()
-  const isRunning = useRunControlStore((state) => state.isRunning)
+  const isRunning = useRunStatus((state) => state.isRunning)
+  const runKnown = useRunStatus((state) => state.known)
 
   const [alerts, setAlerts] = useState<AlertRule[]>([])
   const [loading, setLoading] = useState(true)
@@ -185,7 +187,7 @@ export default function GrafanaAlertManager() {
                 <Shield className="h-5 w-5" />
               </div>
               <div>
-                <CardTitle className="text-xl">Alert Manager</CardTitle>
+                <CardTitle>Alert Manager</CardTitle>
                 <p className="text-sm text-muted-foreground">Grafana Alert Control Panel</p>
               </div>
             </div>
@@ -214,20 +216,14 @@ export default function GrafanaAlertManager() {
       {/* Run status + auto-managed count */}
       <Card>
         <CardContent className="flex items-center justify-between pt-5 pb-5">
-          <div className="flex items-center gap-3">
-            <span
-              className={`h-3 w-3 rounded-full animate-pulse ${
-                isRunning ? 'bg-green-500' : 'bg-muted-foreground'
-              }`}
-            />
-            <div>
-              <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
-                DAQ Run Status
-              </p>
-              <p className="text-base font-semibold">
-                {isRunning ? 'Running' : 'Stopped'}
-              </p>
-            </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+              DAQ run status
+            </p>
+            {/* The same shared state as the header (hooks/use-run-status.ts):
+                this page used to read a flag only the dashboard set, and said
+                "Stopped" during a run. */}
+            <StatusBadge className="mt-1" size="md" state={runState(runKnown ? isRunning : null)} />
           </div>
           <div className="flex items-center gap-1.5 text-sm font-medium text-primary">
             <Zap className="h-4 w-4" />
@@ -246,13 +242,13 @@ export default function GrafanaAlertManager() {
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center justify-center pt-4 pb-4 gap-0.5">
-            <span className="text-2xl font-bold text-green-500">{activeCount}</span>
+            <span className="text-2xl font-bold text-success">{activeCount}</span>
             <span className="text-xs text-muted-foreground font-medium">Active</span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center justify-center pt-4 pb-4 gap-0.5">
-            <span className="text-2xl font-bold text-amber-500">{pausedCount}</span>
+            <span className="text-2xl font-bold text-warning">{pausedCount}</span>
             <span className="text-xs text-muted-foreground font-medium">Paused</span>
           </CardContent>
         </Card>
@@ -371,8 +367,8 @@ export default function GrafanaAlertManager() {
                             variant={alert.isPaused ? 'secondary' : 'default'}
                             className={`gap-1.5 ${
                               alert.isPaused
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'
-                                : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                                ? 'bg-warning/10 text-warning'
+                                : 'bg-success/10 text-success'
                             }`}
                           >
                             {alert.isPaused ? (
@@ -421,7 +417,7 @@ export default function GrafanaAlertManager() {
                                 onClick={() => handleThresholdSave(alert.uid)}
                                 disabled={isPending}
                               >
-                                <Check className="h-3.5 w-3.5 text-green-600" />
+                                <Check className="h-3.5 w-3.5 text-success" />
                               </Button>
                               <Button
                                 size="icon"
@@ -479,8 +475,8 @@ export default function GrafanaAlertManager() {
                             variant={alert.isPaused ? 'default' : 'secondary'}
                             className={
                               alert.isPaused
-                                ? 'bg-green-600 hover:bg-green-700 text-white'
-                                : 'bg-amber-500 hover:bg-amber-600 text-white'
+                                ? 'bg-success hover:bg-success/90 text-success-foreground'
+                                : 'bg-warning hover:bg-warning/90 text-warning-foreground'
                             }
                             disabled={isPending}
                             onClick={() => handleTogglePause(alert.uid, alert.isPaused)}

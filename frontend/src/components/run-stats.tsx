@@ -1,5 +1,6 @@
 "use client"
 
+import { StatusBadge } from '@/components/ui/status-badge'
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -383,7 +384,7 @@ export default function RunStats() {
               title={`Show the rates of board ${board.id}`}
               className={`rounded-lg border p-3 text-left transition-colors ${
                 isActive ? "border-primary bg-muted/50" : "hover:bg-muted/30"
-              } ${live?.failed ? "border-red-500" : ""}`}
+              } ${live?.failed ? "border-destructive" : ""}`}
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">
@@ -392,7 +393,7 @@ export default function RunStats() {
                   <span className="shrink-0 text-xs text-muted-foreground">#{board.id}</span>
                 </span>
                 {live?.failed && (
-                  <Badge variant="destructive" className="shrink-0 gap-1 text-[10px]">
+                  <Badge variant="destructive" className="shrink-0 gap-1 text-xs">
                     <AlertTriangle className="h-3 w-3" />
                     {live.board_failures}
                   </Badge>
@@ -401,7 +402,7 @@ export default function RunStats() {
               <div className="mt-2 text-xl font-semibold tabular-nums">
                 {boardEvents === null ? "—" : formatRate(boardEvents, "events")}
               </div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 all channels together
               </div>
               <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
@@ -438,10 +439,10 @@ export default function RunStats() {
                   <CardContent className="p-3">
                     <p className="text-xs text-muted-foreground">{m.axis}</p>
                     <p className={`text-lg font-semibold tabular-nums ${
-                      highlight ? "text-amber-600 dark:text-amber-400" : ""}`}>
+                      highlight ? "text-warning" : ""}`}>
                       {activeBoard.live ? formatRate(value, m.noun) : "—"}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       board {activeBoard.id}, all channels
                     </p>
                   </CardContent>
@@ -484,7 +485,7 @@ export default function RunStats() {
       <Card>
         <CardHeader className="flex flex-col gap-3 pb-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <CardTitle className="text-base">
+            <CardTitle>
               {METRICS.find((m) => m.key === metric)?.axis} per second
               {activeBoard ? ` · board ${activeBoard.id} (${activeBoard.name})` : ""}
             </CardTitle>
@@ -498,7 +499,7 @@ export default function RunStats() {
           {/* Filters in one row above the plot, each saying what it changes. */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                 Plot
               </Label>
             <Select
@@ -527,7 +528,7 @@ export default function RunStats() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
                 Rate shown
               </Label>
               <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>
@@ -540,14 +541,12 @@ export default function RunStats() {
               </Select>
             </div>
 
-            <Badge variant={unreachable ? "destructive" : isRunning ? "default" : "secondary"}
-                   className="h-9 gap-1.5 px-3"
+            <StatusBadge size="md"
+                   state={unreachable ? "warning" : isRunning ? "running" : "stopped"}
+                   label={unreachable ? "No answer" : undefined}
                    title={unreachable
                      ? "The last request to the DAQ server failed — these numbers are the last known ones"
-                     : ""}>
-              <Activity className="h-3.5 w-3.5" />
-              {unreachable ? "No answer" : isRunning ? "Running" : "Stopped"}
-            </Badge>
+                     : undefined} />
           </div>
         </CardHeader>
 

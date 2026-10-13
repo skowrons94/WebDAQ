@@ -1,5 +1,6 @@
 'use client'
 
+import { StatusBadge } from '@/components/ui/status-badge'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, AlertTriangle, HeartPulse, Pause, RefreshCw } from 'lucide-react'
 
@@ -175,10 +176,7 @@ export default function BoardHealth() {
           What each board has read, written and lost during this run
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant={running ? 'default' : 'secondary'} className="gap-1.5">
-            {running ? <Activity className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
-            {running ? 'Run in progress' : 'No run'}
-          </Badge>
+          <StatusBadge state={running ? 'running' : 'stopped'} label={running ? 'Run in progress' : 'No run'} />
           <Button variant="outline" size="icon" onClick={poll} title="Refresh now">
             <RefreshCw className="h-4 w-4" />
           </Button>
@@ -215,7 +213,7 @@ export default function BoardHealth() {
             const accent = failed || dropped > 0
               ? 'border-destructive'
               : stalled || commErrors > 0
-                ? 'border-amber-500'
+                ? 'border-warning'
                 : ''
 
             return (
@@ -223,7 +221,7 @@ export default function BoardHealth() {
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <CardTitle className="text-base">Board {row.id}</CardTitle>
+                      <CardTitle>Board {row.id}</CardTitle>
                       {row.name && (
                         <p className="text-xs text-muted-foreground">{row.name}</p>
                       )}
@@ -245,12 +243,12 @@ export default function BoardHealth() {
                         Not reported
                       </Badge>
                     ) : stalled ? (
-                      <Badge className="gap-1 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                      <Badge className="gap-1 bg-warning/10 text-warning">
                         <Pause className="h-3 w-3" />
                         No data for {Math.round(row.stalledFor ?? 0)} s
                       </Badge>
                     ) : (
-                      <Badge className="gap-1 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                      <Badge className="gap-1 bg-success/10 text-success">
                         <Activity className="h-3 w-3" />
                         Reading
                       </Badge>

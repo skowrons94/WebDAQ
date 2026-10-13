@@ -16,16 +16,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { ConfirmAction } from "@/components/ui/confirm-action"
 import {
   Card,
   CardContent,
@@ -40,7 +31,6 @@ import {
 } from '@/components/ui/collapsible'
 import {
   startRun,
-  stopRun,
   setSaveData,
   setLimitDataSize,
   setDataSizeLimit,
@@ -48,7 +38,6 @@ import {
   checkRunDirectoryExists,
   getStartTime,
   startAcquisitionCurrent,
-  stopAcquisitionCurrent,
   addRunMetadata,
   reset,
   resetDeviceCurrent,
@@ -60,14 +49,19 @@ import {
   getRunMetadataAll,
   refreshBoardConnections,
   startStatsRun,
-  stopStatsRun
+  getTotalAccumulatedCharge,
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
-import { pauseAlertNonBlocking, unpauseAlertNonBlocking } from '@/lib/grafana-api'
+import { unpauseAlertNonBlocking } from '@/lib/grafana-api'
+import { stopRunSequence } from '@/lib/run-actions'
+import { refreshRunStatus } from '@/hooks/use-run-status'
+import { formatElapsed } from '@/components/run-status-indicator'
 
 interface RunControlButtonsProps {
+  /** Seconds since the run started, for the Stop confirmation. */
+  elapsed?: number
   saveData: boolean
   limitFileSize: boolean
   fileSizeLimit: string
@@ -88,6 +82,7 @@ interface RunControlButtonsProps {
  * experiment control logic and user interface elements.
  */
 export function RunControlButtons({
+  elapsed = 0,
   saveData,
   limitFileSize,
   fileSizeLimit,
@@ -108,6 +103,9 @@ export function RunControlButtons({
   // Dialog states
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
+  // Shown in the Reset total charge confirmation, so the operator sees what
+  // is about to be zeroed.
+  const [totalChargeNow, setTotalChargeNow] = useState<number | null>(null)
 
   // Run metadata states
   const [targetName, setTargetName] = useState<string>('')
@@ -248,6 +246,7 @@ export function RunControlButtons({
       onStartTimeChange(newStartTime)
       setIsRunningStore(true)
       setStartTimeStore(newStartTime)
+      void refreshRunStatus()
 
       if (saveData) {
         await addRunMetadata(runNumber, targetName, tv, pv, runType)
@@ -282,33 +281,28 @@ export function RunControlButtons({
    */
   const handleStopRun = async () => {
     try {
-      onStartTimeChange(null)
       toast({
-        title: 'Stopping Run...',
+        title: 'Stopping run…',
         description: 'Please wait while the run is being stopped.',
       })
 
-      // Stop DAQ and current measurement
-      await stopRun()
-      if (saveData) {
-        if (currentEnabled) {
-          await stopAcquisitionCurrent()
-        }
-        await stopStatsRun()
-      }
+      // Stop DAQ, then current measurement and stats.csv (lib/run-actions.ts,
+      // shared with the phone run bar). The displayed state is cleared only
+      // once the DAQ has really stopped: a failed stop leaves it running.
+      const { warnings } = await stopRunSequence(saveData)
 
-      // Silence (pause) Grafana alerts selected for auto-management
-      autoManageUids.forEach((uid) => pauseAlertNonBlocking(uid))
-
-      toast({
-        title: 'Run Stopped',
-        description: 'The experiment run has been stopped successfully.',
-      })
-
-      // Update states
       onIsRunningChange(false)
+      onStartTimeChange(null)
       setIsRunningStore(false)
       setStartTimeStore(null)
+
+      toast({
+        title: warnings.length ? 'Run stopped (with warnings)' : 'Run stopped',
+        description: warnings.length
+          ? `The DAQ is stopped, but ${warnings.join(' and ')}.`
+          : 'The run has been stopped.',
+        variant: warnings.length ? 'destructive' : undefined,
+      })
 
       // Update run number for next run
       const newRunNumber = await getCurrentRunNumber()
@@ -316,7 +310,7 @@ export function RunControlButtons({
     } catch (error) {
       console.error('Failed to stop run:', error)
       toast({
-        title: 'Error',
+        title: 'The run is still going',
         description: 'Failed to stop the run. Please try again.',
         variant: 'destructive',
       })
@@ -333,10 +327,10 @@ export function RunControlButtons({
         description: 'Please wait while the acquisition is reset.',
       })
 
-      if (currentEnabled) {
-        await resetDeviceCurrent()
-      }
-      // reset() resolves to 0 on success and -1 on failure.
+      // reset() resolves to 0 on success and -1 on failure. The current
+      // device is reset only after the DAQ reset succeeded. The button is
+      // disabled during a run (as on Troubleshoot): the server's reset tears
+      // the acquisition down without closing the run's current log or stats.
       const result = await reset()
       if (result === -1) {
         toast({
@@ -345,6 +339,9 @@ export function RunControlButtons({
           variant: 'destructive',
         })
         return
+      }
+      if (currentEnabled) {
+        await resetDeviceCurrent()
       }
 
       toast({
@@ -419,13 +416,13 @@ export function RunControlButtons({
   return (
     <Card>
       <CardHeader className="pb-4">
-        <CardTitle className="text-lg sm:text-xl">Run Setup &amp; Control</CardTitle>
+        <CardTitle>Run setup &amp; control</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-4">
         {/* Metadata Input Fields */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="targetName">Run Name</Label>
+            <Label htmlFor="targetName">Run name</Label>
             <Input
               id="targetName"
               type="text"
@@ -435,9 +432,9 @@ export function RunControlButtons({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="targetType">Run Type</Label>
+            <Label htmlFor="targetType">Run type</Label>
             <Select value={runType} onValueChange={(value) => setRunType(value)} disabled={isRunning}>
-              <SelectTrigger id="framework">
+              <SelectTrigger id="targetType">
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
               <SelectContent position="popper">
@@ -470,26 +467,45 @@ export function RunControlButtons({
           </div>
         </div>
 
-        {/* Primary Control Buttons */}
+        {/* Primary Control Buttons. Start is green and Stop red, never the
+            brand rose, so the two cannot be mistaken for each other. Stop asks
+            first: it ends the run for everyone. */}
         <div className="grid grid-cols-2 gap-3 border-t pt-4">
           <Button
             onClick={handleStartRun}
             className="w-full"
-            variant={isRunning ? 'outline' : 'default'}
+            variant={isRunning ? 'outline' : 'success'}
             disabled={isRunning}
           >
             <PlayCircle className="mr-2 h-4 w-4" />
             Start Run
           </Button>
-          <Button
-            onClick={handleStopRun}
-            variant={isRunning ? 'destructive' : 'outline'}
-            className="w-full"
-            disabled={!isRunning}
-          >
-            <StopCircle className="mr-2 h-4 w-4" />
-            Stop Run
-          </Button>
+          <ConfirmAction
+            trigger={
+              <Button
+                variant={isRunning ? 'destructive' : 'outline'}
+                className="w-full"
+                disabled={!isRunning}
+              >
+                <StopCircle className="mr-2 h-4 w-4" />
+                Stop Run
+              </Button>
+            }
+            title={runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
+            description={
+              <>
+                <p>
+                  Acquisition ends for every board{elapsed > 0 ? ` after ${formatElapsed(elapsed)}` : ''}.
+                  {saveData
+                    ? ' The run is closed and its files are kept.'
+                    : ' Data saving is off, so nothing from this run is on disk.'}
+                </p>
+                <p>Starting again makes a new run.</p>
+              </>
+            }
+            confirmLabel={runNumber !== null ? `Stop run ${runNumber}` : 'Stop run'}
+            onConfirm={handleStopRun}
+          />
         </div>
 
         <Collapsible open={maintenanceOpen} onOpenChange={setMaintenanceOpen}>
@@ -526,48 +542,102 @@ export function RunControlButtons({
                 </Button>
                 <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 sm:col-span-2">
                   <p className="mb-3 text-xs text-muted-foreground">
-                    Reset the acquisition only when recovery is required.
+                    {isRunning
+                      ? 'Stop the run first: the acquisition cannot be reset while a run is going.'
+                      : 'Reset the acquisition only when recovery is required.'}
                   </p>
-                  <Button
-                    type="button"
-                    onClick={handleReset}
-                    className="w-full"
-                    variant="destructive"
-                  >
-                    <AlertTriangle className="mr-2 h-4 w-4" />
-                    Reset acquisition
-                  </Button>
+                  <ConfirmAction
+                    trigger={
+                      <Button
+                        type="button"
+                        className="w-full"
+                        variant="destructive"
+                        disabled={isRunning}
+                      >
+                        <AlertTriangle className="mr-2 h-4 w-4" />
+                        Reset acquisition
+                      </Button>
+                    }
+                    title="Reset the acquisition?"
+                    description={
+                      <p>
+                        The CAEN acquisition and board monitoring are torn down and the boards
+                        are handed back to the probe layer, ready to start again
+                        {currentEnabled ? '; the current module is reset and stops logging' : ''}.
+                        Use it only to recover from a stuck acquisition. Saved runs are not touched.
+                      </p>
+                    }
+                    confirmLabel="Reset acquisition"
+                    onConfirm={handleReset}
+                  />
                 </div>
               </div>
             </CollapsibleContent>
-            <Button
-              type="button"
-              onClick={handleResetTotalAccumulatedCharge}
-              variant="outline"
-              className="w-full sm:col-start-2 sm:row-start-1 sm:w-auto"
+            {/* Stays on the dashboard (operators use it), behind a confirmation. */}
+            <ConfirmAction
+              trigger={
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full sm:col-start-2 sm:row-start-1 sm:w-auto"
+                >
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Reset total charge
+                </Button>
+              }
+              onOpenChange={(open) => {
+                if (open) {
+                  setTotalChargeNow(null)
+                  getTotalAccumulatedCharge()
+                    .then((v) => setTotalChargeNow(Number(v)))
+                    .catch(() => setTotalChargeNow(null))
+                }
+              }}
+              title="Reset the lifetime charge total?"
+              description={
+                <p>
+                  The lifetime accumulated charge is set to zero and cannot be recovered.
+                  The charge of the current run is not affected.
+                </p>
+              }
+              confirmLabel="Reset total charge"
+              onConfirm={handleResetTotalAccumulatedCharge}
             >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Reset total charge
-            </Button>
+              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                Total now:{' '}
+                <span className="font-semibold tabular-nums">
+                  {totalChargeNow === null || !Number.isFinite(totalChargeNow)
+                    ? '…'
+                    : formatMicroCoulomb(totalChargeNow)}
+                </span>
+              </p>
+            </ConfirmAction>
           </div>
         </Collapsible>
       </CardContent>
 
       {/* Directory Override Confirmation Dialog */}
-      <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Override Existing Run?</AlertDialogTitle>
-            <AlertDialogDescription>
-              The directory for run number {runNumber} already exists. Do you want to override it?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={startRunProcess}>Override</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmAction
+        open={showOverrideDialog}
+        onOpenChange={setShowOverrideDialog}
+        title={`Overwrite run ${runNumber}?`}
+        description={
+          <p>
+            The directory for run {runNumber} already exists. Starting writes this run
+            into it and overwrites the files of the earlier run {runNumber}.
+          </p>
+        }
+        confirmLabel={`Overwrite and start run ${runNumber}`}
+        onConfirm={startRunProcess}
+      />
     </Card>
   )
+}
+
+/** µC → a readable charge (µC, mC or C). */
+function formatMicroCoulomb(microCoulombs: number): string {
+  const a = Math.abs(microCoulombs)
+  if (a >= 1_000_000) return `${(microCoulombs / 1_000_000).toFixed(2)} C`
+  if (a >= 1_000) return `${(microCoulombs / 1_000).toFixed(2)} mC`
+  return `${microCoulombs.toFixed(2)} µC`
 }

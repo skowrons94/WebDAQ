@@ -25,7 +25,7 @@ import {
   getDataCurrent,
   getTotalAccumulatedCharge,
 } from '@/lib/api'
-import useRunControlStore from '@/store/run-control-store'
+import { useRunStatus } from '@/hooks/use-run-status'
 import type { BeamPanelPlacement } from '@/store/visualization-settings-store'
 
 const PLACEMENT_OPTIONS = [
@@ -51,7 +51,7 @@ export function BeamControlPanel({
   placement,
   onPlacementChange,
 }: BeamControlPanelProps) {
-  const isRunning = useRunControlStore((state) => state.isRunning)
+  const isRunning = useRunStatus((state) => state.isRunning)
   const [beamCurrent, setBeamCurrent] = useState(0)
   const [beamCurrentChange, setBeamCurrentChange] = useState(0)
   const [runCharge, setRunCharge] = useState(0)
@@ -113,7 +113,7 @@ export function BeamControlPanel({
         <p className="mt-1 text-lg font-semibold tabular-nums">{formatCharge(runCharge)}</p>
         <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
           <span className={`h-1.5 w-1.5 rounded-full ${
-            isRunning ? 'bg-green-500' : 'bg-muted-foreground/40'
+            isRunning ? 'bg-success' : 'bg-muted-foreground/40'
           }`} />
           {isRunning ? 'Integrating' : 'Paused'}
         </p>

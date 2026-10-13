@@ -1,7 +1,9 @@
 'use client'
 
+import { useRunStatus } from '@/hooks/use-run-status'
+import { StatusBadge } from '@/components/ui/status-badge'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getPsd } from '@/lib/api'
+import { getBoardConfiguration, getPsd } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -22,8 +24,9 @@ type BoardData = {
 
 export default function PSDDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
-  const [isRunning, setIsRunning] = useState(false)
-  const [runNumber, setRunNumber] = useState<number | null>(null)
+  // From the app's shared run-status poller (hooks/use-run-status.ts).
+  const isRunning = useRunStatus((s) => s.isRunning)
+  const runNumber = useRunStatus((s) => s.runNumber)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [updateTrigger, setUpdateTrigger] = useState(0)
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
@@ -38,8 +41,6 @@ export default function PSDDashboard() {
 
   useEffect(() => {
     fetchBoardConfiguration()
-    fetchRunStatus()
-    const statusInterval = setInterval(fetchRunStatus, 5000)
 
     loadJSROOT()
       .then(() => {
@@ -55,7 +56,6 @@ export default function PSDDashboard() {
         })
       })
 
-    return () => clearInterval(statusInterval)
   }, [])
 
   useEffect(() => {
@@ -94,23 +94,7 @@ export default function PSDDashboard() {
     }
   }
 
-  const fetchRunStatus = async () => {
-    try {
-      const [statusResponse, runNumberResponse] = await Promise.all([
-        getRunStatus(),
-        getCurrentRunNumber()
-      ])
-      setIsRunning(statusResponse)
-      setRunNumber(runNumberResponse)
-    } catch (error) {
-      console.error('Failed to fetch run status:', error)
-      toast({
-        title: "Error",
-        description: "Failed to fetch run status. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
+
 
   const createBlankHistogram = useCallback((name: string) => {
     if (window.JSROOT) {
@@ -266,9 +250,9 @@ export default function PSDDashboard() {
               <CardHeader>
                 <CardTitle className="flex justify-between items-center">
                   <span>{board.name} (ID: {board.id}) - PSD Histograms</span>
-                  <div className="text-sm text-muted-foreground">
-                    Status: {isRunning ? 'Running' : 'Stopped'}
-                    {runNumber && ` | Run: ${runNumber}`}
+                  <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
+                    <StatusBadge state={isRunning ? 'running' : 'stopped'} />
+                    {runNumber && <span>Run {runNumber}</span>}
                   </div>
                 </CardTitle>
                 <div className="flex flex-col space-y-4 mt-4">

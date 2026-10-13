@@ -1,5 +1,7 @@
 'use client'
 
+import { useRunStatus, refreshRunStatus } from '@/hooks/use-run-status'
+import { StatusBadge } from '@/components/ui/status-badge'
 import React, { useState, useEffect, useRef } from 'react'
 import {
   getBoardConfiguration,
@@ -13,7 +15,6 @@ import {
   getProbe2,
   startRun,
   stopRun,
-  getRunStatus,
   getSaveData,
   setSaveData,
 } from '@/lib/api'
@@ -161,7 +162,8 @@ export default function ParamTuner() {
   const [waveformNum, setWaveformNum] = useState<1 | 2>(1)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
   const [refreshTick, setRefreshTick] = useState(0)
-  const [isRunning, setIsRunning] = useState(false)
+  // From the app's shared run-status poller (hooks/use-run-status.ts).
+  const isRunning = useRunStatus((s) => s.isRunning)
   // Online mode: write each change to the board as well as to its configuration,
   // so the effect shows up in the trace and the spectrum straight away. Off by
   // default — a session that only edits the configuration must stay possible.
@@ -284,18 +286,14 @@ export default function ParamTuner() {
       )
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll run status
+  // The Tuner's own acquisition ended elsewhere (stopped from the Dashboard,
+  // or by a reset): it is no longer the Tuner's to stop.
+  const sawOwnRun = useRef(false)
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const running = await getRunStatus()
-        setIsRunning(running)
-      } catch {}
-    }
-    fetchStatus()
-    const interval = setInterval(fetchStatus, 3000)
-    return () => clearInterval(interval)
-  }, [])
+    if (!isAcquiring) { sawOwnRun.current = false; return }
+    if (isRunning) sawOwnRun.current = true
+    else if (sawOwnRun.current) setIsAcquiring(false)
+  }, [isRunning, isAcquiring])
 
   // Auto-refresh tick
   useEffect(() => {
@@ -364,6 +362,7 @@ export default function ParamTuner() {
       setSavedSaveFlagState(original)
       await setSaveData(false)
       await startRun()
+      await refreshRunStatus()
       setIsAcquiring(true)
       toast({ title: 'Started', description: 'Acquisition started (data saving disabled)' })
     } catch {
@@ -371,9 +370,13 @@ export default function ParamTuner() {
     }
   }
 
+  // Stops only the acquisition the Tuner started itself (isAcquiring): a
+  // production run started from the Dashboard is never the Tuner's to stop.
   const handleStop = async () => {
+    if (!isAcquiring) return
     try {
       await stopRun()
+      void refreshRunStatus()
       if (savedSaveFlag !== null) await setSaveData(savedSaveFlag)
       setIsAcquiring(false)
       toast({ title: 'Stopped', description: 'Acquisition stopped' })
@@ -552,7 +555,7 @@ export default function ParamTuner() {
         {online && (
           tunable ? (
             <span
-              className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400"
+              className="flex items-center gap-1 text-xs text-success"
               title="Written to the board as soon as you save"
             >
               <Zap className="h-3 w-3" />
@@ -568,7 +571,7 @@ export default function ParamTuner() {
           )
         )}
         {pendingValues[regKey] !== undefined && (
-          <Badge variant="outline" className="text-xs text-orange-500 border-orange-500">
+          <Badge variant="outline" className="text-xs text-warning border-warning">
             unsaved
           </Badge>
         )}
@@ -623,23 +626,27 @@ export default function ParamTuner() {
         <Button
           onClick={handleStart}
           disabled={isAcquiring || isRunning}
-          className="bg-green-600 hover:bg-green-700 text-white"
+          variant="success"
         >
           Start
         </Button>
         <Button
           onClick={handleStop}
-          disabled={!isAcquiring && !isRunning}
+          disabled={!isAcquiring}
           variant="destructive"
+          title={isRunning && !isAcquiring ? 'A run started from the Dashboard is in progress: stop it there' : undefined}
         >
           Stop
         </Button>
 
-        <Badge variant={isRunning ? 'default' : 'secondary'}>
-          {isRunning ? 'Running' : 'Stopped'}
-        </Badge>
+        <StatusBadge state={isRunning ? 'running' : 'stopped'} />
+        {isRunning && !isAcquiring && (
+          <span className="text-xs text-muted-foreground">
+            Run in progress: stop it from the Dashboard
+          </span>
+        )}
         {isAcquiring && (
-          <Badge variant="outline" className="text-yellow-600 border-yellow-600">
+          <Badge variant="outline" className="text-warning border-warning">
             Tuner active · saving disabled
           </Badge>
         )}
@@ -648,7 +655,7 @@ export default function ParamTuner() {
             Only the parameters that are safe to move during acquisition are sent;
             the rest are saved and applied at the next run. */}
         <div className="ml-auto flex items-center gap-2 rounded-md border px-3 py-1.5">
-          <Zap className={`h-4 w-4 ${online ? 'text-green-500' : 'text-muted-foreground'}`} />
+          <Zap className={`h-4 w-4 ${online ? 'text-success' : 'text-muted-foreground'}`} />
           <Label htmlFor="tuner-online" className="text-sm font-medium">Online</Label>
           <Switch id="tuner-online" checked={online} onCheckedChange={setOnline} />
           <span className="text-xs text-muted-foreground max-w-[16rem]">

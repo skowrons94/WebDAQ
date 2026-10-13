@@ -11,13 +11,11 @@ import {
   getSaveData,
   getLimitDataSize,
   getDataSizeLimit,
-  getCurrentRunNumber,
-  getRunStatus,
-  getStartTime,
   getIpCurrent,
   getPortCurrent,
 } from '@/lib/api'
-import useRunControlStore from '@/store/run-control-store'
+import { useRunStatus } from '@/hooks/use-run-status'
+import { useElapsed } from '@/components/run-status-indicator'
 import {
   useVisualizationStore,
   type BeamPanelPlacement,
@@ -43,8 +41,17 @@ import { cn } from '@/lib/utils'
  */
 export function RunControl() {
   const { toast } = useToast()
-  const setIsRunningStore = useRunControlStore((state) => state.setIsRunning)
-  const setStartTimeStore = useRunControlStore((state) => state.setStartTime)
+  // Run state, start time and run number come from the app's one run-status
+  // poller (hooks/use-run-status.ts): the overview, the header, the run bar and
+  // /alerts all read the same values.
+  const runStatus = useRunStatus()
+  const isRunning = runStatus.isRunning
+  const startTime = runStatus.startTime
+  const runNumber = runStatus.runNumber
+  const timer = useElapsed(isRunning, startTime)
+  const setRunNumberState = runStatus.setRunNumber
+  const setIsRunning = runStatus.setIsRunning
+  const setStartTime = runStatus.setStartTime
   const settings = useVisualizationStore((state) => state.settings)
   const updateVisualizationSettings = useVisualizationStore((state) => state.updateSettings)
   const currentEnabled = settings.currentEnabled !== false
@@ -57,10 +64,6 @@ export function RunControl() {
   const [saveData, setSaveDataState] = useState(false)
   const [limitFileSize, setLimitFileSize] = useState(false)
   const [fileSizeLimit, setFileSizeLimit] = useState("")
-  const [runNumber, setRunNumberState] = useState<number | null>(null)
-  const [isRunning, setIsRunning] = useState(false)
-  const [timer, setTimer] = useState(0)
-  const [startTime, setStartTime] = useState<string | null>(null)
 
   // TetrAMM connection state
   const [ipCurrent, setIpCurrent] = useState<string>('')
@@ -69,43 +72,7 @@ export function RunControl() {
   // Initialize component with data from backend
   useEffect(() => {
     fetchInitialData()
-    
-    // Set up polling intervals for status updates
-    const statusInterval = setInterval(fetchRunStatus, 5000)
-
-    return () => {
-      clearInterval(statusInterval)
-    }
   }, [])
-
-  // Timer management for run duration display
-  useEffect(() => {
-    let interval: NodeJS.Timeout | null = null
-    if (isRunning && startTime) {
-      const updateTimer = () => {
-        const start = new Date(startTime).getTime()
-        const now = new Date().getTime()
-        // start_time is a timezone-aware ISO string, so this is correct across
-        // time zones. Clamp at 0 so the timer never shows a negative value from
-        // small clock skew between server and client.
-        const elapsed = Math.max(0, Math.floor((now - start) / 1000))
-        setTimer(elapsed)
-      }
-      updateTimer()
-      interval = setInterval(updateTimer, 1000)
-    } else if (!isRunning) {
-      setTimer(0)
-    }
-    return () => {
-      if (interval) clearInterval(interval)
-    }
-  }, [isRunning, startTime])
-
-  // Sync local state with global store
-  useEffect(() => {
-    setIsRunningStore(isRunning)
-    setStartTimeStore(startTime)
-  }, [isRunning, startTime, setIsRunningStore, setStartTimeStore])
 
   useEffect(() => {
     const node = statusPanelRef.current
@@ -131,18 +98,12 @@ export function RunControl() {
         saveDataStatus,
         limitFileSizeStatus,
         fileSizeLimitData,
-        currentRunNumber,
-        runStatus,
-        startTimeData,
         ipCurrentData,
         portCurrentData
       ] = await Promise.all([
         getSaveData(),
         getLimitDataSize(),
         getDataSizeLimit(),
-        getCurrentRunNumber(),
-        getRunStatus(),
-        getStartTime(),
         getIpCurrent(),
         getPortCurrent()
       ])
@@ -150,9 +111,6 @@ export function RunControl() {
       setSaveDataState(saveDataStatus)
       setLimitFileSize(limitFileSizeStatus)
       setFileSizeLimit(fileSizeLimitData.toString())
-      setRunNumberState(currentRunNumber)
-      setIsRunning(runStatus)
-      setStartTime(startTimeData)
       setIpCurrent(ipCurrentData)
       setPortCurrent(portCurrentData)
     } catch (error) {
@@ -162,28 +120,6 @@ export function RunControl() {
         description: "Failed to fetch initial data. Please try again.",
         variant: "destructive",
       })
-    }
-  }
-
-  /**
-   * Polls backend for current run status and run number
-   */
-
-  const fetchRunStatus = async () => {
-    try {
-      const [statusResponse, runNumberResponse, startTimeResponse] = await Promise.all([
-        getRunStatus(),
-        getCurrentRunNumber(),
-        getStartTime(),
-      ])
-      setIsRunning(statusResponse)
-      setRunNumberState(runNumberResponse)
-      // A run can be started from another browser or from the Tuner. Keep the
-      // shared start time current so every consumer can reconstruct the run
-      // history instead of starting its own clock when it notices the change.
-      setStartTime(statusResponse ? startTimeResponse : null)
-    } catch (error) {
-      console.error('Failed to fetch run status:', error)
     }
   }
 
@@ -248,6 +184,7 @@ export function RunControl() {
                 : 'xl:grid-cols-[minmax(0,2fr)_minmax(22rem,1fr)] xl:items-start',
             )}>
               <RunControlButtons
+                elapsed={timer}
                 saveData={saveData}
                 limitFileSize={limitFileSize}
                 fileSizeLimit={fileSizeLimit}

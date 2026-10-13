@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
-import { getBoardConfiguration, getRunStatus, getCurrentRunNumber, getHistogram, setRebinFactor } from "@/lib/api"
+import { getBoardConfiguration, getHistogram, setRebinFactor } from "@/lib/api"
 // The dashboard's configuration lives on the DAQ server (conf/histograms.json).
 // These are the only definitions of ROI and HistogramConfig — see
 // lib/histogram-config.ts for why there used to be three.
@@ -74,7 +74,7 @@ const SortableHistogramCard = ({ config, roiIntegrals, onAddROI, onEditHistogram
   return (
     <Card ref={setNodeRef} style={style} className={`relative ${isDragging ? 'z-50' : ''} bg-gradient-to-br from-card via-card/95 to-card/90 backdrop-blur-sm border-border/50`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-base font-semibold leading-tight flex items-center gap-2">
+        <CardTitle className="font-semibold leading-tight flex items-center gap-2">
           <div
             {...attributes}
             {...listeners}
@@ -542,11 +542,9 @@ export default function EnhancedHistogramDashboard() {
       setRebinFactor(useHistogramStore.getState().settings.rebinFactor)
         .catch((error) => console.error("Failed to apply the rebin factor:", error))
       await fetchBoardConfiguration()
-      await fetchRunStatus()
     }
 
     initializeApp()
-    const statusInterval = setInterval(fetchRunStatus, 5000)
 
     loadJSROOT()
       .then(() => setJsrootLoaded(true))
@@ -559,7 +557,6 @@ export default function EnhancedHistogramDashboard() {
         })
       })
 
-    return () => clearInterval(statusInterval)
   }, [])
 
   // Initialize histograms when JSROOT loads
@@ -1021,14 +1018,6 @@ export default function EnhancedHistogramDashboard() {
         variant: "destructive",
       })
       return []
-    }
-  }
-
-  const fetchRunStatus = async () => {
-    try {
-      await Promise.all([getRunStatus(), getCurrentRunNumber()])
-    } catch (error) {
-      console.error("Failed to fetch run status:", error)
     }
   }
 

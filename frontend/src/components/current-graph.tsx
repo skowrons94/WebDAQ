@@ -8,7 +8,7 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 import { getCurrentHistory } from '@/lib/api'
-import useRunControlStore from '@/store/run-control-store'
+import { useRunStatus } from '@/hooks/use-run-status'
 import { cn } from '@/lib/utils'
 import {
   currentUnit, maxMagnitude, formatTick, formatValue,
@@ -114,8 +114,8 @@ export default function CurrentGraph({
   const [data, setData] = useState<CurrentPoint[]>([])
   const [binWidth, setBinWidth] = useState<number | null>(null)
   const [stoppedWindow, setStoppedWindow] = useState(30)
-  const isRunning = useRunControlStore((state) => state.isRunning)
-  const startTime = useRunControlStore((state) => state.startTime)
+  const isRunning = useRunStatus((state) => state.isRunning)
+  const startTime = useRunStatus((state) => state.startTime)
 
   useEffect(() => {
     let cancelled = false
@@ -227,7 +227,7 @@ export default function CurrentGraph({
   const historyControl = isRunning ? (
     <div className="flex items-center gap-2">
       <Badge variant="outline" className="w-fit gap-1.5">
-        <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+        <span className="h-1.5 w-1.5 rounded-full bg-success" />
         Since run start
       </Badge>
       {resolutionNote && (

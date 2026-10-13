@@ -1,5 +1,6 @@
 "use client"
 
+import { StatusBadge } from '@/components/ui/status-badge'
 import { useState, useEffect, useCallback, useMemo } from "react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -415,7 +416,7 @@ function BoardsTab({ detail }: { detail: RunDetail }) {
           {detail.board_info.map(b => (
             <Card key={b.board_id}>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+                <CardTitle className="flex items-center gap-2 flex-wrap">
                   {b.configured_name ?? b.model_name}
                   <Badge variant="outline" className="text-xs font-mono">{b.dpp_type}</Badge>
                   <Badge
@@ -850,7 +851,7 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Run</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle>Run</CardTitle></CardHeader>
         <CardContent>
           <Field label="Run number" value={detail.run_number} />
           <Field label="Type" value={detail.run_type} />
@@ -871,14 +872,14 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
       </Card>
 
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Acquisition</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle>Acquisition</CardTitle></CardHeader>
         <CardContent>
           <Field
             label="Synchronisation" value={detail.sync_mode}
             hint="'daisy-chain' means the boards were armed and started together, so their timestamps share one time origin."
           />
           <Field label="Boards" value={detail.board_info.length || undefined} />
-          <Field label="WebDAQ" value={sw.webdaq} />
+          <Field label="LUNADAQ" value={sw.webdaq} />
           <Field label="CaenDAQ" value={sw.caendaq ?? undefined} />
           <Field
             label="Acquisition mode" value={sw.acquisition_mode}
@@ -897,7 +898,7 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
       </Card>
 
       <Card className="lg:col-span-2">
-        <CardHeader className="pb-3"><CardTitle className="text-base">Notes</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle>Notes</CardTitle></CardHeader>
         <CardContent>
           {detail.notes ? (
             <p className="text-sm whitespace-pre-wrap">{detail.notes}</p>
@@ -928,7 +929,7 @@ function SummaryMetric({
         {label}
       </div>
       <div className="mt-1.5 truncate text-lg font-semibold tabular-nums">{value}</div>
-      {detail && <div className="mt-0.5 truncate text-[11px] text-muted-foreground">{detail}</div>}
+      {detail && <div className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</div>}
     </div>
   )
 }
@@ -963,7 +964,7 @@ function LogbookRunHeader({
               <h1 className="text-3xl font-bold tracking-tight">Run {detail.run_number}</h1>
               <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
               {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
-              {!detail.complete && <Badge variant="destructive">in progress</Badge>}
+              {!detail.complete && <StatusBadge state="running" label="In progress" />}
             </div>
             <p className="mt-2 text-base font-medium">
               {detail.target_name || "Untitled run"}
@@ -1085,7 +1086,7 @@ function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
               value={sw.acquisition_mode}
               hint="'mock' means the data was generated in test mode, not read from real boards."
             />
-            <Field label="WebDAQ" value={sw.webdaq} />
+            <Field label="LUNADAQ" value={sw.webdaq} />
             <Field label="CaenDAQ" value={sw.caendaq ?? undefined} />
             <Field label="Python" value={sw.python} />
             <Field label="Platform" value={sw.platform} />
@@ -1163,7 +1164,7 @@ function RunDetailTabs({
         <h2 className="text-lg font-semibold">Run {detail.run_number}</h2>
         <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
         {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
-        {!detail.complete && <Badge variant="destructive">in progress</Badge>}
+        {!detail.complete && <StatusBadge state="running" label="In progress" />}
       </div>
 
       <Tabs defaultValue="overview">
@@ -1353,7 +1354,7 @@ export default function DataDashboard() {
         {/* Run picker */}
         <Card className="lg:sticky lg:top-4">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Runs</CardTitle>
+            <CardTitle>Runs</CardTitle>
             <Input
               value={search}
               onChange={e => setSearch(e.target.value)}
@@ -1378,15 +1379,15 @@ export default function DataDashboard() {
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium">Run {run.run_number}</span>
                     <div className="flex items-center gap-1">
-                      {run.has_data && <Badge variant="outline" className="text-[10px] px-1 py-0">data</Badge>}
-                      {run.has_current && <Badge variant="outline" className="text-[10px] px-1 py-0">I</Badge>}
-                      {run.converted && <Badge className="text-[10px] px-1 py-0">root</Badge>}
+                      {run.has_data && <Badge variant="outline" className="text-xs px-1 py-0">data</Badge>}
+                      {run.has_current && <Badge variant="outline" className="text-xs px-1 py-0">I</Badge>}
+                      {run.converted && <Badge className="text-xs px-1 py-0">root</Badge>}
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
                     {run.target_name || run.run_type || "—"} · {formatDuration(run.duration_s)}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {formatTime(run.start_time)}
                   </div>
                 </button>
