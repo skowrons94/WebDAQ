@@ -165,7 +165,7 @@ export default function GuidedFlow({
 
   return (
     <div className="space-y-3" data-testid="guided-flow">
-      <ol className="flex flex-wrap gap-1.5" aria-label="Steps">
+      <ol className="flex flex-wrap gap-1.5" aria-label="Tuning steps">
         {steps.map((s, k) => {
           const r = s.check(status)
           return (
