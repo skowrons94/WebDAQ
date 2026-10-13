@@ -399,9 +399,25 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                         </div>
                     ) : connected ? (
                         <div className="space-y-3">
+                            {/* What this popover is opened for, first: which working
+                                directory the server writes into. */}
                             <div>
-                                <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium">Server is running</p>
+                                <p className="text-xs font-medium text-muted-foreground">Working directory</p>
+                                {currentDirectory ? (
+                                    <>
+                                        <p className="mt-0.5 flex items-center gap-1.5 text-base font-semibold">
+                                            <FolderOpen className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                                            {activeDir ? activeDir.label : currentDirectory}
+                                        </p>
+                                        {activeDir && (
+                                            <p className="text-sm text-muted-foreground font-mono break-all">{currentDirectory}</p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="mt-0.5 text-sm text-muted-foreground">Not reported by the server</p>
+                                )}
+                                <div className="mt-2 flex items-center gap-2">
+                                    <p className="text-xs text-muted-foreground">Server is running</p>
                                     {serverTestMode && (
                                         <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                                             <FlaskConical className="h-3 w-3" />
@@ -409,18 +425,17 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                                         </span>
                                     )}
                                 </div>
-                                {currentDirectory && (
-                                    <p className="text-xs text-muted-foreground font-mono break-all">
-                                        {activeDir ? `${activeDir.label} · ` : ''}
-                                        {currentDirectory}
-                                    </p>
-                                )}
+                                <p className="mt-1 text-xs text-muted-foreground">
+                                    To work in another directory, stop the server, then start it there.
+                                </p>
                             </div>
                             <div className="flex gap-2">
+                                {/* Outline with destructive text: still behind its
+                                    confirmation, but no longer the loudest thing here. */}
                                 <Button
-                                    variant="destructive"
+                                    variant="outline"
                                     size="sm"
-                                    className="flex-1"
+                                    className="flex-1 border-destructive/60 text-destructive hover:bg-destructive/10 hover:text-destructive"
                                     onClick={() => setConfirmStopServer(true)}
                                     disabled={loading}
                                 >
