@@ -204,7 +204,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                         table.getColumn("run_type")?.setFilterValue(v === "all" ? undefined : v)
                     }
                 >
-                    <SelectTrigger className="w-36 h-9">
+                    <SelectTrigger className="w-36 h-9" aria-label="Filter by run type">
                         <SelectValue placeholder="Run type" />
                     </SelectTrigger>
                     <SelectContent>
@@ -223,7 +223,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                         table.getColumn("flag")?.setFilterValue(v === "all" ? undefined : v)
                     }
                 >
-                    <SelectTrigger className="w-32 h-9">
+                    <SelectTrigger className="w-32 h-9" aria-label="Filter by quality flag">
                         <SelectValue placeholder="Flag" />
                     </SelectTrigger>
                     <SelectContent>

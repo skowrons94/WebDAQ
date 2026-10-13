@@ -155,6 +155,7 @@ export function NotificationSettings() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch
+              aria-label="Telegram notifications on"
               checked={telegram?.enabled ?? false}
               disabled={!telegram?.configured || busy !== null}
               onCheckedChange={(checked) => act('telegram-enabled',
@@ -208,6 +209,7 @@ export function NotificationSettings() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
             <Switch
+              aria-label="Zulip notifications on"
               checked={zulip?.enabled ?? false}
               disabled={!zulip?.configured || busy !== null}
               onCheckedChange={(checked) => act('zulip-enabled',
@@ -295,10 +297,10 @@ export function NotificationSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
-            <Switch checked={status?.notify_recovery ?? true} disabled={busy !== null}
+            <Switch id="notify-recovery" checked={status?.notify_recovery ?? true} disabled={busy !== null}
                     onCheckedChange={(checked) => act('recovery',
                       () => setNotificationSettings({ notify_recovery: checked }))} />
-            <Label>Also send a message when a condition clears</Label>
+            <Label htmlFor="notify-recovery">Also send a message when a condition clears</Label>
           </div>
 
           {status?.load_error && (
@@ -356,7 +358,7 @@ export function NotificationSettings() {
           <div className="flex flex-wrap items-center gap-2 border-t pt-4">
             <Select value={newRuleType}
                     onValueChange={(value) => setNewRuleType(value as AlertRule['type'])}>
-              <SelectTrigger className="w-72"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-72" aria-label="Type of the new alert"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {types.map((type) => (
                   <SelectItem key={type.type} value={type.type}>{type.name}</SelectItem>
@@ -459,7 +461,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
     <div className={`rounded-lg border p-4 ${alerting ? 'border-destructive' : ''}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Switch checked={rule.enabled} disabled={busy}
+          <Switch aria-label={`Alert "${rule.name}" on`} checked={rule.enabled} disabled={busy}
                   onCheckedChange={(checked) => onChange({ enabled: checked })} />
           <div>
             <p className="font-medium">{rule.name}</p>
@@ -523,7 +525,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
               <Select value={String(params.comparison ?? 'below')}
                       onValueChange={(value) =>
                         onChange({ params: { ...params, comparison: value } })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger aria-label="Alert when the value is"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {COMPARISONS.map((c) => (
                     <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
@@ -567,7 +569,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
           <span className="text-xs uppercase tracking-wide text-muted-foreground">Send to</span>
           {(['telegram', 'zulip'] as const).map((name) => (
             <label key={name} className="flex items-center gap-2 text-sm capitalize">
-              <Switch checked={transports.includes(name)} disabled={busy}
+              <Switch aria-label={`Send to ${name}`} checked={transports.includes(name)} disabled={busy}
                       onCheckedChange={(checked) => toggleTransport(name, checked)} />
               {name}
             </label>
@@ -575,7 +577,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
         </div>
         {hasRunOnly && (
           <label className="flex items-center gap-2 text-sm">
-            <Switch checked={Boolean(params.during_run_only)} disabled={busy}
+            <Switch aria-label="Only during a run" checked={Boolean(params.during_run_only)} disabled={busy}
                     onCheckedChange={(checked) =>
                       onChange({ params: { ...params, during_run_only: checked } })} />
             Only during a run

@@ -337,6 +337,14 @@ function isDcOffsetReg(name: string): boolean {
 // Top-level page component
 // ============================================================
 
+/** The accessible name of a register control: its name, and its channel for
+ *  a per-channel register (0x1n.. addresses), e.g. "Trigger threshold, channel 3". */
+function registerControlName(reg: { name: string; address?: string }): string {
+  const addr = reg.address ? parseInt(reg.address, 16) : NaN
+  if (addr >= 0x1000 && addr <= 0x1fff) return `${reg.name}, channel ${(addr >> 8) & 0xf}`
+  return reg.name
+}
+
 export default function Dashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [selectedBoardId, setSelectedBoardId] = useState<string>("")
@@ -414,7 +422,7 @@ export default function Dashboard() {
           <div>
             <Label className="text-lg font-semibold">Select board</Label>
             <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
-              <SelectTrigger className="w-full max-w-md">
+              <SelectTrigger className="w-full max-w-md" aria-label="Select board">
                 <SelectValue placeholder="Select a board..." />
               </SelectTrigger>
               <SelectContent>
@@ -648,7 +656,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                 disabled={saving === String(entry.board_id)}
                 onValueChange={v => setStartMode(entry.board_id, parseInt(v))}
               >
-                <SelectTrigger className="w-full md:w-60 h-9 shrink-0">
+                <SelectTrigger className="w-full md:w-60 h-9 shrink-0" aria-label={`Start mode, board ${entry.board_id}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -666,7 +674,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                 disabled={saving === String(entry.board_id)}
                 onValueChange={v => setClockSource(entry.board_id, parseInt(v))}
               >
-                <SelectTrigger className="w-full md:w-56 h-9 shrink-0">
+                <SelectTrigger className="w-full md:w-56 h-9 shrink-0" aria-label={`Clock source, board ${entry.board_id}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -689,7 +697,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                       disabled={saving === String(entry.board_id)}
                       onValueChange={v => setTrgOutMode(entry.board_id, parseInt(v))}
                     >
-                      <SelectTrigger className="h-8 w-52 text-xs">
+                      <SelectTrigger className="h-8 w-52 text-xs" aria-label={`TRG-OUT mode, board ${entry.board_id}`}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -1302,7 +1310,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                       handleBitFieldChange(regName, field.startBit, field.endBit, parseInt(v))
                     }
                   >
-                    <SelectTrigger className="h-7 w-56 text-sm shrink-0">
+                    <SelectTrigger className="h-7 w-56 text-sm shrink-0" aria-label={field.name}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1315,6 +1323,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                   </Select>
                 ) : isSingleBit ? (
                   <Switch
+                    aria-label={field.name}
                     checked={fieldValue === 1}
                     onCheckedChange={checked =>
                       handleBitFieldChange(regName, field.startBit, field.endBit, checked ? 1 : 0)
@@ -1322,6 +1331,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                   />
                 ) : (
                   <NumericInput
+                    aria-label={field.name}
                     min={0}
                     max={maxValue}
                     value={fieldValue}
@@ -1417,7 +1427,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                 handleBitFieldChange(regName, field.startBit, field.endBit, parseInt(v))
               }
             >
-              <SelectTrigger className="h-8 flex-1 text-sm">
+              <SelectTrigger className="h-8 flex-1 text-sm" aria-label={item.label ?? field.name}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1431,6 +1441,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
           ) : isSingleBit ? (
             <div className="flex-1">
               <Switch
+                aria-label={item.label ?? field.name}
                 checked={value === 1}
                 onCheckedChange={checked =>
                   handleBitFieldChange(regName, field.startBit, field.endBit, checked ? 1 : 0)
@@ -1439,6 +1450,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             </div>
           ) : (
             <NumericInput
+              aria-label={item.label ?? field.name}
               min={0}
               max={maxValue}
               value={value}
@@ -1508,7 +1520,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               value={known ? reg.value_dec.toString() : ""}
               onValueChange={v => handleSettingChange(regName, v)}
             >
-              <SelectTrigger className={`h-8 ${compact ? "text-sm" : ""} ${isModified ? "border-warning" : ""}`}>
+              <SelectTrigger className={`h-8 ${compact ? "text-sm" : ""} ${isModified ? "border-warning" : ""}`} aria-label={registerControlName(reg)}>
                 <SelectValue placeholder={`Non-standard (${reg.value_dec})`} />
               </SelectTrigger>
               <SelectContent>
@@ -1548,6 +1560,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         <div className="space-y-1">
           <div className="flex gap-1 items-center">
             <NumericInput
+              aria-label={registerControlName(reg)}
               min="0"
               max={isDcOffsetReg(reg.name) ? "100" : "4294967295"}
               step={step}
@@ -1597,6 +1610,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       <div className="space-y-1">
         <div className="flex gap-2 items-center">
           <NumericInput
+            aria-label={registerControlName(reg)}
             min="0"
             max={isDcOffsetReg(reg.name) ? "100" : "4294967295"}
             step={step}
@@ -1666,6 +1680,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                 <div key={ch} className="flex flex-col items-center gap-2 min-w-12">
                   <span className="text-sm font-medium">Ch {ch}</span>
                   <Switch
+                    aria-label={`Channel ${ch} enabled`}
                     checked={channelEnabled[ch] ?? false}
                     onCheckedChange={enabled => handleChannelToggle(ch, enabled)}
                   />
@@ -1844,7 +1859,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                       <div className="space-y-1.5">
                         <Label className="text-sm">From</Label>
                         <Select value={copySource} onValueChange={setCopySource}>
-                          <SelectTrigger className="w-36">
+                          <SelectTrigger className="w-36" aria-label="Copy settings from channel">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>

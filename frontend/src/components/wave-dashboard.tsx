@@ -728,6 +728,7 @@ export default function WaveformDashboard() {
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
                         <Checkbox
+                          aria-label={`Dual trace, board ${board.id}`}
                           checked={config.dualTrace}
                           onCheckedChange={(checked: boolean) => handleDualTraceToggle(board.id, checked)}
                         />
@@ -743,7 +744,7 @@ export default function WaveformDashboard() {
                           value={getCurrentTraceValue(board.id, 1).toString()}
                           onValueChange={(value: string) => handleTraceTypeChange(board.id, 1, parseInt(value))}
                         >
-                          <SelectTrigger className="w-48 h-8 text-xs">
+                          <SelectTrigger className="w-48 h-8 text-xs" aria-label={`Trace 1, board ${board.id}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -762,7 +763,7 @@ export default function WaveformDashboard() {
                             value={getCurrentTraceValue(board.id, 2).toString()}
                             onValueChange={(value: string) => handleTraceTypeChange(board.id, 2, parseInt(value))}
                           >
-                            <SelectTrigger className="w-48 h-8 text-xs">
+                            <SelectTrigger className="w-48 h-8 text-xs" aria-label={`Trace 2, board ${board.id}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -781,7 +782,7 @@ export default function WaveformDashboard() {
                           value={getCurrentDigitalProbeValue(board.id).toString()}
                           onValueChange={(value: string) => handleDigitalProbeChange(board.id, parseInt(value))}
                         >
-                          <SelectTrigger className="w-48 h-8 text-xs">
+                          <SelectTrigger className="w-48 h-8 text-xs" aria-label={`Digital probe, board ${board.id}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>

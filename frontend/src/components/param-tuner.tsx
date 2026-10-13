@@ -625,7 +625,7 @@ export default function ParamTuner() {
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">Board</Label>
           <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
-            <SelectTrigger className="w-52 max-w-full">
+            <SelectTrigger className="w-52 max-w-full" aria-label="Board">
               <SelectValue placeholder="Select board..." />
             </SelectTrigger>
             <SelectContent>
@@ -647,7 +647,7 @@ export default function ParamTuner() {
               setPendingValues({})
             }}
           >
-            <SelectTrigger className="w-36">
+            <SelectTrigger className="w-36" aria-label="Channel">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -760,7 +760,7 @@ export default function ParamTuner() {
                     value={trace1Val.toString()}
                     onValueChange={v => handleTraceTypeChange(1, parseInt(v))}
                   >
-                    <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectTrigger className="w-44 h-8 text-xs" aria-label="Trace 1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -779,7 +779,7 @@ export default function ParamTuner() {
                       value={trace2Val.toString()}
                       onValueChange={v => handleTraceTypeChange(2, parseInt(v))}
                     >
-                      <SelectTrigger className="w-44 h-8 text-xs">
+                      <SelectTrigger className="w-44 h-8 text-xs" aria-label="Trace 2">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -798,7 +798,7 @@ export default function ParamTuner() {
                     value={digitalProbeVal.toString()}
                     onValueChange={v => handleDigitalProbeChange(parseInt(v))}
                   >
-                    <SelectTrigger className="w-44 h-8 text-xs">
+                    <SelectTrigger className="w-44 h-8 text-xs" aria-label="Digital probe">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -858,7 +858,7 @@ export default function ParamTuner() {
                 {dppCtrlReg && (
                   <div className="flex items-center gap-3 pt-1">
                     <Label className="text-sm w-44 shrink-0">Invert input</Label>
-                    <Switch checked={invertInput} onCheckedChange={handleInvertInputToggle} />
+                    <Switch aria-label="Invert input" checked={invertInput} onCheckedChange={handleInvertInputToggle} />
                   </div>
                 )}
               </div>

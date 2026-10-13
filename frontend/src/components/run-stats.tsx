@@ -508,6 +508,7 @@ export default function RunStats() {
               disabled={savingSampling}
             >
               <SelectTrigger
+                aria-label="Sampling interval"
                 className="h-9 w-32"
                 title="How often rates are evaluated. Also the window they are averaged over and the rate they reach Graphite."
               >
@@ -532,7 +533,7 @@ export default function RunStats() {
                 Rate shown
               </Label>
               <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>
-                <SelectTrigger className="h-9 w-44"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 w-44" aria-label="Rate shown"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {METRICS.map((m) => (
                     <SelectItem key={m.key} value={m.key}>{m.axis} per second</SelectItem>
