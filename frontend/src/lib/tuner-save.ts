@@ -53,6 +53,12 @@ export function markTunerRunStarted(startTime: string | null): void {
   if (r) write({ ...r, started: true, startTime })
 }
 
+/** The Tuner's run started, but its server start time could not be read then. */
+export function tunerRunStartUnknown(): boolean {
+  const r = read()
+  return !!r && r.started && r.startTime === null
+}
+
 /** Saving is switched off by a Tuner run (started, or starting just now). */
 export function tunerSaveRecordPending(): boolean {
   if (typeof window === 'undefined') return false

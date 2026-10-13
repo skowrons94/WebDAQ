@@ -159,14 +159,14 @@ export function RunBar() {
                 Stop…
               </Button>
             }
-            title={runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
+            title={badge.tuning ? 'Stop the Tuner session?' : runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
             onOpenChange={(open) => {
               if (!open) return
               setSavingNow(null)
               getSaveData().then((v) => setSavingNow(Boolean(v))).catch(() => setSavingNow(null))
             }}
             description={<StopRunBody elapsed={elapsed} saving={savingNow} />}
-            confirmLabel={runNumber !== null ? `Stop run ${runNumber}` : 'Stop run'}
+            confirmLabel={badge.tuning ? 'Stop the Tuner session' : runNumber !== null ? `Stop run ${runNumber}` : 'Stop run'}
             onConfirm={stop}
           />
         ) : (
