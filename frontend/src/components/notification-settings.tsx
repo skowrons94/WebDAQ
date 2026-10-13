@@ -389,7 +389,7 @@ export function NotificationSettings() {
  * writes an empty box as 0 — a threshold of zero is an alert that never fires or
  * never stops.
  */
-function NumberField({ value, draft, setDraft, field, onCommit, min, step }: {
+function NumberField({ value, draft, setDraft, field, onCommit, min, step, label }: {
   value: number
   draft: string | undefined
   setDraft: React.Dispatch<React.SetStateAction<Record<string, string | undefined>>>
@@ -397,9 +397,12 @@ function NumberField({ value, draft, setDraft, field, onCommit, min, step }: {
   onCommit: (value: number) => void
   min?: number
   step?: string
+  /** The field's visible label, as its accessible name. */
+  label?: string
 }) {
   return (
     <Input
+      aria-label={label}
       type="number"
       min={min}
       step={step}
@@ -535,7 +538,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Threshold</Label>
-              <NumberField value={Number(params.threshold ?? 0)} step="any"
+              <NumberField label="Threshold" value={Number(params.threshold ?? 0)} step="any"
                            draft={draft.threshold} setDraft={setDraft} field="threshold"
                            onCommit={(value) =>
                              onChange({ params: { ...params, threshold: value } })} />
@@ -547,7 +550,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
             <Label className="text-xs">
               {rule.type === 'stalled_buffers' ? 'No data for (s)' : 'Held for (s)'}
             </Label>
-            <NumberField value={Number(params.seconds ?? 0)} min={0}
+            <NumberField label={rule.type === 'stalled_buffers' ? 'No data for (s)' : 'Held for (s)'} value={Number(params.seconds ?? 0)} min={0}
                          draft={draft.seconds} setDraft={setDraft} field="seconds"
                          onCommit={(value) =>
                            onChange({ params: { ...params, seconds: value } })} />
