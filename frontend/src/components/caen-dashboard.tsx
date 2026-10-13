@@ -27,6 +27,9 @@ import {
   type RegisterCategory, type SettingSection, type CuratedSetting,
 } from "@/lib/caen-registers"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
+import { ScrollFade } from "@/components/ui/scroll-fade"
+import Link from "next/link"
+import { Plus } from "lucide-react"
 
 // ============================================================
 // Bit-field definitions extracted from CAENRegisterBuilder*.cc
@@ -365,7 +368,9 @@ export default function Dashboard() {
         id: String(board.id),
       }))
       setBoards(boardList)
-      if (boardList.length > 0 && selectedBoardId === "") {
+      // Keep the selection on a board that exists; with one board, that one.
+      if (boardList.length > 0
+          && (selectedBoardId === "" || !boardList.some((b: BoardData) => b.id === selectedBoardId))) {
         setSelectedBoardId(boardList[0].id)
       }
     } catch {
@@ -406,7 +411,8 @@ export default function Dashboard() {
     <div className="container mx-auto p-4">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">CAEN Dashboard</h1>
-        <Button onClick={fetchBoardConfiguration}>Refresh</Button>
+        {/* Re-reading the board list is a secondary action, not the page's primary one. */}
+        <Button variant="outline" onClick={fetchBoardConfiguration}>Refresh</Button>
       </div>
 
       {/* Board tuning and synchronisation are separate jobs: one is per-channel
@@ -419,21 +425,38 @@ export default function Dashboard() {
         </TabsList>
 
         <TabsContent value="boards" className="space-y-6">
-          <div>
-            <Label className="text-lg font-semibold">Select board</Label>
-            <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
-              <SelectTrigger className="w-full max-w-md" aria-label="Select board">
-                <SelectValue placeholder="Select a board..." />
-              </SelectTrigger>
-              <SelectContent>
-                {boards.map(board => (
-                  <SelectItem key={board.id} value={board.id}>
-                    {board.name} (ID: {board.id})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* No boards: say so, with the way to add one. One board: it is the
+              board, nothing to pick. Several: the picker. */}
+          {boards.length === 0 ? (
+            <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-6">
+              <p className="font-semibold">No boards to configure</p>
+              <p className="text-sm text-muted-foreground">
+                Discover the connected digitizers and add one first.
+              </p>
+              <Button asChild variant="outline" size="sm">
+                <Link href="/board">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Discover and add boards
+                </Link>
+              </Button>
+            </div>
+          ) : boards.length > 1 ? (
+            <div>
+              <Label className="text-lg font-semibold">Select board</Label>
+              <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
+                <SelectTrigger className="w-full max-w-md" aria-label="Select board">
+                  <SelectValue placeholder="Select a board..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {boards.map(board => (
+                    <SelectItem key={board.id} value={board.id}>
+                      {board.name} (ID: {board.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           {selectedBoard && <BoardComponent boardData={selectedBoard} />}
         </TabsContent>
@@ -1029,32 +1052,29 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     setModifiedFields(prev => new Set(prev).add(fieldKey(regName, startBit, endBit)))
   }
 
-  const handleSave = async (regName: string) => {
-    try {
-      await setSetting(boardData.id, regName, settings[regName].value_dec.toString())
-      clearModified([regName])
-      toast({ title: "Success", description: `"${settings[regName].name}" updated` })
-    } catch {
-      toast({
-        title: "Error",
-        description: `Failed to update "${settings[regName].name}"`,
-        variant: "destructive",
-      })
-    }
-  }
-
+  const [savingAll, setSavingAll] = useState(false)
   const handleSaveAll = async () => {
+    const names = Array.from(modifiedSettings)
+    setSavingAll(true)
     try {
-      await Promise.all(
-        Array.from(modifiedSettings).map(regName =>
-          setSetting(boardData.id, regName, settings[regName].value_dec.toString())
-        )
+      const results = await Promise.allSettled(
+        names.map(regName => setSetting(boardData.id, regName, settings[regName].value_dec.toString()))
       )
-      setModifiedSettings(new Set())
-      setModifiedFields(new Set())
-      toast({ title: "Success", description: "All modified settings saved" })
-    } catch {
-      toast({ title: "Error", description: "Failed to save some settings", variant: "destructive" })
+      // What was written is no longer pending; what failed stays marked.
+      const saved = names.filter((_, i) => results[i].status === "fulfilled")
+      clearModified(saved)
+      const failed = names.length - saved.length
+      if (failed === 0) {
+        toast({ title: "Saved", description: `${saved.length} setting${saved.length === 1 ? "" : "s"} written to board ${boardData.id}.` })
+      } else {
+        toast({
+          title: `${failed} of ${names.length} not saved`,
+          description: "They are still marked *. Try again, or Discard to read the board's values back.",
+          variant: "destructive",
+        })
+      }
+    } finally {
+      setSavingAll(false)
     }
   }
 
@@ -1264,9 +1284,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             Hex: {reg.value_hex} | Addr: {reg.address}
             {isModified && <span className="text-warning ml-2">● unsaved</span>}
           </span>
-          <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified}>
-            Save
-          </Button>
         </div>
         <div className="text-xs text-muted-foreground font-mono">
           Reg value: {reg.value_dec}
@@ -1464,14 +1481,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               title={`0–${maxValue}`}
             />
           )}
-          <Button
-            size="sm"
-            className="h-8 px-2 text-xs"
-            onClick={() => handleSave(regName)}
-            disabled={!isModified}
-          >
-            Save
-          </Button>
         </div>
       </div>
     )
@@ -1531,14 +1540,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              size="sm"
-              onClick={() => handleSave(regName)}
-              disabled={!isModified}
-              className={compact ? "h-8 px-2 text-xs" : ""}
-            >
-              Save
-            </Button>
           </div>
           {!known && (
             <div className="text-xs text-warning">
@@ -1569,9 +1570,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               className={`h-8 text-sm ${isModified ? "border-warning" : ""}`}
             />
             {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
-            <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified} className="h-8 px-2 text-xs">
-              Save
-            </Button>
           </div>
           {isTimeReg(reg.name) && nsPerSample > 1 && (
             <div className="text-xs text-muted-foreground font-mono">{reg.value_dec} samples</div>
@@ -1589,9 +1587,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       return (
         <div className="space-y-2">
           {renderBinaryEditor(regName, reg)}
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified}>Save</Button>
-          </div>
           <div className="text-xs text-muted-foreground font-mono">
             Dec: {reg.value_dec} | Hex: {reg.value_hex} | Addr: {reg.address}
           </div>
@@ -1619,7 +1614,6 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             className={isModified ? "border-warning" : ""}
           />
           {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
-          <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified}>Save</Button>
         </div>
         <div className="text-xs text-muted-foreground font-mono">
           Reg value: {reg.value_dec}
@@ -1639,6 +1633,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         <div>
           <h3 className="text-lg font-semibold">
             Settings for {boardData.name}
+            <span className="font-normal text-muted-foreground"> · board {boardData.id}</span>
             <Badge variant="outline" className="ml-2 font-mono text-xs">
               {boardData.dpp || "?"}
             </Badge>
@@ -1706,7 +1701,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                 No channels enabled. Enable at least one channel above to configure trigger settings.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <ScrollFade tone="card" hint="More channels to the right →">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
@@ -1745,7 +1740,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </ScrollFade>
             )}
           </CardContent>
         </Card>
@@ -2066,12 +2061,30 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         </TabsContent>
       </Tabs>
 
-      {/* Save All */}
+      {/* One save for every edit, instead of a Save button in each cell (about
+          70 of them). Sticky, so it is in view wherever the edit was made; on a
+          phone it sits above the run bar. */}
       {modifiedSettings.size > 0 && (
-        <div className="flex justify-center">
-          <Button onClick={handleSaveAll} variant="success">
-            Save All Modified Settings ({modifiedSettings.size})
-          </Button>
+        <div
+          role="region"
+          aria-label="Unsaved changes"
+          className="sticky bottom-[5.5rem] z-30 md:bottom-4"
+        >
+          <div className="mx-auto flex max-w-xl flex-wrap items-center justify-between gap-3 rounded-lg border bg-background/95 p-3 shadow-lg backdrop-blur-sm">
+            <p className="text-sm">
+              <span className="font-semibold">{modifiedSettings.size}</span>{" "}
+              unsaved change{modifiedSettings.size === 1 ? "" : "s"}
+              <span className="text-muted-foreground"> — marked *</span>
+            </p>
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={fetchSettings} disabled={savingAll}>
+                Discard
+              </Button>
+              <Button size="sm" variant="success" onClick={handleSaveAll} disabled={savingAll}>
+                {savingAll ? "Saving…" : `Save ${modifiedSettings.size} change${modifiedSettings.size === 1 ? "" : "s"}`}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
