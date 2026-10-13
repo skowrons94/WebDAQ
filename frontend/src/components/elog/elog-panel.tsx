@@ -88,7 +88,7 @@ export function ElogPanel() {
           <div>
             <CardTitle>ELOG</CardTitle>
             <CardDescription>
-              Entries from the shared logbook. Posting signs your WebDAQ user as the author.
+              Entries from the shared logbook. Posting signs your LUNADAQ user as the author.
             </CardDescription>
           </div>
           <div className="flex shrink-0 flex-wrap gap-2">
@@ -159,9 +159,9 @@ export function ElogPanel() {
                       {entry.author || 'unknown'} — {formatWhen(entry)}
                     </p>
                     <div className="mt-1 flex items-center gap-1.5">
-                      {entry.type && <Badge variant="outline" className="text-[10px]">{entry.type}</Badge>}
+                      {entry.type && <Badge variant="outline" className="text-xs">{entry.type}</Badge>}
                       {entry.attachments.length > 0 && (
-                        <span className="flex items-center text-[10px] text-muted-foreground">
+                        <span className="flex items-center text-xs text-muted-foreground">
                           <Paperclip className="mr-0.5 h-3 w-3" />
                           {entry.attachments.length}
                         </span>

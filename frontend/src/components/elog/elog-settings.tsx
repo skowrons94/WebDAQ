@@ -79,7 +79,7 @@ export function ElogSettings() {
       toast({
         title: checked ? 'Posting enabled' : 'Posting disabled',
         description: checked
-          ? 'WebDAQ may submit entries to the logbook.'
+          ? 'LUNADAQ may submit entries to the logbook.'
           : 'Entries can be read but not submitted.',
       })
     } catch (error) {
@@ -114,13 +114,13 @@ export function ElogSettings() {
       <CardHeader>
         <CardTitle>ELOG</CardTitle>
         <CardDescription>
-          Connect WebDAQ to the collaboration&apos;s PSI ELOG logbook. One shared account is used for
-          the connection; each entry is signed with the WebDAQ user who writes it.
+          Connect LUNADAQ to the collaboration&apos;s PSI ELOG logbook. One shared account is used for
+          the connection; each entry is signed with the LUNADAQ user who writes it.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {settings && !settings.available && (
-          <p className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+          <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
             The <code>py_elog</code> package is not installed on the server, so reading and posting
             will fail. Install it with <code>conda install -c paulscherrerinstitute elog</code>{' '}
             and restart the server.
@@ -212,7 +212,7 @@ export function ElogSettings() {
             checked={settings?.enabled ?? false}
             onCheckedChange={(checked) => handleEnabledChange(checked === true)}
           />
-          <Label htmlFor="elog-enabled">Allow WebDAQ to post entries</Label>
+          <Label htmlFor="elog-enabled">Allow LUNADAQ to post entries</Label>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -228,7 +228,7 @@ export function ElogSettings() {
           </Button>
           {testResult && (
             <span className={`flex items-center gap-1.5 text-sm ${
-              testResult.success ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+              testResult.success ? 'text-success' : 'text-destructive'}`}>
               {testResult.success
                 ? <CheckCircle className="h-4 w-4" />
                 : <XCircle className="h-4 w-4" />}

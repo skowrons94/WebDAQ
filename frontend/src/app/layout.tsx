@@ -8,7 +8,7 @@ import Script from "next/script";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "LUNA Control Panel",
+  title: "LUNADAQ",
   description: "Created by J. Skowronski, A. Compagnucci and R. Gesue",
 };
 

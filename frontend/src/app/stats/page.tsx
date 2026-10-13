@@ -113,7 +113,7 @@ export default function StatsPage() {
         const status = await getStatsConnection()
         setConnection({ reachable: status.reachable, error: status.error })
       } catch {
-        setConnection({ reachable: false, error: 'The WebDAQ server did not answer.' })
+        setConnection({ reachable: false, error: 'The LUNADAQ server did not answer.' })
       }
     }
     check()
@@ -298,8 +298,8 @@ export default function StatsPage() {
                   connection === null
                     ? 'bg-muted-foreground/40'
                     : connection.reachable
-                      ? 'bg-green-500'
-                      : 'bg-red-500 animate-pulse'
+                      ? 'bg-success'
+                      : 'bg-destructive animate-pulse'
                 }`}
                 title={
                   connection === null
@@ -368,7 +368,7 @@ export default function StatsPage() {
                 <Card key={path.path} className={path.enabled ? '' : 'opacity-60'}>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div className="min-w-0">
-                      <CardTitle className="truncate text-sm font-medium" title={path.alias}>
+                      <CardTitle className="truncate text-sm font-semibold" title={path.alias}>
                         {path.alias}
                       </CardTitle>
                       <p className="truncate text-xs text-muted-foreground" title={path.path}>
@@ -400,7 +400,7 @@ export default function StatsPage() {
                         title={path.enabled ? 'Stop reading this metric' : 'Read this metric again'}
                       >
                         {path.enabled
-                          ? <Eye className="h-3.5 w-3.5 text-green-600" />
+                          ? <Eye className="h-3.5 w-3.5 text-success" />
                           : <EyeOff className="h-3.5 w-3.5 text-muted-foreground" />}
                       </Button>
                       <Button
@@ -444,7 +444,7 @@ export default function StatsPage() {
         {/* Server settings — needed once per setup, so out of the way */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
               <Settings2 className="h-4 w-4" />
               Graphite server
               <span className="font-normal text-muted-foreground">
@@ -539,7 +539,7 @@ export default function StatsPage() {
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={() => pathToDelete && handleDeletePath(pathToDelete)}
-                className="bg-destructive hover:bg-destructive/90"
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               >
                 Remove
               </AlertDialogAction>

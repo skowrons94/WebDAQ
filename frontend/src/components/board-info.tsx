@@ -55,7 +55,7 @@ function BoardCard({ board }: { board: CaenBoardInfo }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2 flex-wrap">
+        <CardTitle className="flex items-center gap-2 flex-wrap">
           {board.configured_name ?? board.model_name}
           <Badge variant="outline" className="text-xs font-mono">{board.dpp_type}</Badge>
           <Badge variant={roleVariant} className="text-xs">{board.sync_role}</Badge>
@@ -165,7 +165,7 @@ export default function BoardInfoPanel() {
       {/* Software versions — known whether or not a run is active. */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2">
             Software
             <Badge variant={sw.acquisition_mode === "hardware" ? "default" : "secondary"} className="text-xs">
               {sw.acquisition_mode === "hardware" ? "hardware" : "mock / test mode"}
@@ -174,7 +174,7 @@ export default function BoardInfoPanel() {
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-x-8">
           <div>
-            <Field label="WebDAQ" value={sw.webdaq} mono />
+            <Field label="LUNADAQ" value={sw.webdaq} mono />
             <Field label="CaenDAQ" value={sw.caendaq ?? undefined} mono />
             <Field
               label="CAEN hardware support"

@@ -268,7 +268,7 @@ export function ElogComposer({ open, onOpenChange, replyTo, onPosted }: Props) {
           <DialogTitle>{replyTo ? `Reply to entry #${replyTo.id}` : 'New ELOG entry'}</DialogTitle>
           <DialogDescription>
             Posted to the configured logbook. The Author field signs the entry with your
-            WebDAQ user — the connection itself uses the shared account.
+            LUNADAQ user — the connection itself uses the shared account.
           </DialogDescription>
         </DialogHeader>
 

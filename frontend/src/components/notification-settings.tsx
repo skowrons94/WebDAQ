@@ -118,7 +118,7 @@ export function NotificationSettings() {
     } catch {
       setTestResult((r) => ({
         ...r,
-        [transport]: { success: false, message: 'The WebDAQ server could not be reached.' },
+        [transport]: { success: false, message: 'The LUNADAQ server could not be reached.' },
       }))
     } finally {
       setBusy(null)
@@ -242,7 +242,7 @@ export function NotificationSettings() {
             <div className="space-y-2">
               <Label htmlFor="zulip-topic">Topic</Label>
               <Input id="zulip-topic" value={topic} onChange={(e) => setTopic(e.target.value)}
-                     placeholder="WebDAQ alerts" />
+                     placeholder="LUNADAQ alerts" />
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -307,7 +307,7 @@ export function NotificationSettings() {
           )}
 
           {(status?.rejected_rules?.length ?? 0) > 0 && (
-            <div className="rounded-md border border-amber-500/60 bg-amber-500/5 p-3 text-sm">
+            <div className="rounded-md border border-warning/60 bg-warning/5 p-3 text-sm">
               <p className="font-medium">
                 {status!.rejected_rules!.length} saved alert
                 {status!.rejected_rules!.length === 1 ? '' : 's'} could not be read, and
@@ -418,7 +418,7 @@ function Result({ result }: { result?: TestResult | null }) {
   if (!result) return null
   return (
     <span className={`flex items-center gap-1.5 text-sm ${
-      result.success ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+      result.success ? 'text-success' : 'text-destructive'}`}>
       {result.success ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
       {result.message}
     </span>
@@ -466,13 +466,13 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
           </div>
           {alerting && <Badge variant="destructive">Alerting now</Badge>}
           {rule.enabled && unmeasured && !alerting && (
-            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+            <Badge className="bg-warning/10 text-warning"
                    title="This alert is watching, but it has had nothing to read — an unreachable Graphite server, a monitor that stopped, or a counter this CaenDAQ build does not report. That is not the same as everything being fine.">
               nothing to measure{unmeasuredFor ? ` for ${unmeasuredFor} s` : ''}
             </Badge>
           )}
           {rule.enabled && notReady.length === rule.transports.length && (
-            <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400"
+            <Badge className="bg-warning/10 text-warning"
                    title={rule.transports.length
                      ? `${notReady.join(' and ')} ${notReady.length === 1 ? 'is' : 'are'} off or not configured`
                      : 'This alert has no destination'}>

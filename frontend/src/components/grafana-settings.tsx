@@ -69,7 +69,7 @@ export function GrafanaSettings() {
       setTesting(true)
       setTestResult(await testGrafanaConnection())
     } catch (error) {
-      setTestResult({ success: false, message: 'The WebDAQ server could not be reached.' })
+      setTestResult({ success: false, message: 'The LUNADAQ server could not be reached.' })
     } finally {
       setTesting(false)
     }
@@ -91,7 +91,7 @@ export function GrafanaSettings() {
         <CardTitle>Grafana</CardTitle>
         <CardDescription>
           The Grafana server whose alert rules the Alerts page manages, and that run control
-          activates and silences with the run. The WebDAQ server makes these requests, so the
+          activates and silences with the run. The LUNADAQ server makes these requests, so the
           address must be reachable from the server machine.
         </CardDescription>
       </CardHeader>
@@ -142,7 +142,7 @@ export function GrafanaSettings() {
           </Button>
           {testResult && (
             <span className={`flex items-center gap-1.5 text-sm ${
-              testResult.success ? 'text-green-600 dark:text-green-400' : 'text-destructive'}`}>
+              testResult.success ? 'text-success' : 'text-destructive'}`}>
               {testResult.success
                 ? <CheckCircle className="h-4 w-4" />
                 : <XCircle className="h-4 w-4" />}
