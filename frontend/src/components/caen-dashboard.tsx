@@ -1069,7 +1069,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       } else {
         toast({
           title: `${failed} of ${names.length} not saved`,
-          description: "They are still marked *. Try again, or Discard to read the board's values back.",
+          description: "They are still marked in amber. Try again, or Discard to read the board's values back.",
           variant: "destructive",
         })
       }
@@ -2074,7 +2074,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             <p className="text-sm">
               <span className="font-semibold">{modifiedSettings.size}</span>{" "}
               unsaved change{modifiedSettings.size === 1 ? "" : "s"}
-              <span className="text-muted-foreground"> — marked *</span>
+              <span className="text-muted-foreground"> — marked in amber</span>
             </p>
             <div className="flex gap-2">
               <Button variant="ghost" size="sm" onClick={fetchSettings} disabled={savingAll}>
