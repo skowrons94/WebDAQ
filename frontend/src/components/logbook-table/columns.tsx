@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, ArrowUpDown, ArrowUpRight } from "lucide-react"
+import { MoreHorizontal, ArrowUpDown, ArrowUpRight, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -39,7 +39,8 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { addRunMetadata, updateRunFlag, updateRunNotes } from "@/lib/api"
+import { addRunMetadata, updateRunFlag, updateRunNotes, type AlertEvent } from "@/lib/api"
+import { alertCount } from "@/lib/run-alerts"
 import { useForm } from "react-hook-form"
 
 export type RunMetadata = {
@@ -169,6 +170,8 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
 
 interface ColumnsProps {
     onDataUpdate?: () => void;
+    /** Alert events by run number: a run that had any is flagged. */
+    alertsByRun?: Map<number, AlertEvent[]>;
 }
 
 // Reusable sortable header with friendly label.
@@ -212,27 +215,36 @@ export const COLUMN_LABELS: Record<string, string> = {
     actions: "Actions",
 }
 
-export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<RunMetadata>[] => [
+export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}): ColumnDef<RunMetadata>[] => [
     {
         accessorKey: "run_number",
         meta: { label: COLUMN_LABELS.run_number },
         header: sortableHeader("Run #"),
-        cell: ({ row }) => (
-            <Button
-                asChild
-                variant="ghost"
-                size="sm"
-                className="h-8 w-full justify-center gap-1.5 px-2 font-mono"
-            >
-                <Link
-                    href={`/logbook/${row.original.run_number}`}
-                    aria-label={`Open logbook entry for run ${row.original.run_number}`}
+        cell: ({ row }) => {
+            // A run during which an alert fired (a board failure, a stall…) is
+            // marked: otherwise it reads as clean as any other.
+            const alerts = alertsByRun?.get(row.original.run_number)?.length ?? 0
+            const label = `Open logbook entry for run ${row.original.run_number}`
+                + (alerts ? ` (${alertCount(alerts)} during this run)` : "")
+            return (
+                <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-full justify-center gap-1.5 px-2 font-mono"
                 >
-                    {row.original.run_number}
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-            </Button>
-        ),
+                    <Link
+                        href={`/logbook/${row.original.run_number}`}
+                        aria-label={label}
+                        title={alerts ? `${alertCount(alerts)} during this run` : undefined}
+                    >
+                        {alerts > 0 && <AlertTriangle className="h-3.5 w-3.5 text-destructive" aria-hidden="true" />}
+                        {row.original.run_number}
+                        <ArrowUpRight className="h-3.5 w-3.5" />
+                    </Link>
+                </Button>
+            )
+        },
         size: 80,
     },
     {

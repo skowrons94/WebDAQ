@@ -15,15 +15,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReloadIcon } from "@radix-ui/react-icons"
-import { Boxes, CalendarClock, Database, FileText, Gauge, HardDrive, Zap } from "lucide-react"
+import { AlertTriangle, Boxes, CalendarClock, Database, FileText, Gauge, HardDrive, Zap } from "lucide-react"
+import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { MarkdownPreview, RunNotesEditor } from "@/components/run-notes-editor"
 import {
   getRuns, getRunDetail, getRunCurrent, getRunStats, getConversionStatus, startConversion,
   type RunSummary, type RunDetail, type CurrentData, type RunStatsData,
-  type ConversionStatus, type ConversionOptions,
+  type ConversionStatus, type ConversionOptions, type AlertEvent,
 } from "@/lib/api"
+import { alertCount, getAlertsByRun } from "@/lib/run-alerts"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   currentUnit, maxMagnitude, formatTick, formatValue,
@@ -954,6 +956,17 @@ function LogbookRunHeader({
       ?? detail.run_type.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
     : "Unspecified run type"
 
+  // The alerts that fired during this run (they carry its number): a run with
+  // a board failure must not read as a clean "completed run".
+  const [alerts, setAlerts] = useState<AlertEvent[] | null>(null)
+  useEffect(() => {
+    let active = true
+    getAlertsByRun()
+      .then((byRun) => { if (active) setAlerts(byRun.get(detail.run_number) ?? []) })
+      .catch(() => { if (active) setAlerts(null) })
+    return () => { active = false }
+  }, [detail.run_number, detail.complete])
+
   return (
     <section className="overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card to-muted/40 shadow-sm">
       <div className="p-5 sm:p-6">
@@ -967,6 +980,9 @@ function LogbookRunHeader({
               <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
               {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
               {!detail.complete && <StatusBadge state="running" label="In progress" />}
+              {alerts && alerts.length > 0 && (
+                <StatusBadge state="error" label={`${alertCount(alerts.length)} during this run`} />
+              )}
             </div>
             <p className="mt-2 text-base font-medium">
               {detail.target_name || "Untitled run"}
@@ -983,7 +999,8 @@ function LogbookRunHeader({
             icon={CalendarClock}
             label="Duration"
             value={formatDuration(detail.duration_s)}
-            detail={detail.complete ? "completed run" : "still in progress"}
+            detail={!detail.complete ? "still in progress"
+              : alerts && alerts.length ? `completed, with ${alertCount(alerts.length)}` : "completed run"}
           />
           <SummaryMetric
             icon={Zap}
@@ -1008,6 +1025,29 @@ function LogbookRunHeader({
             detail={detail.board_info.map((board) => board.configured_name ?? board.model_name).join(", ") || "no board snapshot"}
           />
         </div>
+
+        {alerts && alerts.length > 0 && (
+          <div className="mt-4 rounded-xl border border-destructive/50 bg-destructive/5 p-3.5">
+            <p className="flex items-center gap-2 text-sm font-semibold text-destructive">
+              <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+              {alertCount(alerts.length)} during this run
+            </p>
+            <ul className="mt-2 space-y-1.5 text-sm">
+              {alerts.slice(0, 5).map((a) => (
+                <li key={a.id} className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="font-mono text-xs tabular-nums text-muted-foreground">
+                    {new Date(a.at * 1000).toLocaleTimeString()}
+                  </span>
+                  <span className="font-medium">{a.title}</span>
+                  {a.lines[0] && <span className="text-xs text-muted-foreground">{a.lines[0]}</span>}
+                </li>
+              ))}
+            </ul>
+            <Link href="/troubleshoot" className="mt-2 inline-block text-xs font-medium underline underline-offset-2">
+              {alerts.length > 5 ? `All ${alerts.length} in Troubleshoot` : "Open Troubleshoot"}
+            </Link>
+          </div>
+        )}
       </div>
     </section>
   )
