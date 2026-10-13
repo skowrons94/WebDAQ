@@ -206,9 +206,12 @@ export function SpectrumPanel({
         const cands = pf.findPeaks(x, shown)
         setCandidates(cands)
         let r = roi
-        if (!r && !autoPicked.current && cands.length) {
+        // Pick the strongest real line by itself (narrow against its position):
+        // a continuum (scintillator Compton edges) gives no automatic pick.
+        const line = cands.find((c) => c.x > 0 && c.fwhm < 0.25 * c.x)
+        if (!r && !autoPicked.current && line) {
           autoPicked.current = true
-          r = { center: cands[0].x, half: Math.max(3 * cands[0].fwhm, 4 * (cur.xmax - cur.xmin) / cur.nbins) }
+          r = { center: line.x, half: Math.max(3 * line.fwhm, 4 * (cur.xmax - cur.xmin) / cur.nbins) }
           setRoi(r)
         }
         if (!r) { setFit(null); return }
