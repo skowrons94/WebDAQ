@@ -23,6 +23,18 @@ import { formatNs } from '@/components/tuner/format'
 import { getBits, setBits, type BoardTiming } from '@/components/tuner/units'
 
 /** Board Configuration (0x8000) fields that pick the traces, per firmware (UM5678/UM4380). */
+/** Selectable probe options: no "Reserved" codes and no repeated labels (the
+ *  docs list e.g. PHA "Peaking" twice), unless the board is set to one. */
+function probeChoices(opts: RegisterOption[], current: number | null): RegisterOption[] {
+  const seen = new Set<string>()
+  return opts.filter((o) => {
+    if (o.value === current) { seen.add(o.label); return true }
+    if (/^reserved$/i.test(o.label) || seen.has(o.label)) return false
+    seen.add(o.label)
+    return true
+  })
+}
+
 const PROBE_BITS = {
   dual: [11, 11] as [number, number],
   pha: { ap1: [12, 13] as [number, number], ap2: [14, 15] as [number, number], dp1: [20, 23] as [number, number] },
@@ -241,7 +253,7 @@ export function WaveformPanel(p: Props) {
             <Select value={String(ap1)} onValueChange={(v) => setField(psd ? PROBE_BITS.psd.ap : PROBE_BITS.pha.ap1, Number(v), psd ? 'Analog probe' : 'Trace 1')}>
               <SelectTrigger className="h-8 w-48 text-xs" aria-label={psd ? 'Analog probe' : 'Trace 1'}><SelectValue /></SelectTrigger>
               <SelectContent>
-                {ap1Options.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                {probeChoices(ap1Options, ap1).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
@@ -251,7 +263,7 @@ export function WaveformPanel(p: Props) {
               <Select value={String(ap2)} onValueChange={(v) => setField(PROBE_BITS.pha.ap2, Number(v), 'Trace 2')}>
                 <SelectTrigger className="h-8 w-48 text-xs" aria-label="Trace 2"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ap2Options.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                  {probeChoices(ap2Options, ap2).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -261,7 +273,7 @@ export function WaveformPanel(p: Props) {
             <Select value={String(dp1)} onValueChange={(v) => setField(psd ? PROBE_BITS.psd.dp1 : PROBE_BITS.pha.dp1, Number(v), 'Digital probe')}>
               <SelectTrigger className="h-8 w-48 text-xs" aria-label="Digital probe"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {dp1Options.map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
+                {probeChoices(dp1Options, dp1).map((o) => <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
