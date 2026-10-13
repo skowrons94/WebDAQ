@@ -126,6 +126,18 @@ export function Board() {
     })
   }
 
+  // "Add this board" on a scan result: the same add as the form, with the
+  // suggested ID and the DPP read from the firmware.
+  async function handleAddDiscovered(board: DiscoveredBoard, suggestedId: string) {
+    await onSubmit({
+      id: suggestedId,
+      vme: board.vme,
+      link_type: board.link_type as BoardData["link_type"],
+      link_num: board.link_num,
+      dpp: (board.dpp ?? "DPP-PHA") as BoardData["dpp"],
+    })
+  }
+
   async function handleRemoveBoard(boardId: string) {
     try {
       await removeBoard(boardId)
@@ -234,7 +246,7 @@ export function Board() {
         </Card>
 
         {/* Discover what is actually connected */}
-        <BoardScan boards={boards} onUse={handleUseDiscovered} />
+        <BoardScan boards={boards} onUse={handleUseDiscovered} onAdd={handleAddDiscovered} />
 
         {/* Add a new board */}
         <Card className="w-full mx-auto" ref={addFormRef}>
