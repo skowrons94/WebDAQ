@@ -571,7 +571,7 @@ export function RunControlButtons({
             </Select>
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="tv">TV (kV)</Label>
+            <Label htmlFor="tv">Terminal voltage (kV)</Label>
             <Input
               id="tv"
               type="text"
@@ -581,7 +581,7 @@ export function RunControlButtons({
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="pv">PV (kV)</Label>
+            <Label htmlFor="pv">Probe voltage (kV)</Label>
             <Input
               id="pv"
               type="text"

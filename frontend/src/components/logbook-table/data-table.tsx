@@ -181,7 +181,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                 <div className="relative flex-1 min-w-[14rem] max-w-md">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search runs, targets, notes…"
+                        placeholder="Search runs, run names, notes…"
                         value={globalFilterValue}
                         onChange={(e) => setGlobalFilterValue(e.target.value)}
                         className="pl-8 pr-8"
@@ -312,9 +312,10 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                                     {rest.map((cell) => {
                                         const meta = cell.column.columnDef.meta as { label?: string } | undefined
                                         const raw = meta?.label ?? COLUMN_LABELS[cell.column.id] ?? cell.column.id
-                                        // Sentence case on the card ("Start time"), acronyms kept (TV, PV).
+                                        // Sentence case on the card ("Start time"); acronyms and
+                                        // units (TV, "(kV)", "(µC)") kept as they are.
                                         const label = raw.split(' ').map((w: string, i: number) =>
-                                            i === 0 || w === w.toUpperCase() ? w : w.toLowerCase()).join(' ')
+                                            i > 0 && /^[A-Z][a-z]+$/.test(w) ? w.toLowerCase() : w).join(' ')
                                         return (
                                             <div key={cell.id} className="contents">
                                                 <dt className="text-muted-foreground">{label}</dt>

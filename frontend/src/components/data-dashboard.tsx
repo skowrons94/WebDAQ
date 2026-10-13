@@ -859,12 +859,12 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
         <CardContent>
           <Field label="Run number" value={detail.run_number} />
           <Field label="Type" value={detail.run_type} />
-          <Field label="Target" value={detail.target_name} />
+          <Field label="Run name" value={detail.target_name} />
           <Field label="Started" value={formatTime(detail.start_time)} />
           <Field label="Stopped" value={formatTime(detail.end_time)} />
           <Field label="Duration" value={formatDuration(detail.duration_s)} />
-          <Field label="Terminal voltage" value={detail.terminal_voltage} />
-          <Field label="Probe voltage" value={detail.probe_voltage} />
+          <Field label="Terminal voltage" value={detail.terminal_voltage != null ? `${detail.terminal_voltage} kV` : undefined} />
+          <Field label="Probe voltage" value={detail.probe_voltage != null ? `${detail.probe_voltage} kV` : undefined} />
           <Field label="User ID" value={detail.user_id} />
           <Field
             label="Accumulated charge"
@@ -1092,9 +1092,9 @@ function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <Field label="Terminal voltage" value={detail.terminal_voltage} />
-          <Field label="Probe voltage" value={detail.probe_voltage} />
-          <Field label="Recorded by user" value={detail.user_id} />
+          <Field label="Terminal voltage" value={detail.terminal_voltage != null ? `${detail.terminal_voltage} kV` : undefined} />
+          <Field label="Probe voltage" value={detail.probe_voltage != null ? `${detail.probe_voltage} kV` : undefined} />
+          <Field label="User ID" value={detail.user_id} />
         </CardContent>
       </Card>
 

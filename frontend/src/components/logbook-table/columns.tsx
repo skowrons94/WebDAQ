@@ -89,7 +89,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="run_number"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Run Number</FormLabel>
+                            <FormLabel>Run number</FormLabel>
                             <FormControl>
                                 <Input type="number" {...field} value={field.value} onChange={e => field.onChange(parseInt(e.target.value))} />
                             </FormControl>
@@ -102,7 +102,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="target_name"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Run Name</FormLabel>
+                            <FormLabel>Run name</FormLabel>
                             <FormControl>
                                 <Input {...field} />
                             </FormControl>
@@ -115,7 +115,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="terminal_voltage"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Terminal Voltage</FormLabel>
+                            <FormLabel>Terminal voltage (kV)</FormLabel>
                             <FormControl>
                                 <Input {...field} />
                             </FormControl>
@@ -128,7 +128,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="probe_voltage"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Probe Voltage</FormLabel>
+                            <FormLabel>Probe voltage (kV)</FormLabel>
                             <FormControl>
                                 <Input {...field} />
                             </FormControl>
@@ -141,7 +141,7 @@ const EditRunForm = ({ runData, onSubmit, onCancel }: EditRunFormProps) => {
                     name="run_type"
                     render={({ field }) => (
                         <FormItem>
-                            <FormLabel>Run Type</FormLabel>
+                            <FormLabel>Run type</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                                 <FormControl>
                                     <SelectTrigger>
@@ -201,15 +201,15 @@ const RUN_TYPE_LABEL: Record<string, string> = {
 }
 
 export const COLUMN_LABELS: Record<string, string> = {
-    run_number: "Run Number",
-    start_time: "Start Time",
-    end_time: "End Time",
+    run_number: "Run number",
+    start_time: "Start time",
+    end_time: "End time",
     duration: "Duration",
-    accumulated_charge: "Accumulated Charge",
-    target_name: "Run Name",
-    terminal_voltage: "Terminal Voltage",
-    probe_voltage: "Probe Voltage",
-    run_type: "Run Type",
+    accumulated_charge: "Accumulated charge (µC)",
+    target_name: "Run name",
+    terminal_voltage: "Terminal voltage (kV)",
+    probe_voltage: "Probe voltage (kV)",
+    run_type: "Run type",
     flag: "Flag",
     notes: "Notes",
     actions: "Actions",
@@ -311,7 +311,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
     {
         accessorKey: "accumulated_charge",
         meta: { label: COLUMN_LABELS.accumulated_charge },
-        header: sortableHeader("Charge"),
+        header: sortableHeader("Charge (µC)"),
         cell: ({ row }) => (
             <div className="text-right tabular-nums text-sm">
                 {row.original.accumulated_charge != null
@@ -323,7 +323,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
     {
         accessorKey: "target_name",
         meta: { label: COLUMN_LABELS.target_name },
-        header: sortableHeader("Target"),
+        header: sortableHeader("Run name"),
         cell: ({ row }) => (
             <div className="text-sm font-medium">{row.original.target_name || "—"}</div>
         ),
@@ -331,7 +331,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
     {
         accessorKey: "terminal_voltage",
         meta: { label: COLUMN_LABELS.terminal_voltage },
-        header: sortableHeader("Terminal V"),
+        header: sortableHeader("Terminal voltage (kV)"),
         cell: ({ row }) => (
             <div className="text-right tabular-nums text-sm">
                 {row.original.terminal_voltage ?? "—"}
@@ -341,7 +341,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
     {
         accessorKey: "probe_voltage",
         meta: { label: COLUMN_LABELS.probe_voltage },
-        header: sortableHeader("Probe V"),
+        header: sortableHeader("Probe voltage (kV)"),
         cell: ({ row }) => (
             <div className="text-right tabular-nums text-sm">
                 {row.original.probe_voltage ?? "—"}
