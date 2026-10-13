@@ -93,13 +93,13 @@ const SortableHistogramCard = ({ config, roiIntegrals, onAddROI, onEditHistogram
           {config.label}
         </CardTitle>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={() => onAddROI(config.id)} title="Add ROI">
-            <Plus className="h-3 w-3" />
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => onAddROI(config.id)} title="Add ROI" aria-label={`Add an ROI to ${config.label}`}>
+            <Plus className="h-4 w-4" />
           </Button>
 
           {/* Edit Histogram */}
-          <Button variant="ghost" size="sm" onClick={() => onEditHistogram(config)} title="Edit Histogram">
-            <Edit className="h-3 w-3" />
+          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => onEditHistogram(config)} title="Edit Histogram" aria-label={`Edit ${config.label}`}>
+            <Edit className="h-4 w-4" />
           </Button>
 
         </div>
@@ -112,7 +112,7 @@ const SortableHistogramCard = ({ config, roiIntegrals, onAddROI, onEditHistogram
             ref={(el) => {
               histogramRefs.current[config.id] = el
             }}
-            className={`w-full ${getHistogramSize(config.size)} border rounded-lg shadow-md bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700`}
+            className={`w-full ${getHistogramSize(config.size)} max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-md bg-gradient-to-br from-white via-gray-50 to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700`}
           />
 
           {dashboardSettings.showROIs && config.rois.filter((r) => r.enabled).length > 0 && (
@@ -1146,20 +1146,30 @@ export default function EnhancedHistogramDashboard() {
     }
   }
 
+  // Whole class names, so Tailwind's scanner sees them (a built
+  // `lg:grid-cols-${n}` only worked while the same literals existed elsewhere).
+  const LG_GRID_COLS: Record<number, string> = {
+    1: "lg:grid-cols-1",
+    2: "lg:grid-cols-2",
+    3: "lg:grid-cols-3",
+    4: "lg:grid-cols-4",
+  }
   const getGridClass = () => {
     if (dashboardSettings.layout === "rows") return "grid-cols-1"
     if (dashboardSettings.layout === "custom") return "grid-cols-1"
-    return `grid-cols-1 md:grid-cols-2 lg:grid-cols-${Math.min(dashboardSettings.gridCols, 4)}`
+    const n = Math.max(1, Math.min(dashboardSettings.gridCols, 4))
+    return `grid-cols-1 md:grid-cols-2 ${LG_GRID_COLS[n]}`
   }
 
   const visibleHistograms = histograms.filter((h) => h.visible).sort((a, b) => a.order - b.order)
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <main className="flex-1 w-full px-4 py-4">
+      <div className="flex-1 w-full px-0 py-4 sm:px-4">
         {/* Header Controls */}
         <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
-          <div className="flex items-center gap-2">
+          {/* Wraps on a narrow screen instead of cutting off Log scale and Rebin. */}
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={addHistogram} variant="outline">
               <Plus className="h-4 w-4 mr-2" />
               Add Histogram
@@ -1172,12 +1182,12 @@ export default function EnhancedHistogramDashboard() {
               onClick={() => saveDashboardSettings({ ...dashboardSettings, isLogScale: !dashboardSettings.isLogScale })}
               variant={dashboardSettings.isLogScale ? "default" : "outline"}
             >
-              {dashboardSettings.isLogScale ? "Linear Scale" : "Log Scale"}
+              {dashboardSettings.isLogScale ? "Linear scale" : "Log scale"}
             </Button>
 
             <div className="flex items-center gap-2">
               <Label htmlFor="rebin-factor" className="text-sm font-medium">
-                Rebin:
+                Rebin
               </Label>
               <Input
                 id="rebin-factor"
@@ -1200,15 +1210,15 @@ export default function EnhancedHistogramDashboard() {
               value={dashboardSettings.layout}
               onValueChange={(value) => value && saveDashboardSettings({ ...dashboardSettings, layout: value as any })}
             >
-              <ToggleGroupItem value="grid">
+              <ToggleGroupItem value="grid" aria-label="Grid layout">
                 <Grid2X2 className="h-4 w-4" />
               </ToggleGroupItem>
-              <ToggleGroupItem value="rows">
+              <ToggleGroupItem value="rows" aria-label="One histogram per row">
                 <Rows2 className="h-4 w-4" />
               </ToggleGroupItem>
             </ToggleGroup>
 
-            <Button onClick={() => setSettingsDialogOpen(true)} variant="outline" size="icon">
+            <Button onClick={() => setSettingsDialogOpen(true)} variant="outline" size="icon" aria-label="Histogram dashboard settings">
               <Settings className="h-4 w-4" />
             </Button>
           </div>
@@ -1389,7 +1399,7 @@ export default function EnhancedHistogramDashboard() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </main>
+      </div>
     </div>
   )
 }

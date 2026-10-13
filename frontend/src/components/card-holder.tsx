@@ -15,6 +15,8 @@ import {
   HardDrive,
   CheckCircle,
   XCircle,
+  MinusCircle,
+  Plus,
   Cpu,
   Wifi,
   WifiOff,
@@ -25,7 +27,9 @@ import {
   Pencil,
 } from "lucide-react"
 
+import Link from "next/link"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { StatusBadge, type StatusState } from "@/components/ui/status-badge"
 import {
   Card,
   CardContent,
@@ -199,6 +203,8 @@ export function CardHolder({
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
   const [boards, setBoards] = useState<BoardInfo[]>([])
+  // Only an answered "no boards" shows the empty state, not the first render.
+  const [boardsLoaded, setBoardsLoaded] = useState(false)
   // The most recent finished run: its number and how long it lasted, shown
   // under the run number on the status card.
   const [lastRun, setLastRun] = useState<{ number: number; duration: number } | null>(null)
@@ -503,6 +509,7 @@ export function CardHolder({
     try {
       const response = await getBoardConfiguration()
       setBoards(response.data || [])
+      setBoardsLoaded(true)
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
     }
@@ -714,61 +721,71 @@ export function CardHolder({
         <section className="h-full">
           <div className="relative mb-2">
             <div className="rounded-md border">
-              <div className="p-4 pb-0">
+              <div className="flex items-center justify-between gap-2 p-4 pb-0">
                 <h2 className="text-sm font-semibold">System status</h2>
+                {/* Discovering and adding boards lives on /board; this is the
+                    way there from where the boards are shown. */}
+                <Button asChild variant="ghost" size="sm" className="-my-2 h-8 gap-1.5 px-2 text-xs">
+                  <Link href="/board">
+                    <Plus className="h-3.5 w-3.5" />
+                    Add / discover boards
+                  </Link>
+                </Button>
               </div>
+              {/* Phones: no inner scroller and no fixed row height, so every
+                  card — and any board FAIL — is on the page, one under the
+                  other. From md up: the resizable panel as before. */}
               <ScrollArea
-                className={isResizingStatusPanel
+                className={cn('max-md:!h-auto', isResizingStatusPanel
                   ? ''
-                  : 'transition-[height] duration-150 ease-out'}
+                  : 'transition-[height] duration-150 ease-out')}
                 viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
                 style={{ height: displayedStatusPanelHeight }}
               >
-                <div className="grid auto-rows-[11.5rem] grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-6 p-4 pb-5 [&>*]:h-full [&>*]:overflow-hidden [&>*]:snap-start">
+                <div className="grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 md:auto-rows-[11.5rem] md:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] md:gap-6 md:[&>*]:h-full md:[&>*]:overflow-hidden md:[&>*]:snap-start">
         {/* Run Status Card */}
         {settings.showStatus && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div className="flex items-center gap-2">
                 <CardTitle className="text-sm font-semibold">
-                  Run Status
+                  Run status
                 </CardTitle>
-                {/* In the header, not the body: the status cards are a fixed
-                    11.5rem and hide their overflow, so a row of its own in the
-                    body pushed the file bandwidth line out of the card. Scaled
-                    down to the height of the title so the header does not grow
-                    either — the Switch primitive has a fixed thumb, so this is
-                    a transform rather than smaller classes. */}
-                <span className="flex h-4 w-7 items-center" title={isRunning
+              </div>
+              {/* Whether this run is recorded: full size and labelled (it was
+                  scaled to 29 x 16 px). In the header, so the fixed-height card
+                  body keeps room for the bandwidth line. */}
+              <div className="flex items-center gap-2" title={isRunning
                   ? "Data saving cannot be changed while a run is going"
                   : dataSavingEnabled
                     ? "Data is being written to disk"
                     : "Nothing will be written to disk"}>
-                  <Switch
-                    className="origin-left scale-[0.65]"
-                    checked={dataSavingEnabled}
-                    onCheckedChange={toggleDataSaving}
-                    disabled={isRunning}
-                    aria-label="Save data to disk"
-                  />
-                </span>
-                <span className={cn(
-                  "text-xs font-medium",
-                  isRunning ? "text-muted-foreground/60" : "text-muted-foreground",
-                )}>
-                  Save
-                </span>
+                <Label htmlFor="save-data-switch" className="text-xs font-medium text-muted-foreground">
+                  Save to disk
+                </Label>
+                <Switch
+                  id="save-data-switch"
+                  checked={dataSavingEnabled}
+                  onCheckedChange={toggleDataSaving}
+                  disabled={isRunning}
+                />
               </div>
-              <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               {/* While a run is live the number is the run being taken and is
                   read only. Stopped, the same number is the run that WILL be
                   taken next, so it says so and can be clicked to change it. */}
-              <div className="flex items-baseline gap-2 text-2xl font-bold">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold">
                 {runNumber !== null && (
                   isRunning ? (
-                    <span>Run {runNumber}</span>
+                    // The run being taken, one click from its Logbook page.
+                    <Link
+                      href={`/logbook/${runNumber}`}
+                      className="rounded-sm underline-offset-4 hover:underline"
+                      title={`Open run ${runNumber} in the Logbook`}
+                    >
+                      Run {runNumber}
+                    </Link>
                   ) : (
                     <button
                       type="button"
@@ -781,13 +798,18 @@ export function CardHolder({
                     </button>
                   )
                 )}
-                <span>{isRunning ? "Running" : "Stopped"}</span>
+                <StatusBadge state={isRunning ? "running" : "stopped"} size="md" />
               </div>
               <p className="truncate text-xs text-muted-foreground">
                 {isRunning
                   ? `started ${formatTime(timer)} ago`
                   : lastRun !== null
-                    ? `last run (${lastRun.number}): ${lastRun.duration}s`
+                    ? <>
+                        <Link href={`/logbook/${lastRun.number}`} className="underline underline-offset-2 hover:text-foreground">
+                          last run ({lastRun.number})
+                        </Link>
+                        {`: ${lastRun.duration}s`}
+                      </>
                     : 'no previous run'}
               </p>
 
@@ -881,7 +903,8 @@ export function CardHolder({
         {/* DAQ Status Card — data saving / waveforms */}
         {settings.showStatus && (() => {
           const okIcon = <CheckCircle className="h-3.5 w-3.5 text-success" />
-          const offIcon = <XCircle className="h-3.5 w-3.5 text-destructive" />
+          // Off is a setting, not a fault: neutral, never red.
+          const offIcon = <MinusCircle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
 
           // Waveforms are configured per-board; summarise how many are active.
           const waveformBoardCount = Object.values(boardWaveforms).filter(Boolean).length
@@ -1012,35 +1035,16 @@ export function CardHolder({
           const isOk = !status || !status.failed;
           const isConnected = connectivity?.connected ?? false;
 
-          // Determine display status based on requirements:
-          // - If running, don't update ready status, maintain current version
-          // - If not running and connected, show "Ready" in green
-          // - If not connected, show "Disconnected" in red
-          let displayText = "Unknown";
-          let displayColor = "text-gray-600";
-          
-          if (!isConnected) {
-            displayText = "Disconnected";
-            displayColor = "text-destructive";
-          } else if (isRunning) {
-            // If running, maintain current status - don't update to "Ready"
-            if (!isOk) {
+          // Running and connected: Running. A FAIL during the run: error.
+          // Stopped and connected: Ready. Not connected: error.
+          const badge: { state: StatusState; label: string } = !isConnected
+            ? { state: "error", label: "Disconnected" }
+            : isRunning
               // The server reports only that the board set its FAIL flag, and in
               // how many data blocks — there is no failure type to decode.
-              displayText = "Board Failure";
-              displayColor = "text-destructive";
-            } else {
-              displayText = "Running";
-              displayColor = "text-success";
-            }
-          } else if (isConnected) {
-            displayText = "Ready";
-            displayColor = "text-success";
-          } else {
-            displayText = "Failed";
-            displayColor = "text-destructive";
-          }
-          
+              ? (!isOk ? { state: "error", label: "Board failure" } : { state: "running", label: "Running" })
+              : { state: "ready", label: "Ready" }
+
           const waveformsOn = boardWaveforms[board.id] ?? false
 
           return (
@@ -1065,9 +1069,7 @@ export function CardHolder({
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
-                <div className={`text-xl font-bold ${displayColor}`}>
-                  {displayText}
-                </div>
+                <StatusBadge state={badge.state} label={badge.label} size="md" />
                 <p className="text-xs text-muted-foreground truncate">
                   {[board.dpp, `${board.chan} ch`, board.link_type].filter(Boolean).join(' · ')}
                 </p>
@@ -1092,6 +1094,26 @@ export function CardHolder({
             </Card>
           )
         })}
+
+        {/* No boards yet: say so where they would be, with the way to add one. */}
+        {settings.showStatus && boardsLoaded && boards.length === 0 && (
+          <Card className="border-dashed">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold">No boards</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                No digitizer is configured, so a run has nothing to read.
+              </p>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/board">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Discover and add boards
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         {/* ROI Cards */}
         {settings.showROIs &&
@@ -1201,7 +1223,7 @@ export function CardHolder({
               onPointerUp={handleStatusResizeEnd}
               onPointerCancel={handleStatusResizeEnd}
               onKeyDown={handleStatusResizeKey}
-              className={`absolute -bottom-3 left-1/2 z-10 flex h-6 w-16 -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`absolute -bottom-3 left-1/2 z-10 hidden h-6 w-16 md:flex -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
               }`}
             >

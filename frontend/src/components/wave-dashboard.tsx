@@ -655,7 +655,7 @@ export default function WaveformDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <main className="flex-1 container mx-auto p-4">
+      <div className="flex-1 container mx-auto px-0 py-4 sm:p-4">
         <div className="mb-4 flex justify-between items-center">
           <div className="text-sm text-muted-foreground">
             {totalSelectedChannels > 0 ?
@@ -838,7 +838,7 @@ export default function WaveformDashboard() {
                           <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
                           <div
                             ref={(el: HTMLDivElement | null) => { histogramRefs.current[histoId] = el }}
-                            className="w-full h-80 border rounded-lg shadow-sm"
+                            className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-sm"
                           ></div>
                         </div>
                       )
@@ -853,7 +853,7 @@ export default function WaveformDashboard() {
             </Card>
           )
         })}
-      </main>
+      </div>
     </div>
   )
 }

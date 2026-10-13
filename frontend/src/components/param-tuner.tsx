@@ -540,9 +540,11 @@ export default function ParamTuner() {
     const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
     const tunable = isOnlineTunable(regKey)
     return (
-      <div key={regKey} className="flex items-center gap-3">
-        <Label className="text-sm w-44 shrink-0">{reg.name}</Label>
+      <div key={regKey} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        {/* Label above the input on a phone, beside it from sm up. */}
+        <Label htmlFor={`tuner-${regKey}`} className="w-full shrink-0 text-sm sm:w-44">{reg.name}</Label>
         <Input
+          id={`tuner-${regKey}`}
           className="w-32 h-8 text-sm"
           type="number"
           step={step}
@@ -588,7 +590,7 @@ export default function ParamTuner() {
         <div className="flex items-center gap-2">
           <Label className="text-sm font-medium">Board</Label>
           <Select value={selectedBoardId} onValueChange={setSelectedBoardId}>
-            <SelectTrigger className="w-52">
+            <SelectTrigger className="w-52 max-w-full">
               <SelectValue placeholder="Select board..." />
             </SelectTrigger>
             <SelectContent>
@@ -673,7 +675,7 @@ export default function ParamTuner() {
         {/* Waveform panel */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
+            <CardTitle className="flex flex-wrap items-center justify-between gap-2">
               <span>Waveform</span>
               <div className="flex items-center gap-2">
                 <Button
@@ -777,7 +779,7 @@ export default function ParamTuner() {
             </div>
           </CardHeader>
           <CardContent>
-            <div ref={waveformRef} className="w-full h-80 border rounded-lg shadow-sm" />
+            <div ref={waveformRef} className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-sm" />
           </CardContent>
         </Card>
 
@@ -856,7 +858,7 @@ export default function ParamTuner() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div ref={histogramRef} className="w-full h-80 border rounded-lg shadow-sm" />
+          <div ref={histogramRef} className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-sm" />
         </CardContent>
       </Card>
     </div>

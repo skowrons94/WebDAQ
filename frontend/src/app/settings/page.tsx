@@ -9,7 +9,8 @@ import { Layout } from '@/components/dashboard-layout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Board } from '@/components/board';
 import { VisualizationSettings } from '@/components/visualization-settings';
@@ -73,63 +74,70 @@ export default function SettingsPage() {
         }
     };
 
+    const VIEWS: { id: string; label: string }[] = [
+        { id: 'boards', label: 'Boards' },
+        { id: 'current', label: 'Current module' },
+        { id: 'notifications', label: 'Notifications' },
+        { id: 'elog', label: 'ELOG' },
+        { id: 'grafana', label: 'Grafana' },
+        { id: 'appearance', label: 'Appearance' },
+    ];
+
+    // The section is in the URL too, so a reload or a shared link opens it.
+    const selectView = (view: string) => {
+        setActiveView(view);
+        const url = new URL(window.location.href);
+        url.searchParams.set('view', view);
+        window.history.replaceState(null, '', url.toString());
+    };
+
     return (
         <QueryClientProvider client={queryClient}>
             <Layout>
-                <main className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col gap-4 bg-muted/40 p-4 md:gap-8 md:p-10 rounded-lg border">
+                <div className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col gap-4 rounded-lg border bg-muted/40 p-3 sm:p-4 md:gap-8 md:p-10">
                     <div className="mx-auto grid w-full max-w-6xl gap-2">
-                        <h1 className="text-3xl font-semibold">Settings</h1>
+                        <h1 className="text-2xl font-semibold">Settings</h1>
                     </div>
-                    <div className="mx-auto grid w-full max-w-6xl items-start gap-6 md:grid-cols-[180px_1fr] lg:grid-cols-[250px_1fr]">
-                        <nav className="grid gap-4 text-sm text-muted-foreground">
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'boards' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('boards')}
-                            >
-                                Boards
-                            </Link>
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'current' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('current')}
-                            >
-                                Current Module
-                            </Link>
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'notifications' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('notifications')}
-                            >
-                                Notifications
-                            </Link>
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'elog' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('elog')}
-                            >
-                                ELOG
-                            </Link>
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'grafana' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('grafana')}
-                            >
-                                Grafana
-                            </Link>
-                            <Link
-                                href="#"
-                                className={`font-semibold ${activeView === 'appearance' ? 'text-primary' : ''}`}
-                                onClick={() => setActiveView('appearance')}
-                            >
-                                Appearance
-                            </Link>
+                    <div className="mx-auto grid w-full max-w-6xl items-start gap-6 md:grid-cols-[180px_minmax(0,1fr)] lg:grid-cols-[250px_minmax(0,1fr)]">
+                        {/* Phones: one select instead of a list that pushes the
+                            section a screen down. */}
+                        <div className="md:hidden">
+                            <Label htmlFor="settings-section" className="sr-only">Settings section</Label>
+                            <Select value={activeView} onValueChange={selectView}>
+                                <SelectTrigger id="settings-section" className="bg-background">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {VIEWS.map((v) => (
+                                        <SelectItem key={v.id} value={v.id}>{v.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <nav aria-label="Settings sections" className="hidden gap-1 text-sm md:grid">
+                            {VIEWS.map((v) => (
+                                <button
+                                    key={v.id}
+                                    type="button"
+                                    aria-current={activeView === v.id ? 'page' : undefined}
+                                    onClick={() => selectView(v.id)}
+                                    className={`rounded-md px-2 py-2 text-left font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                        activeView === v.id
+                                            ? 'bg-background text-primary shadow-sm'
+                                            : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                                >
+                                    {v.label}
+                                </button>
+                            ))}
                         </nav>
-                        <div className="grid gap-6">
+                        {/* min-w-0: a wide child (a table, a long path) scrolls
+                            inside its own box instead of pushing the page sideways. */}
+                        <div className="grid min-w-0 gap-6">
                             {renderActiveView()}
                         </div>
                     </div>
-                </main>
+                </div>
             </Layout>
         </QueryClientProvider>
     )

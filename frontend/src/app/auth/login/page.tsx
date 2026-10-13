@@ -52,9 +52,12 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex items-center justify-center min-h-screen">
+        <main className="flex min-h-screen items-center justify-center px-4 py-8">
             <div className="w-full max-w-md">
-                <h1 className="text-2xl font-bold mb-6 text-center">Login</h1>
+                <p className="mb-1 text-center text-sm font-semibold uppercase tracking-widest text-primary">
+                    LUNADAQ
+                </p>
+                <h1 className="mb-6 text-center text-2xl font-bold">Log in</h1>
                 {expired && (
                     <p className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-center text-sm">
                         Your session ended — log in again to carry on. The run is not
@@ -63,6 +66,6 @@ export default function LoginPage() {
                 )}
                 <AuthForm onSubmit={handleLogin} type="login" />
             </div>
-        </div>
+        </main>
     );
 }

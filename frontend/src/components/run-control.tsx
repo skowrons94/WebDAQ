@@ -24,6 +24,7 @@ import { CardHolder } from '@/components/card-holder'
 import { RunControlButtons } from '@/components/run-control-buttons'
 import { DAQState } from '@/components/daq-state'
 import { BeamControlPanel } from '@/components/beam-control-panel'
+import { RecentRuns } from '@/components/recent-runs'
 import { cn } from '@/lib/utils'
 
 /**
@@ -142,7 +143,7 @@ export function RunControl() {
 
   return (
     <div className="flex flex-col bg-background text-foreground">
-      <main className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-2">
+      <div className="flex flex-1 flex-col gap-4 py-2 md:gap-6 md:p-2">
           {beamSlot('top')}
 
           <div className={cn(
@@ -161,11 +162,14 @@ export function RunControl() {
                 onSaveDataChange={setSaveDataState}
               />
             </div>
+            {/* Matched to the status panel only where the two sit side by side
+                (xl); stacked on a narrower screen, the beam card keeps its own
+                height instead of growing to the whole card list. */}
             {beamSlot(
               'status',
-              'h-full',
+              'xl:h-[var(--beam-panel-h)]',
               beamPlacement === 'status' && statusPanelRenderedHeight !== null
-                ? { height: statusPanelRenderedHeight }
+                ? ({ '--beam-panel-h': `${statusPanelRenderedHeight}px` } as CSSProperties)
                 : undefined,
             )}
           </div>
@@ -178,7 +182,9 @@ export function RunControl() {
               'xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]',
           )}>
             <div className={cn(
-              'order-2 grid h-full gap-4 xl:order-1',
+              // Phones: run controls right after the status cards, before the
+              // beam chart. Tablet and desktop order unchanged.
+              'order-1 grid h-full gap-4 md:order-2 xl:order-1',
               beamPlacement === 'beside-controls'
                 ? 'grid-rows-[auto_1fr]'
                 : 'xl:grid-cols-[minmax(0,2fr)_minmax(22rem,1fr)] xl:items-start',
@@ -215,9 +221,12 @@ export function RunControl() {
               />
             </div>
 
-            {beamSlot('beside-controls', 'order-1 h-full xl:order-2')}
+            {beamSlot('beside-controls', 'order-2 h-full md:order-1 xl:order-2')}
           </div>
-      </main>
+
+          {/* Each recent run one click from its Logbook page. */}
+          <RecentRuns />
+      </div>
     </div>
   )
 }

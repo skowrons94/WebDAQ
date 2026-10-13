@@ -27,8 +27,6 @@ type AuthFormProps = {
 };
 
 export function AuthForm({ onSubmit, type }: AuthFormProps) {
-    console.log('Rendering AuthForm, type:', type);
-
     const form = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema),
         defaultValues: {
@@ -38,14 +36,15 @@ export function AuthForm({ onSubmit, type }: AuthFormProps) {
     });
 
     const handleSubmit = (data: z.infer<typeof schema>) => {
-        console.log('Form submitted with data:', data);
         onSubmit(data);
     };
 
     return (
         <Form {...form}>
-            <div className="flex justify-end mb-4">
-                <ServerStatus />
+            {/* Labelled, not a bare dot: whether the DAQ server answers is the
+                first thing to know when a login fails. */}
+            <div className="mb-4 flex justify-center rounded-md border bg-muted/30">
+                <ServerStatus showLabel align="left" />
             </div>
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-8">
                 <FormField
@@ -55,7 +54,7 @@ export function AuthForm({ onSubmit, type }: AuthFormProps) {
                         <FormItem>
                             <FormLabel>Username</FormLabel>
                             <FormControl>
-                                <Input placeholder="username" {...field} />
+                                <Input placeholder="username" autoComplete="username" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
@@ -68,13 +67,13 @@ export function AuthForm({ onSubmit, type }: AuthFormProps) {
                         <FormItem>
                             <FormLabel>Password</FormLabel>
                             <FormControl>
-                                <Input placeholder="password" type="password" {...field} />
+                                <Input placeholder="password" type="password" autoComplete="current-password" {...field} />
                             </FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
                 />
-                <Button type="submit">{type === 'login' ? 'Login' : 'Register'}</Button>
+                <Button type="submit" className="w-full">{type === 'login' ? 'Log in' : 'Register'}</Button>
             </form>
         </Form>
     );

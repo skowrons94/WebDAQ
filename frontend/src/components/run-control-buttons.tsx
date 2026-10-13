@@ -116,6 +116,10 @@ export function RunControlButtons({
   // Fetch last run metadata on component mount
   useEffect(() => {
     fetchLastRunMetadata()
+    // Opened from the phone run bar ("Start…"): bring the controls into view.
+    if (window.location.hash === '#run-control') {
+      setTimeout(() => document.getElementById('run-control')?.scrollIntoView({ block: 'start' }), 300)
+    }
   }, [])
 
   /**
@@ -414,7 +418,7 @@ export function RunControlButtons({
   }
 
   return (
-    <Card>
+    <Card id="run-control" className="scroll-mt-28">
       <CardHeader className="pb-4">
         <CardTitle>Run setup &amp; control</CardTitle>
       </CardHeader>

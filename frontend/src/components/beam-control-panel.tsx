@@ -39,7 +39,7 @@ const formatCharge = (microCoulombs: number): string => {
   const value = Number.isFinite(microCoulombs) ? microCoulombs : 0
   if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} C`
   if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(2)} mC`
-  return `${value.toFixed(2)} uC`
+  return `${value.toFixed(2)} µC`
 }
 
 interface BeamControlPanelProps {
@@ -97,10 +97,10 @@ export function BeamControlPanel({
           Beam current
         </p>
         <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-3xl font-bold tabular-nums">{beamCurrent.toFixed(2)} uA</span>
+          <span className="text-3xl font-bold tabular-nums">{beamCurrent.toFixed(2)} µA</span>
           <span className="text-xs text-muted-foreground">
             {isRunning
-              ? `${beamCurrentChange >= 0 ? '+' : ''}${beamCurrentChange.toFixed(2)} uA since start`
+              ? `${beamCurrentChange >= 0 ? '+' : ''}${beamCurrentChange.toFixed(2)} µA since start`
               : 'No run in progress'}
           </span>
         </div>

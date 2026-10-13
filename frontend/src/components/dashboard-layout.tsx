@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import {
     AlertTriangle,
     HeartPulse,
@@ -48,7 +48,8 @@ import { useRouter } from 'next/navigation'
 import { ModeToggle } from '@/components/ui/mode-toggle'
 import { NotificationBell } from '@/components/notification-bell'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { RunBar } from '@/components/run-bar'
 import { ServerStatus } from '@/components/server-status'
 import { RunStatusIndicator } from '@/components/run-status-indicator'
 
@@ -58,6 +59,9 @@ const NAV_ITEMS = [
     { href: "/dashboard", label: "Dashboard" },
     { href: "/logbook", label: "Logbook" },
     { href: "/stats", label: "Stats" },
+    // Where boards are discovered (scan) and added. It used to be reachable
+    // only through Settings → Boards, a place nobody looked for it.
+    { href: "/board", label: "Boards" },
     { href: "/DAQ", label: "DAQ" },
     { href: "/tuner", label: "Tuner" },
     { href: "/troubleshoot", label: "Troubleshoot" },
@@ -71,11 +75,22 @@ export function Layout({ children }: { children: React.ReactNode }) {
     const setDashboardTab = useDashboardTabStore((state) => state.setTab)
     const pathname = usePathname()
     const [open, setOpen] = useState(false)
+    const [menuOpen, setMenuOpen] = useState(false)
 
     // A nav entry is active when the current path matches it exactly or is a
     // nested route beneath it (e.g. /settings/foo highlights Settings).
+    // Paths are compared without a trailing slash (static exports add one).
+    const path = (pathname || "/").replace(/\/+$/, "") || "/"
     const isActive = (href: string) =>
-        pathname === href || pathname.startsWith(href + "/")
+        path === href || path.startsWith(href + "/")
+
+    // "<Page> · LUNADAQ" in the browser tab, so a row of tabs in the control
+    // room can be told apart.
+    useEffect(() => {
+        const item = NAV_ITEMS.find((i) => isActive(i.href))
+        document.title = item ? `${item.label} · LUNADAQ` : "LUNADAQ"
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [path])
 
     const handleLogout = () => {
         clearToken()
@@ -94,71 +109,112 @@ export function Layout({ children }: { children: React.ReactNode }) {
         router.push(href)
     }
 
+    const navLinkClass = (href: string) =>
+        `rounded-sm transition-colors hover:text-foreground ${
+            isActive(href)
+                ? "text-foreground font-semibold underline decoration-primary decoration-2 underline-offset-[6px]"
+                : "text-muted-foreground"
+        }`
+
     return (
-        <div className="flex min-h-screen w-full flex-col">
-            <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background/80 backdrop-blur-sm px-4 md:px-6 z-50">
-                <nav className="hidden flex-col gap-6 text-lg font-medium md:flex md:flex-row md:items-center md:gap-5 md:text-sm lg:gap-6">
-                    <Link
-                        href="/dashboard"
-                        className="flex items-center gap-2 text-lg font-semibold md:text-base"
-                    >
-                        <MoonStarIcon className="w-8 h-8 text-primary" />
-                        <span>LUNADAQ</span>
-                    </Link>
+        // Bottom padding below md leaves room for the fixed run bar.
+        <div className="flex min-h-screen w-full flex-col pb-[4.75rem] md:pb-0">
+            {/* Keyboard users jump past the header and nav. */}
+            <a
+                href="#main"
+                className="sr-only focus:not-sr-only focus:fixed focus:left-2 focus:top-2 focus:z-[100] focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:shadow"
+            >
+                Skip to content
+            </a>
+            {/* Below lg: menu, logo, run state, bell, account — nothing else, so
+                the bell and the run state are never pushed off a phone screen.
+                Search, server status and the theme live in the menu sheet. */}
+            <header className="sticky top-0 z-50 flex h-16 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:gap-3 md:px-6">
+                <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+                    <SheetTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="shrink-0 lg:hidden"
+                        >
+                            <Menu className="h-5 w-5" />
+                            <span className="sr-only">Open navigation menu</span>
+                        </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="flex w-[18rem] flex-col gap-6 overflow-y-auto sm:w-[20rem]">
+                        <SheetTitle className="flex items-center gap-2 text-lg font-semibold">
+                            <MoonStarIcon className="h-7 w-7 text-primary" aria-hidden="true" />
+                            LUNADAQ
+                        </SheetTitle>
+                        <nav aria-label="Main" className="grid gap-1 text-base font-medium">
+                            {NAV_ITEMS.map((item) => (
+                                <SheetClose asChild key={item.href}>
+                                    <Link
+                                        href={item.href}
+                                        aria-current={isActive(item.href) ? "page" : undefined}
+                                        className={`flex min-h-11 items-center rounded-md px-2 ${
+                                            isActive(item.href)
+                                                ? "bg-muted font-semibold text-foreground"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        }`}
+                                    >
+                                        {item.label}
+                                    </Link>
+                                </SheetClose>
+                            ))}
+                        </nav>
+                        <div className="grid gap-3 border-t pt-4">
+                            <Button
+                                variant="outline"
+                                className="justify-start"
+                                onClick={() => { setMenuOpen(false); setOpen(true) }}
+                            >
+                                <Search className="mr-2 h-4 w-4" />
+                                Search…
+                            </Button>
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm text-muted-foreground">Theme</span>
+                                <ModeToggle />
+                            </div>
+                            <div className="rounded-md border">
+                                <ServerStatus align="left" showLabel />
+                            </div>
+                        </div>
+                    </SheetContent>
+                </Sheet>
+                <Link
+                    href="/dashboard"
+                    className="flex shrink-0 items-center gap-2 text-base font-semibold"
+                    aria-label="LUNADAQ dashboard"
+                >
+                    <MoonStarIcon className="h-7 w-7 text-primary" aria-hidden="true" />
+                    <span className="hidden sm:inline">LUNADAQ</span>
+                </Link>
+                <nav aria-label="Main" className="hidden items-center gap-4 text-sm font-medium lg:flex xl:gap-5">
                     {NAV_ITEMS.map((item) => (
                         <Link
                             key={item.href}
                             href={item.href}
-                            className={`transition-colors hover:text-foreground ${
-                                isActive(item.href)
-                                    ? "text-foreground font-semibold"
-                                    : "text-muted-foreground"
-                            }`}
+                            aria-current={isActive(item.href) ? "page" : undefined}
+                            className={navLinkClass(item.href)}
                         >
                             {item.label}
                         </Link>
                     ))}
                 </nav>
-                <Sheet>
-                    <SheetTrigger asChild>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="shrink-0 md:hidden"
-                        >
-                            <Menu className="h-5 w-5" />
-                            <span className="sr-only">Toggle navigation menu</span>
-                        </Button>
-                    </SheetTrigger>
-                    <SheetContent side="left">
-                        <nav className="grid gap-6 text-lg font-medium">
-                            <Link
-                                href="/dashboard"
-                                className="flex items-center gap-2 text-lg font-semibold"
-                            >
-                                <MoonStarIcon className="w-8 h-8 text-primary" />
-                                <span>LUNADAQ</span>
-                            </Link>
-                            {NAV_ITEMS.map((item) => (
-                                <Link
-                                    key={item.href}
-                                    href={item.href}
-                                    className={`transition-colors hover:text-foreground ${
-                                        isActive(item.href)
-                                            ? "text-foreground font-semibold"
-                                            : "text-muted-foreground"
-                                    }`}
-                                >
-                                    {item.label}
-                                </Link>
-                            ))}
-                        </nav>
-                    </SheetContent>
-                </Sheet>
-                <div className="flex w-full items-center gap-4 md:ml-auto md:gap-2 lg:gap-4">
+                <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
                     <Button
                         variant="outline"
-                        className="ml-auto flex-1 sm:flex-initial"
+                        size="icon"
+                        className="hidden lg:inline-flex xl:hidden"
+                        onClick={() => setOpen(true)}
+                        aria-label="Search"
+                    >
+                        <Search className="h-4 w-4" />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="hidden xl:inline-flex"
                         onClick={() => setOpen(true)}
                     >
                         <Search className="mr-2 h-4 w-4" />
@@ -176,6 +232,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 <CommandItem onSelect={() => go('/logbook')}>
                                     <FlaskConical className="mr-2 h-4 w-4" />
                                     <span>Logbook</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/board')}>
+                                    <Cpu className="mr-2 h-4 w-4" />
+                                    <span>Boards: discover and add</span>
                                 </CommandItem>
                                 <CommandItem onSelect={() => go('/stats')}>
                                     <LineChart className="mr-2 h-4 w-4" />
@@ -198,7 +258,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 </CommandItem>
                                 <CommandItem onSelect={() => goToTab('health')}>
                                     <HeartPulse className="mr-2 h-4 w-4" />
-                                    <span>Board Health</span>
+                                    <span>Board health</span>
                                 </CommandItem>
                                 <CommandItem onSelect={() => goToTab('waveforms')}>
                                     <AudioWaveform className="mr-2 h-4 w-4" />
@@ -213,7 +273,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 </CommandItem>
                                 <CommandItem onSelect={() => go('/settings?view=current')}>
                                     <Gauge className="mr-2 h-4 w-4" />
-                                    <span>Current Module</span>
+                                    <span>Current module</span>
                                 </CommandItem>
                                 <CommandItem onSelect={() => go('/settings?view=notifications')}>
                                     <BellRing className="mr-2 h-4 w-4" />
@@ -231,21 +291,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         </CommandList>
                     </CommandDialog>
                     <RunStatusIndicator />
-                    <ServerStatus />
-                    {/* What the DAQ did while nobody was watching. */}
+                    <div className="hidden lg:block">
+                        <ServerStatus />
+                    </div>
+                    {/* What the DAQ did while nobody was watching. Never hidden. */}
                     <NotificationBell />
-                    <ModeToggle />
+                    <div className="hidden lg:block">
+                        <ModeToggle />
+                    </div>
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                            <Button variant="secondary" size="icon" className="rounded-full">
+                            <Button variant="secondary" size="icon" className="shrink-0 rounded-full">
                                 <CircleUser className="h-5 w-5" />
-                                <span className="sr-only">Toggle user menu</span>
+                                <span className="sr-only">Account menu</span>
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                            <DropdownMenuLabel>My account</DropdownMenuLabel>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem>Profile</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => router.push('/settings')}>Settings</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handleLogout}>Log out</DropdownMenuItem>
@@ -253,12 +316,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </DropdownMenu>
                 </div>
             </header>
-            <main className="flex-1 pt-4 md:pt-8 px-4 md:px-8">
+            <main id="main" tabIndex={-1} className="flex-1 px-4 pt-4 outline-none md:px-8 md:pt-8">
                 {children}
             </main>
-            <footer className="mt-auto flex items-center justify-center h-16 bg-background text-muted-foreground">
-                <span>&copy; 2025 LUNADAQ</span>
+            <footer className="mt-auto flex h-16 items-center justify-center bg-background text-sm text-muted-foreground">
+                <span>LUNADAQ</span>
             </footer>
+            <RunBar />
         </div>
     )
 }

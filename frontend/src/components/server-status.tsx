@@ -6,6 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Trash2, Plus, Play, Square, FolderOpen, FileText, FlaskConical, Loader2, AlertCircle } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
+import { ConfirmAction } from '@/components/ui/confirm-action'
+import useRunControlStore from '@/store/run-control-store'
+import { cn } from '@/lib/utils'
 
 type WorkingDirectory = {
     id: string
@@ -13,7 +16,19 @@ type WorkingDirectory = {
     path: string
 }
 
-export function ServerStatus() {
+/**
+ * `align`: which edge of the button the popover hangs from. 'left' inside the
+ * phone menu sheet (which opens from the left), 'right' in the header.
+ * `showLabel`: always show the words next to the dot (the menu sheet has room).
+ */
+export function ServerStatus({ align = 'right', showLabel = false }: { align?: 'left' | 'right'; showLabel?: boolean } = {}) {
+    // Read, not polled: this component is on the login page too, where there is
+    // no session to ask with. Inside the app the header's poller keeps it current.
+    const runActive = useRunControlStore((s) => s.isRunning)
+    // The confirmations live outside the popover: it closes on any click
+    // outside itself, and a dialog inside it would close with it.
+    const [confirmStopServer, setConfirmStopServer] = useState(false)
+    const [confirmRemoveDir, setConfirmRemoveDir] = useState<WorkingDirectory | null>(null)
     const [connected, setConnected] = useState<boolean | null>(null)
     const [currentDirectory, setCurrentDirectory] = useState<string | null>(null)
     const [serverTestMode, setServerTestMode] = useState(false)
@@ -340,14 +355,17 @@ export function ServerStatus() {
                 className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted transition-colors"
             >
                 <span className={`inline-block w-2.5 h-2.5 rounded-full ${dotColor}`} />
-                <span className="text-xs text-muted-foreground hidden sm:inline">
+                <span className={cn('text-xs text-muted-foreground', showLabel ? 'inline' : 'hidden sm:inline')}>
                     {label}
                     {connected && activeDir ? ` · ${activeDir.label}` : ''}
                 </span>
             </button>
 
             {open && (
-                <div className="absolute right-0 top-full mt-2 w-[26rem] max-w-[calc(100vw-1rem)] rounded-lg border bg-background shadow-lg p-4 z-50">
+                <div className={cn(
+                    'absolute top-full mt-2 w-[26rem] max-w-[calc(100vw-2rem)] rounded-lg border bg-background shadow-lg p-4 z-50',
+                    align === 'left' ? 'left-0' : 'right-0',
+                )}>
                     {launching ? (
                         <div className="space-y-3">
                             <div className="flex items-center gap-2">
@@ -396,7 +414,7 @@ export function ServerStatus() {
                                     variant="destructive"
                                     size="sm"
                                     className="flex-1"
-                                    onClick={handleStop}
+                                    onClick={() => setConfirmStopServer(true)}
                                     disabled={loading}
                                 >
                                     <Square className="h-3.5 w-3.5 mr-1.5" />
@@ -498,9 +516,10 @@ export function ServerStatus() {
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            onClick={() => deleteDirectory(dir.id)}
+                                            onClick={() => setConfirmRemoveDir(dir)}
                                             className="h-7 w-7 text-destructive hover:text-destructive"
                                             title="Remove from list"
+                                            aria-label={`Remove ${dir.label} from the list`}
                                         >
                                             <Trash2 className="h-3.5 w-3.5" />
                                         </Button>
@@ -565,6 +584,40 @@ export function ServerStatus() {
                     )}
                 </div>
             )}
+            <ConfirmAction
+                open={confirmStopServer}
+                onOpenChange={setConfirmStopServer}
+                title="Stop the DAQ server?"
+                description={
+                    <>
+                        {runActive && (
+                            <p className="font-semibold text-destructive">
+                                A run is in progress. Stopping the server ends it without closing
+                                it cleanly: stop the run from the Dashboard first.
+                            </p>
+                        )}
+                        <p>
+                            The LUNADAQ server process is shut down. Until it is started again
+                            nothing is acquired, monitored or alerted, and every page loses its data.
+                        </p>
+                    </>
+                }
+                confirmLabel={runActive ? 'Stop server during the run' : 'Stop server'}
+                onConfirm={handleStop}
+            />
+            <ConfirmAction
+                open={confirmRemoveDir !== null}
+                onOpenChange={(o) => { if (!o) setConfirmRemoveDir(null) }}
+                title={`Remove "${confirmRemoveDir?.label ?? ''}" from the list?`}
+                description={
+                    <p>
+                        Only the shortcut is removed: the directory and its files on disk
+                        ({confirmRemoveDir?.path}) are not touched. It can be added again.
+                    </p>
+                }
+                confirmLabel="Remove from list"
+                onConfirm={() => { if (confirmRemoveDir) void deleteDirectory(confirmRemoveDir.id) }}
+            />
         </div>
     )
 }

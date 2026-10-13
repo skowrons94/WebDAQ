@@ -291,8 +291,49 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                 </div>
             </div>
 
+            {/* Phones: one card per run, every visible column labelled, instead
+                of a table that showed only Run # and Start. */}
+            <ul className="grid gap-3 sm:hidden" aria-label="Runs">
+                {table.getRowModel().rows?.length ? (
+                    table.getRowModel().rows.map((row) => {
+                        const cells = row.getVisibleCells()
+                        const head = cells.filter((c) => ["run_number", "flag", "actions"].includes(c.column.id))
+                        const rest = cells.filter((c) => !["run_number", "flag", "actions"].includes(c.column.id))
+                        return (
+                            <li key={row.id} className="rounded-lg border bg-background p-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    {head.map((cell) => (
+                                        <div key={cell.id} className={cell.column.id === "actions" ? "ml-auto" : ""}>
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </div>
+                                    ))}
+                                </div>
+                                <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+                                    {rest.map((cell) => {
+                                        const meta = cell.column.columnDef.meta as { label?: string } | undefined
+                                        const label = meta?.label ?? COLUMN_LABELS[cell.column.id] ?? cell.column.id
+                                        return (
+                                            <div key={cell.id} className="contents">
+                                                <dt className="text-muted-foreground">{label}</dt>
+                                                <dd className="min-w-0 break-words">
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </dd>
+                                            </div>
+                                        )
+                                    })}
+                                </dl>
+                            </li>
+                        )
+                    })
+                ) : (
+                    <li className="rounded-lg border bg-background p-6 text-center text-sm text-muted-foreground">
+                        No runs match the current filters.
+                    </li>
+                )}
+            </ul>
+
             {/* Table */}
-            <div className="rounded-md border bg-background">
+            <div className="hidden rounded-md border bg-background sm:block">
                 <Table>
                     <TableHeader>
                         {table.getHeaderGroups().map((headerGroup) => (
@@ -358,7 +399,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-xs text-muted-foreground tabular-nums">
                     Page {table.getState().pagination.pageIndex + 1} of {Math.max(1, table.getPageCount())}
                 </div>
