@@ -400,7 +400,7 @@ export function SpectrumPanel({
                 ) : (
                   <>
                     <dt className="text-muted-foreground">FWHM</dt>
-                    <dd className="font-mono font-semibold tabular-nums">
+                    <dd className={`font-mono tabular-nums ${fit.warning ? 'text-muted-foreground' : 'font-semibold'}`}>
                       {fmt(fit.fwhm, unit)}{Number.isFinite(fit.fwhmErr) && fit.fwhmErr < fit.fwhm ? ` ± ${fmt(fit.fwhmErr, '').trim()}` : ''}
                       {resolutionPct != null && <span className="ml-2 font-sans text-xs font-normal text-muted-foreground">({resolutionPct.toFixed(resolutionPct < 1 ? 2 : 1)} %)</span>}
                     </dd>
@@ -414,7 +414,7 @@ export function SpectrumPanel({
                 )}
                 <dt className="text-muted-foreground">Counts</dt>
                 <dd className="font-mono tabular-nums">{Math.round(fit.net).toLocaleString()}</dd>
-                {!fewCounts && reference && reference.unit === unit && Math.abs(reference.centroid - fit.centroid) < Math.max(3 * fit.fwhm, roi?.half ?? 0) && (
+                {!fewCounts && !fit.warning && reference && reference.unit === unit && Math.abs(reference.centroid - fit.centroid) < Math.max(3 * fit.fwhm, roi?.half ?? 0) && (
                   <>
                     <dt className="text-muted-foreground">Session</dt>
                     <dd className="text-sm">
