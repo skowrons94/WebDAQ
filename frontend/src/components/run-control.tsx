@@ -200,6 +200,7 @@ export function RunControl() {
               <RunControlButtons
                 elapsed={timer}
                 saveData={saveData}
+                onSaveDataChange={setSaveDataState}
                 limitFileSize={limitFileSize}
                 fileSizeLimit={fileSizeLimit}
                 runNumber={runNumber}

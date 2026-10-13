@@ -11,7 +11,8 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { useToast } from '@/components/ui/use-toast'
 import { formatElapsed, useElapsed } from '@/components/run-status-indicator'
 import { useRunStatus } from '@/hooks/use-run-status'
-import { getDataCurrent } from '@/lib/api'
+import { getDataCurrent, getSaveData } from '@/lib/api'
+import { StopRunBody } from '@/components/stop-run-body'
 import { stopRunSequence } from '@/lib/run-actions'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
@@ -48,6 +49,7 @@ export function RunBar() {
   const currentEnabled = useVisualizationStore((s) => s.settings.currentEnabled !== false)
   const [beam, setBeam] = useState<number | null>(null)
   const [stopping, setStopping] = useState(false)
+  const [savingNow, setSavingNow] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (!currentEnabled) { setBeam(null); return }
@@ -131,12 +133,12 @@ export function RunBar() {
               </Button>
             }
             title={runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
-            description={
-              <>
-                <p>Acquisition ends for every board{elapsed > 0 ? ` after ${formatElapsed(elapsed)}` : ''}.</p>
-                <p>Starting again makes a new run.</p>
-              </>
-            }
+            onOpenChange={(open) => {
+              if (!open) return
+              setSavingNow(null)
+              getSaveData().then((v) => setSavingNow(Boolean(v))).catch(() => setSavingNow(null))
+            }}
+            description={<StopRunBody elapsed={elapsed} saving={savingNow} />}
             confirmLabel={runNumber !== null ? `Stop run ${runNumber}` : 'Stop run'}
             onConfirm={stop}
           />

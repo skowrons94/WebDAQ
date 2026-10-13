@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   AlertTriangle,
   ChevronDown,
@@ -17,6 +17,15 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { ConfirmAction } from "@/components/ui/confirm-action"
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Card,
   CardContent,
@@ -52,6 +61,7 @@ import {
   refreshBoardConnections,
   startStatsRun,
   getTotalAccumulatedCharge,
+  getSaveData,
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
@@ -59,12 +69,14 @@ import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
 import { unpauseAlertNonBlocking } from '@/lib/grafana-api'
 import { stopRunSequence } from '@/lib/run-actions'
 import { noteRunAction } from '@/hooks/use-run-status'
-import { formatElapsed } from '@/components/run-status-indicator'
+import { StopRunBody } from '@/components/stop-run-body'
 
 interface RunControlButtonsProps {
   /** Seconds since the run started, for the Stop confirmation. */
   elapsed?: number
   saveData: boolean
+  /** Told when Start switches saving on, so the overview agrees at once. */
+  onSaveDataChange?: (save: boolean) => void
   limitFileSize: boolean
   fileSizeLimit: string
   runNumber: number | null
@@ -86,6 +98,7 @@ interface RunControlButtonsProps {
 export function RunControlButtons({
   elapsed = 0,
   saveData,
+  onSaveDataChange,
   limitFileSize,
   fileSizeLimit,
   runNumber,
@@ -105,6 +118,13 @@ export function RunControlButtons({
   // Dialog states
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
   const [stopping, setStopping] = useState(false)
+  const [starting, setStarting] = useState(false)
+  // Saving was off at Start: the operator chooses before anything is sent.
+  const [savingOffOpen, setSavingOffOpen] = useState(false)
+  // The saving setting this start was confirmed with (used by startRunProcess,
+  // also when it runs later from the overwrite dialog).
+  const pendingSave = useRef(saveData)
+  const turnOnRef = useRef<HTMLButtonElement>(null)
   // The last Stop failed while the run still shows as going: offer the forced reset.
   const [stopFailed, setStopFailed] = useState(false)
   useEffect(() => { if (!isRunning) setStopFailed(false) }, [isRunning])
@@ -152,20 +172,43 @@ export function RunControlButtons({
    * Initiates the run start process with validation and confirmation dialogs
    */
   const handleStartRun = async () => {
-    if (runNumber === null) {
-      toast({
+    if (runNumber === null || starting) {
+      if (runNumber === null) toast({
         title: 'Error',
         description: 'Run number is not set. Please set a run number before starting.',
         variant: 'destructive',
       })
       return
     }
+    // Saving may have been switched off from anywhere (the Tuner, another
+    // computer): ask the server, not this page's copy. Off is never started
+    // silently: the operator chooses, with "turn it on" as the default.
+    let serverSave = saveData
+    try {
+      serverSave = Boolean(await Promise.race([
+        getSaveData(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), 4000)),
+      ]))
+    } catch {
+      // No answer: use the page's copy; an "off" still gets the question below.
+    }
+    if (!serverSave) {
+      setSavingOffOpen(true)
+      return
+    }
+    await beginStart(true)
+  }
 
+  /** Set up and start with the saving setting the operator confirmed. */
+  const beginStart = async (save: boolean) => {
+    pendingSave.current = save
+    setStarting(true)
     try {
       await setRunNumber(runNumber!)
       const directoryExists = await checkRunDirectoryExists()
-      await setSaveData(saveData)
-      
+      await setSaveData(save)
+      onSaveDataChange?.(save)
+
       // Only confirm when the run directory already exists (would be overwritten).
       if (directoryExists) {
         setShowOverrideDialog(true)
@@ -174,7 +217,7 @@ export function RunControlButtons({
 
       await startRunProcess()
     } catch (error) {
-      console.error('Failed to start run:', error)
+      console.error('Failed to start run:', (error as Error)?.message ?? error)
       const serverMessage =
         (error as { response?: { data?: { message?: string } } })?.response?.data?.message
       toast({
@@ -184,6 +227,8 @@ export function RunControlButtons({
           : 'Failed to start the run. Please check all parameters and try again.',
         variant: 'destructive',
       })
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -200,9 +245,10 @@ export function RunControlButtons({
       return
     }
 
+    const saveData = pendingSave.current
     try {
       toast({
-        title: 'Starting Run...',
+        title: 'Starting run…',
         description: `Please wait while the run ${runNumber} is being started.`,
       })
 
@@ -269,7 +315,7 @@ export function RunControlButtons({
       autoManageUids.forEach((uid) => unpauseAlertNonBlocking(uid))
 
       toast({
-        title: sideEffects.length ? 'Run Started (with warnings)' : 'Run Started',
+        title: sideEffects.length ? 'Run started (with warnings)' : 'Run started',
         description: sideEffects.length
           ? `Run ${runNumber} is acquiring, but ${sideEffects.join(' and ')}.`
           : `Run ${runNumber} started successfully with all parameters set.`,
@@ -522,7 +568,7 @@ export function RunControlButtons({
             onClick={handleStartRun}
             className="w-full"
             variant={isRunning ? 'outline' : 'success'}
-            disabled={isRunning}
+            disabled={isRunning || starting}
           >
             <PlayCircle className="mr-2 h-4 w-4" />
             Start Run
@@ -539,17 +585,7 @@ export function RunControlButtons({
               </Button>
             }
             title={runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
-            description={
-              <>
-                <p>
-                  Acquisition ends for every board{elapsed > 0 ? ` after ${formatElapsed(elapsed)}` : ''}.
-                  {saveData
-                    ? ' The run is closed and its files are kept.'
-                    : ' Data saving is off, so nothing from this run is on disk.'}
-                </p>
-                <p>Starting again makes a new run.</p>
-              </>
-            }
+            description={<StopRunBody elapsed={elapsed} saving={saveData} />}
             confirmLabel={runNumber !== null ? `Stop run ${runNumber}` : 'Stop run'}
             onConfirm={handleStopRun}
           />
@@ -695,6 +731,47 @@ export function RunControlButtons({
           </div>
         </Collapsible>
       </CardContent>
+
+      {/* Saving is off on the server: never start such a run silently.
+          "Turn saving on and start" is the default (focused) choice. */}
+      <AlertDialog open={savingOffOpen} onOpenChange={setSavingOffOpen}>
+        <AlertDialogContent
+          className="w-[calc(100%-2rem)] max-w-md rounded-lg"
+          onOpenAutoFocus={(e) => { e.preventDefault(); turnOnRef.current?.focus() }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Start run {runNumber}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p className="flex items-start gap-2 rounded-md border border-destructive bg-destructive/10 p-3 font-semibold text-destructive">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                  Data saving is OFF: this run will not be written to disk.
+                </p>
+                <p className="text-muted-foreground">
+                  Saving may have been switched off by the Tuner or from another computer.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-2 sm:gap-0">
+            <AlertDialogCancel className="pointer-coarse:min-h-11">Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => { setSavingOffOpen(false); void beginStart(false) }}
+            >
+              Start without saving
+            </Button>
+            <Button
+              ref={turnOnRef}
+              variant="success"
+              onClick={() => { setSavingOffOpen(false); void beginStart(true) }}
+            >
+              Turn saving on and start
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Directory Override Confirmation Dialog */}
       <ConfirmAction
