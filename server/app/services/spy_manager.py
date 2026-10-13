@@ -26,6 +26,16 @@ from ..utils.spy import ru_spy
 
 logger = logging.getLogger(__name__)
 
+
+def calibrate_x_axis(histo: Any, offset: float, slope: float) -> None:
+    """Map a histogram's x axis through energy = offset + slope * x.
+
+    Works on the axis limits, so it holds for any binning: the 1-D spectra
+    (0..nbins) and the PSD TH2 (0..QLONG_MAX in fewer bins) alike.
+    """
+    ax = histo.GetXaxis()
+    ax.SetLimits(offset + slope * ax.GetXmin(), offset + slope * ax.GetXmax())
+
 class SpyManager:
     """
     Centralized manager for spy server operations and histogram data.
@@ -132,17 +142,18 @@ class SpyManager:
             histo = self.ru_spy.histogram(board_index, int(channel), histogram_type)
 
             if histo:
-                # Apply the linear energy calibration (energy = offset + slope*bin)
-                # to the x-axis. Uses the raw bin count before rebinning; the
-                # energy range is fixed regardless of binning, and Rebin preserves
-                # the axis limits.
+                # Apply the linear energy calibration (energy = offset + slope*x)
+                # to the x-axis, mapping the axis's own range in raw units: the
+                # 1-D spectra run from 0 to nbins (one bin per channel), the PSD
+                # TH2 from 0 to QLONG_MAX in PSD_XBINS bins, so the limits are
+                # calibrated rather than the bin count. Done before rebinning;
+                # Rebin preserves the axis limits.
                 board_name = next((str(b['name']) for b in boards
                                    if str(b['id']) == str(board_id)), None)
                 if board_name:
                     offset, slope = self._read_calibration(board_name, str(board_id), int(channel))
                     if (offset, slope) != (0.0, 1.0):
-                        n = histo.GetNbinsX()
-                        histo.GetXaxis().SetLimits(offset, offset + slope * n)
+                        calibrate_x_axis(histo, offset, slope)
 
                 # Rebin only applies to 1D spectra (TH2 PSD is rebinned by the route).
                 if self.rebin_factor > 1 and histo.GetDimension() == 1:
