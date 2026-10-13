@@ -27,7 +27,7 @@ const buttonVariants = cva(
         // On a touch screen every size is at least 44 x 44 px (WCAG 2.5.5);
         // with a mouse the sizes are unchanged.
         default: "h-10 px-4 py-2 pointer-coarse:min-h-11",
-        sm: "h-9 rounded-md px-3 pointer-coarse:min-h-11",
+        sm: "h-9 rounded-md px-3 pointer-coarse:min-h-11 pointer-coarse:min-w-11",
         lg: "h-11 rounded-md px-8",
         icon: "h-10 w-10 pointer-coarse:min-h-11 pointer-coarse:min-w-11",
       },
