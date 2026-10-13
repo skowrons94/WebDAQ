@@ -142,6 +142,25 @@ const CURRENT_MODULE_LABELS: Record<string, string> = {
 const PICOAMMETER_MODULES = new Set(['tetramm', 'rbd9103'])
 
 
+/**
+ * A monitored reading with fixed decimals, never "0.00000e+0": zero is "0",
+ * ordinary magnitudes get 3 significant decimals at most, and only a really
+ * tiny or huge value falls back to exponent notation.
+ */
+export function formatReading(value: number): string {
+  if (!Number.isFinite(value)) return '—'
+  const abs = Math.abs(value)
+  if (abs === 0) return '0'
+  if (abs < 1e-3 || abs >= 1e7) return value.toExponential(2)
+  if (abs >= 1000) return value.toFixed(0)
+  if (abs >= 100) return value.toFixed(1)
+  if (abs >= 1) return value.toFixed(2)
+  return value.toFixed(3)
+}
+
+/** "uA" as typed in a stats path → "µA". */
+const displayUnit = (unit: string) => unit.replace(/^u(?=[A-Za-z])/, 'µ')
+
 interface CardHolderProps {
   isRunning: boolean
   timer: number
@@ -163,7 +182,9 @@ const RUN_SLIDER_SPAN = 25
 // the row padding, before the following row begins, so no clipped preview of
 // the next row appears beneath the pull handle.
 const STATUS_PANEL_HEIGHTS = [220, 428, 636] as const
-const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[0]
+// Two rows by default (one row hid the voltage and beam-current cards, and any
+// further board, under the handle); the panel is never taller than its cards.
+const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[1]
 const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height-v3'
 
 export function CardHolder({
@@ -236,6 +257,14 @@ export function CardHolder({
     height => height >= minimumStatusPanelHeight,
   )
   const [isResizingStatusPanel, setIsResizingStatusPanel] = useState(false)
+  // The cards' own height, and how many cards are below the panel's edge (the
+  // count goes on the handle). Measured; both only matter from xl up.
+  const statusGridRef = useRef<HTMLDivElement>(null)
+  const [statusContentHeight, setStatusContentHeight] = useState<number>(0)
+  const [hiddenStatusCards, setHiddenStatusCards] = useState(0)
+  const shownStatusPanelHeight = statusContentHeight > 0
+    ? Math.min(displayedStatusPanelHeight, statusContentHeight)
+    : displayedStatusPanelHeight
   const statusPanelDragRef = useRef<{
     pointerId: number
     startY: number
@@ -323,6 +352,21 @@ export function CardHolder({
       viewport.scrollTo({ top: viewport.scrollTop + (c.top - v.top) - 16, behavior: 'smooth' })
     }
   }, [failingBoards, isRunning])
+
+  useEffect(() => {
+    const grid = statusGridRef.current
+    if (!grid) return
+    const measure = () => {
+      setStatusContentHeight(grid.scrollHeight)
+      const cards = Array.from(grid.children) as HTMLElement[]
+      setHiddenStatusCards(cards.filter((c) => c.offsetTop + c.offsetHeight > shownStatusPanelHeight + 1).length)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(measure)
+    ro.observe(grid)
+    return () => ro.disconnect()
+  })
 
   // Load stats paths on mount
   useEffect(() => {
@@ -846,9 +890,9 @@ export function CardHolder({
                   ? ''
                   : 'transition-[height] duration-150 ease-out')}
                 viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
-                style={{ height: displayedStatusPanelHeight }}
+                style={{ height: shownStatusPanelHeight }}
               >
-                <div className="grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:auto-rows-[11.5rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
+                <div ref={statusGridRef} className="relative grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:auto-rows-[11.5rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
         {failedBoards.map(renderBoardCard)}
 
         {/* Run Status Card */}
@@ -1217,8 +1261,8 @@ export function CardHolder({
             <CardContent>
               <div className="text-2xl font-bold">
                 {metricValues[metric.id] !== undefined
-                  ? (Number(metricValues[metric.id])).toFixed(2)
-                  : 'Loading...'} {metric.unit}
+                  ? formatReading(Number(metricValues[metric.id]))
+                  : 'Loading...'} {metric.unit && displayUnit(metric.unit)}
               </div>
               <p className="text-xs text-muted-foreground">
                 Last updated: {new Date().toLocaleTimeString()}
@@ -1240,10 +1284,14 @@ export function CardHolder({
               <CardContent>
                 <div className="text-2xl font-bold">
                   {currentValues[path.path]?.value !== undefined && currentValues[path.path]?.value !== null
-                    ? (() => {
-                        const value = Number(currentValues[path.path].value);
-                        return value < 1 ? value.toExponential(5) : value.toFixed(3);
-                      })()
+                    ? <>
+                        {formatReading(Number(currentValues[path.path].value))}
+                        {path.unit && (
+                          <span className="ml-1 text-base font-semibold text-muted-foreground">
+                            {displayUnit(path.unit)}
+                          </span>
+                        )}
+                      </>
                     : 'N/A'}
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1261,7 +1309,9 @@ export function CardHolder({
             <button
               type="button"
               role="separator"
-              aria-label="Resize overview status cards"
+              aria-label={hiddenStatusCards > 0
+                ? `Resize overview status cards (${hiddenStatusCards} more below)`
+                : 'Resize overview status cards'}
               aria-orientation="horizontal"
               aria-valuemin={expandForBeam ? 2 : 1}
               aria-valuemax={3}
@@ -1276,11 +1326,16 @@ export function CardHolder({
               onPointerUp={handleStatusResizeEnd}
               onPointerCancel={handleStatusResizeEnd}
               onKeyDown={handleStatusResizeKey}
-              className={`absolute -bottom-3 left-1/2 z-10 hidden h-6 w-16 xl:flex -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              className={`absolute -bottom-3 left-1/2 z-10 hidden h-6 min-w-16 gap-1 px-2 xl:flex -translate-x-1/2 touch-none items-center justify-center rounded-full border bg-background shadow-sm transition-colors hover:border-primary/50 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 isResizingStatusPanel ? 'cursor-grabbing border-primary bg-muted' : 'cursor-row-resize'
               }`}
             >
               <GripHorizontal className="h-4 w-4 text-muted-foreground" />
+              {hiddenStatusCards > 0 && (
+                <span className="whitespace-nowrap text-xs font-medium text-muted-foreground" aria-hidden="true">
+                  +{hiddenStatusCards} card{hiddenStatusCards === 1 ? '' : 's'}
+                </span>
+              )}
             </button>
           </div>
         </section>
