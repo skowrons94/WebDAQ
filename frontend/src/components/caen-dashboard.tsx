@@ -1057,11 +1057,33 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     const names = Array.from(modifiedSettings)
     setSavingAll(true)
     try {
-      const results = await Promise.allSettled(
-        names.map(regName => setSetting(boardData.id, regName, settings[regName].value_dec.toString()))
-      )
+      // One register at a time: the server rewrites the whole board file for
+      // each one, without a lock, so parallel writes lose edits or corrupt it.
+      // It reports a failure as -1 with HTTP 200.
+      const saved: string[] = []
+      for (const regName of names) {
+        const value = settings[regName].value_dec
+        try {
+          const res = await setSetting(boardData.id, regName, value.toString())
+          if (res?.data !== -1 && Number(res?.data) !== -1) saved.push(regName)
+        } catch { /* stays marked */ }
+      }
+      // Read the file back: only what it now holds counts as saved.
+      try {
+        const fresh = await getBoardSettings(boardData.id) as BoardSettings
+        for (let i = saved.length - 1; i >= 0; i--) {
+          if (fresh?.[saved[i]]?.value_dec !== settings[saved[i]].value_dec) saved.splice(i, 1)
+        }
+        // Keep the operator's unsaved edits on screen; take the rest from the file.
+        setSettings(prev => {
+          const next = { ...prev }
+          for (const [k, r] of Object.entries(fresh ?? {})) {
+            if (!names.includes(k) || saved.includes(k)) next[k] = r as RegisterData
+          }
+          return next
+        })
+      } catch { /* the marks below still say what was not confirmed */ }
       // What was written is no longer pending; what failed stays marked.
-      const saved = names.filter((_, i) => results[i].status === "fulfilled")
       clearModified(saved)
       const failed = names.length - saved.length
       if (failed === 0) {
@@ -1118,9 +1140,11 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     }
 
     try {
-      await Promise.all(
-        writes.map(w => setSetting(boardData.id, w.regName, w.value.toString()))
-      )
+      // One at a time (no lock on the server's board file); -1 means not saved.
+      for (const w of writes) {
+        const res = await setSetting(boardData.id, w.regName, w.value.toString())
+        if (res?.data === -1 || Number(res?.data) === -1) throw new Error(`${w.regName} not saved`)
+      }
       // Reflect the new values locally so the UI matches the board without a refetch.
       setSettings(prev => {
         const next = { ...prev }
