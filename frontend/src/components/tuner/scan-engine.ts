@@ -112,7 +112,7 @@ export function readScanRecord(): ScanRecord | null {
     const old = r as unknown as { boardId?: string; original?: Record<string, number>; name?: string; at?: number }
     if (old.boardId && old.original && typeof old.original === 'object') {
       return {
-        v: 2, tab: '', boardId: old.boardId, name: old.name ?? 'Scan', startedAt: old.at ?? 0, heartbeat: old.at ?? 0,
+        v: 2, tab: '', boardId: old.boardId, name: old.name ?? 'Scan', startedAt: old.at ?? 0, heartbeat: 0,
         original: Object.entries(old.original).map(([key, raw]) => ({ key, raw })), scanned: {}, last: {},
       }
     }
