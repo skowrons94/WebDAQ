@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss"
+import plugin from "tailwindcss/plugin"
 
 const config = {
   darkMode: ["class"],
@@ -51,7 +52,34 @@ const config = {
   			card: {
   				DEFAULT: 'hsl(var(--card))',
   				foreground: 'hsl(var(--card-foreground))'
+  			},
+  			// Run state and alarms (see globals.css). "danger" is the same red as
+  			// "destructive", for status code that reads better with that name.
+  			success: {
+  				DEFAULT: 'hsl(var(--success))',
+  				foreground: 'hsl(var(--success-foreground))'
+  			},
+  			warning: {
+  				DEFAULT: 'hsl(var(--warning))',
+  				foreground: 'hsl(var(--warning-foreground))'
+  			},
+  			info: {
+  				DEFAULT: 'hsl(var(--info))',
+  				foreground: 'hsl(var(--info-foreground))'
+  			},
+  			neutral: {
+  				DEFAULT: 'hsl(var(--neutral))',
+  				foreground: 'hsl(var(--neutral-foreground))'
+  			},
+  			danger: {
+  				DEFAULT: 'hsl(var(--destructive))',
+  				foreground: 'hsl(var(--destructive-foreground))'
   			}
+  		},
+  		fontSize: {
+  			// Nothing smaller than 12 px: text-2xs is an alias of text-xs, for the
+  			// places that used text-[9-11px].
+  			'2xs': ['0.75rem', { lineHeight: '1rem' }]
   		},
   		borderRadius: {
   			lg: 'var(--radius)',
@@ -82,7 +110,14 @@ const config = {
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate"),
+    // pointer-coarse: (touch screens) — used to give controls 44 px targets on a
+    // phone or tablet without changing the desktop layout.
+    plugin(({ addVariant }) => {
+      addVariant("pointer-coarse", "@media (pointer: coarse)")
+    }),
+  ],
 } satisfies Config
 
 export default config

@@ -229,12 +229,12 @@ export function ServerStatus() {
     /** Label row above a log pane, with the follow state and a way back. */
     const logHeader = (label: string) => (
         <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] text-muted-foreground">{label}</p>
+            <p className="text-xs text-muted-foreground">{label}</p>
             {!followingTail && (
                 <button
                     type="button"
                     onClick={jumpToLatest}
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
                 >
                     paused — jump to latest
                 </button>
@@ -310,12 +310,12 @@ export function ServerStatus() {
     }
 
     const dotColor = launching
-        ? 'bg-amber-500 shadow-[0_0_6px_2px_rgba(245,158,11,0.4)] animate-pulse'
+        ? 'bg-warning shadow-[0_0_6px_2px_rgba(245,158,11,0.4)] animate-pulse'
         : connected === null
             ? 'bg-gray-400'
             : connected
-                ? 'bg-green-500 shadow-[0_0_6px_2px_rgba(34,197,94,0.4)]'
-                : 'bg-red-500 shadow-[0_0_6px_2px_rgba(239,68,68,0.4)]'
+                ? 'bg-success shadow-[0_0_6px_2px_rgba(34,197,94,0.4)]'
+                : 'bg-destructive shadow-[0_0_6px_2px_rgba(239,68,68,0.4)]'
 
     const label = launching
         ? 'Launching…'
@@ -366,7 +366,7 @@ export function ServerStatus() {
                                 <pre
                                     ref={logsRef}
                                     onScroll={handleLogScroll}
-                                    className="text-[10px] leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-72 overflow-auto"
+                                    className="text-xs leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-72 overflow-auto"
                                 >
                                     {logs || 'Waiting for output…'}
                                 </pre>
@@ -378,7 +378,7 @@ export function ServerStatus() {
                                 <div className="flex items-center gap-2">
                                     <p className="text-sm font-medium">Server is running</p>
                                     {serverTestMode && (
-                                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                        <span className="inline-flex items-center gap-1 rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
                                             <FlaskConical className="h-3 w-3" />
                                             TEST MODE
                                         </span>
@@ -419,7 +419,7 @@ export function ServerStatus() {
                                     <pre
                                         ref={logsRef}
                                         onScroll={handleLogScroll}
-                                        className="text-[10px] leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-72 overflow-auto"
+                                        className="text-xs leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-72 overflow-auto"
                                     >
                                         {logs || 'No output yet…'}
                                     </pre>
@@ -436,7 +436,7 @@ export function ServerStatus() {
                                         <span className="break-words">{launchError}</span>
                                     </div>
                                     {logs && (
-                                        <pre className="text-[10px] leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-48 overflow-auto">
+                                        <pre className="text-xs leading-tight font-mono whitespace-pre-wrap break-words bg-muted/40 border rounded p-2 max-h-48 overflow-auto">
                                             {logs}
                                         </pre>
                                     )}
@@ -448,15 +448,15 @@ export function ServerStatus() {
                                 created there on first launch.
                             </p>
 
-                            <label className="flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 cursor-pointer">
+                            <label className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/5 px-2 py-1.5 cursor-pointer">
                                 <Checkbox
                                     checked={testModeOnLaunch}
                                     onCheckedChange={(c) => setTestModeOnLaunch(Boolean(c))}
                                 />
-                                <FlaskConical className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                                <FlaskConical className="h-3.5 w-3.5 text-warning" />
                                 <div className="flex flex-col">
                                     <span className="text-xs font-medium">Test Mode</span>
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-xs text-muted-foreground">
                                         Use mock boards — for debugging without hardware.
                                     </span>
                                 </div>
@@ -479,7 +479,7 @@ export function ServerStatus() {
                                                 {dir.label}
                                             </span>
                                             <span
-                                                className="text-[10px] text-muted-foreground font-mono truncate"
+                                                className="text-xs text-muted-foreground font-mono truncate"
                                                 title={dir.path}
                                             >
                                                 {dir.path}

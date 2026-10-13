@@ -12,6 +12,10 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        // Start Run and other "go" actions: green, never the brand rose, so
+        // Start can't be mistaken for Stop (red).
+        success:
+          "bg-success text-success-foreground hover:bg-success/90",
         outline:
           "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
         secondary:
@@ -20,10 +24,12 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        sm: "h-9 rounded-md px-3",
+        // On a touch screen every size is at least 44 x 44 px (WCAG 2.5.5);
+        // with a mouse the sizes are unchanged.
+        default: "h-10 px-4 py-2 pointer-coarse:min-h-11",
+        sm: "h-9 rounded-md px-3 pointer-coarse:min-h-11",
         lg: "h-11 rounded-md px-8",
-        icon: "h-10 w-10",
+        icon: "h-10 w-10 pointer-coarse:min-h-11 pointer-coarse:min-w-11",
       },
     },
     defaultVariants: {

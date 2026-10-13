@@ -226,7 +226,7 @@ export function RunNotesEditor({ runNumber, notes, onSaved }: RunNotesEditorProp
       <CardHeader className="border-b bg-muted/20 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <CardTitle className="text-base">Run notes</CardTitle>
+            <CardTitle>Run notes</CardTitle>
             <p className="mt-1 text-xs text-muted-foreground">
               Markdown is stored directly in the run&apos;s database record.
             </p>
@@ -300,7 +300,7 @@ export function RunNotesEditor({ runNumber, notes, onSaved }: RunNotesEditorProp
           )}
           {mode !== "write" && (
             <div className="bg-muted/10 p-4">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Preview
               </div>
               <MarkdownPreview value={draft} />
@@ -314,7 +314,7 @@ export function RunNotesEditor({ runNumber, notes, onSaved }: RunNotesEditorProp
               Use notes template
             </Button>
           )}
-          <span className={cn("text-xs", dirty ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+          <span className={cn("text-xs", dirty ? "text-warning" : "text-muted-foreground")}>
             {dirty ? "Unsaved changes" : "All changes saved"}
           </span>
           <div className="ml-auto flex items-center gap-2">

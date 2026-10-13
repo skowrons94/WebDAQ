@@ -162,9 +162,9 @@ export function Board() {
                 {boards.map((board) => {
                   const conn = connectivity[String(board.id)]
                   const status = conn?.failed
-                    ? { label: "Failed", dot: "bg-red-500", text: "text-red-600 dark:text-red-400" }
+                    ? { label: "Failed", dot: "bg-destructive", text: "text-destructive" }
                     : conn?.connected
-                      ? { label: "Connected", dot: "bg-green-500", text: "text-green-600 dark:text-green-400" }
+                      ? { label: "Connected", dot: "bg-success", text: "text-success" }
                       : { label: "Disconnected", dot: "bg-gray-400", text: "text-muted-foreground" }
                   return (
                     <div

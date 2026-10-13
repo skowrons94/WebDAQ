@@ -56,7 +56,7 @@ export default function LoginPage() {
             <div className="w-full max-w-md">
                 <h1 className="text-2xl font-bold mb-6 text-center">Login</h1>
                 {expired && (
-                    <p className="mb-4 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-center text-sm">
+                    <p className="mb-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-center text-sm">
                         Your session ended — log in again to carry on. The run is not
                         affected: the DAQ server keeps taking data with nobody logged in.
                     </p>

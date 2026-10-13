@@ -240,7 +240,7 @@ export function DAQState({
       <Card className={stretch ? 'h-full' : undefined}>
         <CardHeader className="flex flex-row flex-wrap items-center gap-3 pb-3">
           <div className="grid gap-1">
-            <CardTitle className="text-base">Acquisition setup</CardTitle>
+            <CardTitle>Acquisition setup</CardTitle>
           </div>
           <Button
             onClick={() => setShowParametersDialog(true)}

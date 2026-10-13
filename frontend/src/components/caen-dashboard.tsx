@@ -459,7 +459,7 @@ function RegisterLabel({
       <div className="flex items-center gap-1.5">
         <Label className="text-sm font-semibold">
           {reg.name}
-          {modified && <span className="text-orange-500 ml-1">*</span>}
+          {modified && <span className="text-warning ml-1">*</span>}
         </Label>
         {doc && <InfoTooltip text={doc.description} />}
         {decomposed && <Badge variant="outline" className="text-xs">decomposed</Badge>}
@@ -581,9 +581,9 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
   const chainMembers = sync.chain.filter(e => e.synchronised)
 
   return (
-    <Card className={chained ? "border-green-600/50" : undefined}>
+    <Card className={chained ? "border-success/50" : undefined}>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2">
           Acquisition Control
           <Badge variant={chained ? "default" : "secondary"}>
             {chained ? "Synchronised" : "Independent"}
@@ -712,9 +712,9 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                       SW trigger → TRG-OUT
                     </Label>
                     {entry.needs && (
-                      <span className={`text-[10px] ${
+                      <span className={`text-xs ${
                         entry.needs.sw_trigger_to_trg_out && !entry.sw_trigger_to_trg_out
-                          ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
+                          ? "text-warning" : "text-muted-foreground"}`}>
                         {!entry.needs.sw_trigger_to_trg_out ? "not needed here"
                           : entry.sw_trigger_to_trg_out ? "needed — on" : "needed — off"}
                       </span>
@@ -736,9 +736,9 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                       TRG-IN → TRG-OUT
                     </Label>
                     {entry.needs && (
-                      <span className={`text-[10px] ${
+                      <span className={`text-xs ${
                         entry.needs.ext_trigger_to_trg_out && !entry.ext_trigger_to_trg_out
-                          ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground"}`}>
+                          ? "text-warning" : "text-muted-foreground"}`}>
                         {!entry.needs.ext_trigger_to_trg_out ? "not needed here"
                           : entry.ext_trigger_to_trg_out ? "needed — on" : "needed — off"}
                       </span>
@@ -752,9 +752,9 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
               )}
 
               {entry.problems?.length > 0 && (
-                <div className="rounded-md border border-orange-500/50 bg-orange-500/5 px-3 py-2">
+                <div className="rounded-md border border-warning/50 bg-warning/5 px-3 py-2">
                   {entry.problems.map((p, i) => (
-                    <p key={i} className="text-xs text-orange-600 dark:text-orange-400">
+                    <p key={i} className="text-xs text-warning">
                       ⚠ {p}
                     </p>
                   ))}
@@ -806,7 +806,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
                   <div key={String(entry.board_id)} className="flex items-center gap-2">
                     <div
                       className={`rounded-md border px-3 py-2 ${
-                        entry.role === "master" ? "border-green-600/60 bg-green-600/5" : ""
+                        entry.role === "master" ? "border-success/60 bg-success/5" : ""
                       }`}
                     >
                       <div className="text-sm font-medium">{entry.name}</div>
@@ -1254,7 +1254,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="font-mono">
             Hex: {reg.value_hex} | Addr: {reg.address}
-            {isModified && <span className="text-orange-500 ml-2">● unsaved</span>}
+            {isModified && <span className="text-warning ml-2">● unsaved</span>}
           </span>
           <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified}>
             Save
@@ -1366,7 +1366,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
           <div className="flex items-center gap-1.5 min-h-5">
             <Label className="text-sm font-medium">
               {item.label ?? reg.name}
-              {modifiedSettings.has(regName) && <span className="text-orange-500 ml-1">*</span>}
+              {modifiedSettings.has(regName) && <span className="text-warning ml-1">*</span>}
             </Label>
             {doc && <InfoTooltip text={doc.description} />}
           </div>
@@ -1405,7 +1405,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         <div className="flex items-center gap-1.5 min-h-5">
           <Label className="text-sm font-medium">
             {item.label ?? field.name}
-            {isModified && <span className="text-orange-500 ml-1">*</span>}
+            {isModified && <span className="text-warning ml-1">*</span>}
           </Label>
           <InfoTooltip text={tip} />
         </div>
@@ -1508,7 +1508,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               value={known ? reg.value_dec.toString() : ""}
               onValueChange={v => handleSettingChange(regName, v)}
             >
-              <SelectTrigger className={`h-8 ${compact ? "text-sm" : ""} ${isModified ? "border-orange-500" : ""}`}>
+              <SelectTrigger className={`h-8 ${compact ? "text-sm" : ""} ${isModified ? "border-warning" : ""}`}>
                 <SelectValue placeholder={`Non-standard (${reg.value_dec})`} />
               </SelectTrigger>
               <SelectContent>
@@ -1529,7 +1529,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             </Button>
           </div>
           {!known && (
-            <div className="text-xs text-orange-500">
+            <div className="text-xs text-warning">
               Current value {reg.value_dec} (0x{reg.value_dec.toString(16)}) is not one of the
               documented options — pick one to correct it.
             </div>
@@ -1553,7 +1553,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               step={step}
               value={toDisplay(reg)}
               onValueChange={v => handleSettingChange(regName, fromDisplay(reg, v.toString()).toString())}
-              className={`h-8 text-sm ${isModified ? "border-orange-500" : ""}`}
+              className={`h-8 text-sm ${isModified ? "border-warning" : ""}`}
             />
             {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
             <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified} className="h-8 px-2 text-xs">
@@ -1602,7 +1602,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             step={step}
             value={toDisplay(reg)}
             onValueChange={v => handleSettingChange(regName, fromDisplay(reg, v.toString()).toString())}
-            className={isModified ? "border-orange-500" : ""}
+            className={isModified ? "border-warning" : ""}
           />
           {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
           <Button size="sm" onClick={() => handleSave(regName)} disabled={!isModified}>Save</Button>
@@ -1655,7 +1655,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       {/* ── Channel Enable ── */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Channel Enable</CardTitle>
+          <CardTitle>Channel Enable</CardTitle>
         </CardHeader>
         <CardContent>
           {channels.length === 0 ? (
@@ -1683,7 +1683,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       {uniqueTriggerNames.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Trigger Settings</CardTitle>
+            <CardTitle>Trigger Settings</CardTitle>
           </CardHeader>
           <CardContent>
             {enabledChannels.length === 0 ? (
@@ -1757,7 +1757,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               return (
                 <Card>
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base flex items-center gap-2">
+                    <CardTitle className="flex items-center gap-2">
                       Board Settings
                       <Badge variant="outline" className="text-xs font-normal">
                         Essential settings
@@ -1788,7 +1788,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
           ) : (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
                   Board Settings
                   <Badge variant="outline" className="text-xs font-normal">All registers</Badge>
                 </CardTitle>
@@ -1833,7 +1833,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               {channels.length > 1 && (
                 <Card className="border-dashed">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Copy Channel Settings</CardTitle>
+                    <CardTitle>Copy Channel Settings</CardTitle>
                     <p className="text-sm text-muted-foreground">
                       Copy every setting from one channel onto others. Values are written to
                       the board immediately.
@@ -2009,7 +2009,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                 return (
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-base flex items-center gap-2">
+                      <CardTitle className="flex items-center gap-2">
                         Channel {selectedChannel}
                         <Badge variant={channelEnabled[parseInt(selectedChannel)] ? "default" : "secondary"}>
                           {channelEnabled[parseInt(selectedChannel)] ? "Enabled" : "Disabled"}
@@ -2054,7 +2054,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       {/* Save All */}
       {modifiedSettings.size > 0 && (
         <div className="flex justify-center">
-          <Button onClick={handleSaveAll} className="bg-green-600 hover:bg-green-700">
+          <Button onClick={handleSaveAll} variant="success">
             Save All Modified Settings ({modifiedSettings.size})
           </Button>
         </div>

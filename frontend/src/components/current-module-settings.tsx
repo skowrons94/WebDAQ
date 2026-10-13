@@ -401,17 +401,17 @@ export function CurrentModuleSettings() {
             </div>
             <div className="flex items-center gap-2">
               {status?.connected ? (
-                <Badge variant="default" className="bg-green-500">Connected</Badge>
+                <Badge variant="default" className="bg-success text-success-foreground hover:bg-success/90">Connected</Badge>
               ) : (
                 <Badge variant="secondary">Disconnected</Badge>
               )}
               {status?.running && (
-                <Badge variant="default" className="bg-blue-500">Acquiring</Badge>
+                <Badge variant="default" className="bg-info text-info-foreground hover:bg-info/90">Acquiring</Badge>
               )}
             </div>
           </div>
           {status?.running && (
-            <p className="text-sm text-amber-600">
+            <p className="text-sm text-warning">
               Stop current acquisition before switching modules
             </p>
           )}
@@ -599,7 +599,7 @@ export function CurrentModuleSettings() {
                   (e.g. /dev/ttyUSB0 on Linux, COM3 on Windows). Use the refresh button to rescan.
                 </p>
                 {moduleType === 'rbd9103' && status && status.port_exists === false && (
-                  <p className="text-xs text-red-500">
+                  <p className="text-xs text-destructive">
                     Device {status.port || rbdPort} not found — the serial port does not exist.
                     Check that the RBD 9103 is plugged in and the path is correct.
                   </p>

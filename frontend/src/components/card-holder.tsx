@@ -730,7 +730,7 @@ export function CardHolder({
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <div className="flex items-center gap-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-semibold">
                   Run Status
                 </CardTitle>
                 {/* In the header, not the body: the status cards are a fixed
@@ -880,8 +880,8 @@ export function CardHolder({
 
         {/* DAQ Status Card — data saving / waveforms */}
         {settings.showStatus && (() => {
-          const okIcon = <CheckCircle className="h-3.5 w-3.5 text-green-500" />
-          const offIcon = <XCircle className="h-3.5 w-3.5 text-red-500" />
+          const okIcon = <CheckCircle className="h-3.5 w-3.5 text-success" />
+          const offIcon = <XCircle className="h-3.5 w-3.5 text-destructive" />
 
           // Waveforms are configured per-board; summarise how many are active.
           const waveformBoardCount = Object.values(boardWaveforms).filter(Boolean).length
@@ -890,7 +890,7 @@ export function CardHolder({
           return (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">DAQ Status</CardTitle>
+                <CardTitle className="text-sm font-semibold">DAQ Status</CardTitle>
                 <Server className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -975,18 +975,18 @@ export function CardHolder({
           return (
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{currentModuleName}</CardTitle>
+                <CardTitle className="text-sm font-semibold">{currentModuleName}</CardTitle>
                 <BatteryCharging className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="flex items-baseline gap-2">
                   <span className={`text-2xl font-bold ${
-                    isConnectedCurrent ? '' : 'text-red-600 dark:text-red-400'}`}>
+                    isConnectedCurrent ? '' : 'text-destructive'}`}>
                     {isConnectedCurrent ? 'Connected' : 'Disconnected'}
                   </span>
                   {isConnectedCurrent && (
                     <span className={`text-xs ${
-                      currentSampling ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                      currentSampling ? 'text-success' : 'text-warning'}`}>
                       {currentSampling ? 'reading' : 'not sampling'}
                     </span>
                   )}
@@ -1021,24 +1021,24 @@ export function CardHolder({
           
           if (!isConnected) {
             displayText = "Disconnected";
-            displayColor = "text-red-600";
+            displayColor = "text-destructive";
           } else if (isRunning) {
             // If running, maintain current status - don't update to "Ready"
             if (!isOk) {
               // The server reports only that the board set its FAIL flag, and in
               // how many data blocks — there is no failure type to decode.
               displayText = "Board Failure";
-              displayColor = "text-red-600";
+              displayColor = "text-destructive";
             } else {
               displayText = "Running";
-              displayColor = "text-green-600";
+              displayColor = "text-success";
             }
           } else if (isConnected) {
             displayText = "Ready";
-            displayColor = "text-green-600";
+            displayColor = "text-success";
           } else {
             displayText = "Failed";
-            displayColor = "text-red-600";
+            displayColor = "text-destructive";
           }
           
           const waveformsOn = boardWaveforms[board.id] ?? false
@@ -1047,19 +1047,19 @@ export function CardHolder({
             <Card key={`board-status-${board.id}`}>
               <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
                 <div className="flex flex-col min-w-0">
-                  <CardTitle className="text-sm font-medium">Board {board.id}</CardTitle>
+                  <CardTitle className="text-sm font-semibold">Board {board.id}</CardTitle>
                   <p className="text-xs text-muted-foreground truncate">{board.name}</p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {isConnected ? (
-                    <Wifi className="h-4 w-4 text-green-500" />
+                    <Wifi className="h-4 w-4 text-success" />
                   ) : (
-                    <WifiOff className="h-4 w-4 text-red-500" />
+                    <WifiOff className="h-4 w-4 text-destructive" />
                   )}
                   {isOk ? (
-                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <CheckCircle className="h-4 w-4 text-success" />
                   ) : (
-                    <XCircle className="h-4 w-4 text-red-500" />
+                    <XCircle className="h-4 w-4 text-destructive" />
                   )}
                   <Cpu className="h-4 w-4 text-muted-foreground" />
                 </div>
@@ -1099,7 +1099,7 @@ export function CardHolder({
             <Card key={`${cardData.histogramId}_${cardData.roi.id}`}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="flex flex-col min-w-0">
-                  <CardTitle className="text-sm font-medium truncate">
+                  <CardTitle className="text-sm font-semibold truncate">
                     {cardData.histogramLabel}
                   </CardTitle>
                   <p
@@ -1132,7 +1132,7 @@ export function CardHolder({
         {settings.showMetrics && visibleMetrics.map(metric => (
           <Card key={metric.id}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-sm font-semibold">
                 {metric.metricName.split('_').map(word =>
                   word.charAt(0).toUpperCase() + word.slice(1)
                 ).join(' ')}
@@ -1157,7 +1157,7 @@ export function CardHolder({
           enabledStatsPaths.map((path: any) => (
             <Card key={path.path}>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+                <CardTitle className="text-sm font-semibold">
                   {path.alias}
                 </CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />

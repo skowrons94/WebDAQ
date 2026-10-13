@@ -182,7 +182,7 @@ export function Stats() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
           <div>
-            <CardTitle className="text-sm font-medium">Graphite Server Configuration</CardTitle>
+            <CardTitle className="text-sm font-semibold">Graphite Server Configuration</CardTitle>
           </div>
           <Button
             variant="outline"
@@ -226,7 +226,7 @@ export function Stats() {
         {stats.map((stat, index) => (
         <Card key={index}>
           <CardHeader>
-            <CardTitle className="text-sm font-medium">{stat.name}</CardTitle>
+            <CardTitle className="text-sm font-semibold">{stat.name}</CardTitle>
           </CardHeader>
           <CardContent>
             <ChartContainer className='min-h-[200px] w-full' config={getChartConfig(stat)}>

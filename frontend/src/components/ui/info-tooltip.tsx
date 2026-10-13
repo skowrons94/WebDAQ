@@ -34,7 +34,7 @@ export function InfoTooltip({
         title={text}
         className={cn(
           "flex h-4 w-4 items-center justify-center rounded-full border",
-          "border-muted-foreground/40 text-[10px] leading-none text-muted-foreground",
+          "border-muted-foreground/40 text-xs leading-none text-muted-foreground",
           "hover:border-foreground hover:text-foreground",
           "focus:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         )}

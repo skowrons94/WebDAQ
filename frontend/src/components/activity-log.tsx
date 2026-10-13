@@ -98,9 +98,9 @@ export default function ActivityLog() {
   return (
     <div className="space-y-4">
       {/* ── Recovery: what to press ───────────────────────────────────────── */}
-      <Card className={problems.length ? 'border-amber-500' : ''}>
+      <Card className={problems.length ? 'border-warning' : ''}>
         <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
+          <CardTitle className="flex items-center gap-2">
             <Wrench className="h-4 w-4" />
             Recovery
           </CardTitle>
@@ -115,18 +115,18 @@ export default function ActivityLog() {
           {actions.map((action) => (
             <div key={action.name}
                  className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
-                   !action.ok && action.enabled ? 'border-amber-500/60 bg-amber-500/5' : ''}`}>
+                   !action.ok && action.enabled ? 'border-warning/60 bg-warning/5' : ''}`}>
               <div className="min-w-0">
                 <p className="flex items-center gap-2 text-sm font-medium">
                   {action.label}
                   {!action.ok && action.enabled && (
-                    <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                    <Badge className="bg-warning/10 text-warning">
                       needs attention
                     </Badge>
                   )}
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{action.detail}</p>
-                <p className="mt-1 text-[11px] text-muted-foreground">{action.description}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
                 <Button size="sm" variant={action.ok ? 'outline' : 'default'}
@@ -140,7 +140,7 @@ export default function ActivityLog() {
                 {/* A disabled button shows no tooltip in most browsers, so the
                     reason has to be on the page. */}
                 {action.blocked_reason && (
-                  <span className="max-w-[9rem] text-right text-[10px] text-muted-foreground">
+                  <span className="max-w-[9rem] text-right text-xs text-muted-foreground">
                     {action.blocked_reason}
                   </span>
                 )}
@@ -160,7 +160,7 @@ export default function ActivityLog() {
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="text-base">History</CardTitle>
+              <CardTitle>History</CardTitle>
               <CardDescription>
                 Every alert and recovery, newest first, kept on the DAQ server across
                 restarts.
@@ -262,25 +262,25 @@ export default function ActivityLog() {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-medium">{event.title}</p>
                         {event.subject && (
-                          <Badge variant="secondary" className="text-[10px]">
+                          <Badge variant="secondary" className="text-xs">
                             {event.rule_type === 'board_failure'
                              || event.rule_type === 'stalled_buffers'
                               ? `board ${event.subject}` : event.subject}
                           </Badge>
                         )}
                         {event.run_number !== null && (
-                          <Badge variant="outline" className="text-[10px]">
+                          <Badge variant="outline" className="text-xs">
                             run {event.run_number}
                           </Badge>
                         )}
                         {reachedNobody && (
-                          <Badge className="gap-1 bg-amber-100 text-amber-800 text-[10px] dark:bg-amber-900/30 dark:text-amber-400">
+                          <Badge className="gap-1 bg-warning/10 text-warning text-xs">
                             <MailWarning className="h-3 w-3" />
                             reached nobody
                           </Badge>
                         )}
                         {delivered.filter(([, ok]) => ok).map(([name]) => (
-                          <Badge key={name} variant="outline" className="text-[10px]">
+                          <Badge key={name} variant="outline" className="text-xs">
                             sent to {name}
                           </Badge>
                         ))}
@@ -289,7 +289,7 @@ export default function ActivityLog() {
                         <p key={i} className="text-xs text-muted-foreground">{line}</p>
                       ))}
                     </div>
-                    <div className="shrink-0 text-right text-[11px] text-muted-foreground">
+                    <div className="shrink-0 text-right text-xs text-muted-foreground">
                       <p>{new Date(event.at * 1000).toLocaleTimeString()}</p>
                       <p>{new Date(event.at * 1000).toLocaleDateString()}</p>
                       <p className="mt-0.5">{relativeTime(event.at)}</p>

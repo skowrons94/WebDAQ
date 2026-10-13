@@ -100,7 +100,7 @@ export default function JSROOTHistogram({
         {boardName} - Channel {channelNumber}
       </h2>
       {isLoading && <p>Loading histogram...</p>}
-      {error && <p className="text-red-500">{error}</p>}
+      {error && <p className="text-destructive">{error}</p>}
       <div 
         ref={histogramRef} 
         style={{ 

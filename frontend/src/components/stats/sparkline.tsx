@@ -19,7 +19,7 @@ export function Sparkline({
   if (points.length < 2) {
     return (
       <div
-        className={`flex items-center justify-center text-[10px] text-muted-foreground ${className}`}
+        className={`flex items-center justify-center text-xs text-muted-foreground ${className}`}
         style={{ height }}
       >
         no history
@@ -58,7 +58,7 @@ export function Sparkline({
         strokeLinejoin="round"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
-        className={rising ? 'text-green-500' : 'text-blue-500'}
+        className={rising ? 'text-success' : 'text-info'}
       />
     </svg>
   )

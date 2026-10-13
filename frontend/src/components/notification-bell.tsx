@@ -39,7 +39,7 @@ export function relativeTime(epochSeconds: number): string {
 }
 
 export function eventIcon(kind: AlertEvent['kind']) {
-  if (kind === 'recovery') return <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400" />
+  if (kind === 'recovery') return <ShieldCheck className="h-4 w-4 text-success" />
   if (kind === 'info') return <Wrench className="h-4 w-4 text-muted-foreground" />
   return <TriangleAlert className="h-4 w-4 text-destructive" />
 }
@@ -98,8 +98,8 @@ export function NotificationBell() {
           <BellRing className="h-5 w-5" />
           {unseen > 0 && (
             <span className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center
-              justify-center rounded-full px-1 text-[10px] font-semibold text-white ${
-              undelivered > 0 ? 'bg-amber-500' : 'bg-destructive'}`}>
+              justify-center rounded-full px-1 text-xs font-semibold ${
+              undelivered > 0 ? 'bg-warning text-warning-foreground' : 'bg-destructive text-destructive-foreground'}`}>
               {unseen > 9 ? '9+' : unseen}
             </span>
           )}
@@ -127,8 +127,8 @@ export function NotificationBell() {
         </div>
 
         {undelivered > 0 && (
-          <div className="flex items-start gap-2 border-b bg-amber-500/10 px-3 py-2 text-xs">
-            <MailWarning className="mt-0.5 h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+          <div className="flex items-start gap-2 border-b bg-warning/10 px-3 py-2 text-xs">
+            <MailWarning className="mt-0.5 h-3.5 w-3.5 text-warning" />
             <span>
               {undelivered} of them reached nobody — check Settings → Notifications.
             </span>
@@ -161,11 +161,11 @@ export function NotificationBell() {
                   {event.lines[0] && (
                     <p className="truncate text-xs text-muted-foreground">{event.lines[0]}</p>
                   )}
-                  <p className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <p className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
                     <span>{relativeTime(event.at)}</span>
                     {event.run_number !== null && <span>run {event.run_number}</span>}
                     {Object.keys(event.deliveries).length > 0 && (
-                      <Badge variant="outline" className="h-4 px-1 text-[10px]">
+                      <Badge variant="outline" className="h-4 px-1 text-xs">
                         {Object.entries(event.deliveries)
                           .filter(([, ok]) => ok)
                           .map(([name]) => name)

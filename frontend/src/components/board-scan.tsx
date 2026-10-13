@@ -194,7 +194,7 @@ export function BoardScan({ boards, onUse }: Props) {
           )}
 
           {status?.errors?.map((error, i) => (
-            <p key={i} className="text-sm text-amber-600 dark:text-amber-400">{error}</p>
+            <p key={i} className="text-sm text-warning">{error}</p>
           ))}
 
           {status && status.found.length > 0 ? (

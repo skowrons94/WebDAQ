@@ -375,10 +375,10 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
 
             const flagClass =
                 flag === "good"
-                    ? "text-green-700 bg-green-50 dark:text-green-400 dark:bg-green-950/40 border-green-200 dark:border-green-900"
+                    ? "text-success bg-success/10 border-success"
                     : flag === "bad"
-                        ? "text-red-700 bg-red-50 dark:text-red-400 dark:bg-red-950/40 border-red-200 dark:border-red-900"
-                        : "text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900"
+                        ? "text-destructive bg-destructive/10 border-destructive"
+                        : "text-warning bg-warning/10 border-warning"
 
             return (
                 <Select value={flag} onValueChange={handleFlagChange}>
@@ -386,9 +386,9 @@ export const createColumns = ({ onDataUpdate }: ColumnsProps = {}): ColumnDef<Ru
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="good" className="text-green-600">Good</SelectItem>
-                        <SelectItem value="unknown" className="text-amber-600">Unknown</SelectItem>
-                        <SelectItem value="bad" className="text-red-600">Bad</SelectItem>
+                        <SelectItem value="good" className="text-success">Good</SelectItem>
+                        <SelectItem value="unknown" className="text-warning">Unknown</SelectItem>
+                        <SelectItem value="bad" className="text-destructive">Bad</SelectItem>
                     </SelectContent>
                 </Select>
             )
