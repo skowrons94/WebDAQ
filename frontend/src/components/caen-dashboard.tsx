@@ -458,7 +458,7 @@ export default function Dashboard() {
             </div>
           ) : null}
 
-          {selectedBoard && <BoardComponent boardData={selectedBoard} />}
+          {selectedBoard && <BoardComponent key={selectedBoard.id} boardData={selectedBoard} />}
         </TabsContent>
 
         <TabsContent value="sync">
@@ -1053,7 +1053,10 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   }
 
   const [savingAll, setSavingAll] = useState(false)
+  // One write chain at a time: Save and Copy channel both rewrite the board file.
+  const busy = savingAll || copying
   const handleSaveAll = async () => {
+    if (busy) return
     const names = Array.from(modifiedSettings)
     setSavingAll(true)
     try {
@@ -1087,7 +1090,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       clearModified(saved)
       const failed = names.length - saved.length
       if (failed === 0) {
-        toast({ title: "Saved", description: `${saved.length} setting${saved.length === 1 ? "" : "s"} written to board ${boardData.id}.` })
+        toast({ title: "Saved", description: `${saved.length} setting${saved.length === 1 ? "" : "s"} saved to board ${boardData.id}'s configuration (applies at the next run).` })
       } else {
         toast({
           title: `${failed} of ${names.length} not saved`,
@@ -1107,8 +1110,9 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
    * address, because the address encodes the channel. Anything the source has
    * that a target doesn't is skipped rather than failing the whole copy.
    *
-   * Values are written straight to the board and the local state is updated to
-   * match, so the copy is immediately visible and needs no separate save.
+   * Values are saved to the board's configuration (applied at the next run),
+   * one at a time; the local state follows what was saved, and the settings
+   * are read back afterwards.
    */
   const handleCopyChannel = async (source: number, targets: number[]) => {
     const byChannel = groupChannelSettings(settings)
@@ -1139,40 +1143,50 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       return
     }
 
+    // One at a time (the server rewrites the board file per register); -1 means not saved.
+    const done: typeof writes = []
+    let failed = false
     try {
-      // One at a time (no lock on the server's board file); -1 means not saved.
       for (const w of writes) {
         const res = await setSetting(boardData.id, w.regName, w.value.toString())
-        if (res?.data === -1 || Number(res?.data) === -1) throw new Error(`${w.regName} not saved`)
+        if (res?.data === -1 || Number(res?.data) === -1) { failed = true; break }
+        done.push(w)
       }
-      // Reflect the new values locally so the UI matches the board without a refetch.
+    } catch {
+      failed = true
+    }
+    try {
+      // Show what was saved, then take the file's own values.
       setSettings(prev => {
         const next = { ...prev }
-        for (const w of writes) {
+        for (const w of done) {
           if (!next[w.regName]) continue
-          next[w.regName] = {
-            ...next[w.regName],
-            value_dec: w.value,
-            value_hex: `0x${w.value.toString(16).toUpperCase()}`,
-          }
+          next[w.regName] = { ...next[w.regName], value_dec: w.value, value_hex: `0x${w.value.toString(16).toUpperCase()}` }
         }
         return next
       })
-      // These are saved, so drop them from the unsaved sets.
-      clearModified(writes.map(w => w.regName))
-      toast({
-        title: "Settings copied",
-        description: `${writes.length} setting(s) copied from channel ${source} to channel(s) ${targets.join(", ")}.`,
+      clearModified(done.map(w => w.regName))
+      const fresh = await getBoardSettings(boardData.id) as BoardSettings
+      const touched = new Set(writes.map(w => w.regName))
+      setSettings(prev => {
+        const next = { ...prev }
+        for (const [k, r] of Object.entries(fresh ?? {})) if (touched.has(k)) next[k] = r as RegisterData
+        return next
       })
-    } catch {
+    } catch { /* the toast below still says what happened */ }
+    if (failed) {
       toast({
-        title: "Copy failed",
-        description: "Some settings could not be written. Refresh to see the board's actual state.",
+        title: "Copy incomplete",
+        description: `${done.length} of ${writes.length} settings saved; the rest were not. The values shown are read back from the configuration.`,
         variant: "destructive",
       })
-    } finally {
-      setCopying(false)
+    } else {
+      toast({
+        title: "Settings copied",
+        description: `${writes.length} setting${writes.length === 1 ? "" : "s"} copied from channel ${source} to channel(s) ${targets.join(", ")}, saved to the configuration (applies at the next run).`,
+      })
     }
+    setCopying(false)
   }
 
   const handleBitToggle = (regName: string, bitIndex: number) => {
@@ -1770,7 +1784,8 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         </Card>
       )}
 
-      {/* ── General / Channel tabs ── */}
+      {/* ── General / Channel tabs ── (no edits while a save or copy runs) */}
+      <fieldset disabled={busy} className="min-w-0 disabled:opacity-80">
       <Tabs defaultValue="general">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="general">General settings</TabsTrigger>
@@ -1957,7 +1972,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                         onClick={() =>
                           handleCopyChannel(parseInt(copySource), Array.from(copyTargets).sort((a, b) => a - b))
                         }
-                        disabled={copying || copyTargets.size === 0}
+                        disabled={busy || copyTargets.size === 0}
                       >
                         {copying && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
                         Copy to {copyTargets.size || "…"} channel{copyTargets.size === 1 ? "" : "s"}
@@ -2084,6 +2099,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
           )}
         </TabsContent>
       </Tabs>
+      </fieldset>
 
       {/* One save for every edit, instead of a Save button in each cell (about
           70 of them). Sticky, so it is in view wherever the edit was made; on a
@@ -2101,10 +2117,10 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               <span className="text-muted-foreground"> — marked in amber</span>
             </p>
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={fetchSettings} disabled={savingAll}>
+              <Button variant="ghost" size="sm" onClick={fetchSettings} disabled={busy}>
                 Discard
               </Button>
-              <Button size="sm" onClick={handleSaveAll} disabled={savingAll}>
+              <Button size="sm" onClick={handleSaveAll} disabled={busy}>
                 {savingAll ? "Saving…" : `Save ${modifiedSettings.size} change${modifiedSettings.size === 1 ? "" : "s"}`}
               </Button>
             </div>
