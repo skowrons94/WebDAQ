@@ -220,17 +220,20 @@ export function SpectrumPanel({
         const z = zoomRef.current
         if (z) {
           const w = (cur.xmax - cur.xmin) / cur.nbins
+          // Drawn with the fit's grouping, so data and curve share a scale.
+          const k = f?.groupFactor ?? Math.max(1, Math.floor((2 * r.half) / w / 80))
           const i0 = Math.max(0, Math.floor((r.center - r.half - cur.xmin) / w))
-          const i1 = Math.min(cur.nbins, Math.ceil((r.center + r.half - cur.xmin) / w))
-          if (i1 - i0 >= 4) {
-            const hz = window.JSROOT.createHistogram('TH1D', i1 - i0)
+          const nb = Math.floor((Math.min(cur.nbins, Math.ceil((r.center + r.half - cur.xmin) / w)) - i0) / k)
+          const i1 = i0 + nb * k
+          if (nb >= 4) {
+            const hz = window.JSROOT.createHistogram('TH1D', nb)
             hz.fName = `tuner_roi_${boardId}_${channel}`
             hz.fTitle = ''
             hz.fXaxis.fXmin = cur.xmin + i0 * w
             hz.fXaxis.fXmax = cur.xmin + i1 * w
             hz.fXaxis.fTitle = spectrumAxisTitle(psd, calibrated)
-            hz.fYaxis.fTitle = 'Counts'
-            for (let i = i0; i < i1; i++) hz.fArray[i - i0 + 1] = shown[i]
+            hz.fYaxis.fTitle = k > 1 ? `Counts / ${k} bins` : 'Counts'
+            for (let i = i0; i < i1; i++) hz.fArray[Math.floor((i - i0) / k) + 1] += shown[i]
             const canvas = window.JSROOT.create('TCanvas')
             canvas.fName = `tuner_roi_c_${boardId}_${channel}`
             canvas.fPrimitives.Add(hz, 'hist nostat')

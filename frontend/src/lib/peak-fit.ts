@@ -30,7 +30,9 @@ export interface PeakFit {
   chi2ndf: number
   /** Why the numbers should not be trusted yet (few counts, peak narrower than 2 bins…), if so. */
   warning: string | null
-  /** The fitted curve (with background) at x. */
+  /** Spectrum bins summed per fit bin: model() gives counts per such group. */
+  groupFactor: number
+  /** The fitted curve (with background) at x, in counts per fit bin. */
   model: (x: number) => number
   /** The fitted background at x. */
   background: (x: number) => number
@@ -363,6 +365,7 @@ export function fitPeak(
     net: Math.max(0, net),
     chi2ndf,
     warning,
+    groupFactor: k,
     model: (xx) => (best.tail ? withTailPoint : gauss)(p, xx),
     background: (xx) => p[3] + p[4] * (xx - mu0),
   }
