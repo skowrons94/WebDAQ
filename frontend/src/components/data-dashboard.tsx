@@ -15,7 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ReloadIcon } from "@radix-ui/react-icons"
-import { AlertTriangle, Boxes, CalendarClock, Database, FileText, Gauge, HardDrive, Zap } from "lucide-react"
+import { AlertTriangle, Boxes, CalendarClock, Copy, Database, FileText, Gauge, HardDrive, Zap } from "lucide-react"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { InfoTooltip } from "@/components/ui/info-tooltip"
@@ -1053,9 +1053,87 @@ function LogbookRunHeader({
   )
 }
 
+/**
+ * The run directory as a path someone can paste into a shell: the server's
+ * working directory (from the server-control route, read only) plus the
+ * run's relative "data/runN". When the working directory is not an absolute
+ * path, the relative one is shown as it is.
+ */
+function useRunPath(directory: string): string {
+  const [cwd, setCwd] = useState<string | null>(null)
+  useEffect(() => {
+    let active = true
+    fetch("/api/server-control")
+      .then((r) => r.json())
+      .then((d) => { if (active && typeof d?.currentDirectory === "string") setCwd(d.currentDirectory) })
+      .catch(() => { /* the relative path is still right */ })
+    return () => { active = false }
+  }, [])
+  if (!directory) return ""
+  if (/^([A-Za-z]:[\\/]|\/)/.test(directory)) return directory
+  if (cwd && /^([A-Za-z]:[\\/]|\/)/.test(cwd)) return `${cwd.replace(/[\\/]+$/, "")}/${directory}`
+  return directory
+}
+
+function RunFilesCard({ detail }: { detail: RunDetail }) {
+  const files = detail.files
+  const path = useRunPath(detail.directory)
+  const { toast } = useToast()
+  const SHOWN = 8
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(path)
+      toast({ title: "Path copied", description: path })
+    } catch {
+      toast({ title: "Could not copy", description: "Select the path and copy it by hand.", variant: "destructive" })
+    }
+  }
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Database className="h-4 w-4 text-primary" />
+          Data products
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-2 flex items-start gap-2 rounded-md border bg-muted/40 px-2 py-1.5">
+          <code className="min-w-0 flex-1 break-all text-xs" title="Run directory">{path || "—"}</code>
+          {path && (
+            <Button variant="ghost" size="icon" className="-my-1 h-7 w-7 shrink-0" onClick={copy}
+                    aria-label="Copy the run directory path" title="Copy path">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
+        {files.data.length > 0 ? (
+          <ul className="mb-2 space-y-0.5 text-xs" aria-label="Data files">
+            {files.data.slice(0, SHOWN).map((f) => (
+              <li key={f.name} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate font-mono" title={f.name}>{f.name}</span>
+                <span className="shrink-0 tabular-nums text-muted-foreground">{formatBytes(f.bytes)}</span>
+              </li>
+            ))}
+            {files.data.length > SHOWN && (
+              <li className="text-muted-foreground">
+                and {files.data.length - SHOWN} more ({formatBytes(files.data.slice(SHOWN).reduce((sum, f) => sum + f.bytes, 0))})
+              </li>
+            )}
+          </ul>
+        ) : (
+          <p className="mb-2 text-xs text-muted-foreground">No data files (saving was off, or nothing was written).</p>
+        )}
+        <Field label="Data files" value={`${files.data.length} (${formatBytes(files.data.reduce((sum, file) => sum + file.bytes, 0))})`} />
+        <Field label="Current log" value={files.current ? formatBytes(files.current.bytes) : undefined} />
+        <Field label="Board snapshots" value={files.board_config.length || undefined} />
+        <Field label="ROOT output" value={files.root.length ? files.root.map((file) => file.name).join(", ") : undefined} />
+      </CardContent>
+    </Card>
+  )
+}
+
 function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
   const sw = detail.software_versions ?? {}
-  const files = detail.files
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -1098,21 +1176,7 @@ function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-sm">
-            <Database className="h-4 w-4 text-primary" />
-            Data products
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Field label="Data files" value={`${files.data.length} (${formatBytes(files.data.reduce((sum, file) => sum + file.bytes, 0))})`} />
-          <Field label="Current log" value={files.current ? formatBytes(files.current.bytes) : undefined} />
-          <Field label="Board snapshots" value={files.board_config.length || undefined} />
-          <Field label="ROOT output" value={files.root.length ? files.root.map((file) => file.name).join(", ") : undefined} />
-          <Field label="Directory" value={<span className="font-mono">{detail.directory}</span>} />
-        </CardContent>
-      </Card>
+      <RunFilesCard detail={detail} />
 
       <Card className="lg:col-span-3">
         <CardHeader className="pb-3">
