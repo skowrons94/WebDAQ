@@ -213,7 +213,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <MoonStarIcon className="h-7 w-7 text-primary" aria-hidden="true" />
                     <span className="hidden sm:inline">LUNADAQ</span>
                 </Link>
-                <nav aria-label="Main" className="hidden items-center gap-4 text-sm font-medium lg:flex xl:gap-5">
+                <nav aria-label="Main" className="hidden items-center gap-3 text-sm font-medium lg:flex xl:gap-5">
                     {NAV_ITEMS.map((item) => (
                         <Link
                             key={item.href}
@@ -319,7 +319,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </div>
                     {/* What the DAQ did while nobody was watching. Never hidden. */}
                     <NotificationBell />
-                    <div className="hidden lg:block">
+                    {/* Below xl the theme is under Settings → Appearance (the header must fit at 1024). */}
+                    <div className="hidden xl:block">
                         <ModeToggle />
                     </div>
                     <DropdownMenu>
