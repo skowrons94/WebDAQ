@@ -1168,9 +1168,13 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       clearModified(done.map(w => w.regName))
       const fresh = await getBoardSettings(boardData.id) as BoardSettings
       const touched = new Set(writes.map(w => w.regName))
+      const saved = new Set(done.map(w => w.regName))
       setSettings(prev => {
         const next = { ...prev }
-        for (const [k, r] of Object.entries(fresh ?? {})) if (touched.has(k)) next[k] = r as RegisterData
+        for (const [k, r] of Object.entries(fresh ?? {})) {
+          // A target not copied that still carries an unsaved (amber) edit keeps it.
+          if (touched.has(k) && (saved.has(k) || !modifiedSettings.has(k))) next[k] = r as RegisterData
+        }
         return next
       })
     } catch { /* the toast below still says what happened */ }

@@ -61,6 +61,8 @@ type BoardData = {
 
 const ONLINE_KEY = 'lunadaq:tuner-online'
 const DONE_KEY = 'lunadaq:tuner-checklist'
+// A production run whose start time is not known yet: the confirmation is for "this run" all the same.
+const UNKNOWN_START = 'unknown-start'
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export default function ParamTuner() {
@@ -298,6 +300,11 @@ export default function ParamTuner() {
   const [busy, setBusy] = useState(false)
   const [onlineConfirmedFor, setOnlineConfirmedFor] = useState<string | null>(null)
   const [confirmOnline, setConfirmOnline] = useState(false)
+  // A confirmation given before the run's start time was known belongs to this
+  // run; it ends with the run.
+  useEffect(() => { if (!isRunning) setOnlineConfirmedFor(null) }, [isRunning])
+  const startKey = runStartTime ?? UNKNOWN_START
+  const confirmedKey = onlineConfirmedFor === UNKNOWN_START ? startKey : onlineConfirmedFor
   const onlineRestored = useRef(false)
   useEffect(() => {
     if (onlineRestored.current || kind === 'unknown') return
@@ -309,13 +316,13 @@ export default function ParamTuner() {
   useEffect(() => {
     // Never while the Tuner's own Start is in progress.
     if (busy) return
-    if (onlineMustDrop(online, kind, onlineConfirmedFor, runStartTime)) {
+    if (onlineMustDrop(online, kind, confirmedKey, startKey)) {
       setOnline(false)
       toast({ title: 'Online switched off', description: 'A production run is on: changes are saved to the configuration only, unless you switch Online on again and confirm.' })
     }
-  }, [online, kind, onlineConfirmedFor, runStartTime, busy]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [online, kind, confirmedKey, startKey, busy]) // eslint-disable-line react-hooks/exhaustive-deps
   const requestOnline = (v: boolean) => {
-    if (v && kind === 'production' && onlineConfirmedFor !== runStartTime) { setConfirmOnline(true); return }
+    if (v && kind === 'production' && confirmedKey !== startKey) { setConfirmOnline(true); return }
     setOnline(v)
   }
 
@@ -560,10 +567,17 @@ export default function ParamTuner() {
 
   const showsInput = boardConfigValue !== null && getBits(boardConfigValue, [12, 13]) === 0
   const showsTrapezoid = !isPSD && boardConfigValue !== null && getBits(boardConfigValue, [12, 13]) === 3
-  const peakingNs = !isPSD && reg(0x1064) !== null ? toDisplay(reg(0x1064)!, 'step', timing) : null
-  const shortNs = isPSD && reg(0x1054) !== null ? toDisplay(reg(0x1054)!, 'sample', timing) : null
-  const recordNs = recordRaw !== null ? recordRaw * 8 * timing.sampleNs : null
-  const preNs = preRaw !== null ? preRaw * 4 * timing.sampleNs : 0
+  // The checklist's consistency checks judge the settings being edited: both
+  // sides of each comparison from the staged (or saved) values.
+  const stagedNs = (address: number, unit: 'step' | 'sample') => (reg(address) !== null ? toDisplay(reg(address)!, unit, timing) : null)
+  const peakingNs = !isPSD ? stagedNs(0x1064, 'step') : null
+  const stRiseNs = !isPSD ? stagedNs(0x105c, 'step') : null
+  const stFlatNs = !isPSD ? stagedNs(0x1060, 'step') : null
+  const shortNs = isPSD ? stagedNs(0x1054, 'sample') : null
+  const stLongNs = isPSD ? stagedNs(0x1058, 'sample') : null
+  const stRecord = reg(0x1020), stPre = reg(0x1038)
+  const recordNs = stRecord !== null ? stRecord * 8 * timing.sampleNs : null
+  const preNs = stPre !== null ? stPre * 4 * timing.sampleNs : 0
   const fitUsable = !!fit?.reliable
   const guide: GuideStatus = {
     running: isRunning,
@@ -572,9 +586,9 @@ export default function ParamTuner() {
     clippedTraces: trace ? trace.clipped : null,
     pzResidualPct: trace?.trap?.pzResidualPct ?? null,
     flatTopOk: trace?.trap ? trace.trap.flatTopOk : null,
-    trapezoidFits: !isPSD && riseNs !== null && flatNs !== null && recordNs !== null ? preNs + 2 * riseNs + flatNs <= recordNs : null,
-    samplingInFlatTop: peakingNs !== null && flatNs !== null ? peakingNs < flatNs : null,
-    shortBelowLong: shortNs !== null && longGateNs ? shortNs < longGateNs : null,
+    trapezoidFits: !isPSD && stRiseNs !== null && stFlatNs !== null && recordNs !== null ? preNs + 2 * stRiseNs + stFlatNs <= recordNs : null,
+    samplingInFlatTop: peakingNs !== null && stFlatNs !== null ? peakingNs < stFlatNs : null,
+    shortBelowLong: shortNs !== null && stLongNs ? shortNs < stLongNs : null,
     saturatedPct: rates.now && rates.now.event > 0 ? (100 * rates.now.satu) / rates.now.event : null,
     pileupPct: rates.now && rates.now.event > 0 ? (100 * rates.now.pileup) / rates.now.event : null,
     expectedPileupPct: rates.now ? 100 * expectedPileup(rates.now.event, pileupWindowNs) : null,
@@ -600,7 +614,7 @@ export default function ParamTuner() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep Online off</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { setOnlineConfirmedFor(runStartTime); setOnline(true) }}>
+            <AlertDialogAction onClick={() => { setOnlineConfirmedFor(startKey); setOnline(true) }}>
               Online for this run
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -822,7 +836,7 @@ export default function ParamTuner() {
               currentFwhm={fit?.reliable ? { fwhm: fit.fwhm, unit: fit.unit } : null}
               onUndo={handleUndo}
               onLoadValues={handleLoadValues}
-              onClearHistory={() => { clearHistory(selectedBoardId, selectedChannel); setHistory([]) }}
+              onClearHistory={() => { clearHistory(selectedBoardId, selectedChannel, dpp); setHistory([]) }}
               onPresetSaved={() => markDone('preset')}
             />
           </CardContent>

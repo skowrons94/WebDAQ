@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { changedSince, fieldChanges, filterHistory, undoTarget, type HistoryEntry } from '@/lib/tuner-history'
-import { autoPickable, MIN_COUNTS, spectrumSince } from '@/components/tuner/spectrum-panel'
+import { autoPickable, MIN_COUNTS, nearestLine, shouldRefind, spectrumSince } from '@/components/tuner/spectrum-panel'
 import { onlineMustDrop, restoredOnline, runKind } from '@/lib/tuner-online'
 import { binCenters, fitPeak, groupFor } from '@/lib/peak-fit'
 import { trapezoidMetrics } from '@/lib/trace-metrics'
@@ -173,5 +173,25 @@ describe('history is kept per firmware (S7)', () => {
     const all = [e('DPP-PHA'), e('DPP-PSD'), e(undefined), e('DPP-PHA', 1)]
     expect(filterHistory(all, '0', 0, 'DPP-PSD')).toHaveLength(1)
     expect(filterHistory(all, '0', 0, 'DPP-PHA')).toHaveLength(1)
+  })
+})
+
+// ── review R3: after a change the region stays on its own peak (60Co) ──
+describe('the fit region does not jump to a neighbouring line (R3)', () => {
+  const r1332 = { center: 1332, half: 8 }
+  it('few counts right after a change are not a moved peak', () => {
+    // 1173 keV already has 60 counts, 1332 keV only 20 so far: stay on 1332
+    expect(shouldRefind({ warning: 'Few counts in the peak: wait for more.', net: 20 }, 20)).toBe(false)
+    expect(shouldRefind(null, 30)).toBe(false)
+  })
+  it('looks again only with counts in the region and no usable fit', () => {
+    expect(shouldRefind(null, 200)).toBe(true)
+    expect(shouldRefind({ warning: 'This looks like a continuum', net: 150 }, 200)).toBe(true)
+    expect(shouldRefind({ warning: null, net: 150 }, 200)).toBe(false)
+  })
+  it('never moves 1332 keV onto 1173 keV', () => {
+    const lines = [{ x: 1173.2, fwhm: 2 }, { x: 1335.0, fwhm: 2 }]
+    expect(nearestLine(lines, r1332)?.x).toBe(1335.0)
+    expect(nearestLine([{ x: 1173.2, fwhm: 2 }], r1332)).toBeNull()
   })
 })

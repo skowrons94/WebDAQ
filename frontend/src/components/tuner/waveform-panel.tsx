@@ -93,7 +93,8 @@ export function WaveformPanel(p: Props) {
   useEffect(() => { p.onMetrics?.(metrics) }, [metrics]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cfg = p.boardConfig ?? 0
-  const dual = p.boardConfig !== null && getBits(cfg, PROBE_BITS.dual) === 1
+  // The menu shows the configured (next-run) choice.
+  const dualConfigured = p.boardConfig !== null && getBits(cfg, PROBE_BITS.dual) === 1
   const ap1 = psd ? getBits(cfg, PROBE_BITS.psd.ap) : getBits(cfg, PROBE_BITS.pha.ap1)
   const ap2 = psd ? null : getBits(cfg, PROBE_BITS.pha.ap2)
   const dp1 = psd ? getBits(cfg, PROBE_BITS.psd.dp1) : getBits(cfg, PROBE_BITS.pha.dp1)
@@ -106,6 +107,8 @@ export function WaveformPanel(p: Props) {
   // probe choice that only applies at the next run.
   const runCfg = p.running && p.runningConfig != null ? p.runningConfig : cfg
   const runAp1 = psd ? getBits(runCfg, PROBE_BITS.psd.ap) : getBits(runCfg, PROBE_BITS.pha.ap1)
+  // The traces the board sends: dual trace interleaves them (from the running configuration).
+  const dual = getBits(runCfg, PROBE_BITS.dual) === 1
   const showsInput = runAp1 === 0
   const showsTrapezoid = !psd && runAp1 === 3
   // Dual trace interleaves the two traces: each has every other sample.
@@ -262,7 +265,7 @@ export function WaveformPanel(p: Props) {
         )}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-2">
-            <Switch id="dual-trace-switch" checked={dual} onCheckedChange={(c) => setField(PROBE_BITS.dual, c ? 1 : 0, 'Dual trace')} />
+            <Switch id="dual-trace-switch" checked={dualConfigured} onCheckedChange={(c) => setField(PROBE_BITS.dual, c ? 1 : 0, 'Dual trace')} />
             <Label htmlFor="dual-trace-switch" className="text-sm">Dual trace</Label>
           </div>
           <div className="flex items-center gap-2">
@@ -274,7 +277,7 @@ export function WaveformPanel(p: Props) {
               </SelectContent>
             </Select>
           </div>
-          {!psd && dual && ap2 !== null && (
+          {!psd && dualConfigured && ap2 !== null && (
             <div className="flex items-center gap-2">
               <Label className="text-sm">Trace 2</Label>
               <Select value={String(ap2)} onValueChange={(v) => setField(PROBE_BITS.pha.ap2, Number(v), 'Trace 2')}>

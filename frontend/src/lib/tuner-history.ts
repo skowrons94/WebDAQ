@@ -67,8 +67,9 @@ export function addHistory(e: Omit<HistoryEntry, 'id' | 'at'>): HistoryEntry {
   return entry
 }
 
-export function clearHistory(boardId: string, channel: number) {
-  write(HISTORY_KEY, read<HistoryEntry[]>(HISTORY_KEY, []).filter((e) => !(e.boardId === boardId && e.channel === channel)))
+/** Clear the list shown: this board, channel and firmware only. */
+export function clearHistory(boardId: string, channel: number, dpp: string) {
+  write(HISTORY_KEY, read<HistoryEntry[]>(HISTORY_KEY, []).filter((e) => !(e.boardId === boardId && e.channel === channel && e.dpp === dpp)))
 }
 
 export function loadPresets(dpp: string): Preset[] {

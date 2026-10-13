@@ -67,6 +67,28 @@ type Roi = { center: number; half: number }
 /** Below this many counts in the peak, no fit value is shown or used. */
 export const MIN_COUNTS = 50
 
+/** Counts inside a region of the shown spectrum. */
+function regionCounts(x: ArrayLike<number>, y: ArrayLike<number>, r: Roi): number {
+  let n = 0
+  for (let i = 0; i < x.length; i++) if (x[i] >= r.center - r.half && x[i] <= r.center + r.half) n += y[i]
+  return n
+}
+
+/**
+ * Whether, after a change, the region should look for its peak elsewhere:
+ * only when it has at least MIN_COUNTS and still gives no usable fit.
+ */
+export function shouldRefind(f: { warning: string | null; net: number } | null, countsInRegion: number): boolean {
+  if (countsInRegion < MIN_COUNTS) return false
+  return !f || (!!f.warning && f.net >= MIN_COUNTS)
+}
+
+/** The line the peak most likely moved to: the nearest, within twice the region's half-width. */
+export function nearestLine<T extends { x: number }>(lines: T[], r: Roi): T | null {
+  const near = lines.slice().sort((a, b) => Math.abs(a.x - r.center) - Math.abs(b.x - r.center))[0]
+  return near && Math.abs(near.x - r.center) <= 2 * r.half ? near : null
+}
+
 /** Peaks the panel may pick by itself: lines (narrow against their position) with enough counts, strongest first. */
 export function autoPickable<T extends { x: number; fwhm: number; net: number }>(cands: T[]): T[] {
   return cands.filter((c) => c.x > 0 && c.fwhm < 0.25 * c.x && c.net >= MIN_COUNTS)
@@ -230,11 +252,12 @@ export function SpectrumPanel({
         }
         if (!r) { setFit(null); return }
         let f = pf.fitPeak(x, shown, r.center - r.half, r.center + r.half, { variance })
-        // After a change the peak may have moved out of the region: take the
-        // line nearest to where it was, and fit there.
-        if (refind.current && (!f || f.warning) && lines.length) {
-          const near = lines.slice().sort((a, b) => Math.abs(a.x - r!.center) - Math.abs(b.x - r!.center))[0]
-          if (Math.abs(near.x - r.center) < Math.max(4 * r.half, 0.15 * r.center)) {
+        // After a change the peak may have moved out of the region. Look for it
+        // only once the region has collected counts and still fails (few
+        // counts right after a change are not a moved peak), and only nearby.
+        if (refind.current && shouldRefind(f, regionCounts(x, shown, r))) {
+          const near = nearestLine(lines, r)
+          if (near) {
             r = { center: near.x, half: Math.max(3 * near.fwhm, r.half) }
             setRoi(r)
             f = pf.fitPeak(x, shown, r.center - r.half, r.center + r.half, { variance })
