@@ -233,7 +233,7 @@ function CurrentTab({ runNumber }: { runNumber: number }) {
                 contentStyle={{ fontSize: 12, background: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))' }}
                 itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
               />
-              <Legend {...LEGEND_PROPS} />
+              <Legend {...LEGEND_PROPS} formatter={(value) => <span className="text-foreground">{value}</span>} />
               {channels.map((name, i) => (
                 <Line
                   key={name} type="monotone" dataKey={name} dot={false} strokeWidth={1.5}

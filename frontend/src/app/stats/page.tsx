@@ -341,13 +341,13 @@ function StatsPageContent() {
             Browse what Graphite is collecting and pick the ones to watch.
           </EmptyState>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {paths.map((path) => {
               const reading = currentValues[path.path]
               const value = reading?.value
               const hasValue = path.enabled && value !== undefined && value !== null
               return (
-                <Card key={path.path} className={path.enabled ? '' : 'opacity-60'}>
+                <Card key={path.path} className={path.enabled ? 'min-w-0' : 'min-w-0 opacity-60'}>
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-2">
                     <div className="min-w-0">
                       <CardTitle className="truncate text-sm font-semibold" title={path.alias}>

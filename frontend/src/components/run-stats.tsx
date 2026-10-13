@@ -632,7 +632,9 @@ export default function RunStats() {
                   formatter={(v: number, name: string) => [formatValue(v, unit), name]}
                   labelFormatter={(v) => `t = ${v} s`}
                 />
-                <Legend {...LEGEND_PROPS} />
+                {/* Legend text in the text colour (series colours as text were
+                    below 3:1); the line swatch carries the colour. */}
+                <Legend {...LEGEND_PROPS} formatter={(value) => <span className="text-foreground">{value}</span>} />
                 {selected.map((channel) => (
                   <Line
                     key={channel}
