@@ -503,15 +503,19 @@ function labelHistogramAxes(histogram: any, showTitles: boolean, widthPx: number
   y.fTitle = showTitles ? (y.fTitle || "Counts / bin") : ""
   const narrow = widthPx > 0 && widthPx < 520
   for (const axis of [x, y]) {
-    axis.fLabelSize = narrow ? 0.05 : 0.035
-    axis.fTitleSize = narrow ? 0.05 : 0.04
+    axis.fLabelSize = narrow ? 0.045 : 0.03
+    axis.fTitleSize = narrow ? 0.045 : 0.035
   }
-  x.fTitleOffset = 1.1
-  y.fTitleOffset = narrow ? 1.35 : 1.25
+  x.fTitleOffset = 1.2
+  y.fTitleOffset = 1.5
 }
 
-/** --chart-1 ("220 70% 50%") as "rrggbb", or null when it cannot be read. */
-function seriesHex(): string | null {
+/**
+ * --chart-1 ("220 70% 50%") as "rrggbb", or null when it cannot be read.
+ * JSROOT's dark mode inverts the whole SVG (filter: invert(100%)), so there
+ * the colour is passed pre-inverted and shows as the dark theme's token.
+ */
+function seriesHex(inverted = false): string | null {
   if (typeof window === "undefined") return null
   const v = getComputedStyle(document.documentElement).getPropertyValue("--chart-1").trim()
   const m = v.match(/^([\d.]+)\s+([\d.]+)%\s+([\d.]+)%$/)
@@ -521,7 +525,8 @@ function seriesHex(): string | null {
     const k = (n + h * 12) % 12
     const a = sat * Math.min(l, 1 - l)
     const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
-    return Math.round(c * 255).toString(16).padStart(2, "0")
+    const v = Math.round(c * 255)
+    return (inverted ? 255 - v : v).toString(16).padStart(2, "0")
   }
   return `${f(0)}${f(8)}${f(4)}`
 }
@@ -871,9 +876,14 @@ export default function EnhancedHistogramDashboard() {
       canvas.fName = `canvas_${config.id}`
       canvas.fTitle = config.label
       canvas.fLogy = dashboardSettings.isLogScale ? 1 : 0
+      // Room for the axis titles, which the default margins clip.
+      if (dashboardSettings.showLabels) {
+        canvas.fLeftMargin = 0.15
+        canvas.fBottomMargin = 0.15
+      }
       // The series colour comes from the theme's chart token (--chart-1), as a
       // JSROOT draw option: translucent fill, solid line.
-      const series = seriesHex()
+      const series = seriesHex(Boolean(window.JSROOT.settings?.DarkMode))
       canvas.fPrimitives.Add(histogram, series ? `hist nostat fill_${series}55 line_${series}` : "hist nostat")
       if (dashboardSettings.showROIs && config.rois.length > 0) {
         addROIOverlaysToCanvas(canvas, config, histogram)
