@@ -39,6 +39,8 @@ import {
   getStartTime,
   startAcquisitionCurrent,
   addRunMetadata,
+  stopAcquisitionCurrent,
+  stopStatsRun,
   reset,
   resetDeviceCurrent,
   resetTotalAccumulatedCharge,
@@ -56,7 +58,7 @@ import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
 import { unpauseAlertNonBlocking } from '@/lib/grafana-api'
 import { stopRunSequence } from '@/lib/run-actions'
-import { refreshRunStatus } from '@/hooks/use-run-status'
+import { noteRunAction } from '@/hooks/use-run-status'
 import { formatElapsed } from '@/components/run-status-indicator'
 
 interface RunControlButtonsProps {
@@ -102,6 +104,10 @@ export function RunControlButtons({
 
   // Dialog states
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
+  const [stopping, setStopping] = useState(false)
+  // The last Stop failed while the run still shows as going: offer the forced reset.
+  const [stopFailed, setStopFailed] = useState(false)
+  useEffect(() => { if (!isRunning) setStopFailed(false) }, [isRunning])
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
   // Shown in the Reset total charge confirmation, so the operator sees what
   // is about to be zeroed.
@@ -244,13 +250,16 @@ export function RunControlButtons({
       // Start the actual DAQ run
       await startRun()
 
-      // Update states and store run metadata
-      const newStartTime = await getStartTime()
+      // The run is on: say so now, and make the shared poller ignore any
+      // answer to a poll sent before the start (it would show Stopped again).
       onIsRunningChange(true)
-      onStartTimeChange(newStartTime)
       setIsRunningStore(true)
-      setStartTimeStore(newStartTime)
-      void refreshRunStatus()
+      noteRunAction()
+      const newStartTime = await getStartTime().catch(() => null)
+      if (typeof newStartTime === 'string') {
+        onStartTimeChange(newStartTime)
+        setStartTimeStore(newStartTime)
+      }
 
       if (saveData) {
         await addRunMetadata(runNumber, targetName, tv, pv, runType)
@@ -284,6 +293,10 @@ export function RunControlButtons({
    * Stops the current run and all associated data acquisition
    */
   const handleStopRun = async () => {
+    // One stop at a time: a second confirmation during a slow stop_run would
+    // repeat the teardown (and could advance the run number twice).
+    if (stopping) return
+    setStopping(true)
     try {
       toast({
         title: 'Stopping run…',
@@ -308,16 +321,46 @@ export function RunControlButtons({
         variant: warnings.length ? 'destructive' : undefined,
       })
 
+      setStopFailed(false)
       // Update run number for next run
       const newRunNumber = await getCurrentRunNumber()
       onRunNumberChange(newRunNumber)
     } catch (error) {
-      console.error('Failed to stop run:', error)
+      console.error('Failed to stop run:', (error as Error)?.message ?? error)
+      // The run may be stuck as "running" on the server. Offer the forced
+      // reset (below the Stop button), which Reset acquisition otherwise is
+      // not during a run.
+      setStopFailed(true)
       toast({
         title: 'The run is still going',
-        description: 'Failed to stop the run. Please try again.',
+        description: 'Failed to stop the run. Try again; if it keeps failing, use "Force reset acquisition".',
         variant: 'destructive',
       })
+    } finally {
+      setStopping(false)
+    }
+  }
+
+  /**
+   * Last resort after a failed Stop: the server's reset tears the CAEN
+   * acquisition down and clears the running flag whatever state it is in.
+   * The current log and stats.csv are closed too, as a Stop would.
+   */
+  const handleForceReset = async () => {
+    try {
+      const result = await reset()
+      if (result === -1) throw new Error('reset refused')
+      await stopAcquisitionCurrent().catch((e) => console.error('current stop:', e?.message ?? e))
+      await stopStatsRun().catch((e) => console.error('stats stop:', e?.message ?? e))
+      useRunControlStore.getState().update({ isRunning: false, startTime: null, known: true })
+      onIsRunningChange(false)
+      onStartTimeChange(null)
+      noteRunAction()
+      setStopFailed(false)
+      toast({ title: 'Acquisition reset', description: 'The DAQ is stopped. Check the run in the Logbook: it may be incomplete.' })
+    } catch (error) {
+      console.error('Force reset failed:', (error as Error)?.message ?? error)
+      toast({ title: 'Reset failed', description: 'The acquisition could not be reset. See Troubleshoot, or stop the server.', variant: 'destructive' })
     }
   }
 
@@ -489,7 +532,7 @@ export function RunControlButtons({
               <Button
                 variant={isRunning ? 'destructive' : 'outline'}
                 className="w-full"
-                disabled={!isRunning}
+                disabled={!isRunning || stopping}
               >
                 <StopCircle className="mr-2 h-4 w-4" />
                 Stop Run
@@ -511,6 +554,39 @@ export function RunControlButtons({
             onConfirm={handleStopRun}
           />
         </div>
+
+        {stopFailed && isRunning && (
+          <div className="rounded-md border border-destructive bg-destructive/10 p-3" role="alert">
+            <p className="mb-2 text-sm font-semibold text-destructive">The run did not stop.</p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Try Stop Run again first. If the DAQ is stuck, force a reset.
+            </p>
+            <ConfirmAction
+              trigger={
+                <Button type="button" variant="destructive" className="w-full">
+                  <AlertTriangle className="mr-2 h-4 w-4" />
+                  Force reset acquisition
+                </Button>
+              }
+              title="Force a reset of the acquisition?"
+              description={
+                <>
+                  <p className="font-semibold text-destructive">
+                    Use this only when Stop Run keeps failing.
+                  </p>
+                  <p>
+                    The CAEN acquisition is torn down and the server&apos;s running flag is
+                    cleared, whatever state they are in; the current log and stats.csv are
+                    closed. The run{runNumber !== null ? ` ${runNumber}` : ''} may be incomplete: its last
+                    data may be missing, and it may not be closed in the Logbook.
+                  </p>
+                </>
+              }
+              confirmLabel="Force reset acquisition"
+              onConfirm={handleForceReset}
+            />
+          </div>
+        )}
 
         <Collapsible open={maintenanceOpen} onOpenChange={setMaintenanceOpen}>
           <div className="grid items-start gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
