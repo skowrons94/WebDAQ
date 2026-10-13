@@ -2,8 +2,9 @@
 
 import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useCallback, useEffect, useState } from 'react'
+import Link from 'next/link'
 import {
-  CheckCheck, Loader2, MailWarning, RefreshCw, Trash2, Wrench,
+  ArrowRight, CheckCheck, Loader2, MailWarning, RefreshCw, Trash2, Wrench,
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -13,6 +14,8 @@ import {
 } from '@/components/ui/card'
 import { useToast } from '@/components/ui/use-toast'
 import { eventIcon, relativeTime } from '@/components/notification-bell'
+import { useRunStatus } from '@/hooks/use-run-status'
+import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import {
   clearAlertEvents, getAlertEvents, getRecoveryActions, markAlertEventsSeen,
   runRecoveryAction,
@@ -29,6 +32,33 @@ import {
  */
 
 const POLL_MS = 10000
+
+/** The verb on each recovery button ("Run" was ambiguous in a DAQ). */
+const ACTION_VERBS: Record<string, string> = {
+  boards: 'Reopen',
+  acquisition: 'Reset',
+  current: 'Reconnect',
+  stats: 'Restart',
+  graphite: 'Re-check',
+}
+const verbFor = (action: RecoveryAction) =>
+  ACTION_VERBS[action.name] ?? action.label.split(' ')[0] ?? 'Do it'
+
+/** "board 0", never "board board 0": the server's subject may already say it. */
+export function boardSubject(subject: string): string {
+  return /^board\b/i.test(subject.trim()) ? subject.trim() : `board ${subject}`
+}
+
+/** Where Stop Run is: the dashboard's Run control, on the Overview tab. */
+function RunControlLink({ children }: { children: React.ReactNode }) {
+  const setTab = useDashboardTabStore((s) => s.setTab)
+  return (
+    <Link href="/dashboard#run-control" onClick={() => setTab('overview')}
+          className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2">
+      {children}
+    </Link>
+  )
+}
 const KINDS = [
   { value: '', label: 'Everything' },
   { value: 'alert', label: 'Problems' },
@@ -38,6 +68,8 @@ const KINDS = [
 
 export default function ActivityLog() {
   const { toast } = useToast()
+  const { isRunning, boardError, runNumber } = useRunStatus()
+  const setDashboardTab = useDashboardTabStore((s) => s.setTab)
   const [events, setEvents] = useState<AlertEvent[]>([])
   const [summary, setSummary] = useState<AlertEventSummary | null>(null)
   const [actions, setActions] = useState<RecoveryAction[]>([])
@@ -95,24 +127,55 @@ export default function ActivityLog() {
   // not installed at all is not a problem to shout about.
   const problems = actions.filter((a) => !a.ok && a.enabled
     && !a.detail.toLowerCase().includes('no beam-current monitor'))
+  // A board that failed during this run is a problem even though every
+  // subsystem "answers", and so is an alert nobody has read yet.
+  const boardFailed = isRunning && boardError
+  const unreadAlerts = events.filter((e) => e.kind === 'alert' && !e.seen).length
+  const problemCount = problems.length + (boardFailed ? 1 : 0) + (unreadAlerts > 0 ? 1 : 0)
 
   return (
     <div className="space-y-4">
       {/* ── Recovery: what to press ───────────────────────────────────────── */}
-      <Card className={problems.length ? 'border-warning' : ''}>
+      {/* The page is called what the nav calls it. */}
+      <h1 className="text-2xl font-bold">Troubleshoot</h1>
+      <Card className={boardFailed ? 'border-destructive' : problemCount ? 'border-warning' : ''}>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
             <Wrench className="h-4 w-4" />
-            Recovery
+            Recovery actions
           </CardTitle>
           <CardDescription>
-            {problems.length
-              ? `${problems.length} thing${problems.length === 1 ? '' : 's'} need attention. `
+            {problemCount
+              ? `${problemCount} thing${problemCount === 1 ? ' needs' : 's need'} attention. `
                 + 'Nothing here runs by itself — press what you want to happen.'
               : 'Everything answers. These are the fixes, if something stops.'}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-2 md:grid-cols-2">
+          {/* A board FAIL: the next step, in order. The reset is refused during
+              a run, so the way to Stop is right here. */}
+          {boardFailed && (
+            <div role="alert" className="rounded-lg border border-destructive/60 bg-destructive/5 p-3 md:col-span-2">
+              <p className="text-sm font-semibold text-destructive">
+                A board reported a failure during run{runNumber !== null ? ` ${runNumber}` : ''}.
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Its data has holes from that moment. The boards cannot be reset during a run.
+              </p>
+              <ol className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+                <li><RunControlLink>1. Stop the run</RunControlLink></li>
+                <li aria-hidden="true"><ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /></li>
+                <li>2. Reset the acquisition (below)</li>
+                <li aria-hidden="true"><ArrowRight className="h-3.5 w-3.5 text-muted-foreground" /></li>
+                <li><RunControlLink>3. Start a new run</RunControlLink></li>
+              </ol>
+            </div>
+          )}
+          {unreadAlerts > 0 && (
+            <p className="rounded-lg border border-warning/60 bg-warning/5 p-3 text-sm md:col-span-2">
+              {unreadAlerts} unread alert{unreadAlerts === 1 ? '' : 's'} in the History below.
+            </p>
+          )}
           {actions.map((action) => (
             <div key={action.name}
                  className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
@@ -133,16 +196,26 @@ export default function ActivityLog() {
                 <Button size="sm" variant={action.ok ? 'outline' : 'default'}
                         disabled={!action.enabled || running !== null}
                         title={action.blocked_reason || action.description}
+                        aria-label={action.label}
                         onClick={() => recover(action)}>
                   {running === action.name
                     ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : 'Run'}
+                    : verbFor(action)}
                 </Button>
                 {/* A disabled button shows no tooltip in most browsers, so the
-                    reason has to be on the page. */}
+                    reason has to be on the page — with the way out of it. */}
                 {action.blocked_reason && (
                   <span className="max-w-[9rem] text-right text-xs text-muted-foreground">
                     {action.blocked_reason}
+                    {isRunning && (
+                      <>
+                        {' '}
+                        <Link href="/dashboard#run-control" onClick={() => setDashboardTab('overview')}
+                              className="font-medium text-foreground underline underline-offset-2">
+                          Stop the run
+                        </Link>
+                      </>
+                    )}
                   </span>
                 )}
               </div>
@@ -267,7 +340,7 @@ export default function ActivityLog() {
                           <Badge variant="secondary" className="text-xs">
                             {event.rule_type === 'board_failure'
                              || event.rule_type === 'stalled_buffers'
-                              ? `board ${event.subject}` : event.subject}
+                              ? boardSubject(event.subject) : event.subject}
                           </Badge>
                         )}
                         {event.run_number !== null && (
