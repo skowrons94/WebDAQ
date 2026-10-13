@@ -193,6 +193,22 @@ const sortableHeader = (label: string) =>
         )
     }
 
+/** Runs that started today, yesterday or in the last 7 days (local time). */
+export function startedWithin(start: string | null | undefined, range: string | undefined): boolean {
+    if (!range || range === "all") return true
+    if (!start) return false
+    const t = new Date(start).getTime()
+    if (Number.isNaN(t)) return false
+    const midnight = new Date()
+    midnight.setHours(0, 0, 0, 0)
+    const day = 24 * 3600 * 1000
+    const today = midnight.getTime()
+    if (range === "today") return t >= today
+    if (range === "yesterday") return t >= today - day && t < today
+    if (range === "7d") return t >= today - 6 * day
+    return true
+}
+
 const RUN_TYPE_LABEL: Record<string, string> = {
     longrun: "Long Run",
     scan: "Scan",
@@ -251,6 +267,8 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
         accessorKey: "start_time",
         meta: { label: COLUMN_LABELS.start_time },
         header: sortableHeader("Start"),
+        // Date filter (drives the date dropdown): local calendar days.
+        filterFn: (row, columnId, value) => startedWithin(row.getValue(columnId) as string, value as string),
         cell: ({ row }) => {
             if (!row.original.start_time) return <div className="text-muted-foreground">—</div>
             const date = new Date(row.original.start_time)

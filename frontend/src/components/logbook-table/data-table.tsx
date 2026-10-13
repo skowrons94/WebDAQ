@@ -162,16 +162,18 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
 
     const runTypeFilter = (table.getColumn("run_type")?.getFilterValue() as string) ?? "all"
     const flagFilter = (table.getColumn("flag")?.getFilterValue() as string) ?? "all"
+    const dateFilter = (table.getColumn("start_time")?.getFilterValue() as string) ?? "all"
 
     const totalRows = table.getCoreRowModel().rows.length
     const filteredRows = table.getFilteredRowModel().rows.length
     const filtersActive =
-        Boolean(globalFilterValue) || runTypeFilter !== "all" || flagFilter !== "all"
+        Boolean(globalFilterValue) || runTypeFilter !== "all" || flagFilter !== "all" || dateFilter !== "all"
 
     const clearFilters = () => {
         setGlobalFilterValue("")
         table.getColumn("run_type")?.setFilterValue(undefined)
         table.getColumn("flag")?.setFilterValue(undefined)
+        table.getColumn("start_time")?.setFilterValue(undefined)
     }
 
     return (
@@ -231,6 +233,24 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                         <SelectItem value="good">Good</SelectItem>
                         <SelectItem value="unknown">Unknown</SelectItem>
                         <SelectItem value="bad">Bad</SelectItem>
+                    </SelectContent>
+                </Select>
+
+                {/* Date filter: reviewing yesterday's shift without scrolling. */}
+                <Select
+                    value={dateFilter}
+                    onValueChange={(v) =>
+                        table.getColumn("start_time")?.setFilterValue(v === "all" ? undefined : v)
+                    }
+                >
+                    <SelectTrigger className="w-36 h-9" aria-label="Filter by start date">
+                        <SelectValue placeholder="Date" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Any date</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="yesterday">Yesterday</SelectItem>
+                        <SelectItem value="7d">Last 7 days</SelectItem>
                     </SelectContent>
                 </Select>
 
