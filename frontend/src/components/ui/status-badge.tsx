@@ -6,6 +6,7 @@ import {
   CircleDot,
   HelpCircle,
   MinusCircle,
+  SlidersHorizontal,
   Square,
   XCircle,
 } from "lucide-react"
@@ -23,6 +24,7 @@ import { cn } from "@/lib/utils"
  *   warning  amber             needs attention, data still flowing
  *   error    red, filled       a fault: FAIL flag, disconnected, failed
  *   unknown  grey, dashed      not answered yet; never claims "Stopped"
+ *   tuning   amber, outlined   a Tuner acquisition: running, but nothing is saved
  */
 export type StatusState =
   | "running"
@@ -32,6 +34,7 @@ export type StatusState =
   | "warning"
   | "error"
   | "unknown"
+  | "tuning"
 
 const STYLES: Record<StatusState, { cls: string; Icon: React.ElementType; label: string }> = {
   running: { cls: "border-transparent bg-success text-success-foreground", Icon: CircleDot, label: "Running" },
@@ -41,6 +44,7 @@ const STYLES: Record<StatusState, { cls: string; Icon: React.ElementType; label:
   warning: { cls: "border-transparent bg-warning text-warning-foreground", Icon: AlertTriangle, label: "Warning" },
   error:   { cls: "border-transparent bg-destructive text-destructive-foreground", Icon: XCircle, label: "Error" },
   unknown: { cls: "border-dashed border-border bg-transparent text-muted-foreground", Icon: HelpCircle, label: "Unknown" },
+  tuning:  { cls: "border-warning/70 bg-warning/10 text-warning", Icon: SlidersHorizontal, label: "Tuning · not saved" },
 }
 
 export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

@@ -42,6 +42,7 @@ import { useToast } from '@/components/ui/use-toast'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
 import { useStatsStore } from '@/store/stats-store'
+import { useRunBadge } from '@/hooks/use-run-badge'
 import {
   getFileBandwidth,
   getConnectedCurrent,
@@ -735,6 +736,91 @@ export function CardHolder({
     (settings.showMetrics && visibleMetrics.length > 0) ||
     (settings.showStats && enabledStatsPaths.length > 0)
 
+  const renderBoardCard = (board: BoardInfo) => {
+    const status = boardStatus[board.id];
+    const connectivity = boardConnectivity[board.id];
+    const isOk = !status || !status.failed;
+    const isConnected = connectivity?.connected ?? false;
+
+    // Running and connected: Running. A FAIL during the run: error.
+    // Stopped and connected: Ready. Not connected: error.
+    const badge: { state: StatusState; label: string } = !isConnected
+      ? { state: "error", label: "Disconnected" }
+      : isRunning
+        // The server reports only that the board set its FAIL flag, and in
+        // how many data blocks — there is no failure type to decode.
+        ? (!isOk ? { state: "error", label: "Board failure" } : { state: "running", label: "Running" })
+        : { state: "ready", label: "Ready" }
+
+    const waveformsOn = boardWaveforms[board.id] ?? false
+
+    return (
+      <Card
+        key={`board-status-${board.id}`}
+        data-board-fail={isRunning && !isOk ? 'true' : undefined}
+        className={isRunning && !isOk ? 'ring-2 ring-destructive' : undefined}
+      >
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+          <div className="flex flex-col min-w-0">
+            <CardTitle className="text-sm font-semibold">Board {board.id}</CardTitle>
+            <p className="text-xs text-muted-foreground truncate">{board.name}</p>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {isConnected ? (
+              <Wifi className="h-4 w-4 text-success" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-destructive" />
+            )}
+            {isOk ? (
+              <CheckCircle className="h-4 w-4 text-success" />
+            ) : (
+              <XCircle className="h-4 w-4 text-destructive" />
+            )}
+            <Cpu className="h-4 w-4 text-muted-foreground" />
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <StatusBadge state={badge.state} label={badge.label} size="md" />
+            {/* The next step, from where the failure is seen. */}
+            {isRunning && !isOk && (
+              <Link href="/troubleshoot" className="truncate text-xs font-medium text-destructive underline underline-offset-2">
+                What to do
+              </Link>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground truncate">
+            {[board.dpp, `${board.chan} ch`, board.link_type].filter(Boolean).join(' · ')}
+          </p>
+          <div className="flex items-center justify-between border-t pt-2">
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <AudioWaveform className="h-3.5 w-3.5" />
+              Waveforms
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium w-6 text-right">
+                {waveformsOn ? 'On' : 'Off'}
+              </span>
+              <Switch
+                checked={waveformsOn}
+                onCheckedChange={(checked) => handleBoardWaveformToggle(String(board.id), checked)}
+                disabled={isRunning}
+                aria-label={`Toggle waveforms for board ${board.id}`}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // A board that failed during this run goes first, ahead of the run status:
+  // on a phone it was the fourth card, below the fold.
+  const boardFailedNow = (board: BoardInfo) => isRunning && Boolean(boardStatus[board.id]?.failed)
+  const failedBoards = settings.showStatus ? boards.filter(boardFailedNow) : []
+  const healthyBoards = boards.filter((b) => !boardFailedNow(b))
+  const runBadge = useRunBadge({ boardFailed: failedBoards.length > 0 })
+
   return (
     <div className="h-full">
       {(settings.showStatus || hasMonitoringCards) && (
@@ -763,6 +849,8 @@ export function CardHolder({
                 style={{ height: displayedStatusPanelHeight }}
               >
                 <div className="grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:auto-rows-[11.5rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
+        {failedBoards.map(renderBoardCard)}
+
         {/* Run Status Card */}
         {settings.showStatus && (
           <Card>
@@ -824,7 +912,9 @@ export function CardHolder({
                     </button>
                   )
                 )}
-                <StatusBadge state={isRunning ? "running" : "stopped"} size="md" />
+                {/* The header's rule (hooks/use-run-badge.ts): a board FAIL wins
+                    over "Running", and a Tuner acquisition is not a production run. */}
+                <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} size="md" />
               </div>
               <p className="truncate text-xs text-muted-foreground">
                 {isRunning
@@ -1055,76 +1145,8 @@ export function CardHolder({
           )
         })()}
 
-        {/* Board Status Cards */}
-        {settings.showStatus && boards.map((board) => {
-          const status = boardStatus[board.id];
-          const connectivity = boardConnectivity[board.id];
-          const isOk = !status || !status.failed;
-          const isConnected = connectivity?.connected ?? false;
-
-          // Running and connected: Running. A FAIL during the run: error.
-          // Stopped and connected: Ready. Not connected: error.
-          const badge: { state: StatusState; label: string } = !isConnected
-            ? { state: "error", label: "Disconnected" }
-            : isRunning
-              // The server reports only that the board set its FAIL flag, and in
-              // how many data blocks — there is no failure type to decode.
-              ? (!isOk ? { state: "error", label: "Board failure" } : { state: "running", label: "Running" })
-              : { state: "ready", label: "Ready" }
-
-          const waveformsOn = boardWaveforms[board.id] ?? false
-
-          return (
-            <Card
-              key={`board-status-${board.id}`}
-              data-board-fail={isRunning && !isOk ? 'true' : undefined}
-              className={isRunning && !isOk ? 'ring-2 ring-destructive' : undefined}
-            >
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <div className="flex flex-col min-w-0">
-                  <CardTitle className="text-sm font-semibold">Board {board.id}</CardTitle>
-                  <p className="text-xs text-muted-foreground truncate">{board.name}</p>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {isConnected ? (
-                    <Wifi className="h-4 w-4 text-success" />
-                  ) : (
-                    <WifiOff className="h-4 w-4 text-destructive" />
-                  )}
-                  {isOk ? (
-                    <CheckCircle className="h-4 w-4 text-success" />
-                  ) : (
-                    <XCircle className="h-4 w-4 text-destructive" />
-                  )}
-                  <Cpu className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <StatusBadge state={badge.state} label={badge.label} size="md" />
-                <p className="text-xs text-muted-foreground truncate">
-                  {[board.dpp, `${board.chan} ch`, board.link_type].filter(Boolean).join(' · ')}
-                </p>
-                <div className="flex items-center justify-between border-t pt-2">
-                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <AudioWaveform className="h-3.5 w-3.5" />
-                    Waveforms
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium w-6 text-right">
-                      {waveformsOn ? 'On' : 'Off'}
-                    </span>
-                    <Switch
-                      checked={waveformsOn}
-                      onCheckedChange={(checked) => handleBoardWaveformToggle(String(board.id), checked)}
-                      disabled={isRunning}
-                      aria-label={`Toggle waveforms for board ${board.id}`}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+        {/* Board Status Cards. Failed boards were placed first (above). */}
+        {settings.showStatus && healthyBoards.map(renderBoardCard)}
 
         {/* No boards yet: say so where they would be, with the way to add one. */}
         {settings.showStatus && boardsLoaded && boards.length === 0 && (

@@ -1,6 +1,8 @@
 "use client"
 
 import { StatusBadge } from '@/components/ui/status-badge'
+import { deriveRunBadge } from '@/hooks/use-run-badge'
+import { useRunStatus } from '@/hooks/use-run-status'
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -290,6 +292,12 @@ export default function RunStats() {
   }, [boardRows.length, boardIdx])
 
   const activeBoard = boardRows[boardIdx] ?? boardRows[0]
+  // This tab polls on its own; the name of the state follows the header's rule.
+  const shared = useRunStatus()
+  const runBadge = deriveRunBadge(
+    { ...shared, known: true, unreachable: false, isRunning },
+    { boardFailed: boardRows.some((b) => b.live?.failed) },
+  )
   const channelNumbers = useMemo(() => {
     if (activeBoard?.live) return activeBoard.live.channels.map((c) => c.channel)
     return Array.from({ length: activeBoard?.channelCount ?? 0 }, (_, i) => i)
@@ -542,12 +550,14 @@ export default function RunStats() {
               </Select>
             </div>
 
+            {/* The header's rule (hooks/use-run-badge.ts) on this tab's own poll:
+                a failed board wins over "Running"; a Tuner run says so. */}
             <StatusBadge size="md"
-                   state={unreachable ? "warning" : isRunning ? "running" : "stopped"}
-                   label={unreachable ? "No answer" : undefined}
+                   state={unreachable ? "warning" : runBadge.state}
+                   label={unreachable ? "No answer" : runBadge.label}
                    title={unreachable
                      ? "The last request to the DAQ server failed — these numbers are the last known ones"
-                     : undefined} />
+                     : runBadge.title} />
           </div>
         </CardHeader>
 

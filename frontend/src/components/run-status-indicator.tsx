@@ -7,17 +7,20 @@
 // question that gets asked too late, so this stays visible everywhere and never
 // depends on which tab is open.
 //
-// Three states, colour AND word AND icon coded (StatusBadge) — colour alone would fail
-// both colour-vision-deficient users and a glance at a badly lit control room:
-//   CAEN Error  red     at least one board reported a FAIL aggregate this run
-//   Running     green   acquiring, no board failures
-//   Stopped     neutral no run in progress
+// Colour AND word AND icon coded (StatusBadge) — colour alone would fail both
+// colour-vision-deficient users and a glance at a badly lit control room. The
+// states and their precedence are in hooks/use-run-badge.ts:
+//   Board failure       red     at least one board reported a FAIL aggregate this run
+//   Tuning · not saved  amber   the Tuner's own acquisition, saving off
+//   Running             green   acquiring, no board failures
+//   Stopped             neutral no run in progress
 // A board failure outranks "running": the run is still going, but the data has
 // holes in it, and that is the thing worth interrupting someone for.
 
 import { useEffect, useState } from "react"
 import { StatusBadge } from "@/components/ui/status-badge"
 import { useRunStatus } from "@/hooks/use-run-status"
+import { useRunBadge } from "@/hooks/use-run-badge"
 import { cn } from "@/lib/utils"
 
 /** Elapsed run time as mm:ss, rolling over to h:mm:ss past an hour so a long
@@ -53,23 +56,16 @@ export function useElapsed(isRunning: boolean, startTime: string | null): number
 }
 
 export function RunStatusIndicator({ className }: { className?: string }) {
-  // The state comes from the one shared poller (hooks/use-run-status.ts), so
-  // the header can never disagree with the dashboard or /alerts.
-  const { known, isRunning, startTime, boardError, unreachable } = useRunStatus()
+  // The state comes from the one shared poller (hooks/use-run-status.ts), and
+  // its name from the one rule (hooks/use-run-badge.ts), so the header can
+  // never disagree with the dashboard, the run bar or /alerts.
+  const { known, isRunning, startTime, unreachable } = useRunStatus()
+  const badge = useRunBadge()
   const elapsed = useElapsed(isRunning, startTime)
 
   // Until the first poll answers, show nothing rather than "Stopped" — claiming
   // the DAQ is idle before we know is worse than showing nothing at all.
   if (!known && !unreachable) return null
-
-  // No answer (the last poll failed or hung): never keep claiming "Running"
-  // or "Stopped" from an old answer — say that the state is not known.
-  const state = unreachable
-    ? "warning"
-    : boardError && isRunning ? "error" : isRunning ? "running" : "stopped"
-  const label = state === "warning"
-    ? "No answer"
-    : state === "error" ? "CAEN Error" : state === "running" ? "Running" : "Stopped"
 
   return (
     <div
@@ -78,17 +74,9 @@ export function RunStatusIndicator({ className }: { className?: string }) {
       // learn about a board failure too, not just see a colour change.
       role="status"
       aria-live="polite"
-      title={
-        state === "warning"
-          ? "The DAQ server did not answer the last run-status request; the run state is unknown until it does"
-          : state === "error"
-          ? "A board reported a FAIL aggregate during this run — data may be incomplete"
-          : state === "running"
-            ? "Acquisition is running"
-            : "No run in progress"
-      }
+      title={badge.title}
     >
-      <StatusBadge state={state} label={label} size="md" />
+      <StatusBadge state={badge.state} label={badge.label} size="md" />
       {/* Tabular numerals so the digits do not jitter as the clock ticks. */}
       {isRunning && !unreachable && (
         <span className="font-mono text-sm tabular-nums whitespace-nowrap">
