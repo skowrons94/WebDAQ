@@ -1,6 +1,8 @@
 # app/routes/digitizer.py
 import os
 import json
+import threading
+from functools import wraps
 
 from flask import Blueprint, request, jsonify
 
@@ -24,6 +26,22 @@ register_map = {
     "Invert Input": 1080,
     "Channel Enable Mask": 8120
 }
+
+# Every route that reads, changes and rewrites a board's JSON file holds this
+# lock for the whole read-modify-write: the server runs several request threads,
+# and two interleaved rewrites lose an edit (or, without the atomic replace
+# below, can leave an invalid file the next run cannot configure from).
+BOARD_FILE_LOCK = threading.RLock()
+
+
+def board_file_locked(fn):
+    """Run a board-file read-modify-write route under BOARD_FILE_LOCK."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        with BOARD_FILE_LOCK:
+            return fn(*args, **kwargs)
+    return wrapper
+
 
 def load_board_config(board_id: str) -> dict:
     """
@@ -62,9 +80,12 @@ def save_board_config(board_id: str, config: dict) -> bool:
         return False
     
     filename = f"conf/{board_info['name']}_{board_info['id']}.json"
+    tmp = f"{filename}.tmp"
     try:
-        with open(filename, 'w') as f:
+        # Write a complete copy, then swap it in: a reader never sees half a file.
+        with open(tmp, 'w') as f:
             json.dump(config, f, indent=4)
+        os.replace(tmp, filename)
         return True
     except Exception:
         return False
@@ -169,6 +190,7 @@ def get_polarity(id, channel):
 
 @bp.route('/digitizer/polarity/<id>/<channel>/<value>', methods=['GET'])
 @jwt_required_custom
+@board_file_locked
 def set_polarity(id, channel, value):
     """Set input polarity for a specific channel."""
     # Validate input
@@ -217,6 +239,7 @@ def get_channel_enable(id, channel):
 
 @bp.route('/digitizer/channel/<id>/<channel>/<value>', methods=['GET'])
 @jwt_required_custom
+@board_file_locked
 def set_channel_enable(id, channel, value):
     """Set channel enable status."""
     # Validate input
@@ -262,6 +285,7 @@ def get_setting(id, setting):
 
 @bp.route('/digitizer/<id>/<setting>/<value>', methods=['GET'])
 @jwt_required_custom
+@board_file_locked
 def set_setting(id, setting, value):
     """Set a generic register setting."""
     key = f"{setting}"
@@ -290,6 +314,7 @@ def set_setting(id, setting, value):
 
 @bp.route('/digitizer/<id>/setting/<setting>', methods=['POST'])
 @jwt_required_custom
+@board_file_locked
 def set_setting_online(id, setting):
     """
     Change a register, optionally writing it straight to the board.
@@ -379,6 +404,7 @@ def get_full_config(id):
 
 @bp.route('/digitizer/<id>/config', methods=['POST'])
 @jwt_required_custom
+@board_file_locked
 def set_full_config(id):
     """Set complete configuration for a board."""
     new_config = request.get_json()
