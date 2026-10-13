@@ -1,7 +1,6 @@
 # app/routes/digitizer.py
 import os
 import json
-import threading
 from functools import wraps
 
 from flask import Blueprint, request, jsonify
@@ -10,6 +9,7 @@ from ..utils.jwt_utils import jwt_required_custom
 from ..services.daq_manager import get_daq_manager
 from ..services.board_scanner import get_board_scanner, detect_a4818_pids
 from ..utils.safe_registers import safe_register_names
+from ..utils.board_files import BOARD_FILE_LOCK, write_json_atomic
 
 bp = Blueprint('digitizer', __name__)
 
@@ -27,11 +27,10 @@ register_map = {
     "Channel Enable Mask": 8120
 }
 
-# Every route that reads, changes and rewrites a board's JSON file holds this
-# lock for the whole read-modify-write: the server runs several request threads,
-# and two interleaved rewrites lose an edit (or, without the atomic replace
-# below, can leave an invalid file the next run cannot configure from).
-BOARD_FILE_LOCK = threading.RLock()
+# Every route that reads, changes and rewrites a board's JSON file holds
+# BOARD_FILE_LOCK (utils/board_files.py) for the whole read-modify-write: the
+# server runs several request threads, and two interleaved rewrites lose an
+# edit. Writes are atomic (write_json_atomic).
 
 
 def board_file_locked(fn):
@@ -80,12 +79,9 @@ def save_board_config(board_id: str, config: dict) -> bool:
         return False
     
     filename = f"conf/{board_info['name']}_{board_info['id']}.json"
-    tmp = f"{filename}.tmp"
     try:
-        # Write a complete copy, then swap it in: a reader never sees half a file.
-        with open(tmp, 'w') as f:
-            json.dump(config, f, indent=4)
-        os.replace(tmp, filename)
+        # A complete copy swapped in: a reader never sees half a file.
+        write_json_atomic(filename, config)
         return True
     except Exception:
         return False
@@ -314,7 +310,6 @@ def set_setting(id, setting, value):
 
 @bp.route('/digitizer/<id>/setting/<setting>', methods=['POST'])
 @jwt_required_custom
-@board_file_locked
 def set_setting_online(id, setting):
     """
     Change a register, optionally writing it straight to the board.
@@ -341,16 +336,19 @@ def set_setting_online(id, setting):
 
     online = bool(data.get('online', False))
 
-    config = load_board_config(id)
-    if not config or 'registers' not in config:
-        return jsonify({'message': 'No register configuration for this board.'}), 404
-    if setting not in config['registers']:
-        return jsonify({'message': f"Board has no register '{setting}'."}), 404
+    # The file under the lock; the board write (which may be slow, or hang on
+    # a board that does not answer) after it, outside the lock.
+    with BOARD_FILE_LOCK:
+        config = load_board_config(id)
+        if not config or 'registers' not in config:
+            return jsonify({'message': 'No register configuration for this board.'}), 404
+        if setting not in config['registers']:
+            return jsonify({'message': f"Board has no register '{setting}'."}), 404
 
-    register = config['registers'][setting]
-    config['registers'][setting]['value'] = hex(value)
-    if not save_board_config(id, config):
-        return jsonify({'message': 'Could not save the configuration.'}), 500
+        register = config['registers'][setting]
+        config['registers'][setting]['value'] = hex(value)
+        if not save_board_config(id, config):
+            return jsonify({'message': 'Could not save the configuration.'}), 500
 
     result = {'saved': True, 'written': False, 'reason': '', 'via': '',
               'address': register.get('address', ''), 'value': hex(value)}

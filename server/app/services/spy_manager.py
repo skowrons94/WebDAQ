@@ -23,6 +23,7 @@ import logging
 from typing import Dict, List, Optional, Any, Tuple
 
 from ..utils.spy import ru_spy
+from ..utils.board_files import BOARD_FILE_LOCK, write_json_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -312,24 +313,26 @@ class SpyManager:
                 self.logger.warning(f"Configuration file not found: {filename}")
                 return False
 
-            with open(filename, 'r') as f:
-                data = json.load(f)
+            # The same lock and atomic writer as the register routes: a
+            # register save in between must not be overwritten by a stale copy.
+            with BOARD_FILE_LOCK:
+                with open(filename, 'r') as f:
+                    data = json.load(f)
 
-            # Waveform recording is controlled by bit 16 of register 0x8000
-            reg_key = 'reg_8000'
-            if reg_key not in data.get('registers', {}):
-                self.logger.warning(f"Register {reg_key} not found in {filename}")
-                return False
+                # Waveform recording is controlled by bit 16 of register 0x8000
+                reg_key = 'reg_8000'
+                if reg_key not in data.get('registers', {}):
+                    self.logger.warning(f"Register {reg_key} not found in {filename}")
+                    return False
 
-            value = int(data['registers'][reg_key]["value"], 16)
-            if enabled:
-                value |= (1 << 16)   # Set bit 16
-            else:
-                value &= ~(1 << 16)  # Clear bit 16
-            data['registers'][reg_key]["value"] = hex(value)
+                value = int(data['registers'][reg_key]["value"], 16)
+                if enabled:
+                    value |= (1 << 16)   # Set bit 16
+                else:
+                    value &= ~(1 << 16)  # Clear bit 16
+                data['registers'][reg_key]["value"] = hex(value)
 
-            with open(filename, 'w') as f:
-                json.dump(data, f, indent=4)
+                write_json_atomic(filename, data)
 
             state = "activated" if enabled else "deactivated"
             self.logger.info(f"Waveforms {state} for board {board['id']}")

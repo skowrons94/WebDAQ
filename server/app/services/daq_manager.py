@@ -30,6 +30,7 @@ from typing import Callable, Dict, List, Optional, Any
 
 from .digitizer_container import DigitizerContainer
 from .telegram_notifier import TelegramNotifier
+from ..utils.board_files import BOARD_FILE_LOCK, write_json_atomic
 from ..utils.safe_registers import is_online_safe
 from ..utils.board_defaults import default_board_config
 
@@ -358,8 +359,8 @@ class DAQManager:
                         dpp=board.get('dpp', 'DPP-PSD'),
                         channels=int(board.get('chan', 16)),
                     )
-                    with open(config_file, 'w') as f:
-                        json.dump(config, f, indent=4)
+                    with BOARD_FILE_LOCK:
+                        write_json_atomic(config_file, config)
                     self.logger.info(
                         f"Rebuilt default {board.get('dpp', 'DPP-PSD')} configuration for mock "
                         f"board {board_id} ({len(config['registers'])} registers)")
@@ -495,8 +496,8 @@ class DAQManager:
                         dpp=board_config.get('dpp', 'DPP-PSD'),
                         channels=board_config['chan'],
                     )
-                    with open(config_file, 'w') as f:
-                        json.dump(config, f, indent=4)
+                    with BOARD_FILE_LOCK:
+                        write_json_atomic(config_file, config)
                     self.logger.info(
                         f"Created default {board_config.get('dpp', 'DPP-PSD')} register "
                         f"configuration for mock board at {config_file} "
@@ -543,12 +544,12 @@ class DAQManager:
                     return False
 
             # Open the file and search for reg_ef08 to set the "value" to board id
-            with open(config_file, 'r') as f:
-                config_data = json.load(f)
-            if "reg_EF08" in config_data["registers"]:
-                config_data["registers"]["reg_EF08"]["value"] = "0x" + str(int(board_config["id"]))
-            with open(config_file, 'w') as f:
-                json.dump(config_data, f, indent=4)
+            with BOARD_FILE_LOCK:
+                with open(config_file, 'r') as f:
+                    config_data = json.load(f)
+                if "reg_EF08" in config_data["registers"]:
+                    config_data["registers"]["reg_EF08"]["value"] = "0x" + str(int(board_config["id"]))
+                write_json_atomic(config_file, config_data)
             
             # Create calibration file
             calib_file = f"calib/{board_config['name']}_{board_config['id']}.cal"
