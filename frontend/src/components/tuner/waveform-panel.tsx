@@ -61,7 +61,11 @@ interface Props {
   flatNs: number | null
   negative: boolean
   onBaseline?: (baseline: number | null) => void
+  /** The trace readout, for the guided flow. */
+  onMetrics?: (m: TraceReadout | null) => void
 }
+
+export interface TraceReadout { input: InputMetrics | null; trap: TrapezoidMetrics | null; n: number; clipped: number }
 
 /**
  * The trace, with what it says in numbers (P4): baseline, clipping and
@@ -79,7 +83,8 @@ export function WaveformPanel(p: Props) {
   const [emptyReason, setEmptyReason] = useState<string | null>(null)
   const inputHist = useRef<InputMetrics[]>([])
   const trapHist = useRef<TrapezoidMetrics[]>([])
-  const [metrics, setMetrics] = useState<{ input: InputMetrics | null; trap: TrapezoidMetrics | null; n: number; clipped: number } | null>(null)
+  const [metrics, setMetrics] = useState<TraceReadout | null>(null)
+  useEffect(() => { p.onMetrics?.(metrics) }, [metrics]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cfg = p.boardConfig ?? 0
   const dual = p.boardConfig !== null && getBits(cfg, PROBE_BITS.dual) === 1

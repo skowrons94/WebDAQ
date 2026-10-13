@@ -62,11 +62,14 @@ export function spectrumSince(cur: SpectrumData, snap: SpectrumData | null): { y
   return dropped > 0 ? null : { y, variance: v }
 }
 
-type Roi = { center: number; half: number }
+export type Roi = { center: number; half: number }
+export type FitSummary = { fwhm: number; centroid: number; unit: string; reliable: boolean }
 type Reference = { centroid: number; fwhm: number; unit: string }
 
 const roiKey = (b: string, ch: number) => `lunadaq:tuner-roi:${b}:${ch}`
 const refKey = (b: string, ch: number) => `lunadaq:tuner-ref:${b}:${ch}`
+/** The peak region chosen on the spectrum for this channel (this tab), if any. */
+export function readRoi(boardId: string, channel: number): Roi | null { return readJson<Roi>(roiKey(boardId, channel)) }
 const readJson = <T,>(k: string): T | null => { try { const s = window.sessionStorage.getItem(k); return s ? JSON.parse(s) as T : null } catch { return null } }
 const writeJson = (k: string, v: unknown) => { try { if (v === null) window.sessionStorage.removeItem(k); else window.sessionStorage.setItem(k, JSON.stringify(v)) } catch { /* tab only */ } }
 
@@ -83,7 +86,7 @@ const fmt = (v: number, unit: string) => {
  * one peak — FWHM, FWTM, tail and the change since the session started.
  */
 export function SpectrumPanel({
-  boardId, boardName, channel, psd, jsrootLoaded, refreshTick, changeMark = 0, changeLabel,
+  boardId, boardName, channel, psd, jsrootLoaded, refreshTick, changeMark = 0, changeLabel, onFit,
 }: {
   boardId: string
   boardName: string
@@ -94,6 +97,8 @@ export function SpectrumPanel({
   /** Goes up each time a change reaches the board: the spectrum restarts from there. */
   changeMark?: number
   changeLabel?: string | null
+  /** The current fit (for the change log and the guided flow). */
+  onFit?: (f: FitSummary | null) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const zoomRef = useRef<HTMLDivElement>(null)
@@ -112,6 +117,9 @@ export function SpectrumPanel({
   const pendingSnapshot = useRef(false)
   const autoPicked = useRef(false)
   const unit = calibrated ? 'keV' : 'ch'
+  useEffect(() => {
+    onFit?.(fit ? { fwhm: fit.fwhm, centroid: fit.centroid, unit, reliable: !fit.warning } : null)
+  }, [fit, unit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const setRoi = (r: Roi | null) => { setRoiState(r); writeJson(roiKey(boardId, channel), r) }
 

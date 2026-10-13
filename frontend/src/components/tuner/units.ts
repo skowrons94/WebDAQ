@@ -243,3 +243,11 @@ export function dcOffsetReading(raw: number, negative: boolean, t: BoardTiming) 
   const headroom = negative ? baseline : t.adcMax - baseline
   return { baseline, headroom, headroomPct: Math.round((headroom / t.adcMax) * 100) }
 }
+
+/** A control's field value as text with its unit ("400 ns", "50 %", "On", "1024 samples"). */
+export function formatControl(spec: ControlSpec, v: number, t: BoardTiming): string {
+  if (spec.unit === 'bool') return v === (spec.onValue ?? 1) ? 'On' : 'Off'
+  if (spec.unit === 'enum') return spec.options?.find((o) => o.value === v)?.label ?? String(v)
+  const u = unitLabel(spec.unit, t).label
+  return `${toDisplay(v, spec.unit, t)}${u ? ` ${u}` : ''}`
+}
