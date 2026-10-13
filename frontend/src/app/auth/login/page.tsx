@@ -23,7 +23,7 @@ export default function LoginPage() {
         const target = params.get('next');
         // Same-site paths only, so a crafted link cannot bounce someone
         // somewhere else once they have logged in.
-        if (target && target.startsWith('/') && !target.startsWith('//')) {
+        if (target && target.startsWith('/') && !target.startsWith('//') && !target.includes('\\')) {
             setNext(target);
         }
     }, []);
@@ -42,7 +42,8 @@ export default function LoginPage() {
             setToken(response.data.token);
             router.push(next);
         } catch (error) {
-            console.error('Login error:', error);
+            // Only the message: the error object carries the request, password included.
+            console.error('Login error:', (error as Error)?.message ?? 'unknown error');
             toast({
                 title: 'Login Failed',
                 description: 'Please check your credentials and try again.',

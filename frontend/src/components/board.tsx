@@ -31,7 +31,8 @@ type Connectivity = { connected: boolean; ready: boolean; failed: boolean }
 
 export function Board() {
   // Removing a board mid-run would pull it out from under the acquisition.
-  const runActive = useRunStatus((st) => st.isRunning)
+  // Unknown (no answer yet) counts as running.
+  const runActive = useRunStatus((st) => st.isRunning || !st.known || st.unreachable)
   const [boards, setBoards] = useState<BoardData[]>([])
   const [connectivity, setConnectivity] = useState<Record<string, Connectivity>>({})
   const { toast } = useToast()

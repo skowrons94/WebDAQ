@@ -31,7 +31,7 @@ type WorkingDirectory = {
 export function ServerStatus({ align = 'right', showLabel = false }: { align?: 'left' | 'right'; showLabel?: boolean } = {}) {
     // Read, not polled: this component is on the login page too, where there is
     // no session to ask with. Inside the app the header's poller keeps it current.
-    const runActive = useRunControlStore((s) => s.isRunning)
+    const runActive = useRunControlStore((s) => s.isRunning || s.unreachable)
     // The confirmations live outside the popover: it closes on any click
     // outside itself, and a dialog inside it would close with it.
     const [confirmStopServer, setConfirmStopServer] = useState(false)
@@ -599,7 +599,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                     <>
                         {runActive && (
                             <p className="font-semibold text-destructive">
-                                A run is in progress. Stopping the server ends it without closing
+                                A run is in progress, or its state is not known. Stopping the server ends it without closing
                                 it cleanly: stop the run from the Dashboard first.
                             </p>
                         )}

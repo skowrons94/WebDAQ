@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useSyncExternalStore } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import useAuthStore from '@/store/auth-store'
 
@@ -22,6 +22,7 @@ const subscribeNoop = () => () => {}
  */
 export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter()
+  const pathname = usePathname()  // without the basePath, as router.replace wants it
   // false during SSR and the hydration render, true afterwards.
   const isClient = useSyncExternalStore(subscribeNoop, () => true, () => false)
   const token = useAuthStore((s) => s.token)
@@ -33,8 +34,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }, [hydrated, hydrate])
 
   useEffect(() => {
-    if (hydrated && !token) router.push('/auth/login')
-  }, [hydrated, token, router])
+    if (hydrated && !token) {
+      // replace: Back must not return to a page that only redirects again.
+      // ?next= brings the user back to the page they asked for.
+      const here = (pathname || '/') + window.location.search
+      router.replace(`/auth/login?next=${encodeURIComponent(here)}`)
+    }
+  }, [hydrated, token, router, pathname])
 
   if (!isClient || !hydrated || !token) return null
 
