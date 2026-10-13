@@ -233,7 +233,7 @@ export function SpectrumPanel({
             for (let i = i0; i < i1; i++) hz.fArray[i - i0 + 1] = shown[i]
             const canvas = window.JSROOT.create('TCanvas')
             canvas.fName = `tuner_roi_c_${boardId}_${channel}`
-            canvas.fPrimitives.Add(hz, 'hist')
+            canvas.fPrimitives.Add(hz, 'hist nostat')
             if (f) {
               const N = 200
               const hc = window.JSROOT.createHistogram('TH1D', N)

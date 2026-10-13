@@ -17,7 +17,7 @@ export interface KneeResult {
  * threshold reaches the noise (rate ∝ exp(−Th²/2σ²)) it grows much faster.
  * The knee is the first step whose growth is far above the plateau's.
  */
-export function noiseKnee(points: ThresholdPoint[]): KneeResult {
+export function noiseKnee(points: ThresholdPoint[], lastIsNoise = false): KneeResult {
   const p = points.filter((q) => q.rate > 0).slice().sort((a, b) => b.threshold - a.threshold)
   if (p.length < 3) return { knee: null, recommended: null, text: 'Too few steps with counts to judge.' }
   // Growth of ln(rate) per LSB between neighbouring steps.
@@ -26,8 +26,10 @@ export function noiseKnee(points: ThresholdPoint[]): KneeResult {
     const dth = p[i].threshold - p[i + 1].threshold
     g.push(dth > 0 ? (Math.log(p[i + 1].rate) - Math.log(p[i].rate)) / dth : 0)
   }
-  const head = g.slice(0, Math.max(2, Math.floor(g.length / 2))).map((v) => Math.max(0, v)).sort((a, b) => a - b)
-  const plateau = head[Math.floor(head.length / 2)]
+  // Plateau growth from the high-threshold half; with few steps the smallest
+  // (a single noisy step must not set the plateau).
+  const head = g.slice(0, Math.max(1, Math.floor(g.length / 2))).map((v) => Math.max(0, v)).sort((a, b) => a - b)
+  const plateau = head.length <= 2 ? head[0] : head[Math.floor(head.length / 2)]
   for (let i = 0; i < g.length; i++) {
     const dth = p[i].threshold - p[i + 1].threshold
     // Far faster than the plateau, and at least 50 % more counts in one step.
@@ -35,13 +37,19 @@ export function noiseKnee(points: ThresholdPoint[]): KneeResult {
     if (g[i] > 3 * plateau + 1e-9 && jump > 1.5 * Math.exp(plateau * dth)) {
       const knee = p[i + 1].threshold
       const recommended = Math.max(p[i].threshold, Math.ceil(1.3 * knee))
-      return { knee, recommended, text: `Noise starts at about ${knee} LSB: the rate jumps ×${jump.toFixed(1)} from ${p[i].threshold} to ${knee} LSB.` }
+      const finer = recommended === p[i].threshold && p[i].threshold > Math.ceil(1.3 * knee)
+        ? ` The suggestion is the last clean step; scan from ${p[i].threshold} to ${knee} LSB for a finer answer.` : ''
+      return { knee, recommended, text: `Noise starts at about ${knee} LSB: the rate jumps ×${jump.toFixed(1)} from ${p[i].threshold} to ${knee} LSB.${finer}` }
     }
     if (p[i + 1].lost > 0) {
       return { knee: p[i + 1].threshold, recommended: Math.max(p[i].threshold, Math.ceil(1.3 * p[i + 1].threshold)), text: `Events are lost at ${p[i + 1].threshold} LSB.` }
     }
   }
   const lowest = p[p.length - 1].threshold
+  if (lastIsNoise && p.length >= 2) {
+    const prev = p[p.length - 2].threshold
+    return { knee: lowest, recommended: Math.max(prev, Math.ceil(1.3 * lowest)), text: `The rate took off at ${lowest} LSB: treat that as the noise.` }
+  }
   return { knee: null, recommended: null, text: `No noise knee down to ${lowest} LSB: any tested value is clean; scan lower to find the limit.` }
 }
 

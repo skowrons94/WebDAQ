@@ -95,7 +95,7 @@ export default function ThresholdScan({
           return null
         },
       })
-      const knee = noiseKnee(out.steps.map((s) => ({ threshold: s.value, rate: s.result.event, lost: s.result.lost })))
+      const knee = noiseKnee(out.steps.map((s) => ({ threshold: s.value, rate: s.result.event, lost: s.result.lost })), !!out.stoppedEarly)
       setPoints(out.steps)
       setResult({ ...knee, stoppedEarly: out.stoppedEarly, original: current })
       if (!out.restored) toast({ title: 'Threshold not restored', description: `Set it back to ${current} LSB by hand.`, variant: 'destructive' })
@@ -154,7 +154,7 @@ export default function ThresholdScan({
         </div>
       )}
       {points.length > 0 && (
-        <ScanPlot
+        <div className="max-w-xl"><ScanPlot
           ariaLabel="Rate against threshold"
           points={points.map((s) => ({ x: s.value, y: Math.max(s.result.event, 0.1) }))}
           xLabel="Threshold (LSB)"
@@ -162,7 +162,7 @@ export default function ThresholdScan({
           logY
           reverseX
           marker={result?.recommended ?? null}
-        />
+        /></div>
       )}
       {points.length > 0 && (
         <table className="w-full text-xs tabular-nums">

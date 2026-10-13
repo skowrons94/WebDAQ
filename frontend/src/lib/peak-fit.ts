@@ -73,7 +73,11 @@ function smooth(y: ArrayLike<number>, half: number): Float64Array {
  * spectrum standing clear of their surroundings by more than the counting
  * noise.
  */
-export function findPeaks(x: ArrayLike<number>, y: ArrayLike<number>, max = 8): PeakCandidate[] {
+export function findPeaks(xIn: ArrayLike<number>, yIn: ArrayLike<number>, max = 8): PeakCandidate[] {
+  // Fine spectra (32 k bins) have a few counts per bin: look for peaks on a
+  // copy of at most 1024 bins.
+  const k = Math.max(1, Math.ceil(yIn.length / 1024))
+  const { x, y } = group(xIn, yIn, k)
   const n = y.length
   if (n < 16) return []
   const w = (x[n - 1] - x[0]) / (n - 1)
@@ -107,6 +111,19 @@ export function findPeaks(x: ArrayLike<number>, y: ArrayLike<number>, max = 8): 
     if (out.length >= max) break
   }
   return out
+}
+
+/** Sum groups of k bins (x = mean of the group). */
+function group(x: ArrayLike<number>, y: ArrayLike<number>, k: number, v?: ArrayLike<number>) {
+  const m = Math.floor(y.length / k)
+  if (k <= 1) return { x: Float64Array.from(x), y: Float64Array.from(y), v: Float64Array.from(v ?? y) }
+  const gx = new Float64Array(m), gy = new Float64Array(m), gv = new Float64Array(m)
+  for (let i = 0; i < m; i++) {
+    let sx = 0, sy = 0, sv = 0
+    for (let j = 0; j < k; j++) { sx += x[i * k + j]; sy += y[i * k + j]; sv += v ? v[i * k + j] : y[i * k + j] }
+    gx[i] = sx / k; gy[i] = sy; gv[i] = sv
+  }
+  return { x: gx, y: gy, v: gv }
 }
 
 type Model = (p: number[], x: number) => number
@@ -232,9 +249,14 @@ export function fitPeak(
   const idx: number[] = []
   for (let i = 0; i < x.length; i++) if (x[i] >= lo && x[i] <= hi) idx.push(i)
   if (idx.length < 8) return null
-  const xs = Float64Array.from(idx, (i) => x[i])
-  const ys = Float64Array.from(idx, (i) => y[i])
-  const ws = Float64Array.from(idx, (i) => 1 / Math.max(1, opts.variance ? opts.variance[i] : y[i]))
+  // At most ~80 bins in the region (more counts per bin, steadier weights).
+  const k = Math.max(1, Math.floor(idx.length / 80))
+  const g = group(Float64Array.from(idx, (i) => x[i]), Float64Array.from(idx, (i) => y[i]), k,
+    opts.variance ? Float64Array.from(idx, (i) => opts.variance![i]) : undefined)
+  const xs = g.x, ys = g.y
+  // Weights from the locally averaged variance: 1/count weights pull low-count fits down.
+  const vs = smooth(g.v, 2)
+  const ws = Float64Array.from(vs, (v) => 1 / Math.max(1, v))
   const n = xs.length
   const binW = (xs[n - 1] - xs[0]) / (n - 1)
 
@@ -284,13 +306,13 @@ export function fitPeak(
     return p
   }
 
-  const g = levenberg(gaussB, [hm, mu0, sigma0, yl + slope0 * (mu0 - xl), slope0], xs, ys, ws, clampG)
-  let best = { p: g.p, cov: g.cov, chi2: g.chi2, model: gaussB, tail: false }
+  const gf = levenberg(gaussB, [hm, mu0, sigma0, yl + slope0 * (mu0 - xl), slope0], xs, ys, ws, clampG)
+  let best = { p: gf.p, cov: gf.cov, chi2: gf.chi2, model: gaussB, tail: false }
   let netCounts = 0
-  for (let i = 0; i < n; i++) netCounts += ys[i] - (g.p[3] + g.p[4] * (xs[i] - mu0))
+  for (let i = 0; i < n; i++) netCounts += ys[i] - (gf.p[3] + gf.p[4] * (xs[i] - mu0))
   if (opts.tail !== false && netCounts > 400 && n >= 12) {
-    const t = levenberg(withTail, [...g.p, 0.05, 2 * g.p[2]], xs, ys, ws, clampT)
-    if (t.chi2 < g.chi2 - 10 && t.p[5] > 0.005) best = { p: t.p, cov: t.cov, chi2: t.chi2, model: withTail, tail: true }
+    const t = levenberg(withTail, [...gf.p, 0.05, 2 * gf.p[2]], xs, ys, ws, clampT)
+    if (t.chi2 < gf.chi2 - 10 && t.p[5] > 0.005) best = { p: t.p, cov: t.cov, chi2: t.chi2, model: withTail, tail: true }
   }
   const p = best.p
   const ndf = Math.max(1, n - p.length)
@@ -324,7 +346,7 @@ export function fitPeak(
   for (let i = 0; i < n; i++) net += ys[i] - (p[3] + p[4] * (xs[i] - mu0))
   if (!Number.isFinite(fwhm) || fwhm <= 0) return null
   const fwhmErr = err(2) * (fwhm / p[2])
-  const warning = net < 100 ? 'Few counts in the peak: wait for more.'
+  const warning = net < 200 ? 'Few counts in the peak: wait for more.'
     : fwhm < 2 * binW ? 'The peak is narrower than two bins: rebin finer for a reliable width.'
     : !(fwhmErr < 0.3 * fwhm) ? 'The width is poorly determined: wait for more counts or adjust the region.'
     : chi2ndf > 5 ? 'Poor fit: a neighbouring peak in the region, or the region too narrow.'
