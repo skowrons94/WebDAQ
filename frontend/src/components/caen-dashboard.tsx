@@ -2104,7 +2104,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               <Button variant="ghost" size="sm" onClick={fetchSettings} disabled={savingAll}>
                 Discard
               </Button>
-              <Button size="sm" variant="success" onClick={handleSaveAll} disabled={savingAll}>
+              <Button size="sm" onClick={handleSaveAll} disabled={savingAll}>
                 {savingAll ? "Saving…" : `Save ${modifiedSettings.size} change${modifiedSettings.size === 1 ? "" : "s"}`}
               </Button>
             </div>

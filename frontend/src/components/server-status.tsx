@@ -362,7 +362,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                 className="flex items-center gap-2 px-2 py-1 rounded hover:bg-muted transition-colors"
             >
                 <span className={`inline-block w-2.5 h-2.5 rounded-full ${dotColor}`} />
-                <span className={cn('text-xs text-muted-foreground', showLabel ? 'inline' : 'hidden sm:inline')}>
+                <span className={cn('text-xs text-muted-foreground', showLabel ? 'inline' : 'sr-only 2xl:not-sr-only 2xl:inline')}>
                     {label}
                     {connected && activeDir ? ` · ${activeDir.label}` : ''}
                 </span>

@@ -934,7 +934,10 @@ export function CardHolder({
                   read only. Stopped, the same number is the run that WILL be
                   taken next, so it says so and can be clicked to change it. */}
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold">
-                {runNumber !== null && (
+                {runBadge.tuning ? (
+                  // A Tuner acquisition has no run number and no Logbook entry.
+                  <span>Tuner session</span>
+                ) : runNumber !== null && (
                   isRunning ? (
                     // The run being taken, one click from its Logbook page.
                     <Link

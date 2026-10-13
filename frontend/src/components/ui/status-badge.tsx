@@ -44,7 +44,7 @@ const STYLES: Record<StatusState, { cls: string; Icon: React.ElementType; label:
   warning: { cls: "border-transparent bg-warning text-warning-foreground", Icon: AlertTriangle, label: "Warning" },
   error:   { cls: "border-transparent bg-destructive text-destructive-foreground", Icon: XCircle, label: "Error" },
   unknown: { cls: "border-dashed border-border bg-transparent text-muted-foreground", Icon: HelpCircle, label: "Unknown" },
-  tuning:  { cls: "border-warning/70 bg-warning/10 text-warning", Icon: SlidersHorizontal, label: "Tuning · not saved" },
+  tuning:  { cls: "border-warning/70 bg-warning/10 text-warning", Icon: SlidersHorizontal, label: "Tuning" },
 }
 
 export interface StatusBadgeProps extends React.HTMLAttributes<HTMLSpanElement> {

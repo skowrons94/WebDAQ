@@ -127,7 +127,10 @@ export function RunBar() {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <StatusBadge state={badge.state} label={badge.label} title={badge.title} />
-            {runNumber !== null && (
+            {badge.tuning ? (
+              // A Tuner acquisition has no run number and no Logbook entry.
+              <span className="truncate text-sm text-muted-foreground">Tuner session</span>
+            ) : runNumber !== null && (
               isRunning ? (
                 <Link href={`/logbook/${runNumber}`} className="truncate text-sm font-semibold underline-offset-2 hover:underline">
                   Run {runNumber}

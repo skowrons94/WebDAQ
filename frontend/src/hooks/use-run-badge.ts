@@ -14,7 +14,7 @@ import type { RunControlState } from '@/store/run-control-store'
  *   Unknown              no answer yet
  *   Board failure        running, and a board reported FAIL this run (red):
  *                        an error always wins over "Running"
- *   Tuning · not saved   running, but it is the Tuner's acquisition from this
+ *   Tuning               running, but it is the Tuner's acquisition from this
  *                        browser (saving is off; it is not a production run)
  *   Running              acquiring
  *   Stopped              no run
@@ -48,8 +48,8 @@ export function deriveRunBadge(s: RunFields, opts: { boardFailed?: boolean } = {
       title: 'A board reported a FAIL flag during this run: data may be incomplete. See Troubleshoot.' }
   }
   if (tuning) {
-    return { ...base, state: 'tuning', label: 'Tuning · not saved',
-      title: 'The Tuner is acquiring with data saving off: this is not a production run and nothing is written' }
+    return { ...base, state: 'tuning', label: 'Tuning',
+      title: 'Tuning, not saved: the Tuner is acquiring with data saving off. This is not a production run and nothing is written.' }
   }
   if (running) return { ...base, state: 'running', label: 'Running', title: 'Acquisition is running' }
   return { ...base, state: 'stopped', label: 'Stopped', title: 'No run in progress' }
