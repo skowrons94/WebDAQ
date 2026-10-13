@@ -1,5 +1,6 @@
 'use client'
 
+import { StatusBadge } from '@/components/ui/status-badge'
 import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useEffect, useState } from 'react'
 import {
@@ -280,9 +281,8 @@ export function NotificationSettings() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={status?.watching ? 'default' : 'destructive'}>
-                {status?.watching ? 'Watching' : 'Not watching'}
-              </Badge>
+              <StatusBadge state={status?.watching ? 'running' : 'error'}
+                           label={status?.watching ? 'Watching' : 'Not watching'} />
               {!status?.watching && (
                 <Button size="sm" variant="outline" disabled={busy !== null}
                         onClick={() => act('watcher', () => setAlertWatcher('start'),

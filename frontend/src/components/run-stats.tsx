@@ -619,7 +619,16 @@ export default function RunStats() {
                   label={yAxisLabel(yLabel)}
                 />
                 <Tooltip
-                  contentStyle={{ fontSize: 12 }}
+                  // Themed, and the values in the text colour: series colours as
+                  // text fell below 3:1, and the default white box was unreadable
+                  // in dark mode. The legend carries the colours.
+                  contentStyle={{
+                    fontSize: 12,
+                    background: 'hsl(var(--popover))',
+                    color: 'hsl(var(--popover-foreground))',
+                    border: '1px solid hsl(var(--border))',
+                  }}
+                  itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                   formatter={(v: number, name: string) => [formatValue(v, unit), name]}
                   labelFormatter={(v) => `t = ${v} s`}
                 />

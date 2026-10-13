@@ -152,15 +152,15 @@ export function BoardScan({ boards, onUse }: Props) {
   return (
     <>
       <Card className="w-full mx-auto">
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-          <div>
-            <CardTitle>Find CAEN Boards</CardTitle>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-4 space-y-0">
+          <div className="min-w-[14rem] flex-1">
+            <CardTitle>Find CAEN boards</CardTitle>
             <CardDescription>
               Probe the links and list the digitizers that answer, so you do not have to
               type their settings from memory.
             </CardDescription>
           </div>
-          <div className="flex shrink-0 gap-2">
+          <div className="flex shrink-0 flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => setOptionsOpen(true)} disabled={running}>
               <Settings2 className="mr-1.5 h-4 w-4" />
               Options
@@ -204,7 +204,7 @@ export function BoardScan({ boards, onUse }: Props) {
                 return (
                 <div
                   key={`${board.link_type}-${board.link_num}-${board.id}-${board.vme}-${i}`}
-                  className={`rounded-lg border bg-card p-4 shadow-sm ${configured ? 'opacity-60' : ''}`}
+                  className={`rounded-lg border bg-card p-4 shadow-sm ${configured ? 'border-dashed bg-muted/40' : ''}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">

@@ -230,7 +230,8 @@ function CurrentTab({ runNumber }: { runNumber: number }) {
               <Tooltip
                 labelFormatter={(v: number) => `t = ${Number(v).toFixed(2)} s`}
                 formatter={(v: number, name: string) => [formatValue(v, unit), name]}
-                contentStyle={{ fontSize: 12 }}
+                contentStyle={{ fontSize: 12, background: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))' }}
+                itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
               />
               <Legend {...LEGEND_PROPS} />
               {channels.map((name, i) => (
@@ -368,7 +369,8 @@ function StatsTab({ runNumber }: { runNumber: number }) {
                     <Tooltip
                       labelFormatter={(v: number) => `t = ${Number(v).toFixed(2)} s`}
                       formatter={(v: number) => [formatValue(v, metric.unit), metric.name]}
-                      contentStyle={{ fontSize: 12 }}
+                      contentStyle={{ fontSize: 12, background: 'hsl(var(--popover))', color: 'hsl(var(--popover-foreground))', border: '1px solid hsl(var(--border))' }}
+                itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                     />
                     <Line
                       type="monotone" dataKey="v" dot={false} strokeWidth={1.5}

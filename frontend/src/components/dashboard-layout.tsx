@@ -189,7 +189,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </Sheet>
                 <Link
                     href="/dashboard"
-                    className="flex shrink-0 items-center gap-2 text-base font-semibold"
+                    className="flex shrink-0 items-center gap-2 text-base font-semibold pointer-coarse:min-h-11 pointer-coarse:min-w-11"
                     aria-label="LUNADAQ dashboard"
                 >
                     <MoonStarIcon className="h-7 w-7 text-primary" aria-hidden="true" />

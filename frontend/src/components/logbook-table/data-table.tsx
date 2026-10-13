@@ -315,7 +315,7 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                                         return (
                                             <div key={cell.id} className="contents">
                                                 <dt className="text-muted-foreground">{label}</dt>
-                                                <dd className="min-w-0 break-words">
+                                                <dd className="min-w-0 break-words [&>*]:!min-w-0 [&>*]:!w-auto">
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </dd>
                                             </div>

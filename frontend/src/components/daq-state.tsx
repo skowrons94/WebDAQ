@@ -253,13 +253,13 @@ export function DAQState({
           </Button>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2 pt-0">
-          <Badge variant={saveData ? 'default' : 'secondary'}>
+          <Badge variant="secondary" className={saveData ? 'border-transparent bg-success/15 text-success hover:bg-success/15' : undefined}>
             Saving {saveData ? 'enabled' : 'disabled'}
           </Badge>
           <Badge variant="outline">
             {limitFileSize ? `${fileSizeLimit} MB limit` : 'No size limit'}
           </Badge>
-          <Badge variant={autoRestartEnabled ? 'default' : 'secondary'}>
+          <Badge variant="secondary" className={autoRestartEnabled ? 'border-transparent bg-info/15 text-info hover:bg-info/15' : undefined}>
             Auto-restart {autoRestartEnabled ? `${autoRestartDelay}s` : 'off'}
           </Badge>
         </CardContent>
