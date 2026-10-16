@@ -51,8 +51,8 @@ function probeCount(start: string, end: string, step: string): number | null {
 }
 
 function formatSeconds(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  return `${Math.floor(seconds / 60)}m ${Math.round(seconds % 60)}s`
+  if (seconds < 60) return `${Math.round(seconds)} s`
+  return `${Math.floor(seconds / 60)} min ${Math.round(seconds % 60)} s`
 }
 
 type ConfiguredBoard = { id: string; vme?: string; link_type?: string; link_num?: string }

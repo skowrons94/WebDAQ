@@ -247,7 +247,7 @@ as ``test mode''.
 
 On \ui{Dashboard $\rightarrow$ Overview}, in \ui{Run Setup \& Control}, fill in
 \ui{Run Name}, \ui{Run Type}, \ui{TV (kV)} and \ui{PV (kV)} --- all four are
-pre-filled from the last run --- and press \ui{Start Run}.
+pre-filled from the last run --- and press \ui{Start run}.
 
 What happens, in order: the run number and the saving options are stored; the
 beam-current recording and the statistics are pointed at this run; the boards are
@@ -285,7 +285,7 @@ Changing settings mid-run is covered in section~\ref{sec:duringrun}.
 
 \section{Stopping}
 
-\ui{Stop Run} stops the monitor, the spy snapshots and the acquisition, hands the
+\ui{Stop run} stops the monitor, the spy snapshots and the acquisition, hands the
 boards back, writes the end time, advances the run number (when saving) and sets
 the run state to stopped --- which stores the accumulated charge, closes
 \file{current.txt} and writes \file{roi.json}. Auto-managed Grafana rules are
@@ -432,7 +432,10 @@ run.
 
 The place to change thresholds and shaping with beam on target. It starts
 acquisition with \textbf{data saving switched off}, so nothing lands in a run
-directory, and a badge reminds you that the Tuner is holding the run.
+directory, and the amber \emph{Tuning} badge (\emph{Tuner session} in the run
+bar) says that the Tuner is holding the run. There are no automatic scans: you
+change a setting, save it and judge it on the trace, the rates and the fitted
+peak, in the order of the \ui{Tune this channel} checklist.
 
 \label{sec:duringrun}
 The \ui{Online} switch decides where a change goes. With it on during a run, only
@@ -441,6 +444,11 @@ marked \emph{live} or \emph{next run} \emph{before} you touch it. The save to th
 configuration always happens, and a write the board refuses is reported as
 \emph{saved, not sent to the board} with the reason --- so the configuration and
 the hardware cannot drift apart.
+
+During a \textbf{production run} Online is never carried over from an earlier
+page: it comes back off, and switching it on asks first (\ui{Online for this
+run}), because saved changes then reach the data being taken at once while the
+register file stored with the run does not show them.
 
 \section{Troubleshoot}
 
@@ -475,9 +483,11 @@ directory between sites without emptying them.
 \ui{Settings $\rightarrow$ Boards $\rightarrow$ Scan for boards} probes the links
 --- USB, optical (CONET), A4818, and a VME crate through a bridge --- and lists
 the digitizers that answer with their model, serial number, channel count and
-firmware. \ui{Use these settings} fills the add form rather than adding the board,
-because the board ID and the DPP firmware are judgements, not measurements: the
-firmware is only \emph{inferred} from the code the board reports.
+firmware. When the firmware is recognised, \ui{Add this board} adds the result in
+one step with the suggested board ID. \ui{Use these settings} fills the add form
+instead, for when the board ID or the DPP firmware should be checked first: they
+are judgements, not measurements, and the firmware is only \emph{inferred} from
+the code the board reports.
 
 Adding a board reads its register dump out of the hardware into
 \file{conf/<model>\_<id>.json} and creates a unit calibration in \file{calib/}.

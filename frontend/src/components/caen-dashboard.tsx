@@ -1060,9 +1060,9 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     const names = Array.from(modifiedSettings)
     setSavingAll(true)
     try {
-      // One register at a time: the server rewrites the whole board file for
-      // each one, without a lock, so parallel writes lose edits or corrupt it.
-      // It reports a failure as -1 with HTTP 200.
+      // One register at a time: the server rewrites the board file for each
+      // one (under its board-file lock, atomically); sequential saves keep the
+      // per-register result simple. It reports a failure as -1 with HTTP 200.
       const saved: string[] = []
       for (const regName of names) {
         const value = settings[regName].value_dec
@@ -1888,8 +1888,8 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                   <CardHeader className="pb-3">
                     <CardTitle>Copy channel settings</CardTitle>
                     <p className="text-sm text-muted-foreground">
-                      Copy every setting from one channel onto others. Values are written to
-                      the board immediately.
+                      Copy every setting from one channel onto others. Values are saved to the
+                      configuration and apply at the next run.
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
@@ -1979,7 +1979,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                         disabled={busy || copyTargets.size === 0}
                       >
                         {copying && <ReloadIcon className="mr-2 h-4 w-4 animate-spin" />}
-                        Copy to {copyTargets.size || "…"} channel{copyTargets.size === 1 ? "" : "s"}
+                        {copyTargets.size === 0 ? "Choose channels" : `Copy to ${copyTargets.size} channel${copyTargets.size === 1 ? "" : "s"}`}
                       </Button>
                     </div>
                   </CardContent>

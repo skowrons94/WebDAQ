@@ -241,7 +241,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         onClick={() => setOpen(true)}
                     >
                         <Search className="mr-2 h-4 w-4" />
-                        Search...
+                        Search…
                     </Button>
                     <CommandDialog open={open} onOpenChange={setOpen}>
                         <CommandInput placeholder="Type a command or search..." />

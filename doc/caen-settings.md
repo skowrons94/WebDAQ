@@ -18,8 +18,10 @@ Settings → Boards.
 **Scan first.** Press *Scan for boards*. The server probes the links the way
 CoMPASS does — it opens each candidate, asks the board what it is, and closes it
 again — then lists what answered: model, serial number, channel count, ADC bits
-and firmware. Press *Use these settings* on a result and the add form is filled
-in for you. Check the ID and the DPP firmware, then press *Add Board*.
+and firmware. When the firmware is known, *Add this board* adds the result in one
+step with the suggested ID. To check or change the ID or the DPP firmware first,
+press *Use these settings*: the add form is filled in for you, then press
+*Add board*.
 
 What the scan covers, from *Options*:
 
@@ -318,7 +320,14 @@ ones that may:
   one underneath a running acquisition produces buffers the decoder cannot read.
 
 Each field in the Tuner is marked **live** or **next run** while Online is on, so
-you know before you type. Everything is saved to the JSON either way — the
+you know before you type.
+
+During a **production run** Online asks first: switching it on shows *Online
+during a production run?*, and only *Online for this run* turns it on (for that
+run only). Saved changes then reach the run's data at once, but not the register
+file stored with the run at its start. Online left on in the browser is not
+carried into a production run: it comes back off. A Tuner run (data saving off)
+needs no confirmation. Everything is saved to the JSON either way — the
 configuration and the board never drift apart.
 
 A register that is not on the list is refused by default. That is deliberate: a

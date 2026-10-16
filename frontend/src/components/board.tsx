@@ -364,7 +364,7 @@ export function Board() {
                 />
                 <Button type="submit">
                   <Plus className="mr-1.5 h-4 w-4" />
-                  Add Board
+                  Add board
                 </Button>
               </form>
             </Form>

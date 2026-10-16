@@ -37,7 +37,7 @@ show one row more or less; the height is remembered per browser.
 
 | Card | What it tells you |
 |---|---|
-| **Run Status** | The run number, *Running* or *Stopped*, how long ago it started (or how long the last one lasted), the file write rate, and a **Save** switch. While the DAQ is stopped the run number is a button that opens *Next run*, where you set the number the next run will take. |
+| **Run Status** | The run number and the run badge (below), how long ago it started (or how long the last one lasted), the file write rate, and a **Save** switch. While the DAQ is stopped the run number is a button that opens *Next run*, where you set the number the next run will take. |
 | **DAQ Status** | Four lines — data saving, waveforms, current, stats — each with a tick or a cross, so you can see at a glance what this run will actually record. |
 | **Picoammeter** | Only for a real device: connected or not, whether it is sampling, its address and range. A monitored Graphite value has no device card, because it has no device. |
 | **Board *n*** | One per board: *Ready*, *Running*, *Board Failure* or *Disconnected*, the firmware and channel count, and a waveform switch (locked while a run is going). |
@@ -46,7 +46,22 @@ show one row more or less; the height is remembered per browser.
 **Run Setup & Control** is where a run begins. Fill in **Run Name**, **Run Type**
 (long run, scan, background, calibration), **TV (kV)** and **PV (kV)** — all four
 are pre-filled from the last run, and all four are locked while a run is in
-progress. Then **Start Run**.
+progress. Then **Start run**.
+
+The **run badge** says the same thing in the header, the phone run bar and the
+Run Status card:
+
+| Badge | Colour | Meaning |
+|---|---|---|
+| *Running* | green | a production run is acquiring |
+| *Stopped* | grey | no run |
+| *Tuning* | amber | the Tuner's own acquisition, with data saving off ("not saved" in its tooltip); the run bar and the card say *Tuner session* instead of a run number |
+| *Board failure* | red | running, and a board reported a FAIL flag this run |
+| *No answer* | amber | the last run-status request got no answer: the state is unknown until it does |
+| *Unknown* | grey | waiting for the first answer |
+
+The green buttons start (**Start run**, **Start**); **Stop run** is red and
+always asks first.
 
 If the directory for that run number already exists, WebDAQ asks before using it
 again rather than quietly overwriting. If the run number is not set at all, it
@@ -246,7 +261,10 @@ there is none.
 
 The place to change thresholds and shaping with beam on target. The page starts
 acquisition with **data saving switched off**, so nothing you do here lands in a
-run directory; a yellow badge reminds you that the Tuner is holding the run.
+run directory; the amber *Tuning* badge (and *Tuner session* in the run bar)
+says that the Tuner is holding the run. The Tuner has no automatic scans: you
+change a setting, save it, and judge it on the trace, the rates and the fitted
+peak; the *Tune this channel* checklist gives the order.
 
 The **Online** switch decides where a change goes:
 
@@ -255,6 +273,11 @@ The **Online** switch decides where a change goes:
 | on | yes | Registers that are safe to move are written to the board as you save them. Each field is marked *live* or *next run*, so you know before you touch it. |
 | on | no | Written to the board anyway — the next run applies the whole configuration regardless. |
 | off | either | Saved to the board's configuration only, and applied at the next run. |
+
+During a **production run** (started from the Dashboard), Online is never
+carried over: it comes back off, and switching it on asks first (*Online for
+this run*), because saved changes then reach the data of the run being taken at
+once, while the run's stored register file does not show them.
 
 The allowlist of live-writable registers comes from the server per firmware and
 channel, and a write the board refuses is reported as *saved, not sent to the
@@ -273,7 +296,8 @@ after. It has two halves: **Recovery** at the top and **History** below.
 [Troubleshooting](troubleshooting.md) is the chapter that goes with it.
 
 **Recovery** lists five actions, each with its current state — whether that part
-of the system answers right now — and a **Run** button. Nothing here runs by
+of the system answers right now — and a button that says what it does (for
+example *Restart the server*, *Reset acquisition*). Nothing here runs by
 itself. An action that would cost data while a run is in progress is refused
 before you press it, with the reason on the page.
 
