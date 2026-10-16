@@ -59,13 +59,6 @@ export function tunerRunStartUnknown(): boolean {
   return !!r && r.started && r.startTime === null
 }
 
-/** Saving is switched off by a Tuner run (started, or starting just now). */
-export function tunerSaveRecordPending(): boolean {
-  if (typeof window === 'undefined') return false
-  const r = read()
-  return r !== null && !expired(r)
-}
-
 /**
  * The run with this start_time is the one the Tuner started from this
  * browser. A record from an older Tuner run (stopped elsewhere while this
@@ -79,6 +72,11 @@ export function tunerOwnsRun(startTime: string | null): boolean {
 /** A Tuner run was started from this browser and saving not yet put back. */
 export function tunerRunRecordStarted(): boolean {
   return typeof window !== 'undefined' && read()?.started === true
+}
+
+/** Drop the record without touching the server (the switch-off itself was refused). */
+export function forgetTunerSaveFlag(): void {
+  try { window.localStorage.removeItem(KEY) } catch { /* ignore */ }
 }
 
 let restoring: Promise<boolean | null> | null = null

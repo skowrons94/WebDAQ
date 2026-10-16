@@ -455,6 +455,11 @@ def remove_caen():
 @bp.route("/experiment/set_save_data", methods=['POST'])
 @jwt_required_custom
 def update_save_data():
+    # Saving belongs to a run: it cannot change while one is running (stop_run
+    # decides from it whether to record the end time and move the run number
+    # on). The UI disables the switches then; a stale page must not slip past.
+    if daq_mgr.is_running():
+        return jsonify({'message': 'Data saving cannot change while a run is running: stop the run first.'}), 409
     save = request.get_json()["value"]
     daq_mgr.set_save_data(save)
     return jsonify(daq_mgr.get_save_data())

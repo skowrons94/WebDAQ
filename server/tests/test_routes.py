@@ -470,5 +470,33 @@ class StatsRouteTests(RouteTestCase):
         self.assertEqual(response.status_code, 400)
 
 
+class SaveDataRouteTests(RouteTestCase):
+    """/experiment/set_save_data: only between runs (final review L5)."""
+
+    def test_saving_cannot_change_during_a_run(self):
+        from app.services.daq_manager import get_daq_manager
+        daq = get_daq_manager(test_flag=True)
+        before = daq.get_save_data()
+        daq.daq_state['running'] = True
+        try:
+            response = self.post('/experiment/set_save_data', {'value': not before})
+            self.assertEqual(response.status_code, 409)
+            self.assertIn('stop the run', response.get_json()['message'].lower())
+            self.assertEqual(daq.get_save_data(), before)
+        finally:
+            daq.daq_state['running'] = False
+
+    def test_saving_changes_between_runs(self):
+        from app.services.daq_manager import get_daq_manager
+        daq = get_daq_manager(test_flag=True)
+        before = daq.get_save_data()
+        try:
+            response = self.post('/experiment/set_save_data', {'value': not before})
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(daq.get_save_data(), (not before))
+        finally:
+            daq.set_save_data(before)
+
+
 if __name__ == '__main__':
     unittest.main()

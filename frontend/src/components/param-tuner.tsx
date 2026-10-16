@@ -2,7 +2,7 @@
 
 import { useRunStatus, noteRunAction } from '@/hooks/use-run-status'
 import useRunControlStore from '@/store/run-control-store'
-import { markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerOwnsRun, tunerRunRecordStarted, tunerRunStartUnknown } from '@/lib/tuner-save'
+import { forgetTunerSaveFlag, markTunerRunStarted, rememberTunerSaveFlag, restoreTunerSaveFlag, tunerOwnsRun, tunerRunRecordStarted, tunerRunStartUnknown } from '@/lib/tuner-save'
 import { getStartTime } from '@/lib/api'
 import { StatusBadge } from '@/components/ui/status-badge'
 import React, { useState, useEffect, useMemo, useRef } from 'react'
@@ -345,7 +345,14 @@ export default function ParamTuner() {
       // acquisition ends, saving is put back.
       const original = Boolean(await getSaveData())
       rememberTunerSaveFlag(original)
-      await setSaveData(false)
+      try {
+        await setSaveData(false)
+      } catch (error) {
+        // Refused (the server allows it only between runs): nothing changed,
+        // so there is nothing to put back.
+        forgetTunerSaveFlag()
+        throw error
+      }
       try {
         await startRun()
       } catch (error) {
