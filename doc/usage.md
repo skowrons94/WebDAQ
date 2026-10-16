@@ -9,10 +9,14 @@ The navigation is the same on every page: **Dashboard, Logbook, Stats, DAQ,
 Tuner, Troubleshoot, Alerts, Settings**. The header carries four things worth
 knowing about:
 
-* the **run status** — *Running* with an elapsed clock, *Stopped*, or *CAEN
-  Error* when a board raised its FAIL flag during this run;
+* the **run status** — the run badge (see the table in §1.1) with an elapsed
+  clock;
 * the **DAQ Server** badge, which starts and stops the server itself and shows
-  its log;
+  its log. While the server is up, starting or stopping it (and its log) needs
+  you to be logged in; while it is down, it can be started from the login page.
+  A server that is up but does not answer is never stopped from here (nothing
+  can check your login then): stop it from the terminal
+  (`server/scripts/kill-server.sh`);
 * the **bell**, which counts alerts nobody has looked at yet and turns amber when
   something was raised that reached nobody;
 * **Search**, a command palette that jumps to any page, any dashboard tab or any

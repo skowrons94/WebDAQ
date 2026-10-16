@@ -14,6 +14,6 @@ declare module 'vitest' {
     not: Matchers
   }
   export function describe(name: string, fn: () => void): void
-  export function it(name: string, fn: () => void | Promise<void>): void
+  export function it(name: string, fn: () => void | Promise<void>, timeout?: number): void
   export function expect(v: unknown): Matchers
 }

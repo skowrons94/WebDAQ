@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { runSideEffects } from '@/lib/side-effects'
-import { bearerToken, checkLauncherAuth, launcherAllows } from '@/lib/launcher-auth'
+import { bearerToken, checkLauncherAuth, isRefused, launcherAllows, runsMainPy } from '@/lib/launcher-auth'
 import { safeNextPath } from '@/lib/safe-redirect'
 
 // ── S1: a failure after the start is a warning, and later steps still run ──
@@ -27,7 +27,13 @@ describe('launcher authentication (S2)', () => {
     const auth = (init?.headers as Record<string, string> | undefined)?.Authorization
     return new Response('{}', { status: accept && auth === `Bearer ${accept}` ? 200 : 401 })
   }) as unknown as typeof fetch
-  const down = (async () => { throw new TypeError('fetch failed') }) as unknown as typeof fetch
+  // Node's fetch: a refused connection is a TypeError whose cause has code ECONNREFUSED.
+  const refused = () => Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }) })
+  const down = (async () => { throw refused() }) as unknown as typeof fetch
+  // A server that never answers: only the abort signal ends the request.
+  const silent = ((_url: string, init?: RequestInit) => new Promise((_, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal!.reason ?? new DOMException('timeout', 'TimeoutError')))
+  })) as unknown as typeof fetch
 
   it('reads a bearer token', () => {
     expect(bearerToken('Bearer abc.def')).toBe('abc.def')
@@ -46,19 +52,31 @@ describe('launcher authentication (S2)', () => {
     expect(launcherAllows('stop', await checkLauncherAuth('Bearer stale', ['http://daq:5001'], server('good')))).toBe(false)
     expect(launcherAllows('stop', await checkLauncherAuth('Bearer good', ['http://daq:5001'], server('good')))).toBe(true)
   })
-  it('with the server down: start and the launch log stay open, stop still needs a token', async () => {
+  it('refused everywhere (ECONNREFUSED) is down: start and the launch log stay open, stop never', async () => {
     const anon = await checkLauncherAuth(null, ['http://daq:5001', 'http://127.0.0.1:5001'], down)
     expect(anon.backendUp).toBe(false)
     expect(launcherAllows('start', anon)).toBe(true)
     expect(launcherAllows('logs', anon)).toBe(true)
     expect(launcherAllows('stop', anon)).toBe(false)
-    expect(launcherAllows('stop', await checkLauncherAuth('Bearer t', ['http://daq:5001'], down))).toBe(true)
+    expect(launcherAllows('stop', await checkLauncherAuth('Bearer anything', ['http://daq:5001'], down))).toBe(false)
   })
-  it('tries the next URL when the first is unreachable', async () => {
+  it('a server that does not answer in time is UP: nothing opens (fails closed)', async () => {
+    const a = await checkLauncherAuth(null, ['http://daq:5001', 'http://127.0.0.1:5001'], silent, 50)
+    expect(a).toEqual({ backendUp: true, tokenOk: false, hasToken: false })
+    for (const action of ['start', 'stop', 'logs'] as const) expect(launcherAllows(action, a)).toBe(false)
+    const withToken = await checkLauncherAuth('Bearer x', ['http://daq:5001'], silent, 50)
+    expect(launcherAllows('stop', withToken)).toBe(false)
+  })
+  it('tells a refusal from a timeout', () => {
+    expect(isRefused(refused())).toBe(true)
+    expect(isRefused(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))).toBe(false)
+    expect(isRefused(Object.assign(new TypeError('fetch failed'), { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } }))).toBe(false)
+  })
+  it('tries the next URL when the first refuses', async () => {
     let calls = 0
     const f = (async (url: string, init?: RequestInit) => {
       calls++
-      if (url.startsWith('http://bad')) throw new TypeError('unreachable')
+      if (url.startsWith('http://bad')) throw refused()
       return server('good')(url, init)
     }) as unknown as typeof fetch
     const a = await checkLauncherAuth('Bearer good', ['http://bad:5001', 'http://127.0.0.1:5001'], f)
@@ -79,5 +97,21 @@ describe('safe redirect after login (L3)', () => {
       'https://evil.example/', 'javascript:alert(1)', 'evil', '', null, undefined]) {
       expect(safeNextPath(bad as string, o)).toBe('/dashboard')
     }
+  })
+})
+
+// ── round-3 review 2: the PID-file stop only for this installation's main.py ──
+describe('runsMainPy', () => {
+  const MAIN = '/opt/webdaq/server/main.py'
+  it('accepts the launcher\'s absolute path and a relative one from the server directory', () => {
+    expect(runsMainPy(['/opt/luna/bin/python', MAIN], '/data/exp1', MAIN)).toBe(true)
+    expect(runsMainPy(['python', 'main.py'], '/opt/webdaq/server', MAIN)).toBe(true)
+    expect(runsMainPy(['python', './main.py'], '/opt/webdaq/server/', MAIN)).toBe(true)
+  })
+  it('refuses any other main.py', () => {
+    expect(runsMainPy(['python', 'main.py'], '/home/someone/project', MAIN)).toBe(false)
+    expect(runsMainPy(['python', '/elsewhere/main.py'], '/opt/webdaq/server', MAIN)).toBe(false)
+    expect(runsMainPy(['python', 'not_main.py'], '/opt/webdaq/server', MAIN)).toBe(false)
+    expect(runsMainPy(['python', 'main.py'], null, MAIN)).toBe(false)
   })
 })

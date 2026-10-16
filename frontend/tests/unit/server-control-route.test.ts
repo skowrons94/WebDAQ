@@ -20,7 +20,22 @@ const post = (body: unknown, auth?: string) => new Request('http://localhost:300
   body: JSON.stringify(body),
 })
 
+const stubSilent = () => {
+  const real = globalThis.fetch
+  globalThis.fetch = ((_input: RequestInfo | URL, init?: RequestInit) => new Promise((_, reject) => {
+    init?.signal?.addEventListener('abort', () => reject(init.signal!.reason))
+  })) as typeof fetch
+  return () => { globalThis.fetch = real }
+}
+
 describe('/api/server-control (S2)', () => {
+  it('a server that does not answer is not "down": start and stop without an accepted token get 401', async () => {
+    const restore = stubSilent()
+    try {
+      expect((await POST(post({ action: 'start', directory: '/nonexistent/x' }))).status).toBe(401)
+      expect((await POST(post({ action: 'stop' }, 'Bearer anything'))).status).toBe(401)
+    } finally { restore() }
+  }, 15000)
   it('refuses stop without a token: 401', async () => {
     const restore = stubServer()
     try {

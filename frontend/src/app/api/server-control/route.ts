@@ -3,7 +3,7 @@ import { spawn, spawnSync, ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs/promises'
 import fsSync from 'fs'
-import { checkLauncherAuth, launcherAllows } from '@/lib/launcher-auth'
+import { checkLauncherAuth, isRefused, launcherAllows, runsMainPy } from '@/lib/launcher-auth'
 
 // Module-level state. Tracks the child we spawned and the directory it's running
 // in so the UI can show the active working dir even after a Next.js HMR reload.
@@ -203,13 +203,16 @@ function backendUrls(): string[] {
 const unauthorized = () =>
     NextResponse.json({ success: false, error: 'Log in first: this needs a valid WebDAQ session.' }, { status: 401 })
 
+// Down only when every address refused the connection. A server that does
+// not answer in time is still running (stalled or busy): never "down".
 async function isServerRunning(): Promise<boolean> {
     for (const url of backendUrls()) {
         try {
             await fetch(url, { signal: AbortSignal.timeout(2000) })
             return true
-        } catch {
-            // Try the next candidate.
+        } catch (error) {
+            if (!isRefused(error)) return true
+            // Refused here: try the next candidate.
         }
     }
     return false
@@ -367,10 +370,20 @@ function pidFromFile(): number | null {
         return null
     }
 }
-// A PID is ours only while its command line runs this installation's main.py.
+// A PID is ours only while it runs this installation's main.py: an argument
+// that resolves, against the process's working directory, to MAIN_PY (as
+// the server's own single-instance check does with /proc). Not any main.py.
 function isOurServer(pid: number): boolean {
-    const cmd = commandLine(pid)
-    return cmd.includes(MAIN_PY) || (isOwnedBackend(cmd) && cmd.includes('main.py'))
+    let args: string[] = []
+    let cwd: string | null = null
+    try {
+        args = fsSync.readFileSync(`/proc/${pid}/cmdline`, 'utf-8').split('\0').filter(Boolean)
+        cwd = fsSync.readlinkSync(`/proc/${pid}/cwd`)
+    } catch {
+        // No /proc (or not ours to read): only the absolute path in ps counts.
+        return commandLine(pid).split(/\s+/).includes(MAIN_PY)
+    }
+    return runsMainPy(args, cwd, MAIN_PY, (p) => fsSync.realpathSync(p))
 }
 
 // SIGTERM a PID, wait for it to actually die, then SIGKILL as a last resort.
@@ -399,7 +412,9 @@ async function killProcess(pid: number): Promise<void> {
 // Make sure the backend port is free before launching. Reaps leftover WebDAQ
 // servers automatically; refuses (with a clear message) when a foreign process
 // owns the port so we never kill something the user actually wants.
-async function ensureBackendPortFree(): Promise<{ ok: true } | { ok: false; error: string }> {
+// `mayReap`: only a caller whose token the server accepted may have a WebDAQ
+// server on the port stopped; otherwise the answer is 409.
+async function ensureBackendPortFree(mayReap: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
     const holders = inspectPort(BACKEND_PORT)
     if (holders.length === 0) return { ok: true }
 
@@ -411,6 +426,14 @@ async function ensureBackendPortFree(): Promise<{ ok: true } | { ok: false; erro
         else foreign.push({ pid: h.pid, command: cmd })
     }
 
+    if (ourPids.length > 0 && !mayReap) {
+        return {
+            ok: false,
+            error:
+                `A WebDAQ server holds port ${BACKEND_PORT} but does not answer (PID ${ourPids.join(', ')}). ` +
+                `Stop it from the terminal (server/scripts/kill-server.sh).`,
+        }
+    }
     for (const pid of ourPids) await killProcess(pid)
 
     const remaining = inspectPort(BACKEND_PORT)
@@ -675,9 +698,11 @@ export async function POST(request: Request) {
 
     // Who may start or stop the server (lib/launcher-auth.ts): with the
     // server up, only a caller holding a token it accepts.
+    let tokenOk = false
     if (action === 'start' || action === 'stop') {
         const auth = await checkLauncherAuth(request.headers.get('authorization'), backendUrls())
         if (!launcherAllows(action, auth)) return unauthorized()
+        tokenOk = auth.tokenOk
     }
 
     if (action === 'start') {
@@ -695,7 +720,7 @@ export async function POST(request: Request) {
         // previous instance may still be holding the port. Reap our own
         // leftovers (or report a foreign holder) before binding, so a stale
         // process can't force a full PC reboot to recover.
-        const portCheck = await ensureBackendPortFree()
+        const portCheck = await ensureBackendPortFree(tokenOk)
         if (!portCheck.ok) {
             return NextResponse.json({ success: false, error: portCheck.error }, { status: 409 })
         }

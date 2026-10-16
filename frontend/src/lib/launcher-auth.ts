@@ -7,8 +7,12 @@
  *    to every other request). Without one: 401.
  *  - While the server is down nothing can verify a token (the server issues
  *    and checks them), and the login page must be able to start it. So "start"
- *    and the launch log stay open then; "stop" still needs a bearer token,
+ *    and the launch log stay open then. "Stop" always needs an accepted token,
  *    and only ever stops the launcher's own server process.
+ *  - "Down" means refused: every address refused the connection (nothing
+ *    listens). A server that does not answer in time (stalled, or flooded by
+ *    someone on the network) is UP for these rules, with the token not
+ *    accepted — never a reason to open start, or to reap the port.
  */
 export interface LauncherAuth {
   /** The DAQ server answered. */
@@ -24,9 +28,21 @@ export function bearerToken(authorization: string | null | undefined): string | 
   return m ? m[1] : null
 }
 
+/** Connection-level errors that mean "nothing is there" (as opposed to a timeout). */
+const DOWN_CODES = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ENOTFOUND', 'EADDRNOTAVAIL'])
+
+/** Whether a fetch error says the address refused (nothing listening), not that it was slow. */
+export function isRefused(error: unknown): boolean {
+  const e = error as { code?: string; cause?: { code?: string; errors?: { code?: string }[] } } | null
+  const codes = [e?.code, e?.cause?.code, ...(e?.cause?.errors ?? []).map((x) => x?.code)]
+  return codes.some((c) => !!c && DOWN_CODES.has(c))
+}
+
 /**
  * Ask the DAQ server whether the caller's token is good. `urls` are the
  * server's base URLs to try in turn (the configured one, then loopback).
+ * Down only when every address refused; a timeout or any other failure
+ * counts as up with the token not accepted.
  */
 export async function checkLauncherAuth(
   authorization: string | null | undefined,
@@ -43,11 +59,28 @@ export async function checkLauncherAuth(
       })
       // Any answer means the server is up; only 200 accepts the token.
       return { backendUp: true, tokenOk: !!token && res.status === 200, hasToken: !!token }
-    } catch {
-      // Not reachable at this URL: try the next.
+    } catch (error) {
+      // Refused here: try the next address. Anything else (a timeout above
+      // all): the server may be up and stalled -- fail closed.
+      if (!isRefused(error)) return { backendUp: true, tokenOk: false, hasToken: !!token }
     }
   }
   return { backendUp: false, tokenOk: false, hasToken: !!token }
+}
+
+/**
+ * Whether a process runs this installation's main.py: an argument that is
+ * main.py and resolves (against the process's working directory) to `mainPy`.
+ * `realpath` resolves symlinks; it defaults to the identity.
+ */
+export function runsMainPy(args: string[], cwd: string | null, mainPy: string, realpath: (p: string) => string = (p) => p): boolean {
+  const want = realpath(mainPy)
+  return args.some((a) => {
+    if (!/(^|\/)main\.py$/.test(a)) return false
+    const abs = a.startsWith('/') ? a : cwd ? `${cwd.replace(/\/+$/, '')}/${a.replace(/^\.\//, '')}` : null
+    if (!abs) return false
+    try { return realpath(abs) === want } catch { return false }
+  })
 }
 
 /** Whether an action is allowed under these rules (see the module comment). */
@@ -56,6 +89,6 @@ export function launcherAllows(action: 'start' | 'stop' | 'logs' | 'status', a: 
     case 'status': return true // running flag, directory, test mode: nothing secret
     case 'start': return a.backendUp ? a.tokenOk : true
     case 'logs': return a.backendUp ? a.tokenOk : true
-    case 'stop': return a.backendUp ? a.tokenOk : a.hasToken
+    case 'stop': return a.tokenOk
   }
 }
