@@ -1,0 +1,300 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebDAQ — data acquisition for the LUNA experiment &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="WebDAQ — data acquisition for the LUNA experiment" href="welcome.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="#" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="#">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="#" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">WebDAQ — data acquisition for the LUNA experiment</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="webdaq-data-acquisition-for-the-luna-experiment">
+<h1>WebDAQ — data acquisition for the LUNA experiment<a class="headerlink" href="#webdaq-data-acquisition-for-the-luna-experiment" title="Link to this heading"></a></h1>
+<p>WebDAQ reads the CAEN digitizers, writes the data, shows the spectra while they
+fill, records what the beam was doing and says something when a board stops.
+This manual is written for the person on shift; the later chapters are for
+whoever has to change the system.</p>
+<p>The same material is available as a single PDF, built from <code class="docutils literal notranslate"><span class="pre">manual/</span></code> in the
+repository.</p>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="welcome.html#where-to-start">Where to start</a></li>
+<li class="toctree-l2"><a class="reference internal" href="welcome.html#key-capabilities">Key capabilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="welcome.html#support">Support</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#what-the-machine-needs">1. What the machine needs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#installing">2. Installing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#the-working-directory">3. The working directory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#starting-it">4. Starting it</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#without-hardware">5. Without hardware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#checking-the-installation">6. Checking the installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#updating-an-installation">7. Updating an installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="installation.html#if-the-installation-itself-fails">8. If the installation itself fails</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#start-the-application">1. Start the application</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#check-the-hardware">2. Check the hardware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#tune-a-channel">3. Tune a channel</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#take-a-run">4. Take a run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#what-the-run-leaves-behind">5. What the run leaves behind</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#write-it-down">6. Write it down</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#without-hardware">7. Without hardware</a></li>
+<li class="toctree-l2"><a class="reference internal" href="example-session.html#after-changing-the-code">8. After changing the code</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#dashboard">1. Dashboard</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#logbook">2. Logbook</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#stats">3. Stats</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#daq">4. DAQ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#tuner">5. Tuner</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#troubleshoot">6. Troubleshoot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#alerts">7. Alerts</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#settings">8. Settings</a></li>
+<li class="toctree-l2"><a class="reference internal" href="usage.html#what-is-refused-and-when">9. What is refused, and when</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#the-five-recovery-actions">1. The five recovery actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#a-board">2. A board</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#the-beam-current">3. The beam current</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#spectra-and-rates">4. Spectra and rates</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#monitored-values-and-graphite">5. Monitored values and Graphite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#alerts-that-did-not-arrive">6. Alerts that did not arrive</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#the-server">7. The server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#the-interface">8. The interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#after-a-crash-or-a-power-cut">9. After a crash or a power cut</a></li>
+<li class="toctree-l2"><a class="reference internal" href="troubleshooting.html#getting-help">10. Getting help</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="caen-settings.html#adding-a-board">1. Adding a board</a></li>
+<li class="toctree-l2"><a class="reference internal" href="caen-settings.html#the-signal-chain">2. The signal chain</a></li>
+<li class="toctree-l2"><a class="reference internal" href="caen-settings.html#two-worked-examples">3. Two worked examples</a></li>
+<li class="toctree-l2"><a class="reference internal" href="caen-settings.html#synchronising-several-boards">4. Synchronising several boards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="caen-settings.html#tuning-while-the-beam-is-on">5. Tuning while the beam is on</a></li>
+<li class="toctree-l2"><a class="reference internal" href="caen-settings.html#where-the-settings-live">6. Where the settings live</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="histograms-and-rois.html#the-dashboard-belongs-to-the-experiment-not-to-your-browser">1. The dashboard belongs to the experiment, not to your browser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="histograms-and-rois.html#adding-a-spectrum">2. Adding a spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="histograms-and-rois.html#regions-of-interest">3. Regions of interest</a></li>
+<li class="toctree-l2"><a class="reference internal" href="histograms-and-rois.html#zoom-rebinning-and-display">4. Zoom, rebinning and display</a></li>
+<li class="toctree-l2"><a class="reference internal" href="histograms-and-rois.html#what-is-recorded-with-the-run">5. What is recorded with the run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="histograms-and-rois.html#waveforms-and-psd">6. Waveforms and PSD</a></li>
+<li class="toctree-l2"><a class="reference internal" href="histograms-and-rois.html#when-something-looks-wrong">7. When something looks wrong</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="current-and-charge.html#the-two-charges-and-why-they-differ">1. The two charges, and why they differ</a></li>
+<li class="toctree-l2"><a class="reference internal" href="current-and-charge.html#tetramm">2. TetrAMM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="current-and-charge.html#rbd-9103">3. RBD 9103</a></li>
+<li class="toctree-l2"><a class="reference internal" href="current-and-charge.html#monitored-value-a-graphite-metric">4. Monitored value (a Graphite metric)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="current-and-charge.html#the-current-plot">5. The current plot</a></li>
+<li class="toctree-l2"><a class="reference internal" href="current-and-charge.html#what-is-recorded">6. What is recorded</a></li>
+<li class="toctree-l2"><a class="reference internal" href="current-and-charge.html#checks-that-catch-most-problems">7. Checks that catch most problems</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#why-a-time-series-database-at-all">1. Why a time-series database at all</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#the-stats-page">2. The Stats page</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#the-run-s-stats-file">3. The run’s stats file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#grafana">4. Grafana</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#alerts-telegram-and-zulip">5. Alerts: Telegram and Zulip</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#the-board-health-tab">6. The Board Health tab</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#what-happened-while-nobody-was-looking">7. What happened while nobody was looking</a></li>
+<li class="toctree-l2"><a class="reference internal" href="monitoring-and-alerts.html#what-to-check-when-a-number-is-missing">8. What to check when a number is missing</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="run-data.html#the-run-directory">1. The run directory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="run-data.html#the-data-file">2. The data file</a></li>
+<li class="toctree-l2"><a class="reference internal" href="run-data.html#converting-to-root">3. Converting to ROOT</a></li>
+<li class="toctree-l2"><a class="reference internal" href="run-data.html#checking-a-run-that-was-interrupted">4. Checking a run that was interrupted</a></li>
+<li class="toctree-l2"><a class="reference internal" href="run-data.html#reading-the-run-back-in-the-logbook">5. Reading the run back in the Logbook</a></li>
+<li class="toctree-l2"><a class="reference internal" href="run-data.html#housekeeping">6. Housekeeping</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="elog.html#setting-it-up">1. Setting it up</a></li>
+<li class="toctree-l2"><a class="reference internal" href="elog.html#reading">2. Reading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="elog.html#writing">3. Writing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="elog.html#what-is-worth-writing">4. What is worth writing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="elog.html#when-it-does-not-work">5. When it does not work</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="toctree-wrapper compound">
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="details.html#the-data-path">1. The data path</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#starting-from-nothing">2. Starting from nothing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#adding-the-boards">3. Adding the boards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#what-a-run-is">4. What a run is</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#changing-settings-while-running">5. Changing settings while running</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#what-is-stored-and-where">6. What is stored, and where</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#monitoring">7. Monitoring</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#after-the-run">8. After the run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="details.html#interfaces">9. Interfaces</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="directory-structure.html#top-level">1. Top level</a></li>
+<li class="toctree-l2"><a class="reference internal" href="directory-structure.html#server-the-flask-backend">2. <code class="docutils literal notranslate"><span class="pre">server/</span></code> — the Flask backend</a></li>
+<li class="toctree-l2"><a class="reference internal" href="directory-structure.html#frontend-the-web-interface">3. <code class="docutils literal notranslate"><span class="pre">frontend/</span></code> — the web interface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="directory-structure.html#the-repository-versus-a-working-directory">4. The repository versus a working directory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="directory-structure.html#legacy-and-dead-paths">5. Legacy and dead paths</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#the-shape-of-the-server">1. The shape of the server</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#starting-up-what-main-py-guarantees">2. Starting up: what <code class="docutils literal notranslate"><span class="pre">main.py</span></code> guarantees</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#the-application-factory">3. The application factory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#the-http-surface">4. The HTTP surface</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#the-database">5. The database</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#acquisition-who-owns-the-boards">6. Acquisition: who owns the boards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#board-failures-auto-restart-and-diagnostics">7. Board failures, auto-restart and diagnostics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#online-spectra-what-spy-means-now">8. Online spectra: what “spy” means now</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#online-tuning">9. Online tuning</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#the-histogram-dashboard-and-the-rois">10. The histogram dashboard and the ROIs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#beam-current-and-charge">11. Beam current and charge</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#graphite-two-endpoints-two-directions">12. Graphite: two endpoints, two directions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#alerts-notifications-and-recovery">13. Alerts, notifications and recovery</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#grafana-elog-and-the-run-report">14. Grafana, ELOG and the run report</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#completed-runs-and-conversion">15. Completed runs and conversion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#a-run-start-to-finish">16. A run, start to finish</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#configuration-files">17. Configuration files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#test-mode-and-the-test-suite">18. Test mode and the test suite</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#the-frontend-as-a-client">19. The frontend as a client</a></li>
+<li class="toctree-l2"><a class="reference internal" href="server-architecture.html#working-in-this-codebase">20. Working in this codebase</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="welcome.html" class="btn btn-neutral float-right" title="WebDAQ — data acquisition for the LUNA experiment" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
