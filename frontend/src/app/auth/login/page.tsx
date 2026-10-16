@@ -6,6 +6,7 @@ import { AuthForm } from '@/components/auth-form';
 import { login } from '@/lib/api';
 import useAuthStore from '@/store/auth-store';
 import { useToast } from '@/components/ui/use-toast';
+import { safeNextPath } from '@/lib/safe-redirect';
 
 export default function LoginPage() {
     const router = useRouter();
@@ -20,19 +21,16 @@ export default function LoginPage() {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         setExpired(params.get('expired') === '1');
-        const target = params.get('next');
         // Same-site paths only, so a crafted link cannot bounce someone
-        // somewhere else once they have logged in.
-        if (target && target.startsWith('/') && !target.startsWith('//') && !target.includes('\\')) {
-            setNext(target);
-        }
+        // somewhere else once they have logged in (lib/safe-redirect.ts).
+        setNext(safeNextPath(params.get('next'), window.location.origin));
     }, []);
 
     const handleLogin = async (data: { username?: string; password?: string }) => {
         if (!data.username || !data.password) {
             toast({
                 title: 'Login failed',
-                description: 'Username and Password are required.',
+                description: 'Username and password are required.',
                 variant: 'destructive',
             });
             return;
