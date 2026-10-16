@@ -68,6 +68,7 @@ import { unpauseAlertNonBlocking } from '@/lib/grafana-api'
 import { forceResetSequence, stopRunSequence } from '@/lib/run-actions'
 import { noteRunAction } from '@/hooks/use-run-status'
 import { StopRunBody } from '@/components/stop-run-body'
+import { runSideEffects } from '@/lib/side-effects'
 
 interface RunControlButtonsProps {
   /** Seconds since the run started, for the Stop confirmation. */
@@ -277,7 +278,7 @@ export function RunControlButtons({
     try {
       toast({
         title: 'Starting run…',
-        description: `Please wait while the run ${runNumber} is being started.`,
+        description: `Please wait while run ${runNumber} is being started.`,
       })
 
       // Configure acquisition parameters
@@ -329,18 +330,31 @@ export function RunControlButtons({
       onIsRunningChange(true)
       setIsRunningStore(true)
       noteRunAction()
-      const newStartTime = await getStartTime().catch(() => null)
-      if (typeof newStartTime === 'string') {
-        onStartTimeChange(newStartTime)
-        setStartTimeStore(newStartTime)
-      }
-
-      if (saveData) {
-        await addRunMetadata(runNumber, targetName, tv, pv, runType)
-      }
-
-      // Activate (unpause) Grafana alerts selected for auto-management
-      autoManageUids.forEach((uid) => unpauseAlertNonBlocking(uid))
+      // From here on the run is acquiring: nothing may turn into "Failed to
+      // start the run". Each step on its own; a failure is a warning, and the
+      // next step still runs (the alerts are unpaused even if the Logbook
+      // entry could not be completed).
+      sideEffects.push(...await runSideEffects([
+        {
+          warning: 'the run start time could not be read',
+          run: async () => {
+            const newStartTime = await getStartTime()
+            if (typeof newStartTime === 'string') {
+              onStartTimeChange(newStartTime)
+              setStartTimeStore(newStartTime)
+            }
+          },
+        },
+        saveData && {
+          warning: 'the run name and type were not saved to the Logbook',
+          run: () => addRunMetadata(runNumber, targetName, tv, pv, runType),
+        },
+        {
+          // Activate (unpause) Grafana alerts selected for auto-management
+          warning: 'the auto-managed Grafana alerts were not unpaused',
+          run: () => autoManageUids.forEach((uid) => unpauseAlertNonBlocking(uid)),
+        },
+      ]))
 
       toast({
         title: sideEffects.length ? 'Run started (with warnings)' : 'Run started',
@@ -603,7 +617,7 @@ export function RunControlButtons({
             disabled={isRunning || starting}
           >
             <PlayCircle className="mr-2 h-4 w-4" />
-            Start Run
+            Start run
           </Button>
           <ConfirmAction
             trigger={
@@ -613,7 +627,7 @@ export function RunControlButtons({
                 disabled={!isRunning || stopping}
               >
                 <StopCircle className="mr-2 h-4 w-4" />
-                Stop Run
+                Stop run
               </Button>
             }
             title={runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
@@ -639,7 +653,7 @@ export function RunControlButtons({
           <div className="rounded-md border border-destructive bg-destructive/10 p-3" role="alert">
             <p className="mb-2 text-sm font-semibold text-destructive">The run did not stop.</p>
             <p className="mb-3 text-xs text-muted-foreground">
-              Try Stop Run again first. If the DAQ is stuck, force a reset.
+              Try Stop run again first. If the DAQ is stuck, force a reset.
             </p>
             <ConfirmAction
               trigger={
@@ -652,12 +666,12 @@ export function RunControlButtons({
               description={
                 <>
                   <p className="font-semibold text-destructive">
-                    Use this only when Stop Run keeps failing.
+                    Use this only when Stop run keeps failing.
                   </p>
                   <p>
                     The CAEN acquisition is torn down and the server&apos;s running flag is
                     cleared, whatever state they are in; the current log and stats.csv are
-                    closed. The run{runNumber !== null ? ` ${runNumber}` : ''} may be incomplete: its last
+                    closed. Run{runNumber !== null ? ` ${runNumber}` : ''} may be incomplete: its last
                     data may be missing, and it may not be closed in the Logbook. The
                     auto-managed Grafana alerts are paused, and with saving on the run number
                     moves on{runNumber !== null ? ` to ${runNumber + 1}` : ''}, so the next Start does not overwrite it.
