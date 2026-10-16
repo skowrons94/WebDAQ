@@ -16,6 +16,13 @@ const ConfirmAction = dynamic(
 )
 import useRunControlStore from '@/store/run-control-store'
 import { cn } from '@/lib/utils'
+import { currentToken } from '@/store/auth-store'
+
+/** The launcher route checks the same session token as the DAQ server (lib/launcher-auth.ts). */
+function launcherHeaders(extra: Record<string, string> = {}): Record<string, string> {
+    const token = currentToken()
+    return token ? { ...extra, Authorization: `Bearer ${token}` } : extra
+}
 
 type WorkingDirectory = {
     id: string
@@ -196,7 +203,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
         let cancelled = false
         const tick = async () => {
             try {
-                const res = await fetch('/api/server-control?logs=1')
+                const res = await fetch('/api/server-control?logs=1', { headers: launcherHeaders() })
                 const data = await res.json()
                 if (cancelled) return
 
@@ -276,7 +283,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
         try {
             const res = await fetch('/api/server-control', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: launcherHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({
                     action: 'start',
                     directory: dir.path,
@@ -302,7 +309,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
         try {
             const res = await fetch('/api/server-control', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: launcherHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify({ action: 'stop' }),
             })
             const data = await res.json()

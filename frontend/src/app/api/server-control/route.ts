@@ -3,6 +3,7 @@ import { spawn, spawnSync, ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs/promises'
 import fsSync from 'fs'
+import { checkLauncherAuth, launcherAllows } from '@/lib/launcher-auth'
 
 // Module-level state. Tracks the child we spawned and the directory it's running
 // in so the UI can show the active working dir even after a Next.js HMR reload.
@@ -185,21 +186,25 @@ async function writeState(state: ServerState) {
     }
 }
 
-async function isServerRunning(): Promise<boolean> {
-    // Try the configured URL first, then fall back to loopback. This covers the
-    // case where NEXT_PUBLIC_API_URL points at a host/IP that this Next.js process
-    // can't reach (e.g. behind port forwarding) but the backend is in fact running
-    // locally on 127.0.0.1:5001.
+// Try the configured URL first, then fall back to loopback. This covers the
+// case where NEXT_PUBLIC_API_URL points at a host/IP that this Next.js process
+// can't reach (e.g. behind port forwarding) but the backend is in fact running
+// locally on 127.0.0.1:5001.
+function backendUrls(): string[] {
     const candidates = [
         process.env.NEXT_PUBLIC_API_URL,
         'http://127.0.0.1:5001',
     ].filter((u): u is string => Boolean(u))
-
     // De-duplicate so we don't probe the same URL twice when the env var is unset
     // or already points at loopback.
-    const urls = candidates.filter((u, i) => candidates.indexOf(u) === i)
+    return candidates.filter((u, i) => candidates.indexOf(u) === i)
+}
 
-    for (const url of urls) {
+const unauthorized = () =>
+    NextResponse.json({ success: false, error: 'Log in first: this needs a valid WebDAQ session.' }, { status: 401 })
+
+async function isServerRunning(): Promise<boolean> {
+    for (const url of backendUrls()) {
         try {
             await fetch(url, { signal: AbortSignal.timeout(2000) })
             return true
@@ -251,9 +256,17 @@ async function tailLog(absDir: string): Promise<{ content: string; size: number 
     }
 }
 
+// GET without ?logs=1 stays public: running or not, the working directory and
+// the test-mode flag are shown on the login page and in the Logbook, and say
+// nothing an operator at the screen could not see. The log may hold more, so it
+// follows the launcher rules (lib/launcher-auth.ts).
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const wantLogs = searchParams.get('logs') === '1'
+    if (wantLogs) {
+        const auth = await checkLauncherAuth(request.headers.get('authorization'), backendUrls())
+        if (!launcherAllows('logs', auth)) return unauthorized()
+    }
 
     const running = await isServerRunning()
     const state = await readState()
@@ -342,6 +355,22 @@ function commandLine(pid: number): string {
 // A port holder is "ours" if it's the Python/waitress process that runs main.py.
 function isOwnedBackend(cmd: string): boolean {
     return /main\.py/.test(cmd) || /waitress/.test(cmd)
+}
+
+// The PID the DAQ server records for itself (app/utils/single_instance.py).
+const PID_FILE = path.join(SERVER_DIR, 'cache', 'daq-server.pid')
+function pidFromFile(): number | null {
+    try {
+        const pid = parseInt(fsSync.readFileSync(PID_FILE, 'utf-8').trim(), 10)
+        return Number.isFinite(pid) && pid > 1 ? pid : null
+    } catch {
+        return null
+    }
+}
+// A PID is ours only while its command line runs this installation's main.py.
+function isOurServer(pid: number): boolean {
+    const cmd = commandLine(pid)
+    return cmd.includes(MAIN_PY) || (isOwnedBackend(cmd) && cmd.includes('main.py'))
 }
 
 // SIGTERM a PID, wait for it to actually die, then SIGKILL as a last resort.
@@ -644,6 +673,13 @@ export async function POST(request: Request) {
     const { action, directory } = body
     const testMode = Boolean(body?.testMode)
 
+    // Who may start or stop the server (lib/launcher-auth.ts): with the
+    // server up, only a caller holding a token it accepts.
+    if (action === 'start' || action === 'stop') {
+        const auth = await checkLauncherAuth(request.headers.get('authorization'), backendUrls())
+        if (!launcherAllows(action, auth)) return unauthorized()
+    }
+
     if (action === 'start') {
         if (await isServerRunning()) {
             return NextResponse.json({ success: true })
@@ -755,20 +791,12 @@ export async function POST(request: Request) {
 
     if (action === 'stop') {
         try {
-            if (serverPid) {
-                try {
-                    process.kill(serverPid, 'SIGTERM')
-                } catch {
-                    /* ignore */
-                }
-            }
-            // Best-effort fallback for orphaned processes from before a Next.js reload.
-            const { execSync } = require('child_process')
-            try {
-                execSync('pkill -f "python.*main.py"', { stdio: 'ignore' })
-            } catch {
-                /* ignore */
-            }
+            // Only the server's own process: the one this launcher started, else
+            // the PID the server writes (server/cache/daq-server.pid, e.g. after
+            // a Next.js reload), and only if that PID still runs our main.py.
+            // Never a pattern kill: other Python main.py processes are not ours.
+            const pid = serverPid ?? pidFromFile()
+            if (pid && isOurServer(pid)) await killProcess(pid)
             serverProcess = null
             serverPid = null
             // Preserve lastDirectory so the stopped server's logs stay readable.
