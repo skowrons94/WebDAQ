@@ -897,6 +897,7 @@ def update_module_settings():
 
     data = request.get_json()
     module_type = settings.get("module_type", "tetramm")
+    warning = None
 
     try:
         if module_type == "graphite":
@@ -991,6 +992,16 @@ def update_module_settings():
                     controller.reset()
                 except Exception as e:
                     print(f"Failed to reset RBD 9103 after settings change: {e}")
+                # The settings are saved either way, but a port that would not
+                # open must not be reported as a plain success: say why.
+                if isinstance(controller, RBD9103Controller) and not (
+                        controller.serial_port and controller.serial_port.is_open):
+                    reason = controller.last_error or "unknown error"
+                    warning = (f"Settings saved, but {settings['rbd9103_port']} "
+                               f"could not be opened: {reason}")
+                    if "Permission denied" in reason:
+                        warning += (" — the server's user needs to be in the 'dialout' "
+                                    "group (sudo usermod -aG dialout $USER, then log in again).")
 
             # Update device-specific settings (range, filter, bias, etc.)
             if "device_settings" in data:
@@ -1009,6 +1020,8 @@ def update_module_settings():
         with open("conf/current.json", "w") as f:
             json.dump(settings, f, indent=2)
 
+        if warning:
+            return jsonify({"message": "Settings updated", "warning": warning}), 200
         return jsonify({"message": "Settings updated successfully"}), 200
 
     except Exception as e:

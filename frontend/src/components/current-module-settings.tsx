@@ -283,12 +283,21 @@ export function CurrentModuleSettings() {
         }
       }
 
-      await updateCurrentModuleSettings(settingsData)
+      const res = await updateCurrentModuleSettings(settingsData)
 
-      toast({
-        title: 'Success',
-        description: 'RBD 9103 settings updated'
-      })
+      // Saved, but the port did not open (missing device, no permission…).
+      if (res?.data?.warning) {
+        toast({
+          title: 'Not connected',
+          description: res.data.warning,
+          variant: 'destructive'
+        })
+      } else {
+        toast({
+          title: 'Success',
+          description: 'RBD 9103 settings updated'
+        })
+      }
 
       await loadSettings()
 

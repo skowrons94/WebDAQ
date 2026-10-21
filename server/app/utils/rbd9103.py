@@ -100,6 +100,9 @@ class RBD9103Controller:
         self.high_speed = high_speed
         self.serial_port: Optional[serial.Serial] = None
         self.connection_timeout = 1.0
+        # Why the last initialize() could not open the port, for the UI: the
+        # failure is otherwise only in the server log.
+        self.last_error: Optional[str] = None
 
         # Graphite configuration
         self.graphite_host = graphite_host
@@ -447,6 +450,7 @@ class RBD9103Controller:
         """
         Initialize RBD 9103 device with current settings and start acquisition.
         """
+        self.last_error = None
         try:
             self.logger.info("Initializing RBD 9103 device")
 
@@ -477,6 +481,7 @@ class RBD9103Controller:
 
         except Exception as e:
             self.logger.error(f"Failed to initialize RBD 9103 device: {e}")
+            self.last_error = str(e)
             # Ensure we don't leave the device in a broken state
             self.is_acquiring = False
             if self.serial_port and self.serial_port.is_open:
