@@ -90,6 +90,112 @@ export const addBoard = (boardData: any) =>
 export const removeBoard = (boardId: string) =>
     api.post('/experiment/remove_board', { id: boardId });
 
+// ── Struck SIS3316 (Ethernet) ────────────────────────────────────────────────
+// A board dict with vendor 'sis3316' carries its IP address in link_num. Its
+// settings are sis3316daq's model (board / channel_defaults / sparse channels),
+// not CAEN registers; see server/native/sis3316daq/sis3316daq/settings.py.
+export type Sis3316ChannelSettings = {
+    enabled: boolean;
+    invert: boolean;
+    input_range: string;
+    termination_50ohm: boolean;
+    dac_offset: number;
+    internal_trigger: boolean;
+    external_trigger: boolean;
+    trigger_peaking: number;
+    trigger_gap: number;
+    trigger_threshold: number;
+    high_energy_threshold: number;
+    cfd: 'off' | 'zero' | '50';
+    trigger_pulse_length: number;
+    energy_peaking: number;
+    energy_gap: number;
+    tau_table: number;
+    tau_factor: number;
+    energy_extra_filter: number;
+    energy_pickup_index: number;
+    histogram_divider: number;
+    histogram_offset: number;
+    histogram_pileup: boolean;
+};
+
+export type Sis3316BoardSettings = {
+    sample_clock_mhz: number;
+    header_id: number;
+    readout_interval_ms: number;
+    bank_threshold_words: number;
+    trigger_gate_window: number;
+    pre_trigger_delay: number;
+    raw_samples: number;
+    raw_start_index: number;
+    pileup_window: number;
+    repileup_window: number;
+    save_peak_accumulators: boolean;
+    save_maw_values: boolean;
+    maw_test_buffer_length: number;
+    maw_test_buffer_pretrigger: number;
+    maw_test_buffer_energy: boolean;
+    onboard_histograms: boolean;
+    nim_ti_as_trigger: boolean;
+    nim_ti_timestamp_clear: boolean;
+    lemo_co_select: number;
+    lemo_to_select: number;
+    lemo_uo_select: number;
+    spectrum_bins: number;
+    [key: string]: number | boolean | string;
+};
+
+export type Sis3316Settings = {
+    board: Sis3316BoardSettings;
+    channel_defaults: Sis3316ChannelSettings;
+    channels: Record<string, Partial<Sis3316ChannelSettings>>;
+};
+
+export type Sis3316SettingsResponse = {
+    settings: Sis3316Settings;
+    defaults: Sis3316Settings;
+    clock_choices: number[];
+    input_ranges: string[];
+    running: boolean;
+};
+
+export type Sis3316Info = {
+    model: string;
+    serial: number;
+    mac: string;
+    vme_fpga_firmware: string;
+    adc_fpga_firmware: string[];
+    adc_type: string;
+    udp_protocol: string;
+    hardware_version: number;
+    temperature_c: number;
+    sample_clock_mhz?: number;
+    host?: string;
+    failed?: boolean;
+    already_configured?: boolean;
+};
+
+export const probeSis3316 = (host: string) =>
+    api.post('/sis3316/probe', { host }).then(res => res.data as Sis3316Info);
+export const getSis3316Info = (boardId: string) =>
+    api.get(`/sis3316/${boardId}/info`).then(res => res.data as Sis3316Info);
+export const getSis3316Settings = (boardId: string) =>
+    api.get(`/sis3316/${boardId}/settings`).then(res => res.data as Sis3316SettingsResponse);
+export const setSis3316Settings = (boardId: string, settings: Sis3316Settings) =>
+    api.post(`/sis3316/${boardId}/settings`, { settings })
+        .then(res => res.data as { settings: Sis3316Settings; applied: boolean; online?: boolean; warning?: string });
+// ROOT JSON of the board's own 64K-bin energy histogram (first `bins` bins)
+export const getSis3316OnboardHistogram = (boardId: string, channel: number, bins: number) =>
+    api.get(`/sis3316/${boardId}/onboard_histogram/${channel}`, { params: { bins } }).then(res => res.data);
+export const clearSis3316OnboardHistograms = (boardId: string, channels?: number[]) =>
+    api.post(`/sis3316/${boardId}/onboard_histogram/clear`, { channels });
+export const getSis3316Counters = (boardId: string) =>
+    api.get(`/sis3316/${boardId}/counters`)
+        .then(res => res.data as { names: string[]; channels: Record<string, number>[] });
+// ROOT JSON of the last trapezoid (MAW test buffer) trace of a channel
+export const getSis3316Maw = (boardId: string, channel: number) =>
+    api.get(`/sis3316/${boardId}/maw/${channel}`).then(res => res.data);
+
 // ── Multi-board synchronisation ──────────────────────────────────────────────
 // There is no separate sync setting: whether a board joins the chain is decided
 // by its own Acquisition Control register (0x8100), edited in the CAEN

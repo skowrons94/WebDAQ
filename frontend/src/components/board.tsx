@@ -16,6 +16,7 @@ import { getBoardConfiguration, addBoard, removeBoard, getBoardConnectivity, typ
 import { useToast } from "@/components/ui/use-toast"
 import { Cpu, Plus, Trash2 } from 'lucide-react'
 import { BoardScan } from '@/components/board-scan'
+import { Sis3316AddBoard } from '@/components/sis3316/sis3316-add-board'
 
 const formSchema = z.object({
   id: z.string().min(1, "Board ID is required"),
@@ -26,6 +27,13 @@ const formSchema = z.object({
 })
 
 type BoardData = z.infer<typeof formSchema>
+// A configured board as the server lists it: CAEN boards, or an SIS3316
+// (vendor 'sis3316', IP address in link_num).
+type ConfiguredBoard = Omit<BoardData, 'link_type' | 'dpp'> & {
+  link_type: string
+  dpp: string
+  vendor?: string
+}
 
 type Connectivity = { connected: boolean; ready: boolean; failed: boolean }
 
@@ -33,7 +41,7 @@ export function Board() {
   // Removing a board mid-run would pull it out from under the acquisition.
   // Unknown (no answer yet) counts as running.
   const runActive = useRunStatus((st) => st.isRunning || !st.known || st.unreachable)
-  const [boards, setBoards] = useState<BoardData[]>([])
+  const [boards, setBoards] = useState<ConfiguredBoard[]>([])
   const [connectivity, setConnectivity] = useState<Record<string, Connectivity>>({})
   const { toast } = useToast()
   const addFormRef = useRef<HTMLDivElement>(null)
@@ -162,7 +170,7 @@ export function Board() {
         {/* Added boards — shown first, as a grid of status cards */}
         <Card className="w-full mx-auto">
           <CardHeader>
-            <CardTitle>Added CAEN boards</CardTitle>
+            <CardTitle>Added boards</CardTitle>
             <CardDescription>
               Configured digitizers and their live connection status.
             </CardDescription>
@@ -202,16 +210,27 @@ export function Board() {
                         <StatusBadge state={status.state} label={status.label} />
                       </div>
 
-                      <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
-                        <dt className="text-muted-foreground">VME Address</dt>
-                        <dd className="text-right font-mono">{board.vme}</dd>
-                        <dt className="text-muted-foreground">Link Type</dt>
-                        <dd className="text-right">{board.link_type}</dd>
-                        <dt className="text-muted-foreground">
-                          {board.link_type === "A4818" ? "PID" : "Link Number"}
-                        </dt>
-                        <dd className="text-right font-mono">{board.link_num}</dd>
-                      </dl>
+                      {board.vendor === "sis3316" ? (
+                        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
+                          <dt className="text-muted-foreground">Model</dt>
+                          <dd className="text-right">Struck SIS3316</dd>
+                          <dt className="text-muted-foreground">Link Type</dt>
+                          <dd className="text-right">Ethernet</dd>
+                          <dt className="text-muted-foreground">IP address</dt>
+                          <dd className="text-right font-mono">{board.link_num}</dd>
+                        </dl>
+                      ) : (
+                        <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
+                          <dt className="text-muted-foreground">VME Address</dt>
+                          <dd className="text-right font-mono">{board.vme}</dd>
+                          <dt className="text-muted-foreground">Link Type</dt>
+                          <dd className="text-right">{board.link_type}</dd>
+                          <dt className="text-muted-foreground">
+                            {board.link_type === "A4818" ? "PID" : "Link Number"}
+                          </dt>
+                          <dd className="text-right font-mono">{board.link_num}</dd>
+                        </dl>
+                      )}
 
                       <ConfirmAction
                         trigger={
@@ -246,7 +265,7 @@ export function Board() {
         </Card>
 
         {/* Discover what is actually connected */}
-        <BoardScan boards={boards} onUse={handleUseDiscovered} onAdd={handleAddDiscovered} />
+        <BoardScan boards={boards as BoardData[]} onUse={handleUseDiscovered} onAdd={handleAddDiscovered} />
 
         {/* Add a new board */}
         <Card className="w-full mx-auto" ref={addFormRef}>
@@ -370,6 +389,13 @@ export function Board() {
             </Form>
           </CardContent>
         </Card>
+
+        {/* Struck SIS3316 over Ethernet: no CAEN link, found by IP address */}
+        <Sis3316AddBoard
+          existingIds={boards.map((b) => String(b.id))}
+          disabled={runActive}
+          onAdded={() => { fetchBoardConfiguration(); fetchConnectivity() }}
+        />
     </div>
   )
 }

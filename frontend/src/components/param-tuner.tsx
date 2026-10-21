@@ -67,6 +67,8 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 export default function ParamTuner() {
   const [boards, setBoards] = useState<BoardData[]>([])
+  // SIS3316 boards have no CAEN registers to tune; they are left out here.
+  const [sisBoards, setSisBoards] = useState(0)
   const [selectedBoardId, setSelectedBoardId] = useState<string>('')
   const [selectedChannel, setSelectedChannel] = useState<number>(0)
   const [settings, setSettings] = useState<BoardSettings>({})
@@ -195,10 +197,11 @@ export default function ParamTuner() {
         // below treats a perfectly good board as no board and the page stays
         // empty; it also never matches the string the Select hands back. Make
         // every id a string at the boundary and the rest can stop caring.
-        const boardList: BoardData[] = (res.data ?? []).map((board: BoardData) => ({
-          ...board,
-          id: String(board.id),
-        }))
+        const all: (BoardData & { vendor?: string })[] = res.data ?? []
+        const boardList: BoardData[] = all
+          .filter((board) => board.vendor !== 'sis3316')
+          .map((board) => ({ ...board, id: String(board.id) }))
+        setSisBoards(all.length - boardList.length)
         setBoards(boardList)
         if (boardList.length > 0) setSelectedBoardId(boardList[0].id)
       } catch {
@@ -610,6 +613,12 @@ export default function ParamTuner() {
 
   return (
     <div className="flex flex-col gap-6">
+      {sisBoards > 0 && (
+        <p className="text-sm text-muted-foreground">
+          The Tuner edits CAEN registers. SIS3316 boards are tuned on the DAQ page
+          (Settings, and the Filter trace tab for the trapezoid).
+        </p>
+      )}
       <AlertDialog open={confirmOnline} onOpenChange={setConfirmOnline}>
         <AlertDialogContent>
           <AlertDialogHeader>

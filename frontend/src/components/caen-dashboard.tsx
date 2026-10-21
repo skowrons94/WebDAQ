@@ -30,6 +30,7 @@ import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { ScrollFade } from "@/components/ui/scroll-fade"
 import Link from "next/link"
 import { Plus } from "lucide-react"
+import { Sis3316Dashboard } from "@/components/sis3316/sis3316-dashboard"
 
 // ============================================================
 // Bit-field definitions extracted from CAENRegisterBuilder*.cc
@@ -268,6 +269,7 @@ interface BoardData {
   link_num: string
   dpp: string
   chan: string
+  vendor?: string   // 'sis3316' for a Struck SIS3316 (not a CAEN register board)
 }
 
 interface RegisterData {
@@ -450,7 +452,7 @@ export default function Dashboard() {
                 <SelectContent>
                   {boards.map(board => (
                     <SelectItem key={board.id} value={board.id}>
-                      {board.name} (ID: {board.id})
+                      {board.name} (ID: {board.id}){board.vendor === "sis3316" ? ` — ${board.link_num}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -458,7 +460,9 @@ export default function Dashboard() {
             </div>
           ) : null}
 
-          {selectedBoard && <BoardComponent key={selectedBoard.id} boardData={selectedBoard} />}
+          {selectedBoard && (selectedBoard.vendor === "sis3316"
+            ? <Sis3316Dashboard key={selectedBoard.id} board={selectedBoard} />
+            : <BoardComponent key={selectedBoard.id} boardData={selectedBoard} />)}
         </TabsContent>
 
         <TabsContent value="sync">

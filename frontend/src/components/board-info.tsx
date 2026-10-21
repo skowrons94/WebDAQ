@@ -48,6 +48,47 @@ function Field({ label, value, mono = false }: { label: string; value?: React.Re
 
 const hex = (v: number) => `0x${(v >>> 0).toString(16).toUpperCase().padStart(4, "0")}`
 
+type SisBoardInfo = {
+  vendor: 'sis3316'
+  board_id: string
+  name?: string
+  serial?: number
+  mac?: string
+  host?: string
+  vme_fpga_firmware?: string
+  adc_fpga_firmware?: string[]
+  adc_type?: string
+  sample_clock_mhz?: number
+  temperature_c?: number
+}
+
+function Sis3316Card({ board }: { board: SisBoardInfo }) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 flex-wrap">
+          Struck SIS3316
+          <Badge variant="outline" className="text-xs font-mono">{board.adc_type}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
+        <div>
+          <Field label="Serial number" value={board.serial} />
+          <Field label="Board ID" value={board.board_id} />
+          <Field label="Sampling" value={board.sample_clock_mhz ? `${board.sample_clock_mhz} MHz` : undefined} />
+          <Field label="Temperature" value={board.temperature_c !== undefined ? `${board.temperature_c.toFixed(1)} °C` : undefined} />
+        </div>
+        <div>
+          <Field label="VME FPGA firmware" value={board.vme_fpga_firmware} mono />
+          <Field label="ADC FPGA firmware" value={board.adc_fpga_firmware?.[0]} mono />
+          <Field label="IP address" value={board.host} mono />
+          <Field label="MAC address" value={board.mac} mono />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function BoardCard({ board }: { board: CaenBoardInfo }) {
   const roleVariant =
     board.sync_role === "master" ? "default" : board.sync_role === "slave" ? "outline" : "secondary"
@@ -200,7 +241,9 @@ export default function BoardInfoPanel() {
           </AlertDescription>
         </Alert>
       ) : (
-        data.boards.map(board => <BoardCard key={board.board_id} board={board} />)
+        data.boards.map(board => (board as unknown as { vendor?: string }).vendor === 'sis3316'
+          ? <Sis3316Card key={board.board_id} board={board as unknown as SisBoardInfo} />
+          : <BoardCard key={board.board_id} board={board} />)
       )}
     </div>
   )
