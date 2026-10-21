@@ -154,6 +154,15 @@ An empty histogram says why in its own title — *No data yet — start a run*, 
 board is not part of the current run*, *No counts yet on channel n* — so read the
 title before anything else.
 
+### A V1725/V1730 spectrum is one narrow line near the baseline
+
+The board is not recording energies: its Board Configuration (0x8000) has
+*time stamp recording* or *energy recording* (bits 18/19, which the CAEN manual
+says must be 1) switched off, so every event is the waveform alone. **Board
+Health** says so on the board's card. WebDAQ switches the two bits back on in the
+board's file at the next run start and notes it in the server log; until then the
+board's spectra, rates and coincidences have nothing to show.
+
 ### Waveforms are empty
 
 Waveforms have to be switched on per board: the switch on the board card on the
@@ -268,6 +277,7 @@ half-written.
 | The page loads but every request fails | `NEXT_PUBLIC_API_URL` is wrong, or the frontend was not rebuilt after it changed. It is compiled into the bundle. |
 | You are sent back to the login page | The token was cleared. The notice says it plainly: the run is not affected, the DAQ server keeps taking data with nobody logged in. |
 | A number is frozen | Look for *No answer* on that panel. WebDAQ shows the last known value and marks it rather than showing a plausible wrong one. |
+| No plot draws anywhere, the rest of the page works | The plotting library (JSROOT) did not load. WebDAQ serves it itself from `frontend/node_modules/jsroot`; run `npm install` in `frontend/` (or `./install.sh`) if it is missing. It no longer depends on root.cern, which started redirecting to the CERN login. |
 | The ELOG panel cannot reach the logbook | The URL or the shared account in Settings → ELOG; if the message is about `py_elog`, the server is running in the wrong environment. |
 
 ---

@@ -586,7 +586,8 @@ def get_available_histogram_types():
         'histogram_types': [
             {'type': 'energy', 'description': 'Energy spectrum (DPP-PHA)'},
             {'type': 'qlong', 'description': 'Long gate charge (DPP-PSD)'},
-            {'type': 'qshort', 'description': 'Short gate charge (DPP-PSD)'}
+            {'type': 'qshort', 'description': 'Short gate charge (DPP-PSD)'},
+            {'type': 'interval', 'description': 'Time between consecutive hits (log axis)'}
         ],
         'waveform_types': [
             {'type': 'wave1', 'description': 'Primary waveform'},

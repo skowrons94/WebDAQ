@@ -15,6 +15,7 @@ const RunStats = dynamic(() => import('@/components/run-stats'), { ssr: false, l
 const HistogramDashboard = dynamic(() => import('@/components/histo-dashboard'), { ssr: false, loading: TabLoading });
 const WaveformDashboard = dynamic(() => import('@/components/wave-dashboard'), { ssr: false, loading: TabLoading });
 const PSDDashboard = dynamic(() => import('@/components/psd-dashboard'), { ssr: false, loading: TabLoading });
+const CoincidencesDashboard = dynamic(() => import('@/components/coincidences-dashboard'), { ssr: false, loading: TabLoading });
 import { Layout } from '@/components/dashboard-layout';
 import {
   Tabs,
@@ -39,6 +40,7 @@ function DashboardContent() {
     ...(settings.showHistograms ? ['histograms'] : []),
     ...(settings.showWaveforms ? ['waveforms'] : []),
     ...((settings.showPSD ?? true) ? ['psd'] : []),
+    'coincidences',
   ], [settings.showHistograms, settings.showWaveforms, settings.showPSD]);
 
   // Honor a ?tab= query param, for a bookmark or a link from outside the app.
@@ -71,6 +73,7 @@ function DashboardContent() {
                 {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
                 {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
                 {(settings.showPSD ?? true) && <TabsTrigger value="psd">PSD</TabsTrigger>}
+                <TabsTrigger value="coincidences">Coincidences</TabsTrigger>
               </TabsList>
             </ScrollFade>
           <TabsContent value="health">
@@ -96,6 +99,9 @@ function DashboardContent() {
           )}
           <TabsContent value="runstats">
             <RunStats />
+          </TabsContent>
+          <TabsContent value="coincidences">
+            <CoincidencesDashboard />
           </TabsContent>
         </Tabs>
       </Layout>

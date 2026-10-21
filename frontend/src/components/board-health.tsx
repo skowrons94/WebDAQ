@@ -283,6 +283,20 @@ export default function BoardHealth() {
                     <Problem label="Dropped" value={row.counters.blocks_dropped} />
                     <Problem label="Read errors" value={row.counters.comm_errors} />
                   </div>
+                  {(row.counters.incomplete_events ?? 0) > 0 && (
+                    <p className="rounded-md border border-destructive/40 bg-destructive/5 p-2 text-xs text-destructive">
+                      This board sends events without an energy or a time stamp: its Board
+                      Configuration (0x8000) has time stamp or energy recording (bits 18/19, which
+                      the CAEN manual says must be 1) switched off. Spectra and coincidences of
+                      this board are empty. Restarting the run switches them back on.
+                    </p>
+                  )}
+                  {(row.counters.decode_dropped ?? 0) > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      The online decoder fell behind and skipped {formatCount(row.counters.decode_dropped ?? 0)} block(s):
+                      spectra, rates and coincidences miss them; the data file has them all.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )

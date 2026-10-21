@@ -142,7 +142,9 @@ class SpyManager:
 
             histo = self.ru_spy.histogram(board_index, int(channel), histogram_type)
 
-            if histo:
+            # The time-between-hits histogram has its own (time) axis: neither
+            # the energy calibration nor the energy rebinning applies to it.
+            if histo and histogram_type != "interval":
                 # Apply the linear energy calibration (energy = offset + slope*x)
                 # to the x-axis, mapping the axis's own range in raw units: the
                 # 1-D spectra run from 0 to nbins (one bin per channel), the PSD

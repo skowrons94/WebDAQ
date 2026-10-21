@@ -26,6 +26,7 @@ repository.
    caen-settings.md
    sis3316.md
    histograms-and-rois.md
+   coincidences.md
    current-and-charge.md
    monitoring-and-alerts.md
    run-data.md

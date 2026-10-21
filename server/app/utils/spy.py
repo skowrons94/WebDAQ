@@ -107,6 +107,20 @@ class ReadoutUnitSpy:
         hist.SetStats(0)
         return hist
 
+    def _build_interval(self, name: str, arr, per_decade: int):
+        """Time between hits on a true log axis: bin i spans
+        10**(i/per_decade) to 10**((i+1)/per_decade) ns."""
+        n = len(arr)
+        edges = np.power(10.0, np.arange(n + 1) / float(per_decade))
+        hist = ROOT.TH1F(name, "Time between consecutive hits", n, edges)
+        buf = np.zeros(n + 2, dtype=np.float64)
+        buf[1:1 + n] = arr
+        hist.SetContent(np.ascontiguousarray(buf))
+        hist.SetEntries(float(arr.sum()))
+        hist.GetXaxis().SetTitle("time between hits [ns]")
+        hist.SetStats(0)
+        return hist
+
     def histogram(self, board_index: Optional[int], channel: int, htype: str,
                   wave_kind: str = "any"):
         """Return a histogram for (board_index, channel) of the given type.
@@ -138,6 +152,15 @@ class ReadoutUnitSpy:
             name = f"{htype}_b{board_index}_ch{channel}"
             if htype == "psd":
                 return self._build_psd(name, daq.psd(board_index, channel), acq._caendaq)
+            if htype == "interval":
+                if not hasattr(daq, "interval"):
+                    return self._empty("This caendaq build has no time-between-hits "
+                                       "histogram — reinstall it (install.sh)")
+                arr = daq.interval(board_index, channel)
+                if arr is None or len(arr) == 0:
+                    return self._empty(f"No timed hits yet on channel {channel}")
+                per_decade = int(getattr(acq._caendaq, "INTERVAL_BINS_PER_DECADE", 100) or 100)
+                return self._build_interval(name, np.asarray(arr), per_decade)
             if htype in ("wave1", "wave2"):
                 # Only one trace is exposed today; wave2 has no source yet.
                 if htype == "wave2":

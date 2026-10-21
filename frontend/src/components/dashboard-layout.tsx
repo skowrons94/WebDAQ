@@ -19,6 +19,7 @@ import {
     Search,
     SlidersHorizontal,
     StopCircle,
+    GitMerge,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -286,6 +287,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                 <CommandItem onSelect={() => goToTab('waveforms')}>
                                     <AudioWaveform className="mr-2 h-4 w-4" />
                                     <span>Waveforms</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => goToTab('coincidences')}>
+                                    <GitMerge className="mr-2 h-4 w-4" />
+                                    <span>Coincidences</span>
                                 </CommandItem>
                             </CommandGroup>
                             <CommandSeparator />

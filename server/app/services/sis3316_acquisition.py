@@ -276,6 +276,8 @@ class Sis3316Acquisition:
             return self._daq.waveform(idx, channel, wave_kind)
         if kind == "maw":
             return self._daq.maw(idx, channel)
+        if kind == "interval" and hasattr(self._daq, "interval"):
+            return self._daq.interval(idx, channel)
         return None
 
 

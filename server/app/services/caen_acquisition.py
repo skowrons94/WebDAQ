@@ -201,6 +201,49 @@ def is_synchronised(board: Dict[str, Any]) -> bool:
     return start_mode_of(board) != START_MODE_SW
 
 
+# Board Configuration (0x8000) bits UM5678/UM4380 mark "must be 1" on the x725 /
+# x730 DPP-PHA and DPP-PSD firmware: [18] time stamp recording, [19] energy
+# (charge) recording. Without them the board sends the waveform alone, every
+# "energy" is a stray sample and no hit has a time. The settings page does not
+# offer them, so a dump read from a board in that state is the only way in.
+_MUST_BE_ONE_8000 = (1 << 18) | (1 << 19)
+
+
+def ensure_recording_bits(board: Dict[str, Any], logger: logging.Logger) -> bool:
+    """Switch time stamp and energy recording back on in the board's register
+    dump if they are off. Returns True when the file was changed."""
+    name = str(board.get("name", ""))
+    if "725" not in name and "730" not in name:
+        return False
+    if str(board.get("dpp", "")) not in ("DPP-PHA", "DPP-PSD"):
+        return False
+    fn = f"conf/{board['name']}_{board['id']}.json"
+    try:
+        with open(fn) as f:
+            data = json.load(f)
+        reg = data.get("registers", {}).get("reg_8000")
+        if not reg:
+            return False
+        value = int(reg["value"], 16)
+        if value & _MUST_BE_ONE_8000 == _MUST_BE_ONE_8000:
+            return False
+        fixed = value | _MUST_BE_ONE_8000
+        reg["value"] = f"0x{fixed:X}"
+        tmp = fn + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(data, f, indent=4)
+        os.replace(tmp, fn)
+        logger.warning(
+            f"Board {board['id']} ({name}): Board Configuration 0x8000 was 0x{value:X}, "
+            f"with time stamp and/or energy recording (bits 18/19, which the CAEN "
+            f"manual says must be 1) off — the board would send waveforms only. "
+            f"Set to 0x{fixed:X} in {fn}.")
+        return True
+    except Exception as e:
+        logger.debug(f"ensure_recording_bits({fn}): {e}")
+        return False
+
+
 def _waveforms_enabled(board: Dict[str, Any]) -> bool:
     """Whether waveform recording is on for a board (bit 16 of register 0x8000 in
     its conf/<name>_<id>.json), matching spy_manager.get_waveform_status_for_board."""
@@ -338,6 +381,7 @@ class CaenAcquisition:
                                       stats_first_interval_ms=stats_first_ms)
             # daq_state keeps boards sorted by id, so add order == board index.
             for board in caen_boards:
+                ensure_recording_bits(board, self.logger)
                 conn = _CONN_TYPE.get(board.get("link_type", "USB"), 0)
                 config = f"conf/{board['name']}_{board['id']}.json"
                 idx = self.daq.add_board(
@@ -382,6 +426,7 @@ class CaenAcquisition:
                 return False
             self._running = True
             self.logger.info("Acquisition started")
+            self._start_coincidences()
             return True
         except Exception as e:
             self.logger.error(f"Error starting acquisition: {e}")
@@ -395,10 +440,27 @@ class CaenAcquisition:
             if self._sis_boards:
                 self._sis().stop()
             self.logger.info("Acquisition stopped")
+            self._finish_coincidences()
             return True
         except Exception as e:
             self.logger.error(f"Error stopping acquisition: {e}")
             return False
+
+    # ----------------------------------------------------------- coincidences
+    def _start_coincidences(self) -> None:
+        # Never allowed to fail a run: coincidences are a view on the data.
+        try:
+            from .coincidences import get_coincidence_builder
+            get_coincidence_builder().start(self)
+        except Exception as e:
+            self.logger.error(f"Online coincidences could not start: {e}")
+
+    def _finish_coincidences(self) -> None:
+        try:
+            from .coincidences import get_coincidence_builder
+            get_coincidence_builder().finish()
+        except Exception as e:
+            self.logger.error(f"Online coincidences did not finish cleanly: {e}")
 
     # ------------------------------------------------------------- monitoring
     def board_index(self, board_id: str) -> Optional[int]:
@@ -614,6 +676,8 @@ class CaenAcquisition:
         "blocks_dropped",     # blocks the write queue refused (full) — lost data
         "comm_errors",        # CAEN read errors
         "events_decoded",     # events decoded out of those buffers
+        "decode_dropped",     # blocks the online decoder skipped while behind (file has them)
+        "incomplete_events",  # events sent without a time stamp or energy (0x8000 bits 18/19 off)
         "board_failures",     # aggregates carrying the board's FAIL flag
     )
 
@@ -726,6 +790,9 @@ class _MixedDaq:
 
     def psd(self, b, ch):
         return self._get("psd", b, ch)
+
+    def interval(self, b, ch):
+        return self._get("interval", b, ch)
 
 
 # Global instance --------------------------------------------------------------

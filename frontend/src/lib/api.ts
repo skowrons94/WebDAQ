@@ -1001,6 +1001,10 @@ export type BoardCounters = {
     blocks_dropped: number | null;
     comm_errors: number | null;
     events_decoded: number | null;
+    /** Blocks the online decoder skipped while behind: missing from the spectra, present in the file. */
+    decode_dropped?: number | null;
+    /** Events without a time stamp or energy word (Board Configuration 0x8000 bits 18/19 off). */
+    incomplete_events?: number | null;
     board_failures: number | null;
     failed: boolean;
 };
@@ -1256,3 +1260,66 @@ export const getElogAttachment = (url: string) =>
         .then(res => res.data as Blob);
 
 export default api;
+
+// ─── Online coincidences ─────────────────────────────────────────────────────
+// Gates are sentences: "spectrum of <channels> in coincidence with (or vetoed
+// by) <partners> within ±window ns". Board ids are WebDAQ board ids.
+export type CoincChannel = { board: string; channel: number };
+export type CoincGate = {
+    id: string;
+    name: string;
+    enabled: boolean;
+    channels: CoincChannel[];
+    partners: CoincChannel[];
+    mode: 'coincidence' | 'anticoincidence';
+    window_ns: number;
+    min_partners: number;
+    dt_range_ns: number;
+    matrix: boolean;
+};
+export type CoincConfig = {
+    version: number;
+    latency_ms: number;
+    offsets_ns: Record<string, number>;   // 'board:channel' -> ns
+    gates: CoincGate[];
+};
+export type CoincGateStatus = {
+    id: string;
+    singles: number;
+    passed: number;
+    fraction: number | null;
+    rate: number;
+    singles_rate: number;
+    per_channel: Record<string, { singles: number; passed: number }>;
+    pairs_skipped: number;
+};
+export type CoincStatus = {
+    running: boolean;
+    gates: CoincGateStatus[];
+    problems: Record<string, string[]>;
+    domains: { name: string; boards: string[]; pending: number; late: number; overflow: number; memory_mb: number }[];
+    dropped: number;
+    skipped_blocks: number;
+    clock_domains: Record<string, string>;
+    since: number | null;
+};
+export const getCoincConfig = () =>
+    api.get('/coincidences/config').then(res => res.data as CoincConfig);
+export const putCoincConfig = (cfg: CoincConfig) =>
+    api.put('/coincidences/config', cfg).then(res => res.data as CoincConfig);
+export const getCoincStatus = () =>
+    api.get('/coincidences/status').then(res => res.data as CoincStatus);
+export const resetCoincidences = () =>
+    api.post('/coincidences/reset').then(res => res.data);
+export const alignCoincGate = (gateId: string) =>
+    api.post(`/coincidences/${gateId}/align`).then(res => res.data as { offsets_ns: Record<string, number> });
+export const getCoincSpectrum = (gateId: string, boardId: string, channel: number) =>
+    api.get(`/coincidences/${gateId}/spectrum/${boardId}/${channel}`).then(res => res.data);
+// partner: 'board:channel' or '*' (all partners together)
+export const getCoincDt = (gateId: string, boardId: string, channel: number | '*', partner: string) =>
+    api.get(`/coincidences/${gateId}/dt/${boardId}/${channel}/${encodeURIComponent(partner)}`).then(res => res.data);
+export const getCoincMatrix = (gateId: string) =>
+    api.get(`/coincidences/${gateId}/matrix`).then(res => res.data);
+// Time between consecutive hits of one channel (log time axis).
+export const getIntervalHistogram = (boardId: string, channel: number) =>
+    api.get(`/histograms/${boardId}/${channel}/interval`).then(res => res.data);
