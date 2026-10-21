@@ -80,7 +80,7 @@ function ChannelSelect({ value, onChange }: { value: number; onChange: (ch: numb
     <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
       <SelectTrigger className="w-36" aria-label="Channel"><SelectValue /></SelectTrigger>
       <SelectContent>
-        {CHANNELS.map((ch) => <SelectItem key={ch} value={String(ch)}>Channel {ch + 1}</SelectItem>)}
+        {CHANNELS.map((ch) => <SelectItem key={ch} value={String(ch)}>Channel {ch}</SelectItem>)}
       </SelectContent>
     </Select>
   )
@@ -368,7 +368,7 @@ function SettingsTab({ boardId }: { boardId: string }) {
                 const over = draft.channels[String(ch)] ?? {}
                 return (
                   <TableRow key={ch}>
-                    <TableCell className="font-medium">{ch + 1}</TableCell>
+                    <TableCell className="font-medium">{ch}</TableCell>
                     {CHANNEL_COLUMNS.map((c) => (
                       <TableCell key={String(c.key)}
                                  className={c.key in over ? "bg-amber-500/10" : undefined}>
@@ -409,7 +409,7 @@ function OnboardHistogramTab({ boardId }: { boardId: string }) {
     try {
       await clearSis3316OnboardHistograms(boardId, all ? undefined : [channel])
       setManual((n) => n + 1)
-      toast({ title: "Cleared", description: all ? "All on-board histograms are empty." : `Channel ${channel + 1} is empty.` })
+      toast({ title: "Cleared", description: all ? "All on-board histograms are empty." : `Channel ${channel} is empty.` })
     } catch (e) {
       toast({ title: "Error", description: errorText(e, "Could not clear."), variant: "destructive" })
     }
@@ -479,7 +479,7 @@ function CountersTab({ boardId }: { boardId: string }) {
             <TableBody>
               {data.channels.map((row, ch) => (
                 <TableRow key={ch}>
-                  <TableCell className="font-medium">{ch + 1}</TableCell>
+                  <TableCell className="font-medium">{ch}</TableCell>
                   {data.names.map((n) => <TableCell key={n} className="text-right font-mono">{row[n].toLocaleString()}</TableCell>)}
                 </TableRow>
               ))}
