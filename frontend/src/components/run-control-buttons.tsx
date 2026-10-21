@@ -18,15 +18,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { ConfirmAction } from "@/components/ui/confirm-action"
 import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
-import {
   Card,
   CardContent,
   CardHeader,
@@ -122,12 +113,9 @@ export function RunControlButtons({
   // button, so the guard must not wait for state.
   const startingRef = useRef(false)
   const setStartBusy = (busy: boolean) => { startingRef.current = busy; setStarting(busy) }
-  // Saving was off at Start: the operator chooses before anything is sent.
-  const [savingOffOpen, setSavingOffOpen] = useState(false)
-  // The saving setting this start was confirmed with (used by startRunProcess,
-  // also when it runs later from the overwrite dialog).
+  // The saving setting this start goes with (used by startRunProcess, also
+  // when it runs later from the overwrite dialog).
   const pendingSave = useRef(saveData)
-  const turnOnRef = useRef<HTMLButtonElement>(null)
   // The last Stop failed while the run still shows as going: offer the forced
   // reset. Shared with the phone run bar (store), cleared once the DAQ stops.
   const stopFailed = useRunControlStore((st) => st.stopFailed)
@@ -188,8 +176,8 @@ export function RunControlButtons({
     }
     setStartBusy(true)
     // Saving may have been switched off from anywhere (the Tuner, another
-    // computer): ask the server, not this page's copy. Off is never started
-    // silently: the operator chooses, with "turn it on" as the default.
+    // computer): start with what the server says, not this page's copy. The
+    // operators know their saving switch, so there is no extra question.
     let serverSave = saveData
     try {
       serverSave = Boolean(await Promise.race([
@@ -197,23 +185,9 @@ export function RunControlButtons({
         new Promise((_, reject) => setTimeout(() => reject(new Error('deadline')), 4000)),
       ]))
     } catch {
-      // No answer: use the page's copy; an "off" still gets the question below.
+      // No answer: use the page's copy.
     }
-    if (!serverSave) {
-      // The (modal) dialog decides; its buttons take the guard again.
-      setStartBusy(false)
-      setSavingOffOpen(true)
-      return
-    }
-    await beginStart(true)
-  }
-
-  /** From the saving-off dialog: the operator's choice, once. */
-  const startFromDialog = (save: boolean) => {
-    setSavingOffOpen(false)
-    if (startingRef.current) return
-    setStartBusy(true)
-    void beginStart(save)
+    await beginStart(serverSave)
   }
 
   /** From the overwrite dialog: guarded like Start itself. */
@@ -791,47 +765,6 @@ export function RunControlButtons({
           </div>
         </Collapsible>
       </CardContent>
-
-      {/* Saving is off on the server: never start such a run silently.
-          "Turn saving on and start" is the default (focused) choice. */}
-      <AlertDialog open={savingOffOpen} onOpenChange={setSavingOffOpen}>
-        <AlertDialogContent
-          className="w-[calc(100%-2rem)] max-w-md rounded-lg"
-          onOpenAutoFocus={(e) => { e.preventDefault(); turnOnRef.current?.focus() }}
-        >
-          <AlertDialogHeader>
-            <AlertDialogTitle>Start run {runNumber}?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm">
-                <p className="flex items-start gap-2 rounded-md border border-destructive bg-destructive/10 p-3 font-semibold text-destructive">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                  Data saving is OFF: this run will not be written to disk.
-                </p>
-                <p className="text-muted-foreground">
-                  Saving may have been switched off by the Tuner or from another computer.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="gap-2 sm:gap-0">
-            <AlertDialogCancel className="pointer-coarse:min-h-11">Cancel</AlertDialogCancel>
-            <Button
-              variant="outline"
-              className="border-destructive text-destructive hover:bg-destructive/10 hover:text-destructive"
-              onClick={() => startFromDialog(false)}
-            >
-              Start without saving
-            </Button>
-            <Button
-              ref={turnOnRef}
-              variant="success"
-              onClick={() => startFromDialog(true)}
-            >
-              Turn saving on and start
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Directory Override Confirmation Dialog */}
       <ConfirmAction
