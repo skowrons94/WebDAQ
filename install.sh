@@ -8,15 +8,15 @@
 # Acquisition is fully in-process via the caendaq module, installed with
 # `pip install` (scikit-build-core builds it via CMake).
 #
-# The two C++ components are git submodules pinned under server/native/:
-#   server/native/caendaq   — CaenDAQ, the acquisition backend (Python module)
-#   server/native/rureader  — RUReader, the offline .caendat → ROOT converter
-# server/native/sis3316daq is the pure-Python backend for Struck SIS3316 boards
-# (Ethernet/UDP); it lives in this repository and is installed editable.
+# The acquisition components are git submodules pinned under server/native/:
+#   server/native/caendaq    — CaenDAQ, the CAEN acquisition backend (C++ Python module)
+#   server/native/rureader   — RUReader, the offline .caendat → ROOT converter
+#   server/native/sis3316daq — SisDAQ, the Struck digitizer backend (pure Python;
+#                              SIS3316 over Ethernet/UDP; installed editable)
 #
 # Steps:
 #   1. System build tools (git, cmake, make, g++, curl)
-#   2. Check out the git submodules (CaenDAQ, RUReader)
+#   2. Check out the git submodules (CaenDAQ, RUReader, SisDAQ)
 #   3. Install Miniforge (conda)            — skipped if conda is already present
 #   4. Create the `luna` conda environment  — skipped if it already exists
 #   5. Build RUReader (offline .caendat → ROOT converter) and the caendaq
@@ -41,6 +41,7 @@ ENV_FILE="$FRONTEND_DIR/.env"
 NATIVE_DIR="$REPO_ROOT/server/native"
 CAENDAQ_DIR="$NATIVE_DIR/caendaq"
 RUREADER_DIR="$NATIVE_DIR/rureader"
+SISDAQ_DIR="$NATIVE_DIR/sis3316daq"
 SRC_DIR="${LUNA_SRC_DIR:-$(dirname "$REPO_ROOT")}"
 GITHUB_USER="skowrons94"
 MINIFORGE_DIR="$HOME/miniforge3"
@@ -98,7 +99,7 @@ ensure_build_tools() {
 
 # ── 1. Git submodules (CaenDAQ, RUReader) ─────────────────────────────────────
 ensure_submodules() {
-    step "Checking out the C++ submodules (CaenDAQ, RUReader)"
+    step "Checking out the submodules (CaenDAQ, RUReader, SisDAQ)"
 
     if [ ! -f "$REPO_ROOT/.gitmodules" ]; then
         warn ".gitmodules missing — skipping (sources will be looked up / cloned later)"
@@ -214,7 +215,8 @@ verify_env_packages() {
 resolve_source() {
     local submodule_dir="$1" repo="$2" fallback_dir="$SRC_DIR/$2"
 
-    if [ -f "$submodule_dir/CMakeLists.txt" ]; then
+    # A checked-out submodule: a CMake project, or a Python package (SisDAQ).
+    if [ -f "$submodule_dir/CMakeLists.txt" ] || [ -f "$submodule_dir/pyproject.toml" ]; then
         echo "$submodule_dir"
         return
     fi
@@ -284,8 +286,10 @@ build_caendaq() {
 # ── 5b. sis3316daq Python module (Struck SIS3316 backend) ───────────────────────
 install_sis3316daq() {
     step "Installing the sis3316daq Python module"
-    # Editable: pure Python, so a 'git pull' updates it without re-installing.
-    pip install --no-deps -e "$NATIVE_DIR/sis3316daq" || die "sis3316daq install failed"
+    local dir; dir="$(resolve_source "$SISDAQ_DIR" "SisDAQ")"
+    info "Source: $dir"
+    # Editable: pure Python, so updating the submodule needs no re-install.
+    pip install --no-deps -e "$dir" || die "sis3316daq install failed"
     python -c "import sis3316daq; print('    sis3316daq', sis3316daq.__file__)" \
         || die "sis3316daq did not import after install (wrong env?)"
     ok "sis3316daq installed (run files need h5py, from environment.yml)"

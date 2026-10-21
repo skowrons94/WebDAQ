@@ -4,3 +4,6 @@
 [submodule "server/native/rureader"]
 	path = server/native/rureader
 	url = https://github.com/skowrons94/RUReader.git
+[submodule "server/native/sis3316daq"]
+	path = server/native/sis3316daq
+	url = https://github.com/skowrons94/SisDAQ.git
