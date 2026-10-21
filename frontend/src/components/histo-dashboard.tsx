@@ -73,29 +73,46 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
  * the range and, on release, hands its two ends (in client pixels) over to be
  * turned into an ROI. JSROOT never sees the drag, so nothing zooms.
  */
-function ROIMarker({ onMark }: { onMark: (fromPx: number, toPx: number) => void }) {
-  const [drag, setDrag] = useState<{ start: number; now: number } | null>(null)
+function ROIMarker({ onMark, frame }: {
+  onMark: (fromPx: number, toPx: number) => void
+  /** The plot frame (inside the axes) in client pixels, or null if not drawn. */
+  frame: () => DOMRect | null
+}) {
+  const [drag, setDrag] = useState<{ start: number; now: number; f: DOMRect } | null>(null)
   const box = useRef<HTMLDivElement>(null)
-  const local = (clientX: number) => clientX - (box.current?.getBoundingClientRect().left ?? 0)
+  const clamp = (x: number, f: DOMRect) => Math.min(f.right, Math.max(f.left, x))
+  const origin = () => box.current?.getBoundingClientRect() ?? new DOMRect()
   return (
     <div
       ref={box}
       className="absolute inset-0 z-20 cursor-crosshair touch-none"
       title="Drag across a peak to mark an ROI"
       onPointerDown={(e) => {
+        const f = frame()
+        // Only a drag that starts inside the plot frame marks anything.
+        if (!f || e.clientX < f.left || e.clientX > f.right || e.clientY < f.top || e.clientY > f.bottom) return
         e.currentTarget.setPointerCapture(e.pointerId)
-        setDrag({ start: e.clientX, now: e.clientX })
+        setDrag({ start: e.clientX, now: e.clientX, f })
       }}
-      onPointerMove={(e) => { if (drag) setDrag({ ...drag, now: e.clientX }) }}
+      onPointerMove={(e) => { if (drag) setDrag({ ...drag, now: clamp(e.clientX, drag.f) }) }}
       onPointerUp={(e) => {
-        if (drag && Math.abs(e.clientX - drag.start) > 3) onMark(drag.start, e.clientX)
+        if (drag) {
+          const end = clamp(e.clientX, drag.f)
+          if (Math.abs(end - drag.start) > 3) onMark(drag.start, end)
+        }
         setDrag(null)
       }}
       onPointerCancel={() => setDrag(null)}
     >
       {drag && (
-        <div className="pointer-events-none absolute inset-y-0 border-x border-primary bg-primary/15"
-             style={{ left: Math.min(local(drag.start), local(drag.now)), width: Math.abs(drag.now - drag.start) }} />
+        // Shaded over the plot region only, between the axes.
+        <div className="pointer-events-none absolute border-x border-primary bg-primary/15"
+             style={{
+               left: Math.min(drag.start, drag.now) - origin().left,
+               width: Math.abs(drag.now - drag.start),
+               top: drag.f.top - origin().top,
+               height: drag.f.height,
+             }} />
       )}
     </div>
   )
@@ -103,7 +120,7 @@ function ROIMarker({ onMark }: { onMark: (fromPx: number, toPx: number) => void 
 
 // Sortable Histogram Card Component
 const SortableHistogramCard = ({
-  config, roiIntegrals, stats, counts, running, expanded, calibrated, markingROIs, onMarkROI,
+  config, roiIntegrals, stats, counts, running, expanded, calibrated, markingROIs, onMarkROI, frameRect,
   onAddROI, onROIFromView, onCalibrate, onEditHistogram, onEditROI, onToggleExpand, onHide,
   onZoomToROI, onToggleROI, dashboardSettings, getHistogramSize, histogramRefs,
 }: {
@@ -113,6 +130,7 @@ const SortableHistogramCard = ({
   /** ROI marking mode: a drag across the plot marks an ROI instead of zooming. */
   markingROIs: boolean
   onMarkROI: (id: string, fromPx: number, toPx: number, plot: HTMLDivElement) => void
+  frameRect: (id: string) => DOMRect | null
   onCalibrate: (config: HistogramConfig) => void
   roiIntegrals: { [key: string]: number }
   stats: ChannelStats | null
@@ -230,7 +248,7 @@ const SortableHistogramCard = ({
             className={`w-full ${expanded ? "h-[65vh]" : `${getHistogramSize(config.size)} max-md:h-auto max-md:aspect-[4/3]`} rounded-md border bg-background`}
           />
           {markingROIs && (
-            <ROIMarker onMark={(from, to) => {
+            <ROIMarker frame={() => frameRect(config.id)} onMark={(from, to) => {
               const plot = histogramRefs.current[config.id]
               if (plot) onMarkROI(config.id, from, to, plot)
             }} />
@@ -741,17 +759,8 @@ function labelHistogramAxes(histogram: any, showTitles: boolean, widthPx: number
   const raw = Number(x.fXmin) === 0 && Number.isInteger(xmax) && xmax >= 256 && (xmax & (xmax - 1)) === 0
   x.fTitle = showTitles ? (x.fTitle || (raw ? "ADC channel" : "Energy (keV)")) : ""
   y.fTitle = showTitles ? (y.fTitle || "Counts / bin") : ""
-  const narrow = widthPx > 0 && widthPx < 520
-  // JSROOT sizes text as a fraction of the pad height, so a tall (enlarged)
-  // pad would get huge labels: aim at a fixed pixel size instead.
-  const frac = (px: number, fallback: number) =>
-    heightPx > 0 ? Math.min(0.06, Math.max(0.018, px / heightPx)) : fallback
-  for (const axis of [x, y]) {
-    axis.fLabelSize = frac(narrow ? 15 : 13, narrow ? 0.045 : 0.03)
-    axis.fTitleSize = frac(narrow ? 15 : 14, narrow ? 0.045 : 0.035)
-  }
-  x.fTitleOffset = 1.2
-  y.fTitleOffset = 1.5
+  // Sizes, offsets and margins come from the shared plot style (lib/jsroot-style).
+  void widthPx; void heightPx
 }
 
 /**
@@ -982,19 +991,8 @@ export default function EnhancedHistogramDashboard() {
     if (jsrootLoaded) {
       const effectiveTheme = dashboardSettings.theme === "auto" ? theme : dashboardSettings.theme
       window.JSROOT.settings.DarkMode = effectiveTheme === "dark"
-      
-      // Configure modern fonts and appearance
-      window.JSROOT.settings.Palette = 57 // Modern color palette
-      window.JSROOT.settings.OptStat = 0  // Disable stats box globally
-      window.JSROOT.settings.OptTitle = 1 // Show titles
-      
-      // Set modern font
-      if (window.JSROOT.gStyle) {
-        window.JSROOT.gStyle.fTextFont = 42 // Helvetica
-        window.JSROOT.gStyle.fLabelFont = 42
-        window.JSROOT.gStyle.fTitleFont = 42
-        window.JSROOT.gStyle.fStatFont = 42
-      }
+      window.JSROOT.settings.Palette = 57 // kBird
+      // Fonts, sizes, margins and the rest: lib/jsroot-style.ts, for every plot.
     }
   }, [jsrootLoaded, theme, dashboardSettings.theme])
 
@@ -1206,11 +1204,6 @@ export default function EnhancedHistogramDashboard() {
       canvas.fName = `canvas_${config.id}`
       canvas.fTitle = config.label
       canvas.fLogy = settings.isLogScale ? 1 : 0
-      // Room for the axis titles, which the default margins clip.
-      if (settings.showLabels) {
-        canvas.fLeftMargin = 0.15
-        canvas.fBottomMargin = 0.15
-      }
       // The series colour comes from the theme's chart token (--chart-1), as a
       // JSROOT draw option: translucent fill, solid line.
       const series = seriesHex(Boolean(window.JSROOT.settings?.DarkMode))
@@ -1591,6 +1584,16 @@ export default function EnhancedHistogramDashboard() {
     await addRoiRange(histogramId, xmin, xmax)
   }
 
+  // The plot frame of a card (inside its axes), in client pixels.
+  const frameRect = (histogramId: string): DOMRect | null => {
+    const fp = histogramPainters.current[histogramId]?.getFramePainter?.()
+    const svg = histogramRefs.current[histogramId]?.querySelector("svg")
+    if (!fp || !svg) return null
+    const r = svg.getBoundingClientRect()
+    return new DOMRect(r.left + Number(fp.getFrameX?.() ?? 0), r.top + Number(fp.getFrameY?.() ?? 0),
+                       Number(fp.getFrameWidth?.() ?? r.width), Number(fp.getFrameHeight?.() ?? r.height))
+  }
+
   // Marking mode: the two ends of a drag, in client pixels, into axis units.
   const markROI = async (histogramId: string, fromPx: number, toPx: number, plot: HTMLDivElement) => {
     const fp = histogramPainters.current[histogramId]?.getFramePainter?.()
@@ -1868,6 +1871,7 @@ export default function EnhancedHistogramDashboard() {
                     calibrated={calibStatus?.[config.boardId]?.[config.channel]?.calibrated}
                     markingROIs={markingROIs}
                     onMarkROI={(id, from, to, plot) => void markROI(id, from, to, plot)}
+                    frameRect={frameRect}
                     onCalibrate={setCalibrating}
                     onToggleExpand={(id) => setExpandedId((cur) => (cur === id ? null : id))}
                     onHide={(id) => void hideHistogram(id)}

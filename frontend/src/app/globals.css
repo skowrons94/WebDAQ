@@ -102,3 +102,12 @@
     @apply rounded-sm outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
+
+
+/* JSROOT plots in the site's font: ROOT names its own (Arial/Helvetica), and
+   lib/jsroot-style.ts sets the sizes. */
+.jsroot text,
+svg.jsroot text,
+[class*="root_canvas"] text {
+  font-family: inherit !important;
+}

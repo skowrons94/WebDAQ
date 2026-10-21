@@ -89,9 +89,6 @@ export function RootPlot({ fetch, deps, logx = false, logy = false, twoD = false
       const canvas = JSROOT.create('TCanvas')
       canvas.fLogx = logx ? 1 : 0
       canvas.fLogy = logy ? 1 : 0
-      canvas.fLeftMargin = 0.12
-      canvas.fBottomMargin = 0.14
-      canvas.fRightMargin = twoD ? 0.13 : 0.04
       const series = seriesHex()
       const opt = twoD ? 'colz' : (series ? `hist nostat fill_${series}55 line_${series}` : 'hist nostat')
       canvas.fPrimitives.Add(obj, opt)

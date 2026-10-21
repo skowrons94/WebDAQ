@@ -1,3 +1,5 @@
+import { installPlotStyle } from './jsroot-style';
+
 let jsrootPromise: Promise<void> | null = null;
 
 // JSROOT is served by this web server (app/api/jsroot, from the version pinned
@@ -21,6 +23,7 @@ export function loadJSROOT(): Promise<void> {
       for (const src of SOURCES) {
         try {
           await loadScript(src);
+          installPlotStyle(window.JSROOT);
           return;
         } catch (e) {
           console.warn(String(e));
