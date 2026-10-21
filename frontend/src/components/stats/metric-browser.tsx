@@ -7,8 +7,97 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
-import { ChevronRight, Folder, Gauge, Loader2, Search, X } from 'lucide-react'
-import { browseMetrics, type MetricNode } from '@/lib/api'
+import { ChevronRight, Folder, Gauge, Loader2, RefreshCw, Search, X } from 'lucide-react'
+import { browseMetrics, getRecentMetrics, type MetricNode, type RecentMetric } from '@/lib/api'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Sparkline } from "@/components/stats/sparkline"
+import { formatReading } from "@/components/card-holder"
+
+function age(iso: string): string {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
+  if (s < 90) return `${Math.round(s)} s ago`
+  if (s < 5400) return `${Math.round(s / 60)} min ago`
+  return `${(s / 3600).toFixed(1)} h ago`
+}
+
+/** What Graphite has had a value for in the last hour: the metrics worth adding. */
+function ActiveMetrics({ existing, onSelect }: { existing: string[]; onSelect: (path: string, leaf: string) => void }) {
+  const [items, setItems] = useState<RecentMetric[] | null>(null)
+  const [info, setInfo] = useState<{ scanned: number; truncated: boolean } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [filter, setFilter] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(async (refresh = false) => {
+    setLoading(true)
+    try {
+      const r = await getRecentMetrics(refresh)
+      setItems(r.metrics)
+      setInfo({ scanned: r.scanned, truncated: r.truncated })
+      setError(null)
+    } catch (e) {
+      const serverMessage = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setError(serverMessage ?? 'Could not reach the Graphite server. Check its address below.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const shown = (items ?? []).filter((m) => !filter || m.path.toLowerCase().includes(filter.toLowerCase()))
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter (e.g. voltage)" className="h-9" />
+        <Button variant="outline" size="sm" className="h-9" onClick={() => load(true)} disabled={loading}
+                aria-label="Look again" title="Look again (the list is kept for a minute)">
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+      <ScrollArea className="h-72 rounded-md border">
+        {loading && items === null ? (
+          <div className="flex h-72 flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />Looking for metrics updated in the last hour…
+          </div>
+        ) : error ? (
+          <p className="p-6 text-center text-sm text-destructive">{error}</p>
+        ) : shown.length === 0 ? (
+          <p className="p-6 text-center text-sm text-muted-foreground">
+            {items?.length ? 'Nothing matches that filter.' : 'No metric has been updated in the last hour. Browse all of them instead.'}
+          </p>
+        ) : (
+          <div className="divide-y">
+            {shown.map((m) => {
+              const label = m.path.split('.').pop() ?? m.path
+              const already = existing.includes(m.path)
+              return (
+                <button key={m.path} disabled={already} onClick={() => onSelect(m.path, label)}
+                        className="grid w-full grid-cols-[1fr_auto] items-center gap-x-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted/60 disabled:opacity-50 disabled:hover:bg-transparent sm:grid-cols-[1fr_5rem_auto]">
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{label}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{m.path}</span>
+                  </span>
+                  <Sparkline values={m.trend} height={24} className="hidden text-primary sm:block" />
+                  <span className="text-right">
+                    <span className="block font-mono text-sm tabular-nums">{formatReading(m.value)}</span>
+                    <span className="block text-xs text-muted-foreground">{already ? 'added' : age(m.timestamp)}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </ScrollArea>
+      {info && (
+        <p className="text-xs text-muted-foreground">
+          {items?.length ?? 0} of {info.scanned} metrics had a value in the last hour
+          {info.truncated ? ' (the tree is large: only the first part was looked at — browse for the rest)' : ''}.
+          The DAQ's own rates are on the Data rates page.
+        </p>
+      )}
+    </div>
+  )
+}
 
 type Props = {
   open: boolean
@@ -76,13 +165,23 @@ export function MetricBrowser({ open, onOpenChange, onSelect, existing = [] }: P
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Add a metric</DialogTitle>
           <DialogDescription>
-            Browse what the Graphite server is collecting, or search for a name.
+            Pick one of the metrics Graphite has had values for in the last hour, or browse them all.
           </DialogDescription>
         </DialogHeader>
+
+        <Tabs defaultValue="active">
+          <TabsList>
+            <TabsTrigger value="active">Active in the last hour</TabsTrigger>
+            <TabsTrigger value="all">Browse all</TabsTrigger>
+          </TabsList>
+          <TabsContent value="active">
+            {open && <ActiveMetrics existing={existing} onSelect={onSelect} />}
+          </TabsContent>
+          <TabsContent value="all" className="space-y-3">
 
         <form onSubmit={handleSearch} className="flex gap-2">
           <Input
@@ -167,6 +266,8 @@ export function MetricBrowser({ open, onOpenChange, onSelect, existing = [] }: P
             </div>
           )}
         </ScrollArea>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>

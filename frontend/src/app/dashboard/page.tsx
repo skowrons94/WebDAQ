@@ -5,7 +5,6 @@ import { AuthGate } from '@/components/auth-gate';
 import { RunControl } from '@/components/run-control';
 import dynamic from 'next/dynamic';
 import { TabLoading } from '@/components/ui/tab-loading';
-import { ScrollFade } from '@/components/ui/scroll-fade';
 
 // The overview is what opens; every other tab (recharts, dnd-kit, the JSROOT
 // dashboards) is loaded when first shown, which keeps /dashboard's first load
@@ -17,11 +16,10 @@ const WaveformDashboard = dynamic(() => import('@/components/wave-dashboard'), {
 const PSDDashboard = dynamic(() => import('@/components/psd-dashboard'), { ssr: false, loading: TabLoading });
 const CoincidencesDashboard = dynamic(() => import('@/components/coincidences-dashboard'), { ssr: false, loading: TabLoading });
 import { Layout } from '@/components/dashboard-layout';
+import { useActiveItem } from '@/components/app-nav';
 import {
   Tabs,
   TabsContent,
-  TabsList,
-  TabsTrigger,
 } from "@/components/ui/tabs"
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
@@ -55,27 +53,14 @@ function DashboardContent() {
     if (!availableTabs.includes(tab)) setTab('overview')
   }, [availableTabs, tab, setTab]);
 
+  const active = useActiveItem()
+
   return (
       <Layout>
+        {/* The views are chosen from the sidebar (or the menu on a phone); the
+            heading says which one this is. */}
+        <h1 className="mb-4 text-xl font-semibold tracking-tight">{active?.label ?? 'Dashboard'}</h1>
         <Tabs value={tab} onValueChange={setTab} orientation='vertical'>
-          {/* A fade at the cut edge, so a phone's strip (cut at "Histogra")
-              says there are more tabs; the padding lets the last one clear it. */}
-          <ScrollFade className="max-w-full" innerClassName="flex items-center pb-1 max-sm:pr-8">
-            <TabsList className="min-w-max">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                  {/* The boards' own health sits beside the overview: during a run
-                      it answers the question the overview raises. */}
-                  <TabsTrigger value="health">Board health</TabsTrigger>
-                {/* Rates come right after the overview: during a run they are
-                    what tells you the detectors are alive, so they are looked at
-                    far more often than the spectra. */}
-                <TabsTrigger value="runstats">Data rates</TabsTrigger>
-                {settings.showHistograms && <TabsTrigger value="histograms">Histograms</TabsTrigger>}
-                {settings.showWaveforms && <TabsTrigger value="waveforms">Waveforms</TabsTrigger>}
-                {(settings.showPSD ?? true) && <TabsTrigger value="psd">PSD</TabsTrigger>}
-                <TabsTrigger value="coincidences">Coincidences</TabsTrigger>
-              </TabsList>
-            </ScrollFade>
           <TabsContent value="health">
               <BoardHealth />
             </TabsContent>

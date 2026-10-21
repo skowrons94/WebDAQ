@@ -28,13 +28,28 @@ taking data with nobody logged in.
 
 ---
 
-## 1. Dashboard
+## 1. Finding your way
 
-Six tabs: **Overview**, **Board Health**, **Data Rates**, **Histograms**,
-**Waveforms** and **PSD**. The last three can be switched off in Settings →
-Appearance, and the tab strip follows.
+Every page is in the sidebar on the left (on a phone, in the menu behind the ☰
+button), grouped by what it is for:
 
-### 1.1 Overview — taking the run
+| Group | Pages |
+|---|---|
+| **Run** | Overview, Data rates, Stats, Board health |
+| **Spectra** | Histograms, Waveforms, PSD, Coincidences |
+| **Setup** | Boards, DAQ settings, Tuner |
+| **Records** | Logbook |
+| **System** | Alerts, Troubleshoot, Settings |
+
+Each page has its own address (the Dashboard views as `/dashboard?tab=…`), so a
+bookmark opens it directly. The sidebar folds down to icons with *Collapse* at
+its foot, remembered per browser. Histograms, Waveforms and PSD can be switched
+off in Settings → Appearance, and the sidebar follows. The search box (or
+Ctrl-K) jumps to any page or setting by name.
+
+## 2. Dashboard
+
+### 2.1 Overview — taking the run
 
 **System status** is the band of cards at the top. Drag the handle beneath it to
 show one row more or less; the height is remembered per browser.
@@ -92,7 +107,7 @@ run is going the plot covers the run from its start; while stopped you can pick 
 30 s to 5 min window. The **Position** button moves the panel to one of four
 places on the Overview.
 
-### 1.2 Board Health — what the boards are actually doing
+### 2.2 Board Health — what the boards are actually doing
 
 One card per board with the readout counters CaenDAQ keeps for the run: **data
 blocks** read, **events decoded**, **bytes read** and **bytes sent to file**, each
@@ -113,27 +128,34 @@ Every counter belongs to the run. They start at zero when a run starts and are
 gone when it ends, which is why the tab says so plainly between runs instead of
 showing zeros.
 
-### 1.3 Data Rates — counts per second, per channel
+### 2.3 Data Rates — counts per second, per channel
 
 A tile per board with its total event rate, then four tiles for the selected
 board — **Events**, **Pile-ups**, **Lost events**, **Saturations** — and the
 write rate for the board and for all boards together. Pile-up, lost and
 saturation turn amber when they are not zero.
 
-The plot shows one metric for up to six channels of one board. Two controls sit
-above it:
+Each board's tile also shows its average rate over the run and a trend line of
+the whole run, so a detector that slowly faded is visible at a glance.
+
+The plot shows one metric for up to six channels of one board, over the whole
+run: the server keeps the rates from the start (and after the run stops, until
+the next one starts), so a reload or a late arrival loses nothing. A long run is
+thinned by averaging neighbouring points, which keeps it light without
+changing the mean. Three controls sit above it:
 
 * **Plot** — the sampling cadence, from 0.5 s to 60 s. This is not a display
   setting: one CaenDAQ tick samples the counters, differences them and publishes
   them, so the same number sets the refresh rate, the averaging window and the
-  resolution of what reaches Graphite. Changing it starts the trace over.
+  resolution of what reaches Graphite.
+* **Show** — the whole run, the last 10 minutes or the last minute.
 * **Rate shown** — which of the four rates is drawn. All four are recorded, so
   switching keeps the history you already have.
 
 A badge reads *Running*, *Stopped* or *No answer*. A run that stops leaves its
-trace on screen; a run that starts clears it.
+trace on screen; a run that starts begins a new one.
 
-### 1.4 Histograms, Waveforms and PSD
+### 2.4 Histograms, Waveforms and PSD
 
 The histogram dashboard is covered in [Spectra and
 ROIs](histograms-and-rois.md): which spectra are shown, their ROIs, zoom,
@@ -149,12 +171,12 @@ something to touch mid-measurement.
 
 ---
 
-## 2. Logbook
+## 3. Logbook
 
 Two logbooks live here: the run metadata WebDAQ records itself (**Runs**) and the
 collaboration's ELOG (**ELOG**).
 
-### 2.1 Runs
+### 3.1 Runs
 
 A table of every run, newest first. Search covers run numbers, targets, notes and
 voltages; the type and flag filters narrow it; **Columns** chooses what is shown
@@ -166,7 +188,7 @@ a run already taken — useful when a shift realises the target was mistyped.
 
 The run number is a link to the run's own page.
 
-### 2.2 One run
+### 3.2 One run
 
 Six tabs, reading the database and the run directory together:
 
@@ -187,7 +209,7 @@ Six tabs, reading the database and the run directory together:
 A run still in progress is marked *in progress* and its duration reads *still in
 progress*; nothing on the page pretends the run is finished.
 
-### 2.3 ELOG
+### 3.3 ELOG
 
 Read and write the collaboration logbook without leaving run control: the entry
 list with search, the reading pane with attachments, and a composer whose fields
@@ -200,7 +222,7 @@ Everything stays editable before you post. See [ELOG](elog.md).
 
 ---
 
-## 3. Stats
+## 4. Stats
 
 The Graphite values this experiment watches. Each card is one metric, with its
 latest value, a sparkline, and buttons to rename it, stop reading it or remove it.
@@ -218,11 +240,11 @@ at its next stats interval.
 
 ---
 
-## 4. DAQ
+## 5. DAQ
 
 Three tabs: **Configuration**, **Calibration** and **Hardware Info**.
 
-### 4.1 Configuration
+### 5.1 Configuration
 
 **Board Settings** is the whole register set of one board, grouped by function and
 in the order the signal is processed. **Advanced** shows every register rather
@@ -245,13 +267,13 @@ draws the cable order and the start sequence. [CAEN
 digitizers](caen-settings.md#4-synchronising-several-boards) explains the
 mechanism.
 
-### 4.2 Calibration
+### 5.2 Calibration
 
 Two numbers per channel, `A` and `B`, applied to the energy axis of the spectra.
 They are stored per board and channel in `calib/` and are read again whenever the
 file changes.
 
-### 4.3 Hardware Info
+### 5.3 Hardware Info
 
 What the boards report about themselves — model, serial number, firmware, DPP
 licence, connection, and the acquisition registers as actually programmed — plus
@@ -261,7 +283,7 @@ there is none.
 
 ---
 
-## 5. Tuner
+## 6. Tuner
 
 The place to change thresholds and shaping with beam on target. The page starts
 acquisition with **data saving switched off**, so nothing you do here lands in a
@@ -293,7 +315,7 @@ selectors) and the energy spectrum of the channel you are tuning.
 
 ---
 
-## 6. Troubleshoot
+## 7. Troubleshoot
 
 The page to open when something looks wrong, and the one to read the morning
 after. It has two halves: **Recovery** at the top and **History** below.
@@ -313,7 +335,7 @@ one you want to notice. *Mark all read* clears the bell.
 
 ---
 
-## 7. Alerts
+## 8. Alerts
 
 The Grafana alert rules, managed from here so you do not have to open Grafana
 during a shift: pause or activate a rule, edit its threshold, and mark rules as
@@ -329,19 +351,21 @@ Settings → Grafana.
 
 ---
 
-## 8. Settings
+## 9. Settings
 
-Six sections. Everything except **Appearance** is stored on the DAQ server and is
-therefore the same for everyone.
+Grouped by what each section is about; every entry says in one line what it is
+for. Everything except **Appearance** is stored on the DAQ server and is
+therefore the same for everyone. The boards are set up under Setup → **Boards**
+(scan, add, live status) and **DAQ settings** (their registers).
 
-| Section | What it holds |
-|---|---|
-| **Boards** | The configured digitizers with their live status, a **Scan** that probes the links and lists what answers, and the form to add a board. Scan fills the form rather than adding the board — the ID and the firmware choice stay yours. |
-| **Current Module** | Which source the beam current comes from — TetrAMM, RBD 9103 or a monitored Graphite value — and its settings. Also the Carbon address the measured current is *pushed* to, which is not the same as the Graphite server the Stats page *reads*. |
-| **Notifications** | Telegram and Zulip credentials, and the alert rules. See [Monitoring and alerts](monitoring-and-alerts.md). |
-| **ELOG** | The logbook URL, the shared account, default attributes, and whether WebDAQ may post at all. |
-| **Grafana** | The Grafana address and a service-account token. The DAQ server makes those requests, so the address has to be reachable from the server machine. |
-| **Appearance** | Theme, which dashboard tabs and cards are shown, and whether current acquisition is enabled at all. Browser-local. |
+| Group | Section | What it holds |
+|---|---|---|
+| Hardware | **Current module** | Which source the beam current comes from — TetrAMM, RBD 9103 or a monitored Graphite value — and its settings. Also the Carbon address the measured current is *pushed* to. |
+| Services | **Statistics (Graphite)** | The Graphite server: host, web port (where the Stats page reads metrics) and Carbon port (where the DAQ writes its rates), and the metric prefix of the experiment. |
+| Services | **Grafana** | The Grafana address and a service-account token. The DAQ server makes those requests, so the address has to be reachable from the server machine. |
+| Services | **Logbook (ELOG)** | The logbook URL, the shared account, default attributes, and whether WebDAQ may post at all. |
+| Alerts | **Notifications** | Telegram and Zulip credentials, and the alert rules. See [Monitoring and alerts](monitoring-and-alerts.md). |
+| Interface | **Appearance** | Theme, which dashboard views and cards are shown, and whether current acquisition is enabled at all. Browser-local. |
 
 ```{note}
 `conf/telegram_settings.json`, `conf/zulip_settings.json`,
@@ -354,7 +378,7 @@ emptying them.
 
 ---
 
-## 9. What is refused, and when
+## 10. What is refused, and when
 
 A short list of the places WebDAQ says no, so the refusal is not a surprise:
 

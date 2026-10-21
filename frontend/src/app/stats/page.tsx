@@ -1,9 +1,10 @@
 'use client'
+import Link from 'next/link'
 
 import { EmptyState, ErrorState } from '@/components/ui/empty-state'
 import { useCallback, useEffect, useState } from 'react'
 import { AuthGate } from '@/components/auth-gate'
-import { Eye, EyeOff, Gauge, Pencil, Plus, RefreshCw, Settings2, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Gauge, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Layout } from '@/components/dashboard-layout'
@@ -23,7 +24,6 @@ import {
   getStatsMetricLastValue,
   getStatsMetricSeries,
   getStatsGraphiteConfig,
-  setStatsGraphiteConfig,
   getStatsConnection,
 } from '@/lib/api'
 import { Label } from '@/components/ui/label'
@@ -65,13 +65,9 @@ function StatsPageContent() {
     { mode: 'add' | 'edit'; path: string; name: string; unit: string } | null
   >(null)
 
-  // Graphite configuration — needed rarely, so it stays folded away.
+  // The Graphite server, shown and checked here; set in Settings.
   const [graphiteHost, setGraphiteHost] = useState('localhost')
   const [graphitePort, setGraphitePort] = useState('80')
-  // Root of the metric tree the DAQ writes rates into. It names the experiment,
-  // not a board — each campaign gets its own subtree so their series never mix.
-  const [graphitePrefix, setGraphitePrefix] = useState('ancillary.rates')
-  const [showGraphiteConfig, setShowGraphiteConfig] = useState(false)
 
   useEffect(() => {
     const loadGraphiteConfig = async () => {
@@ -79,7 +75,6 @@ function StatsPageContent() {
         const config = await getStatsGraphiteConfig()
         setGraphiteHost(config.graphite_host || 'localhost')
         setGraphitePort(String(config.graphite_port || 80))
-        setGraphitePrefix(config.graphite_prefix || 'ancillary.rates')
       } catch (error) {
         console.error('Failed to load graphite config:', error)
       }
@@ -236,26 +231,6 @@ function StatsPageContent() {
       setLocalError(null)
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handleSaveGraphiteConfig = async () => {
-    try {
-      const saved = await setStatsGraphiteConfig(
-        graphiteHost, parseInt(graphitePort), graphitePrefix)
-      // The server normalises the prefix (dots kept, everything Graphite would
-      // choke on becomes '_'), so show what will actually be written.
-      if (saved?.graphite_prefix) setGraphitePrefix(saved.graphite_prefix)
-      toast({
-        title: 'Saved',
-        description: `Graphite server updated — rates go to ${saved?.graphite_prefix ?? graphitePrefix}.bo_<board>`,
-      })
-    } catch (error: any) {
-      toast({
-        title: 'Error',
-        description: error.response?.data?.error || 'Failed to save the Graphite configuration',
-        variant: 'destructive',
-      })
     }
   }
 
@@ -423,63 +398,11 @@ function StatsPageContent() {
           </div>
         )}
 
-        {/* Server settings — needed once per setup, so out of the way */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4">
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-              <Settings2 className="h-4 w-4" />
-              Graphite server
-              <span className="font-normal text-muted-foreground">
-                {graphiteHost}:{graphitePort}
-              </span>
-            </CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => setShowGraphiteConfig(!showGraphiteConfig)}>
-              {showGraphiteConfig ? 'Hide' : 'Change'}
-            </Button>
-          </CardHeader>
-          {showGraphiteConfig && (
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="stats-graphite-host">Host</Label>
-                  <Input
-                    id="stats-graphite-host"
-                    value={graphiteHost}
-                    onChange={(e) => setGraphiteHost(e.target.value)}
-                    placeholder="lunaserver"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="stats-graphite-port">Port</Label>
-                  <Input
-                    id="stats-graphite-port"
-                    value={graphitePort}
-                    onChange={(e) => setGraphitePort(e.target.value)}
-                    placeholder="80"
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stats-graphite-prefix">Metric prefix (experiment)</Label>
-                <Input
-                  id="stats-graphite-prefix"
-                  value={graphitePrefix}
-                  onChange={(e) => setGraphitePrefix(e.target.value)}
-                  placeholder="ancillary.rates.12c12c"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Where the DAQ writes its rates. Give each experiment its own subtree so
-                  campaigns never share a series — rates land under{' '}
-                  <code className="font-mono">
-                    {(graphitePrefix || 'ancillary.rates')}.bo_&lt;board&gt;.ch_&lt;channel&gt;.totalRate
-                  </code>
-                  . A live run picks up a change on its next stats interval.
-                </p>
-              </div>
-              <Button onClick={handleSaveGraphiteConfig}>Save</Button>
-            </CardContent>
-          )}
-        </Card>
+        {/* The server itself is set up in Settings → Statistics (Graphite). */}
+        <p className="text-xs text-muted-foreground">
+          Graphite server <span className="font-mono">{graphiteHost}:{graphitePort}</span> —{' '}
+          <Link href="/settings?view=graphite" className="underline underline-offset-2 hover:text-foreground">change it in Settings</Link>.
+        </p>
 
         <MetricBrowser
           open={browserOpen}

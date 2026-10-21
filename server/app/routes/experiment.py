@@ -580,6 +580,17 @@ def get_stats():
     file write rate) from the caendaq statistics collector."""
     return jsonify(caen_acq.stats()), 200
 
+@bp.route('/experiment/rate_history', methods=['GET'])
+@jwt_required_custom
+def get_rate_history_route():
+    """The rates of the whole run (kept after it stops, until the next one).
+    ?since=<t>&generation=<g> returns only the newer points while the history
+    has not been thinned since (generation unchanged)."""
+    from ..services.rate_history import get_rate_history
+    since = request.args.get('since', type=float)
+    generation = request.args.get('generation', type=int)
+    return jsonify(get_rate_history().snapshot(since, generation)), 200
+
 @bp.route('/experiment/board_diagnostics', methods=['GET'])
 @jwt_required_custom
 def get_board_diagnostics():

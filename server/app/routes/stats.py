@@ -28,7 +28,10 @@ def get_graphite_config():
         return jsonify({
             'graphite_host': config['graphite_host'],
             'graphite_port': config['graphite_port'],
-            'graphite_prefix': config['graphite_prefix']
+            'graphite_prefix': config['graphite_prefix'],
+            # Where the DAQ writes its rates (Carbon, plaintext); the port
+            # above is the web API that reads them back.
+            'carbon_port': int(stats_manager.stats_config.get('carbon_port', 2003) or 2003),
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -65,6 +68,17 @@ def set_graphite_config():
             stats_manager.stats_config['graphite_port'] = int(graphite_port)
             stats_manager._save_config(stats_manager.stats_config)
 
+        carbon_port = data.get('carbon_port')
+        if carbon_port is not None:
+            try:
+                carbon_port = int(carbon_port)
+                if not 1 <= carbon_port <= 65535:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return jsonify({'error': 'carbon_port must be a port number'}), 400
+            stats_manager.stats_config['carbon_port'] = carbon_port
+            stats_manager._save_config(stats_manager.stats_config)
+
         if graphite_prefix is not None:
             try:
                 graphite_prefix = stats_manager.set_graphite_prefix(graphite_prefix)
@@ -78,6 +92,7 @@ def set_graphite_config():
             from ..services.caen_acquisition import get_caen_acquisition
             get_caen_acquisition(TEST_FLAG).set_graphite(
                 stats_manager.stats_config.get('graphite_host', ''),
+                port=int(stats_manager.stats_config.get('carbon_port', 2003) or 2003),
                 prefix=stats_manager.get_graphite_prefix())
         except Exception:
             pass
@@ -330,6 +345,26 @@ def browse_metrics():
             'nodes': stats_manager.graphite_client.find_metrics(query),
             'prefix': prefix,
         }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@bp.route('/stats/recent', methods=['GET'])
+@jwt_required_custom
+def recent_metrics_route():
+    """Metrics with a value in the last hour (?window=-1h), latest value and a
+    short trend each, leaving out this DAQ's own rates. ?refresh=1 skips the
+    one-minute cache."""
+    from ..services.metric_discovery import recent_metrics
+    from ..services.caen_acquisition import _graphite_from_stats, _DEFAULT_GRAPHITE_PREFIX
+    window = request.args.get('window', '-1h')
+    if not window.startswith('-') or len(window) > 8:
+        return jsonify({'error': 'window must look like -1h or -30min'}), 400
+    refresh = request.args.get('refresh', '').lower() in ('1', 'true', 'yes')
+    try:
+        _, _, prefix = _graphite_from_stats()
+        return jsonify(recent_metrics(stats_manager.graphite_client,
+                                      [prefix, _DEFAULT_GRAPHITE_PREFIX], window, refresh)), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

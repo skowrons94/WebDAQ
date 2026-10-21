@@ -22,7 +22,6 @@ import {
     GitMerge,
 } from "lucide-react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -52,56 +51,32 @@ import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import dynamic from 'next/dynamic'
 import { useIsPhone } from '@/hooks/use-is-phone'
+import { NavList, SideNav, useActiveItem } from '@/components/app-nav'
 
 // Phones only, so desktops never download it.
 const RunBar = dynamic(() => import('@/components/run-bar').then((m) => m.RunBar), { ssr: false })
 import { ServerStatus } from '@/components/server-status'
 import { RunStatusIndicator } from '@/components/run-status-indicator'
 
-// Top-level pages, in nav order. Used for both the desktop and mobile menus
-// and to highlight the page the user is currently on.
-const NAV_ITEMS = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/logbook", label: "Logbook" },
-    { href: "/stats", label: "Stats" },
-    // Where boards are discovered (scan) and added. It used to be reachable
-    // only through Settings → Boards, a place nobody looked for it.
-    { href: "/board", label: "Boards" },
-    { href: "/DAQ", label: "DAQ" },
-    { href: "/tuner", label: "Tuner" },
-    { href: "/troubleshoot", label: "Troubleshoot" },
-    { href: "/alerts", label: "Alerts" },
-    { href: "/settings", label: "Settings" },
-]
-
 export function Layout({ children }: { children: React.ReactNode }) {
     const clearToken = useAuthStore((state) => state.clearToken)
     const router = useRouter()
     const setDashboardTab = useDashboardTabStore((state) => state.setTab)
-    const pathname = usePathname()
     const [open, setOpen] = useState(false)
     const [menuOpen, setMenuOpen] = useState(false)
     const menuButtonRef = useRef<HTMLButtonElement>(null)
-    const firstNavRef = useRef<HTMLAnchorElement>(null)
     // Closing the menu to open Search: focus goes to the search box, not back
     // to the menu button.
     const toSearch = useRef(false)
     const phone = useIsPhone()
 
-    // A nav entry is active when the current path matches it exactly or is a
-    // nested route beneath it (e.g. /settings/foo highlights Settings).
-    // Paths are compared without a trailing slash (static exports add one).
-    const path = (pathname || "/").replace(/\/+$/, "") || "/"
-    const isActive = (href: string) =>
-        path === href || path.startsWith(href + "/")
+    const activeItem = useActiveItem()
 
     // "<Page> · LUNADAQ" in the browser tab, so a row of tabs in the control
     // room can be told apart.
     useEffect(() => {
-        const item = NAV_ITEMS.find((i) => isActive(i.href))
-        document.title = item ? `${item.label} · LUNADAQ` : "LUNADAQ"
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [path])
+        document.title = activeItem ? `${activeItem.label} · LUNADAQ` : "LUNADAQ"
+    }, [activeItem])
 
     const handleLogout = () => {
         clearToken()
@@ -120,12 +95,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         router.push(href)
     }
 
-    const navLinkClass = (href: string) =>
-        `rounded-sm transition-colors hover:text-foreground ${
-            isActive(href)
-                ? "text-foreground font-semibold underline decoration-primary decoration-2 underline-offset-[6px]"
-                : "text-muted-foreground"
-        }`
 
     return (
         // Bottom padding below md leaves room for the fixed run bar.
@@ -158,7 +127,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         className="flex w-[18rem] flex-col gap-6 overflow-y-auto sm:w-[20rem]"
                         // Focus starts on the first page in the menu, and goes
                         // back to the menu button when it closes.
-                        onOpenAutoFocus={(e) => { e.preventDefault(); firstNavRef.current?.focus() }}
+                        onOpenAutoFocus={(e) => {
+                            e.preventDefault()
+                            const sheet = e.currentTarget as HTMLElement | null
+                            const link = sheet?.querySelector<HTMLElement>('a[aria-current="page"]')
+                                ?? sheet?.querySelector<HTMLElement>('nav a')
+                            link?.focus()
+                        }}
                         onCloseAutoFocus={(e) => {
                             if (toSearch.current) { toSearch.current = false; e.preventDefault(); return }
                             e.preventDefault()
@@ -169,24 +144,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             <MoonStarIcon className="h-7 w-7 text-primary" aria-hidden="true" />
                             LUNADAQ
                         </SheetTitle>
-                        <nav aria-label="Main" className="grid gap-1 text-base font-medium">
-                            {NAV_ITEMS.map((item, i) => (
-                                <SheetClose asChild key={item.href}>
-                                    <Link
-                                        ref={i === 0 ? firstNavRef : undefined}
-                                        href={item.href}
-                                        aria-current={isActive(item.href) ? "page" : undefined}
-                                        className={`flex min-h-11 items-center rounded-md px-2 ${
-                                            isActive(item.href)
-                                                ? "bg-muted font-semibold text-foreground"
-                                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                                        }`}
-                                    >
-                                        {item.label}
-                                    </Link>
-                                </SheetClose>
-                            ))}
-                        </nav>
+                        <NavList wrap={(link, key) => <SheetClose asChild key={key}>{link}</SheetClose>} />
                         <div className="grid gap-3 border-t pt-4">
                             <Button
                                 variant="outline"
@@ -214,18 +172,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <MoonStarIcon className="h-7 w-7 text-primary" aria-hidden="true" />
                     <span className="hidden sm:inline">LUNADAQ</span>
                 </Link>
-                <nav aria-label="Main" className="hidden items-center gap-2.5 text-sm font-medium lg:flex xl:gap-5">
-                    {NAV_ITEMS.map((item) => (
-                        <Link
-                            key={item.href}
-                            href={item.href}
-                            aria-current={isActive(item.href) ? "page" : undefined}
-                            className={navLinkClass(item.href)}
-                        >
-                            {item.label}
-                        </Link>
-                    ))}
-                </nav>
                 <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
                     <Button
                         variant="outline"
@@ -295,9 +241,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                             </CommandGroup>
                             <CommandSeparator />
                             <CommandGroup heading="Settings">
-                                <CommandItem onSelect={() => go('/settings?view=boards')}>
+                                <CommandItem onSelect={() => go('/board')}>
                                     <Cpu className="mr-2 h-4 w-4" />
                                     <span>Boards</span>
+                                </CommandItem>
+                                <CommandItem onSelect={() => go('/settings?view=graphite')}>
+                                    <LineChart className="mr-2 h-4 w-4" />
+                                    <span>Statistics server (Graphite)</span>
                                 </CommandItem>
                                 <CommandItem onSelect={() => go('/settings?view=current')}>
                                     <Gauge className="mr-2 h-4 w-4" />
@@ -345,12 +295,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </DropdownMenu>
                 </div>
             </header>
-            <main id="main" tabIndex={-1} className="flex-1 px-4 pt-4 outline-none md:px-8 md:pt-8">
-                {children}
-            </main>
-            <footer className="mt-auto flex h-16 items-center justify-center bg-background text-sm text-muted-foreground">
-                <span>LUNADAQ</span>
-            </footer>
+            <div className="flex flex-1">
+                <SideNav />
+                <div className="flex min-w-0 flex-1 flex-col">
+                    <main id="main" tabIndex={-1} className="flex-1 px-4 pt-4 outline-none md:px-8 md:pt-6">
+                        {children}
+                    </main>
+                    <footer className="mt-auto flex h-16 items-center justify-center bg-background text-sm text-muted-foreground">
+                        <span>LUNADAQ</span>
+                    </footer>
+                </div>
+            </div>
             {phone && <RunBar />}
         </div>
     )

@@ -9,10 +9,14 @@ export function Sparkline({
   values,
   className = '',
   height = 32,
+  fromZero = false,
 }: {
   values: (number | null)[]
   className?: string
   height?: number
+  /** Scale from zero, not from the lowest value: for rates, where 71 against
+   *  72 events/s is no dip at all. */
+  fromZero?: boolean
 }) {
   const points = values.filter((v): v is number => v !== null && Number.isFinite(v))
 
@@ -27,7 +31,7 @@ export function Sparkline({
     )
   }
 
-  const min = Math.min(...points)
+  const min = fromZero ? Math.min(0, ...points) : Math.min(...points)
   const max = Math.max(...points)
   // A flat series would divide by zero; draw it down the middle instead.
   const span = max - min || 1

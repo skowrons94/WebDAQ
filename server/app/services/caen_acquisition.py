@@ -458,6 +458,7 @@ class CaenAcquisition:
             self._running = True
             self.logger.info("Acquisition started")
             self._start_coincidences()
+            self._start_rate_history()
             return True
         except Exception as e:
             self.logger.error(f"Error starting acquisition: {e}")
@@ -472,12 +473,24 @@ class CaenAcquisition:
                 self._sis().stop()
             self.logger.info("Acquisition stopped")
             self._finish_coincidences()
+            try:
+                from .rate_history import get_rate_history
+                get_rate_history().stop()
+            except Exception:
+                pass
             return True
         except Exception as e:
             self.logger.error(f"Error stopping acquisition: {e}")
             return False
 
     # ----------------------------------------------------------- coincidences
+    def _start_rate_history(self) -> None:
+        try:
+            from .rate_history import get_rate_history
+            get_rate_history().start(self, (self.stats_interval() or 1000) / 1000.0)
+        except Exception as e:
+            self.logger.error(f"The run's rate history could not start: {e}")
+
     def _start_coincidences(self) -> None:
         # Never allowed to fail a run: coincidences are a view on the data.
         try:

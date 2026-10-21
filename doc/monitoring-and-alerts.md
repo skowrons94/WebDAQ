@@ -44,10 +44,10 @@ accelerator.terminal_voltage    12c12c.tetram…
 
 * **Board rates** — events, pile-up, saturation, lost counts and file write rate
   per board and channel, pushed by the acquisition on the sampling cadence during
-  a run — once a second unless it was changed on the Data Rates tab.
+  a run — once a second unless it was changed on the Data rates page.
 * **Beam current** — every sample from the TetrAMM or the RBD 9103.
 
-Both go to Carbon on port 2003 of the host configured in Settings; the Stats page
+Both go to Carbon (port 2003 by default) of the host set in Settings → Statistics (Graphite); the Stats page
 and Grafana read them back over HTTP (port 80 or 8080, depending on the install).
 
 ### Graphite time syntax
@@ -57,6 +57,21 @@ Ranges are relative: `-10s`, `-30min`, `-6h`, `-1d`. **The minute unit is `min`*
 makes once.
 
 ---
+
+### No Graphite or Grafana in the lab?
+
+`scripts/monitoring.sh start` runs both on the DAQ PC in Docker, with their data
+in `~/webdaq-monitoring` and Grafana already connected to Graphite:
+
+```bash
+scripts/monitoring.sh start                     # web 8080, Carbon 2003, Grafana 3001
+scripts/monitoring.sh start --graphite-port 8081 --carbon-port 2013 --grafana-port 3002
+scripts/monitoring.sh status | stop | remove    # remove keeps the data
+```
+
+Then set Settings → Statistics (Graphite) to `localhost`, the web and Carbon
+ports above, and Settings → Grafana to `http://localhost:3001` (first login
+admin/admin).
 
 ## 2. The Stats page
 
@@ -69,9 +84,12 @@ on the page will read `N/A` until it does. Grey is the check in flight. The ligh
 distinguishes a dead server from metrics that simply have no data — without it
 they look identical.
 
-**Adding a metric.** Press *Add metric* and browse the tree: open `accelerator`,
-pick `terminal_voltage`. Or type a word in the search box to find it anywhere in
-the tree. Then give it:
+**Adding a metric.** Press *Add metric*. It opens on **Active in the last hour**:
+every metric Graphite has had a value for in the last hour, with its latest
+value, how long ago it came and a short trend — the DAQ's own rates and
+Graphite's bookkeeping left out. Type in the filter to narrow it down. For
+anything else, **Browse all** walks the whole tree (open `accelerator`, pick
+`terminal_voltage`) or searches it by name. Then give it:
 
 * a **name** — what the card and the CSV column will be called ("Terminal
   Voltage"), and

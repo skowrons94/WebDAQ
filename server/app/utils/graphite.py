@@ -364,9 +364,9 @@ class GraphiteClient:
             'until': until_time
         }
         
-        # Add all targets as separate parameters
-        for target in targets:
-            params[f'target'] = target
+        # Every target as its own 'target' parameter: requests sends a list as
+        # repeated keys. (Assigning them one by one kept only the last.)
+        params['target'] = list(targets)
         
         try:
             response = self._get(url, params)

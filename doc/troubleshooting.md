@@ -60,7 +60,7 @@ server retries by itself, warns in the log which boards stayed shut, and
 
 The board set its FAIL flag in a data block: it could not sustain the readout —
 typically a full internal buffer or a lost link — and **the data from that point
-may be incomplete**. Open **Dashboard → Board Health** and read the three problem
+may be incomplete**. Open **Board health** (sidebar → Run) and read the three problem
 counters for that board:
 
 * **FAIL blocks** not zero confirms it.
@@ -172,7 +172,7 @@ dual trace enabled.
 
 ### The rates are not updating
 
-**Data Rates** shows *No answer* when the last request failed — the numbers on
+**Data rates** shows *No answer* when the last request failed — the numbers on
 screen are then the last known ones, not current. If it says *Stopped* while a
 run is going, the page and the server disagree about the run state; reload.
 

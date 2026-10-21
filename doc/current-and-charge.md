@@ -141,7 +141,7 @@ against a dead number.
 ```{note}
 Two different Graphite endpoints are involved and they are easy to confuse. The
 **Carbon** ingest (port 2003, Settings → Current Module) is where WebDAQ *sends*
-measured current. The **render API** (Settings → Stats page) is where it *reads*
+measured current. The **render API** (Settings → Statistics (Graphite)) is where it *reads*
 values back — including this module and the long-run history behind the current
 plot. A monitored value that never arrives is usually the render API pointing at
 port 2003.

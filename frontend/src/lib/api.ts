@@ -894,10 +894,11 @@ export const getStatsGraphiteConfig = () =>
 // with the server so one Save covers both, and the server normalises it — use
 // the graphite_prefix in the response rather than what was typed.
 export const setStatsGraphiteConfig = (
-    graphite_host: string, graphite_port: number, graphite_prefix?: string) =>
+    graphite_host: string, graphite_port: number, graphite_prefix?: string, carbon_port?: number) =>
     api.post('/stats/graphite_config',
              { graphite_host, graphite_port,
-               ...(graphite_prefix !== undefined ? { graphite_prefix } : {}) })
+               ...(graphite_prefix !== undefined ? { graphite_prefix } : {}),
+               ...(carbon_port !== undefined ? { carbon_port } : {}) })
        .then(res => res.data);
 
 // Rate sampling cadence. One caendaq tick samples the counters, differences
@@ -1346,3 +1347,22 @@ export const getReferenceLines = () =>
 // The spectrum in channels, without the energy calibration (peak picking).
 export const getRawHistogram = (boardId: string, channel: number, type: string = 'energy') =>
     api.get(`/histograms/${boardId}/${channel}/${type}`, { params: { raw: 1 } }).then(res => res.data);
+
+// ─── Rates of the whole run (Data rates page) ───────────────────────────────
+// points[i].b[boardId].ch[channel] = [events, pile-ups, lost, saturations] per
+// second; .w = bytes/s to file. `since`+`generation` fetch only newer points
+// while the server has not thinned its history (incremental: true).
+export type RatePoint = { t: number; b: Record<string, { w: number; ch: Record<string, number[]> }> };
+export type RateHistory = {
+    run_start: number | null; generation: number; step_s: number; metrics: string[];
+    incremental: boolean; running: boolean; points: RatePoint[];
+};
+export const getRateHistory = (since?: number, generation?: number) =>
+    api.get('/experiment/rate_history', { params: since !== undefined ? { since, generation } : {} })
+        .then(res => res.data as RateHistory);
+
+// Metrics with a value in the last hour, without this DAQ's own rates.
+export type RecentMetric = { path: string; value: number; timestamp: string; trend: number[] };
+export const getRecentMetrics = (refresh = false) =>
+    api.get('/stats/recent', { params: refresh ? { refresh: 1 } : {} })
+        .then(res => res.data as { metrics: RecentMetric[]; scanned: number; truncated: boolean; window: string });

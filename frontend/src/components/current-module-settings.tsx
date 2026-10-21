@@ -320,7 +320,7 @@ export function CurrentModuleSettings() {
       console.error('Error searching metrics:', error)
       toast({
         title: 'Error',
-        description: 'Could not reach Graphite to list metrics. Check the Stats page server settings.',
+        description: 'Could not reach Graphite to list metrics. Check the server in Settings → Statistics (Graphite).',
         variant: 'destructive'
       })
     } finally {
@@ -429,10 +429,11 @@ export function CurrentModuleSettings() {
 
       {/* Module-specific settings */}
       <Tabs value={moduleType} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="tetramm">TetrAMM Settings</TabsTrigger>
-          <TabsTrigger value="rbd9103">RBD 9103 Settings</TabsTrigger>
-          <TabsTrigger value="graphite">Monitored value</TabsTrigger>
+        {/* Wraps on a phone rather than squeezing three labels into each other. */}
+        <TabsList className="flex h-auto w-full flex-wrap">
+          <TabsTrigger value="tetramm" className="flex-1">TetrAMM</TabsTrigger>
+          <TabsTrigger value="rbd9103" className="flex-1">RBD 9103</TabsTrigger>
+          <TabsTrigger value="graphite" className="flex-1 whitespace-nowrap">Monitored value</TabsTrigger>
         </TabsList>
 
         <TabsContent value="tetramm">
@@ -746,8 +747,8 @@ export function CurrentModuleSettings() {
                   placeholder="accelerator.beam_current"
                 />
                 <p className="text-xs text-muted-foreground">
-                  The Graphite path of the value to use. Read through the same server the
-                  Stats page is configured with.
+                  The Graphite path of the value to use, read from the server set in
+                  Settings → Statistics (Graphite).
                 </p>
               </div>
 
@@ -894,7 +895,7 @@ export function CurrentModuleSettings() {
           <CardDescription>
             Where measured current is <strong>sent</strong> (Carbon plaintext ingest,
             usually port 2003). Reading values back — the monitored-value module and the
-            history behind long-run plots — uses the render API configured on the Stats page.
+            history behind long-run plots — uses the server set in Settings → Statistics (Graphite).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

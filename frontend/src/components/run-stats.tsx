@@ -18,8 +18,9 @@ import {
 import { Activity, AlertTriangle, Cpu, HardDrive } from "lucide-react"
 import {
   getExperimentStats, getBoardConfiguration, getRunStatus,
-  getStatsSampling, setStatsSampling,
+  getStatsSampling, setStatsSampling, getRateHistory, type RatePoint,
 } from "@/lib/api"
+import { Sparkline } from "@/components/stats/sparkline"
 import {
   rateUnit, byteRateUnit, maxMagnitude, formatTick, formatValue,
   CHART_MARGIN, yAxisLabel, xAxisLabel,
@@ -60,7 +61,24 @@ const METRICS = [
 ] as const
 type MetricKey = (typeof METRICS)[number]["key"]
 
-const MAX_POINTS = 60          // rolling history: 60 points at the sampling cadence
+// What the chart shows of the run: the server keeps all of it.
+const WINDOWS = [
+  { s: 0, label: "Whole run" },
+  { s: 600, label: "Last 10 min" },
+  { s: 60, label: "Last minute" },
+] as const
+
+/** Seconds since the run started, as a clock: 42 s, 12:05, 1:02:05. */
+function formatElapsed(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds))
+  if (s < 60) return `${s} s`
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60
+  const mm = h ? String(m).padStart(2, "0") : String(m)
+  return `${h ? `${h}:` : ""}${mm}:${String(r).padStart(2, "0")}`
+}
+
+/** Index of a metric in the server's [events, pile-ups, lost, saturations]. */
+const METRIC_INDEX: Record<string, number> = { event_rate: 0, pileup_rate: 1, lost_rate: 2, satu_rate: 3 }
 
 // Sampling cadence choices offered on this page. This is NOT a UI-only poll
 // rate: one caendaq tick samples the counters, differences them and pushes to
@@ -132,11 +150,14 @@ export default function RunStats() {
   const [boardIdx, setBoardIdx] = useState(0)
   const [metric, setMetric] = useState<MetricKey>("event_rate")
   const [selected, setSelected] = useState<number[]>([])
-  const [history, setHistory] = useState<Array<Record<string, number | string>>>([])
+  // The whole run's rates, from the server (it keeps them, thinned when long).
+  const [points, setPoints] = useState<RatePoint[]>([])
+  const [historyStep, setHistoryStep] = useState(1)
+  const [windowS, setWindowS] = useState<number>(0)
   // True while the last poll failed: the numbers on screen are the last known
   // ones, not current.
   const [unreachable, setUnreachable] = useState(false)
-  const startRef = useRef<number>(Date.now())
+  const followRef = useRef<{ generation?: number; last?: number }>({})
 
   // The board list comes from the configuration, so the page has something to
   // show between runs: it used to render nothing at all until rates arrived,
@@ -206,20 +227,20 @@ export default function RunStats() {
       const boardRates: BoardRate[] = Array.isArray(stats) ? stats : []
       setRates(boardRates)
 
-      const board = boardRates[boardIdx]
-      if (board) {
-        // Every metric is recorded, not just the one on screen: switching the
-        // selector used to throw the trace away and leave the chart blank for a
-        // minute, which looks like the rates stopped.
-        const t = Math.round((Date.now() - startRef.current) / 1000)
-        const row: Record<string, number | string> = { time: t }
-        for (const channel of board.channels) {
-          const values = channel as unknown as Record<string, number>
-          for (const m of METRICS) {
-            row[seriesKey(channel.channel, m.key)] = values[m.key] ?? 0
-          }
-        }
-        setHistory((h) => [...h, row].slice(-MAX_POINTS))
+      // The history: everything newer than what is held, or all of it again
+      // when the server has thinned it (or a new run began) since.
+      const follow = followRef.current
+      const h = await getRateHistory(follow.last, follow.generation).catch(() => null)
+      if (!active || !h) return
+      setHistoryStep(h.step_s)
+      if (h.incremental) {
+        if (h.points.length) setPoints((p) => [...p, ...h.points])
+      } else {
+        setPoints(h.points)
+      }
+      followRef.current = {
+        generation: h.generation,
+        last: h.points.length ? h.points[h.points.length - 1].t : follow.last,
       }
     }
     poll()
@@ -227,7 +248,7 @@ export default function RunStats() {
     // a value that cannot have changed yet, and makes the chart draw flat steps.
     const id = setInterval(poll, Math.max(samplingMs, MIN_POLL_MS))
     return () => { active = false; clearInterval(id) }
-  }, [boardIdx, samplingMs])
+  }, [samplingMs])
 
   // The run state and the headline numbers do not have to wait for the chart's
   // cadence: at 60 s the page would say "Stopped" for a minute after Start.
@@ -248,21 +269,12 @@ export default function RunStats() {
     return () => { active = false; clearInterval(id) }
   }, [samplingMs])
 
-  // A new run means new boards and a new time origin. A run that *stops* keeps
-  // its trace on screen — that last minute is usually what you want to look at.
+  // A new run means new boards. Its history comes with a new generation from
+  // the server, so the trace starts over by itself; a run that *stops* keeps
+  // its trace on screen.
   useEffect(() => {
-    if (!isRunning) return
-    setHistory([])
-    startRef.current = Date.now()
-    loadBoards()
+    if (isRunning) loadBoards()
   }, [isRunning, loadBoards])
-
-  // Changing the cadence changes what a point means, so start the trace over
-  // rather than splicing 10 s averages onto 1 s ones. Changing the metric does
-  // not: every metric is in the history already.
-  useEffect(() => {
-    setHistory([]); startRef.current = Date.now()
-  }, [boardIdx, samplingMs])
 
   // One row per configured board, carrying its live rates when a run supplies
   // them. Board order matches: the acquisition adds boards sorted by id.
@@ -292,6 +304,47 @@ export default function RunStats() {
   }, [boardRows.length, boardIdx])
 
   const activeBoard = boardRows[boardIdx] ?? boardRows[0]
+
+  // Which key of the history a board is under: its id, or the only one there.
+  const keyOf = useCallback((id: string | undefined) => {
+    const last = points[points.length - 1]
+    if (!last || id === undefined) return undefined
+    if (last.b[id]) return id
+    const keys = Object.keys(last.b)
+    return keys.length === 1 ? keys[0] : undefined
+  }, [points])
+
+  // Rows for the chart: every metric of every channel of the shown board.
+  const history = useMemo(() => {
+    const key = keyOf(activeBoard?.id)
+    if (!key) return []
+    const end = points.length ? points[points.length - 1].t : 0
+    const from = windowS > 0 ? end - windowS : -Infinity
+    return points.filter((p) => p.t >= from && p.b[key]).map((p) => {
+      const row: Record<string, number | string> = { time: p.t }
+      for (const [ch, values] of Object.entries(p.b[key].ch)) {
+        for (const m of METRICS) row[seriesKey(Number(ch), m.key)] = values[METRIC_INDEX[m.key]] ?? 0
+      }
+      return row
+    })
+  }, [points, activeBoard, keyOf, windowS])
+
+  // Per board over the whole run: its total event rate, point by point, for
+  // the trend line and the run average on its card.
+  const boardTrend = useCallback((id: string) => {
+    const key = keyOf(id)
+    if (!key) return null
+    const totals = points.map((p) => {
+      const b = p.b[key]
+      return b ? Object.values(b.ch).reduce((sum, v) => sum + (v[0] ?? 0), 0) : null
+    })
+    const valid = totals.filter((v): v is number => v !== null)
+    const every = Math.max(1, Math.ceil(totals.length / 120))
+    return {
+      average: valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : null,
+      line: totals.filter((_, i) => i % every === 0),
+    }
+  }, [points, keyOf])
   // This tab polls on its own; the name of the state follows the header's rule.
   const shared = useRunStatus()
   const runBadge = deriveRunBadge(
@@ -417,6 +470,21 @@ export default function RunStats() {
                 <span>{board.dpp} · {board.channelCount} ch</span>
                 <span>{live ? `${formatBytes(live.write_rate)} to file` : "idle"}</span>
               </div>
+              {(() => {
+                const trend = boardTrend(board.id)
+                if (!trend || trend.line.length < 2) return null
+                return (
+                  <div className="mt-2 border-t pt-2">
+                    <div className="flex items-baseline justify-between text-xs">
+                      <span className="text-muted-foreground">{isRunning ? "This run" : "Last run"}</span>
+                      <span className="tabular-nums">
+                        avg <span className="font-medium">{trend.average === null ? "—" : formatRate(trend.average, "events")}</span>
+                      </span>
+                    </div>
+                    <Sparkline values={trend.line} height={28} fromZero className="mt-1 text-primary" />
+                  </div>
+                )
+              })()}
             </button>
           )
         })}
@@ -498,10 +566,11 @@ export default function RunStats() {
               {activeBoard ? ` · board ${activeBoard.id} (${activeBoard.name})` : ""}
             </CardTitle>
             <p className="text-xs text-muted-foreground">
-              {isRunning
-                ? `Per channel, in ${unit.trim()} — last ${MAX_POINTS} points, one every `
-                  + `${samplingLabel(samplingMs)}, averaged over that interval`
-                : "No run in progress — rates start when a run does"}
+              {points.length
+                ? `Per channel, in ${unit.trim()} — ${windowS ? WINDOWS.find((w) => w.s === windowS)?.label.toLowerCase() : "the whole run"}, `
+                  + `one point every ${historyStep > samplingMs / 1000 + 0.01 ? `${historyStep.toFixed(historyStep < 10 ? 1 : 0)} s (averaged: a long run is thinned)` : samplingLabel(samplingMs)}`
+                  + (isRunning ? "" : " — the last run, kept until the next one starts")
+                : "No run yet — rates start when a run does"}
             </p>
           </div>
           {/* Filters in one row above the plot, each saying what it changes. */}
@@ -534,6 +603,18 @@ export default function RunStats() {
                 )}
               </SelectContent>
             </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                Show
+              </Label>
+              <Select value={String(windowS)} onValueChange={(v) => setWindowS(Number(v))}>
+                <SelectTrigger className="h-9 w-36" aria-label="Time shown"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {WINDOWS.map((w) => <SelectItem key={w.s} value={String(w.s)}>{w.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1">
@@ -600,7 +681,7 @@ export default function RunStats() {
             <div className="flex h-[340px] flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center">
               <Activity className="h-7 w-7 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">
-                {!isRunning
+                {!isRunning && !points.length
                   ? "Rates appear here once a run starts."
                   : selected.length === 0
                     ? "Select a channel above to plot it."
@@ -618,10 +699,12 @@ export default function RunStats() {
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
                   dataKey="time"
+                  type="number"
+                  domain={["dataMin", "dataMax"]}
                   tick={{ fontSize: 11 }}
-                  minTickGap={32}
-                  interval="preserveStartEnd"
-                  label={xAxisLabel("Time (s)")}
+                  tickFormatter={(v: number) => formatElapsed(v)}
+                  minTickGap={40}
+                  label={xAxisLabel("Time since run start")}
                 />
                 <YAxis
                   tick={{ fontSize: 11 }}
@@ -641,7 +724,7 @@ export default function RunStats() {
                   }}
                   itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                   formatter={(v: number, name: string) => [formatValue(v, unit), name]}
-                  labelFormatter={(v) => `t = ${v} s`}
+                  labelFormatter={(v) => `t = ${formatElapsed(Number(v))}`}
                 />
                 {/* No chart legend: the channel buttons above carry the colours
                     (it was the third copy of the same key). */}

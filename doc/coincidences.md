@@ -1,6 +1,6 @@
 # Online coincidences
 
-The Coincidences page (Dashboard → Coincidences) builds spectra of channels
+The Coincidences page (sidebar → Spectra → Coincidences) builds spectra of channels
 gated by other channels, live, while the run is going. It is a view on the
 data: the run files keep every hit, so a gate set up wrong costs nothing — fix
 it and the gate starts over.
