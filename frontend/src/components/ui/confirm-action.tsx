@@ -67,7 +67,10 @@ export function ConfirmAction({
           </AlertDialogDescription>
         </AlertDialogHeader>
         {children}
-        <AlertDialogFooter className="gap-2 sm:gap-0">
+        {/* On a phone the buttons stack with Cancel on top, the action
+            below it: the footer's default reverses them, which put the red
+            confirm first, under the thumb. */}
+        <AlertDialogFooter className="gap-2 max-sm:flex-col sm:gap-0">
           <AlertDialogCancel className="pointer-coarse:min-h-11">{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             className={cn(

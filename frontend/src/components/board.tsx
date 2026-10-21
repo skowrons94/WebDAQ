@@ -17,6 +17,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { Cpu, Plus, Trash2 } from 'lucide-react'
 import { BoardScan } from '@/components/board-scan'
 import { Sis3316AddBoard } from '@/components/sis3316/sis3316-add-board'
+import { boardLabel } from '@/lib/board-label'
 
 const formSchema = z.object({
   id: z.string().min(1, "Board ID is required"),
@@ -33,6 +34,8 @@ type ConfiguredBoard = Omit<BoardData, 'link_type' | 'dpp'> & {
   link_type: string
   dpp: string
   vendor?: string
+  /** Model, e.g. "V1725S", once the board has been opened. */
+  name?: string
 }
 
 type Connectivity = { connected: boolean; ready: boolean; failed: boolean }
@@ -214,7 +217,7 @@ export function Board() {
                             <Cpu className="h-5 w-5 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold leading-tight">Board {board.id}</p>
+                            <p className="font-semibold leading-tight">{boardLabel(board)}</p>
                             <p className="text-xs text-muted-foreground">{board.dpp}</p>
                           </div>
                         </div>
@@ -225,19 +228,19 @@ export function Board() {
                         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
                           <dt className="text-muted-foreground">Model</dt>
                           <dd className="text-right">Struck SIS3316</dd>
-                          <dt className="text-muted-foreground">Link Type</dt>
+                          <dt className="text-muted-foreground">Link type</dt>
                           <dd className="text-right">Ethernet</dd>
                           <dt className="text-muted-foreground">IP address</dt>
                           <dd className="text-right font-mono">{board.link_num}</dd>
                         </dl>
                       ) : (
                         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
-                          <dt className="text-muted-foreground">VME Address</dt>
+                          <dt className="text-muted-foreground">VME address</dt>
                           <dd className="text-right font-mono">{board.vme}</dd>
-                          <dt className="text-muted-foreground">Link Type</dt>
+                          <dt className="text-muted-foreground">Link type</dt>
                           <dd className="text-right">{board.link_type}</dd>
                           <dt className="text-muted-foreground">
-                            {board.link_type === "A4818" ? "PID" : "Link Number"}
+                            {board.link_type === "A4818" ? "PID" : "Link number"}
                           </dt>
                           <dd className="text-right font-mono">{board.link_num}</dd>
                         </dl>
@@ -256,15 +259,15 @@ export function Board() {
                             Remove
                           </Button>
                         }
-                        title={`Remove board ${board.id}?`}
+                        title={`Remove ${boardLabel(board)}?`}
                         description={
                           <p>
-                            Board {board.id} ({board.dpp}) leaves the DAQ configuration and the next
+                            {boardLabel(board)} ({board.dpp}) leaves the DAQ configuration and the next
                             run does not read it. Its energy calibration file is deleted, so the
                             board has to be calibrated again if it is added back.
                           </p>
                         }
-                        confirmLabel={`Remove board ${board.id}`}
+                        confirmLabel={`Remove ${boardLabel(board)}`}
                         onConfirm={() => handleRemoveBoard(board.id)}
                       />
                     </div>
@@ -286,7 +289,10 @@ export function Board() {
           </CardHeader>
           <CardContent>
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                {/* Two columns from sm up, like the SIS3316 form below: one
+                    column of 1100 px wide inputs was hard to read. */}
+                <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="id"
@@ -305,7 +311,7 @@ export function Board() {
                   name="vme"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>VME Address</FormLabel>
+                      <FormLabel>VME address</FormLabel>
                       <FormControl>
                         <Input placeholder="0" {...field} />
                       </FormControl>
@@ -318,7 +324,7 @@ export function Board() {
                   name="link_type"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Link Type</FormLabel>
+                      <FormLabel>Link type</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -344,7 +350,7 @@ export function Board() {
 
                     return (
                       <FormItem>
-                        <FormLabel>{isA4818 ? "PID" : "Link Number"}</FormLabel>
+                        <FormLabel>{isA4818 ? "PID" : "Link number"}</FormLabel>
                         {isA4818 ? (
                           <FormControl>
                             <Input
@@ -376,11 +382,11 @@ export function Board() {
                   name="dpp"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>DPP Software</FormLabel>
+                      <FormLabel>DPP firmware</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select DPP software" />
+                            <SelectValue placeholder="Select DPP firmware" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
@@ -392,6 +398,7 @@ export function Board() {
                     </FormItem>
                   )}
                 />
+                </div>
                 <Button type="submit">
                   <Plus className="mr-1.5 h-4 w-4" />
                   Add board
@@ -404,6 +411,7 @@ export function Board() {
         {/* Struck SIS3316 over Ethernet: no CAEN link, found by IP address */}
         <Sis3316AddBoard
           existingIds={boards.map((b) => String(b.id))}
+          existingHosts={boards.filter((b) => b.vendor === "sis3316").map((b) => String(b.link_num))}
           disabled={runActive}
           onAdded={() => { fetchBoardConfiguration(); fetchConnectivity() }}
         />

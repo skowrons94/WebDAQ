@@ -56,6 +56,16 @@ REFERENCE_LINES: List[Dict[str, Any]] = [
     {"name": "Bi-214", "energy": 1764.49},
     {"name": "Y-88", "energy": 1836.06},
     {"name": "Tl-208", "energy": 2614.51},
+    # Beam-induced lines seen at LUNA, from contaminants hit by the proton
+    # beam: gamma energies (recoil-corrected, not level energies) from ENSDF.
+    # Capture lines whose energy follows the beam energy are left out.
+    {"name": "Li-7, 7Li(p,p'g)", "energy": 477.60},
+    {"name": "Ne-20, 23Na(p,ag)", "energy": 1633.67},
+    {"name": "Si-28, 27Al(p,g)", "energy": 1778.97},
+    {"name": "C-12, 15N(p,ag) / 11B", "energy": 4438.94},
+    {"name": "O-16, 19F(p,ag)", "energy": 6128.63},
+    {"name": "O-16, 19F(p,ag)", "energy": 6915.5},
+    {"name": "O-16, 19F(p,ag)", "energy": 7115.15},
 ]
 
 

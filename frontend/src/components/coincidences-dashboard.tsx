@@ -21,6 +21,8 @@ import {
   type CoincChannel, type CoincConfig, type CoincGate, type CoincStatus,
 } from '@/lib/api'
 import { RootPlot } from '@/components/root-plot'
+import { boardLabel as sharedBoardLabel } from '@/lib/board-label'
+import { formatHz } from '@/lib/format-rate'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -65,17 +67,20 @@ function formatCount(n: number): string {
   return n.toLocaleString()
 }
 
-function formatRate(r: number): string {
-  if (r >= 1000) return `${(r / 1000).toFixed(2)} kHz`
-  if (r >= 10) return `${r.toFixed(1)} Hz`
-  return `${r.toFixed(2)} Hz`
-}
+// The site's one rate format (lib/format-rate.ts).
+const formatRate = (r: number) => formatHz(r)
 
 // ───────────────────────────────────────────────────────────── channel picking
 
 function boardLabel(b: Board | undefined, id: string) {
-  return b ? `${b.name} ${b.id}` : `Board ${id}`
+  return sharedBoardLabel(b, id)
 }
+
+// The words of the axes, the same on every plot of the page. The server sends
+// the gated spectrum on 0…N channels, or mapped to keV when the channel is
+// calibrated (its axis then no longer starts at 0).
+const COUNTS = 'Counts / bin'
+const energyTitle = (h: any) => (h?.fXaxis && Number(h.fXaxis.fXmin) !== 0 ? 'Energy (keV)' : 'ADC channel')
 
 function ChannelChips({ value, boards, onRemove, empty }: {
   value: CoincChannel[]
@@ -279,6 +284,12 @@ function GateResults({ gate, status, boards, onAligned }: {
   const [channel, setChannel] = useState<string>(key(gate.channels[0]))
   const [partner, setPartner] = useState<string>('*')
   const [logy, setLogy] = useState(false)
+  // The Δt peak of real coincidences is a few bins wide in a range many times
+  // the window: on a phone it was one line at 0. The plot opens on a few
+  // windows around 0; "Full range" shows the whole Δt range.
+  const [dtFull, setDtFull] = useState(false)
+  const dtZoom = 3 * gate.window_ns
+  const dtRange: [number, number] | null = !dtFull && dtZoom < gate.dt_range_ns ? [-dtZoom, dtZoom] : null
   useEffect(() => {
     if (!gate.channels.some((c) => key(c) === channel) && gate.channels[0]) setChannel(key(gate.channels[0]))
   }, [gate.channels, channel])
@@ -329,7 +340,8 @@ function GateResults({ gate, status, boards, onAligned }: {
               <Checkbox checked={logy} onCheckedChange={(v) => setLogy(v === true)} />Log
             </label>
           </div>
-          <RootPlot fetch={() => getCoincSpectrum(gate.id, bid, Number(chs))} deps={[gate.id, channel]} logy={logy} />
+          <RootPlot fetch={() => getCoincSpectrum(gate.id, bid, Number(chs))} deps={[gate.id, channel]} logy={logy}
+                    xTitle={energyTitle} yTitle={COUNTS} />
         </div>
         <div>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
@@ -344,6 +356,13 @@ function GateResults({ gate, status, boards, onAligned }: {
                   </SelectContent>
                 </Select>
               )}
+              {dtZoom < gate.dt_range_ns && (
+                <Button size="sm" variant="outline" className="h-7 pointer-coarse:h-10" aria-pressed={dtFull}
+                        onClick={() => setDtFull((v) => !v)}
+                        title={dtFull ? `Show ±${dtZoom} ns around 0` : `Show the whole ±${gate.dt_range_ns} ns`}>
+                  {dtFull ? 'Around the window' : 'Full range'}
+                </Button>
+              )}
               <ConfirmAction
                 title="Align the partners in time?"
                 description={`Each partner's time offset is shifted so that its Δt peak against ${label(key(gate.channels[0]))} sits at 0. The gate's spectra start over.`}
@@ -351,7 +370,8 @@ function GateResults({ gate, status, boards, onAligned }: {
                 trigger={<Button size="sm" variant="outline" className="h-7"><Crosshair className="mr-1 h-3 w-3" />Align in time</Button>} />
             </div>
           </div>
-          <RootPlot fetch={() => getCoincDt(gate.id, bid, Number(chs), partner)} deps={[gate.id, channel, partner]} />
+          <RootPlot fetch={() => getCoincDt(gate.id, bid, Number(chs), partner)} deps={[gate.id, channel, partner]}
+                    xTitle="Δt (ns)" yTitle={COUNTS} xRange={dtRange} />
           <p className="mt-1 text-xs text-muted-foreground">
             Real coincidences make a peak; the flat floor is chance. Set the window to cover the peak.
           </p>
@@ -364,7 +384,8 @@ function GateResults({ gate, status, boards, onAligned }: {
         {gate.matrix && !veto && (
           <div className="xl:col-span-2">
             <p className="mb-1 text-sm font-medium">Energy of {label(key(gate.channels[0]))} (x) against its partner (y)</p>
-            <RootPlot fetch={() => getCoincMatrix(gate.id)} deps={[gate.id]} twoD height={360} />
+            <RootPlot fetch={() => getCoincMatrix(gate.id)} deps={[gate.id]} twoD height={360}
+                      xTitle={`${label(key(gate.channels[0]))} (ADC channel)`} yTitle="Partner (ADC channel)" />
           </div>
         )}
       </div>
@@ -455,14 +476,17 @@ export default function CoincidencesDashboard() {
         <CardHeader className="pb-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2"><GitMerge className="h-5 w-5" />Coincidences</CardTitle>
+              {/* The page heading already says "Coincidences". */}
+              <CardTitle className="flex items-center gap-2"><GitMerge className="h-5 w-5" />Gates</CardTitle>
               <CardDescription>
                 Spectra of channels gated by other channels, built live during the run. The data files keep every
                 hit, so nothing is lost if a gate is wrong.
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant={live ? 'default' : 'outline'}>{live ? 'Building' : 'Idle — start a run'}</Badge>
+              {/* Collecting is the normal state during a run: green, not the rose of
+                  an action or anything that reads as an error. */}
+              <Badge variant="outline" className={live ? 'border-success text-success' : ''}>{live ? 'Collecting' : 'Idle — start a run'}</Badge>
               {live && <Badge variant="outline" title="Hits waiting to be compared">{memory.toFixed(1)} MB pending</Badge>}
               {late > 0 && <Badge variant="outline" className="border-warning text-warning"
                                   title="Hits that arrived after their time had been evaluated: raise the latency below">{formatCount(late)} late</Badge>}
@@ -587,7 +611,8 @@ export default function CoincidencesDashboard() {
         </CardHeader>
         <CardContent>
           {intervalChannel && (
-            <RootPlot fetch={() => getIntervalHistogram(ivBoard, Number(ivChannel))} deps={[intervalChannel]} logx />
+            <RootPlot fetch={() => getIntervalHistogram(ivBoard, Number(ivChannel))} deps={[intervalChannel]} logx
+                      xTitle="Time between hits (ns)" yTitle={COUNTS} />
           )}
         </CardContent>
       </Card>

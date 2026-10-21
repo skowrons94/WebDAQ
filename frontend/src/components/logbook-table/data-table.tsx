@@ -80,7 +80,9 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
     const [globalFilterValue, setGlobalFilterValue] = React.useState("")
 
     // Persist column visibility across sessions.
-    const STORAGE_KEY = "logbookTable_columnVisibility"
+    // v2: terminal voltage joined the columns hidden by default, so that the
+    // flag fits at 1440 px; a new key gives everyone that default once.
+    const STORAGE_KEY = "logbookTable_columnVisibility_v2"
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>(() => {
         if (typeof window !== "undefined") {
             try {
@@ -91,7 +93,8 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
             }
         }
         // Sensible defaults: hide the less commonly used columns.
-        return { end_time: false, probe_voltage: false }
+        // The voltages are in each run's entry and in the Columns picker.
+        return { end_time: false, probe_voltage: false, terminal_voltage: false }
     })
 
     React.useEffect(() => {

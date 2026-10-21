@@ -144,9 +144,9 @@ const SAVE: Step = {
 }
 
 function Mark({ v }: { v: Verdict }) {
-  if (v === 'ok') return <Check className="h-3.5 w-3.5 text-success" aria-label="done" />
-  if (v === 'warn') return <AlertTriangle className="h-3.5 w-3.5 text-warning" aria-label="needs attention" />
-  return <Circle className="h-3 w-3 text-muted-foreground" aria-label="not checked" />
+  if (v === 'ok') return <Check className="h-3.5 w-3.5 shrink-0 text-success" aria-label="done" />
+  if (v === 'warn') return <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-warning" aria-label="needs attention" />
+  return <Circle className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="not checked" />
 }
 
 /**

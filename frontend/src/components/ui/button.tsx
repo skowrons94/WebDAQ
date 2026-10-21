@@ -12,6 +12,12 @@ const buttonVariants = cva(
         default: "bg-primary text-primary-foreground hover:bg-primary/90",
         destructive:
           "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+        // Delete and other destructive actions inside a dialog: red text on
+        // an outline, so it does not stand beside the filled rose Save as a
+        // second filled button of nearly the same colour. Stop run keeps the
+        // filled destructive variant.
+        destructiveOutline:
+          "border border-destructive/60 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive",
         // Start Run and other "go" actions: green, never the brand rose, so
         // Start can't be mistaken for Stop (red).
         success:

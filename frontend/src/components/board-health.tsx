@@ -8,6 +8,8 @@ import { Activity, AlertTriangle, HeartPulse, Pause, RefreshCw } from 'lucide-re
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { boardLabel } from '@/lib/board-label'
+import { formatHz } from '@/lib/format-rate'
 import {
   getBoardDiagnostics, getBoardConfiguration,
   type BoardCounters, type BoardDiagnostics,
@@ -232,10 +234,7 @@ export default function BoardHealth() {
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <CardTitle>Board {row.id}</CardTitle>
-                      {row.name && (
-                        <p className="text-xs text-muted-foreground">{row.name}</p>
-                      )}
+                      <CardTitle>{boardLabel({ id: row.id, name: row.name })}</CardTitle>
                     </div>
                     {failed ? (
                       <Badge variant="destructive" className="gap-1">
@@ -271,7 +270,7 @@ export default function BoardHealth() {
                     <Counter label="Data blocks" value={formatCount(row.counters.buffers_read)}
                              rate={stale ? '—' : formatRate(row.buffersPerSecond, '/s')} />
                     <Counter label="Events decoded" value={formatCount(row.counters.events_decoded)}
-                             rate={stale ? '—' : formatRate(row.eventsPerSecond, '/s')} />
+                             rate={stale ? '—' : `${formatHz(row.eventsPerSecond)} (last 1 s)`} />
                     <Counter label="Read from board" value={formatBytes(row.counters.bytes_read)}
                              rate={stale || row.bytesPerSecond === null ? '—'
                                : `${formatBytes(row.bytesPerSecond)}/s`} />

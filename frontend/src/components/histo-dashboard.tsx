@@ -30,6 +30,8 @@ import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTheme } from "next-themes"
 import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle, Ruler, MoreHorizontal, SlidersHorizontal } from "lucide-react"
+import { boardLabel, channelLabel } from "@/lib/board-label"
+import { formatHz } from "@/lib/format-rate"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -56,12 +58,8 @@ import {CSS} from '@dnd-kit/utilities'
 
 type ChannelStats = ChannelRates & { trigger?: number; energyWarning?: string }
 
-function formatRate(v: number | undefined): string {
-  if (v === undefined || !Number.isFinite(v)) return "—"
-  if (v >= 1e6) return `${(v / 1e6).toFixed(2)} MHz`
-  if (v >= 1e3) return `${(v / 1e3).toFixed(2)} kHz`
-  return `${v.toFixed(v < 10 ? 1 : 0)} Hz`
-}
+// One rate format on every page (lib/format-rate.ts).
+const formatRate = (v: number | undefined) => formatHz(v)
 
 /** One labelled number of the stats line on top of a histogram. */
 function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
@@ -196,11 +194,15 @@ const SortableHistogramCard = ({
             )}
             <span className="truncate" title={title}>{title}</span>
             {calibrated !== undefined && (
+              // The badge is small to look at but its hit area is not: the
+              // ::before reaches 32 px high (and some width) around it, so a
+              // finger finds it on a phone.
               <button type="button" onClick={() => onCalibrate(config)}
-                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none ${calibrated
+                      className={`relative shrink-0 rounded px-1.5 py-1 text-[11px] font-medium leading-none before:absolute before:-inset-x-1.5 before:-inset-y-2 before:content-[''] ${calibrated
                         ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
-                      title={calibrated ? "Energy calibrated — click to change" : "Not calibrated: the axis is in channels — click to calibrate"}>
-                {calibrated ? "keV" : "channels"}
+                      title={calibrated ? "Energy calibrated: the axis is in keV. Click to change" : "Not calibrated: the axis is in ADC channels. Click to calibrate"}
+                      aria-label={calibrated ? `Energy calibration of ${title} (keV)` : `Calibrate ${title} (axis in ADC channels)`}>
+                {calibrated ? "keV" : "uncalibrated"}
               </button>
             )}
           </CardTitle>
@@ -281,13 +283,15 @@ const SortableHistogramCard = ({
                 {config.rois
                   .filter((r) => r.enabled)
                   .map((roi) => {
-                    const value = roiIntegrals[roiKey(config.id, roi.id)] ?? 0
+                    // Undefined until the server first answers: "…", not a
+                    // 0 that looks like an empty peak for several seconds.
+                    const value = roiIntegrals[roiKey(config.id, roi.id)]
                     return (
                       <button
                         key={roi.id}
                         type="button"
                         onClick={() => onEditROI(config.id, roi)}
-                        className="flex w-full items-center gap-2 rounded px-1 py-0.5 hover:bg-muted/60 transition-colors text-left"
+                        className="flex w-full min-h-7 items-center gap-2 rounded px-1 py-1 hover:bg-muted/60 transition-colors text-left max-md:min-h-8"
                         title={`Edit ${roi.name} (range ${roi.low}–${roi.high})`}
                       >
                         <span
@@ -297,7 +301,7 @@ const SortableHistogramCard = ({
                         <span className="font-medium truncate">{roi.name}</span>
                         {dashboardSettings.showIntegrals && (
                           <span className="ml-auto font-mono tabular-nums text-muted-foreground">
-                            {value.toFixed(0)}
+                            {value === undefined ? "…" : value.toFixed(0)}
                           </span>
                         )}
                       </button>
@@ -347,7 +351,7 @@ const SortableHistogramCard = ({
                       </td>
                       <td className="py-1.5 text-right font-mono tabular-nums">{roi.low} – {roi.high}</td>
                       <td className="py-1.5 text-right font-mono tabular-nums">
-                        {roi.enabled ? (roiIntegrals[roiKey(config.id, roi.id)] ?? 0).toFixed(0) : "off"}
+                        {roi.enabled ? (roiIntegrals[roiKey(config.id, roi.id)]?.toFixed(0) ?? "…") : "off"}
                       </td>
                       <td className="py-1.5 text-right whitespace-nowrap">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onZoomToROI(config.id, roi)}
@@ -397,7 +401,7 @@ function ChannelBrowser({ boards, histograms, statsFor, running, onToggle, onBoa
           return (
             <div key={board.id} className="flex flex-col gap-2 sm:flex-row sm:items-start">
               <div className="flex items-center gap-2 sm:w-56 sm:shrink-0">
-                <span className="text-sm font-medium truncate">{board.name} <span className="text-muted-foreground">#{board.id}</span></span>
+                <span className="text-sm font-medium truncate">{boardLabel(board)}</span>
                 <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onBoard(board.id, true)}>All</Button>
                 <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => onBoard(board.id, false)}>None</Button>
               </div>
@@ -527,11 +531,11 @@ const ROIDialog = ({ isOpen, onClose, histogramId, roi, onSave, onDelete }: ROID
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{roi ? "Edit ROI" : "Add New ROI"}</DialogTitle>
+          <DialogTitle>{roi ? "Edit ROI" : "Add an ROI"}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="roi-name">ROI Name</Label>
+            <Label htmlFor="roi-name">ROI name</Label>
             <Input id="roi-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -587,7 +591,9 @@ const ROIDialog = ({ isOpen, onClose, histogramId, roi, onSave, onDelete }: ROID
               {roi && onDelete && (
                 <ConfirmAction
                   trigger={
-                    <Button variant="destructive">
+                    // Quiet and on the far left, away from Save: a filled red
+                    // button beside the rose Save read as a second Save.
+                    <Button variant="ghost" className="px-2 text-destructive hover:bg-destructive/10 hover:text-destructive">
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete
                     </Button>
@@ -649,7 +655,7 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
       boardId,
       channel,
       size,
-      label: customLabel || `Board ${boardId} - Channel ${channel}`,
+      label: customLabel || channelLabel(boards.find((b) => String(b.id) === String(boardId)), channel, boardId),
       customLabel,
       visible,
     })
@@ -667,7 +673,7 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{histogram ? "Edit Histogram" : "Add New Histogram"}</DialogTitle>
+          <DialogTitle>{histogram ? "Edit histogram" : "Add a histogram"}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="flex flex-col gap-2">
@@ -679,7 +685,7 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
               <SelectContent>
                 {boards.map((board) => (
                   <SelectItem key={board.id} value={board.id}>
-                    {board.name} (ID: {board.id})
+                    {boardLabel(board)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -737,7 +743,9 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
               {histogram && onDelete && (
                 <ConfirmAction
                   trigger={
-                    <Button variant="destructive">
+                    // Quiet and on the far left, away from Save: a filled red
+                    // button beside the rose Save read as a second Save.
+                    <Button variant="ghost" className="px-2 text-destructive hover:bg-destructive/10 hover:text-destructive">
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete
                     </Button>
@@ -1372,7 +1380,9 @@ export default function EnhancedHistogramDashboard() {
         // colour index is inverted with the rest of the plot, and a red ROI
         // showed cyan beside its red legend.
         const hex = plotHex(roi.color)
-        canvas.fPrimitives.Add(overlay, `hist same fill_${hex} line_${hex}`)
+        // A translucent fill (alpha 0x59) under a solid line: the spectrum
+        // under the ROI stays visible.
+        canvas.fPrimitives.Add(overlay, `hist same fill_${hex}59 line_${hex}`)
       } catch (error) {
         console.error(`Failed to add ROI overlay for ${roi.name}:`, error)
       }
@@ -1508,8 +1518,26 @@ export default function EnhancedHistogramDashboard() {
     setRoiDialogOpen(true)
   }
 
+  // The ROIs of a histogram that share counts with [low, high] (other than
+  // the one being edited): overlapping regions count the same events twice,
+  // which is rarely meant, so the shifter is told but not stopped.
+  const overlapping = (histogramId: string, low: number, high: number, exceptId?: string) =>
+    (histogramsRef.current.find((h) => h.id === histogramId)?.rois ?? [])
+      .filter((r) => r.id !== exceptId && r.low < high && low < r.high)
+
+  const warnOverlap = (histogramId: string, low: number, high: number, exceptId?: string) => {
+    const others = overlapping(histogramId, low, high, exceptId)
+    if (others.length === 0) return false
+    toast({
+      title: "ROIs overlap",
+      description: `${low} – ${high} overlaps ${others.map((r) => `${r.name} (${r.low} – ${r.high})`).join(", ")}: the counts in the shared part are in both.`,
+    })
+    return true
+  }
+
   const saveROI = async (histogramId: string, roi: Partial<ROI> & { id?: string }) => {
     const store = useHistogramStore.getState()
+    if (roi.low !== undefined && roi.high !== undefined) warnOverlap(histogramId, roi.low, roi.high, roi.id)
     if (roi.id) {
       await store.updateRoi(histogramId, roi.id, roi)
     } else {
@@ -1668,11 +1696,15 @@ export default function EnhancedHistogramDashboard() {
     const round = (v: number) => Math.round(v * 100) / 100
     // "ROI n" with n one above the highest so far, so a deletion never repeats a name.
     const highest = Math.max(0, ...(config?.rois ?? []).map((r) => Number(/^ROI (\d+)$/.exec(r.name)?.[1] ?? 0)))
+    // Checked before adding, or the new ROI would overlap itself.
+    const overlapped = warnOverlap(histogramId, round(xmin), round(xmax))
     await useHistogramStore.getState().addRoi(histogramId, {
       name: `ROI ${highest + 1}`, low: round(xmin), high: round(xmax), color, enabled: true,
     })
     roisChanged(histogramId)
-    toast({ title: "ROI added", description: `${round(xmin)} – ${round(xmax)}. Click its name to rename or adjust it.` })
+    if (!overlapped) {
+      toast({ title: "ROI added", description: `${round(xmin)} – ${round(xmax)}. Click its name to rename or adjust it.` })
+    }
   }
 
   const zoomToROI = (histogramId: string, roi: ROI) => {
@@ -1803,10 +1835,19 @@ export default function EnhancedHistogramDashboard() {
   // A card is named as the rest of the site names a channel ("V1725S 0 · ch 3"),
   // unless it was given a label of its own. The stored default label
   // ("Board 0 - Channel 3") is the server's, kept for older configurations.
+  // The x range the card shows now (its painter's zoom, else the saved one),
+  // or null when it shows everything.
+  const zoomOf = (h: HistogramConfig): { xmin: number; xmax: number } | null => {
+    const fp = histogramPainters.current[h.id]?.getFramePainter?.()
+    const a = Number(fp?.zoom_xmin), b = Number(fp?.zoom_xmax)
+    if (fp && b > a) return { xmin: a, xmax: b }
+    return h.zoom && h.zoom.xmax > h.zoom.xmin ? h.zoom : null
+  }
+
   const titleOf = (h: HistogramConfig) => {
     if (h.customLabel) return h.customLabel
     const board = boards.find((b) => b.id === String(h.boardId))
-    return board ? `${board.name} ${board.id} · ch ${h.channel}` : h.label
+    return board ? channelLabel(board, h.channel) : h.label
   }
 
   // An enlarged histogram comes first, so it opens in view.
@@ -2027,6 +2068,8 @@ export default function EnhancedHistogramDashboard() {
             label={titleOf(calibrating)}
             psd={String(boards.find((b) => String(b.id) === calibrating.boardId)?.dpp ?? "").toUpperCase().endsWith("PSD")}
             running={running}
+            zoom={zoomOf(calibrating)}
+            zoomInKeV={!!calibStatus?.[calibrating.boardId]?.[calibrating.channel]?.calibrated}
             onSaved={() => void afterCalibration(calibrating.boardId, calibrating.channel)}
           />
         )}
@@ -2086,52 +2129,57 @@ export default function EnhancedHistogramDashboard() {
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="dash-isLogScale"
                     checked={dashboardSettings.isLogScale}
                     onCheckedChange={(checked) =>
                       saveDashboardSettings({ ...dashboardSettings, isLogScale: checked as boolean })
                     }
                   />
-                  <Label>Logarithmic scale</Label>
+                  <Label htmlFor="dash-isLogScale">Logarithmic scale</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="dash-showLabels"
                     checked={dashboardSettings.showLabels}
                     onCheckedChange={(checked) =>
                       saveDashboardSettings({ ...dashboardSettings, showLabels: checked as boolean })
                     }
                   />
-                  <Label>Show axis titles</Label>
+                  <Label htmlFor="dash-showLabels">Show axis titles</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="dash-showROIs"
                     checked={dashboardSettings.showROIs}
                     onCheckedChange={(checked) =>
                       saveDashboardSettings({ ...dashboardSettings, showROIs: checked as boolean })
                     }
                   />
-                  <Label>Show ROIs</Label>
+                  <Label htmlFor="dash-showROIs">Show ROIs</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="dash-showIntegrals"
                     checked={dashboardSettings.showIntegrals}
                     onCheckedChange={(checked) =>
                       saveDashboardSettings({ ...dashboardSettings, showIntegrals: checked as boolean })
                     }
                   />
-                  <Label>Show integrals</Label>
+                  <Label htmlFor="dash-showIntegrals">Show integrals</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
+                    id="dash-autoUpdate"
                     checked={dashboardSettings.autoUpdate}
                     onCheckedChange={(checked) =>
                       saveDashboardSettings({ ...dashboardSettings, autoUpdate: checked as boolean })
                     }
                   />
-                  <Label>Auto update</Label>
+                  <Label htmlFor="dash-autoUpdate">Auto update</Label>
                 </div>
               </div>
             </div>

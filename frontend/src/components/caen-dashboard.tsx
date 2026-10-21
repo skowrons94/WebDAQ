@@ -32,6 +32,7 @@ import Link from "next/link"
 import { Plus } from "lucide-react"
 import { Sis3316Dashboard } from "@/components/sis3316/sis3316-dashboard"
 import { useIsPhone } from "@/hooks/use-is-phone"
+import { boardLabel } from "@/lib/board-label"
 
 // ============================================================
 // Bit-field definitions extracted from CAENRegisterBuilder*.cc
@@ -324,7 +325,12 @@ const TIME_REG_KEYWORDS = [
   'Trigger Hold-Off',
 ]
 
-function getNsPerSample(boardName: string): number {
+/**
+ * The unit of the PHA time registers: the DPP clock period (16 ns on a V1725,
+ * four 4 ns samples), not one ADC sample. The hints say "10 × 16 ns", as the
+ * Tuner does, so nobody reads the register value as a number of samples.
+ */
+function getNsPerStep(boardName: string): number {
   if (boardName.includes('1730')) return 8
   if (boardName.includes('1725')) return 16
   if (boardName.includes('1724')) return 10
@@ -333,6 +339,18 @@ function getNsPerSample(boardName: string): number {
 
 function isTimeReg(name: string): boolean {
   return TIME_REG_KEYWORDS.some(t => name.toLowerCase().includes(t.toLowerCase()))
+}
+
+/**
+ * Register names as the manual writes them ("Trigger Hold-Off Width") shown in
+ * the site's sentence case ("Trigger hold-off width"). Acronyms and names with
+ * digits ("DC", "BLT", "RC-CR2") keep their capitals.
+ */
+function sentenceCase(name: string): string {
+  return name.split(' ').map((word, i) => {
+    if (i === 0 || /\d/.test(word) || /^[A-Z]{2,}(-[A-Z0-9]+)*$/.test(word)) return word
+    return word.toLowerCase()
+  }).join(' ')
 }
 
 function isDcOffsetReg(name: string): boolean {
@@ -417,7 +435,7 @@ export default function Dashboard() {
           boards share a time origin. Keep them in their own sub-dashboards. */}
       <Tabs defaultValue="boards">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
-          <TabsList className="grid w-full max-w-md grid-cols-2 sm:w-auto sm:min-w-[22rem]">
+          <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
             <TabsTrigger value="boards">Board settings</TabsTrigger>
             <TabsTrigger value="sync">Synchronization</TabsTrigger>
           </TabsList>
@@ -451,7 +469,7 @@ export default function Dashboard() {
                 <SelectContent>
                   {boards.map(board => (
                     <SelectItem key={board.id} value={board.id}>
-                      {board.name} (ID: {board.id}){board.vendor === "sis3316" ? ` — ${board.link_num}` : ""}
+                      {boardLabel(board)}{board.vendor === "sis3316" ? ` — ${board.link_num}` : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -925,11 +943,11 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   const { toast } = useToast()
 
   // ── Unit conversion (board-specific) ─────────────────────
-  const nsPerSample = getNsPerSample(boardData.name)
+  const nsPerStep = getNsPerStep(boardData.name)
 
   const toDisplay = (reg: RegisterData): string => {
     if (isDcOffsetReg(reg.name)) return ((reg.value_dec / 65535) * 100).toFixed(1)
-    if (isTimeReg(reg.name) && nsPerSample > 1) return (reg.value_dec * nsPerSample).toString()
+    if (isTimeReg(reg.name) && nsPerStep > 1) return (reg.value_dec * nsPerStep).toString()
     return reg.value_dec.toString()
   }
 
@@ -937,13 +955,16 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
     const v = parseFloat(displayVal)
     if (isNaN(v)) return reg.value_dec
     if (isDcOffsetReg(reg.name)) return Math.round((v / 100) * 65535)
-    if (isTimeReg(reg.name) && nsPerSample > 1) return Math.round(v / nsPerSample)
+    if (isTimeReg(reg.name) && nsPerStep > 1) return Math.round(v / nsPerStep)
     return Math.round(v)
   }
 
   const unitForName = (name: string): string => {
     if (isDcOffsetReg(name)) return '%'
-    if (isTimeReg(name) && nsPerSample > 1) return 'ns'
+    if (isTimeReg(name) && nsPerStep > 1) return 'ns'
+    // Thresholds are in ADC codes; naming the unit also keeps the threshold
+    // input as wide as its neighbours, which all have a unit beside them.
+    if (name.toLowerCase().includes('threshold')) return 'LSB'
     return ''
   }
 
@@ -1441,7 +1462,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         <div key={key} className="space-y-1.5">
           <div className="flex items-center gap-1.5 min-h-5">
             <Label className="text-sm font-medium">
-              {item.label ?? reg.name}
+              {item.label ?? sentenceCase(reg.name)}
               {modifiedSettings.has(regName) && <span className="text-warning ml-1">*</span>}
             </Label>
             {doc && <InfoTooltip text={doc.description} />}
@@ -1480,7 +1501,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       <div key={key} className="space-y-1.5">
         <div className="flex items-center gap-1.5 min-h-5">
           <Label className="text-sm font-medium">
-            {item.label ?? field.name}
+            {item.label ?? sentenceCase(field.name)}
             {isModified && <span className="text-warning ml-1">*</span>}
           </Label>
           <InfoTooltip text={tip} />
@@ -1547,7 +1568,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
     return (
       <div key={section.id}>
-        <h4 className="text-sm font-semibold">{section.title}</h4>
+        <h4 className="text-sm font-semibold">{sentenceCase(section.title)}</h4>
         <p className="text-xs text-muted-foreground mt-0.5 mb-4 max-w-3xl">
           {section.description}
         </p>
@@ -1605,7 +1626,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
     if (compact) {
       const unit = unitForName(reg.name)
-      const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
+      const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerStep > 1 ? nsPerStep : 1)
       return (
         <div className="space-y-1">
           <div className="flex gap-1 items-center">
@@ -1618,10 +1639,10 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               onValueChange={v => handleSettingChange(regName, fromDisplay(reg, v.toString()).toString())}
               className={`h-8 text-sm ${isModified ? "border-warning" : ""}`}
             />
-            {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
+            {unit && <span className="text-xs text-muted-foreground w-7 shrink-0">{unit}</span>}
           </div>
-          {isTimeReg(reg.name) && nsPerSample > 1 && (
-            <div className="text-xs text-muted-foreground font-mono">{reg.value_dec} samples</div>
+          {isTimeReg(reg.name) && nsPerStep > 1 && (
+            <div className="text-xs text-muted-foreground font-mono">{reg.value_dec} × {nsPerStep} ns</div>
           )}
           {isModified && <div className="text-xs text-muted-foreground font-mono">{reg.value_hex}</div>}
         </div>
@@ -1649,7 +1670,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
     // Plain numeric input
     const unit = unitForName(reg.name)
-    const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerSample > 1 ? nsPerSample : 1)
+    const step = isDcOffsetReg(reg.name) ? 0.1 : (isTimeReg(reg.name) && nsPerStep > 1 ? nsPerStep : 1)
     return (
       <div className="space-y-1">
         <div className="flex gap-2 items-center">
@@ -1662,11 +1683,11 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             onValueChange={v => handleSettingChange(regName, fromDisplay(reg, v.toString()).toString())}
             className={isModified ? "border-warning" : ""}
           />
-          {unit && <span className="text-xs text-muted-foreground w-6 shrink-0">{unit}</span>}
+          {unit && <span className="text-xs text-muted-foreground w-7 shrink-0">{unit}</span>}
         </div>
         <div className="text-xs text-muted-foreground font-mono">
           Reg value: {reg.value_dec}
-          {isTimeReg(reg.name) && nsPerSample > 1 ? ` samples (${nsPerSample} ns/sample)` : ""}
+          {isTimeReg(reg.name) && nsPerStep > 1 ? ` (× ${nsPerStep} ns)` : ""}
           {" "}| Hex: {reg.value_hex} | Addr: {reg.address}
         </div>
       </div>
@@ -1678,11 +1699,11 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-6">
-        <div>
+      {/* On a phone the switches go under the title instead of squeezing it. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+        <div className="min-w-0">
           <h3 className="text-lg font-semibold">
-            Settings for {boardData.name}
-            <span className="font-normal text-muted-foreground"> · board {boardData.id}</span>
+            Settings for {boardLabel(boardData)}
             <Badge variant="outline" className="ml-2 font-mono text-xs">
               {boardData.dpp || "?"}
             </Badge>
@@ -1773,14 +1794,8 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                         const entry = findRegForChannelAndName(ch, settingName)
                         return (
                           <div key={settingName} className="space-y-1.5 py-3 first:pt-0 last:pb-0">
-                            <p className="text-sm font-medium">
-                              {settingName}
-                              {unitForName(settingName) && (
-                                <span className="text-xs font-normal text-muted-foreground ml-1">
-                                  ({unitForName(settingName)})
-                                </span>
-                              )}
-                            </p>
+                            {/* The unit is written beside the input, not again here. */}
+                            <p className="text-sm font-medium">{sentenceCase(settingName)}</p>
                             {entry
                               ? renderSettingInput(entry[0], entry[1], true)
                               : <p className="text-sm text-muted-foreground">—</p>}
@@ -1808,12 +1823,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                     {uniqueTriggerNames.map(settingName => (
                       <tr key={settingName} className="border-b last:border-0">
                         <td className="py-3 pr-6 font-medium whitespace-nowrap">
-                          {settingName}
-                          {unitForName(settingName) && (
-                            <span className="text-xs font-normal text-muted-foreground ml-1">
-                              ({unitForName(settingName)})
-                            </span>
-                          )}
+                          {sentenceCase(settingName)}
                         </td>
                         {enabledChannels.map(ch => {
                           const entry = findRegForChannelAndName(ch, settingName)
@@ -1840,7 +1850,9 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       {/* ── General / Channel tabs ── (no edits while a save or copy runs) */}
       <fieldset disabled={busy} className="min-w-0 disabled:opacity-80">
       <Tabs defaultValue="general">
-        <TabsList className="grid w-full grid-cols-2">
+        {/* The same tab style as the two rows above: full width on a phone,
+            as wide as the labels on a wider screen. */}
+        <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
           <TabsTrigger value="general">General settings</TabsTrigger>
           <TabsTrigger value="channels">Channel settings</TabsTrigger>
         </TabsList>

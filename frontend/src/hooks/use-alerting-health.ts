@@ -104,6 +104,9 @@ export function refreshAlertingHealth(): Promise<void> {
 }
 
 const NOTIFICATIONS = '/settings?view=notifications'
+// The watcher switch and the rules are in the Alerts card at the bottom of a
+// long page (under the Telegram and Zulip forms): link straight to it.
+const ALERTS_CARD = `${NOTIFICATIONS}#alerts`
 
 /** What is wrong with alerting itself, most serious first; empty when fine. */
 export function alertingProblems(s: Pick<AlertingHealthState,
@@ -113,7 +116,7 @@ export function alertingProblems(s: Pick<AlertingHealthState,
     return [{
       title: 'Alerts are off',
       detail: 'Nothing is watching the run, so no alert can be raised.',
-      href: NOTIFICATIONS,
+      href: ALERTS_CARD,
       linkLabel: 'Settings → Notifications',
     }]
   }
@@ -129,7 +132,7 @@ export function alertingProblems(s: Pick<AlertingHealthState,
     return [{
       title: 'No alert is set up',
       detail: 'No rule is switched on, so nothing will be sent.',
-      href: NOTIFICATIONS,
+      href: ALERTS_CARD,
       linkLabel: 'Settings → Notifications',
     }]
   }
@@ -137,7 +140,7 @@ export function alertingProblems(s: Pick<AlertingHealthState,
     return [{
       title: `${s.undeliverableRules} alert${s.undeliverableRules === 1 ? '' : 's'} reach nobody`,
       detail: 'Their destinations are off or not configured.',
-      href: NOTIFICATIONS,
+      href: ALERTS_CARD,
       linkLabel: 'Settings → Notifications',
     }]
   }

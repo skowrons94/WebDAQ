@@ -13,6 +13,27 @@ import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useJsrootTheme } from '@/lib/jsroot-theme'
+import { EmptyState } from '@/components/ui/empty-state'
+import { boardLabel, channelLabel } from '@/lib/board-label'
+
+/** The server sends the 2D PSD plot without axis titles; the words go here. */
+function nameAxes(h: any) {
+  if (h?.fXaxis && !h.fXaxis.fTitle) h.fXaxis.fTitle = 'Q long (ADC)'
+  if (h?.fYaxis && !h.fYaxis.fTitle) h.fYaxis.fTitle = 'PSD = 1 − Q short / Q long'
+}
+
+/**
+ * A 2D plot in colours with its palette. Drawn in a canvas of our own so the
+ * shared style (lib/jsroot-style.ts) sees the "colz" and leaves room for the
+ * palette on the right.
+ */
+function psdCanvas(h: any, id: string) {
+  const canvas = window.JSROOT.create('TCanvas')
+  canvas.fName = `psd_${id}`
+  h.fStats = 0
+  canvas.fPrimitives.Add(h, 'colz')
+  return canvas
+}
 
 type BoardData = {
   id: string;
@@ -27,6 +48,8 @@ type BoardData = {
 
 export default function PSDDashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
+  // The empty state waits for the board list, so it does not flash on load.
+  const [boardsLoaded, setBoardsLoaded] = useState(false)
   // From the app's shared run-status poller (hooks/use-run-status.ts).
   const isRunning = useRunStatus((s) => s.isRunning)
   const runBadge = useRunBadge()
@@ -86,14 +109,15 @@ export default function PSDDashboard() {
     try {
       const response = await getBoardConfiguration()
       // Ids arrive as numbers; everything downstream compares them as strings.
-      // The SIS3316 readout makes no PSD histograms, so its boards are not
-      // listed here at all.
+      // Only DPP-PSD firmware records the two charges a PSD plot is made of:
+      // a DPP-PHA board or the SIS3316 would only show an empty plot here.
       setBoards((response.data ?? [])
-        .filter((board: BoardData) => board.vendor !== 'sis3316')
+        .filter((board: BoardData) => board.vendor !== 'sis3316' && String(board.dpp ?? '').toUpperCase() === 'DPP-PSD')
         .map((board: BoardData) => ({
           ...board,
           id: String(board.id),
         })))
+      setBoardsLoaded(true)
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
       toast({
@@ -108,9 +132,10 @@ export default function PSDDashboard() {
 
   const createBlankHistogram = useCallback((name: string) => {
     if (window.JSROOT) {
-      const hist = window.JSROOT.createHistogram("TH1F", 100)
+      const hist = window.JSROOT.createHistogram("TH2F", 128, 64)
       hist.fName = name
-      hist.fTitle = `PSD Histogram for ${name}`
+      hist.fTitle = ''
+      nameAxes(hist)
       return hist
     }
     return null
@@ -123,7 +148,7 @@ export default function PSDDashboard() {
         if (histoElement) {
           const blankHist = createBlankHistogram(histoId)
           if (blankHist) {
-            window.JSROOT.redraw(histoElement, blankHist, "hist")
+            window.JSROOT.redraw(histoElement, psdCanvas(blankHist, histoId), "")
           }
         }
       })
@@ -188,12 +213,13 @@ export default function PSDDashboard() {
           try {
             const histogramData = await getPsd(board.id, channelIndex.toString())
             const histogram = window.JSROOT.parse(histogramData)
-            window.JSROOT.redraw(histoElement, histogram, "hist")
+            nameAxes(histogram)
+            await window.JSROOT.redraw(histoElement, psdCanvas(histogram, histoId), "")
           } catch (error) {
             console.error(`Failed to fetch PSD histogram for ${histoId}:`, error)
             toast({
               title: "Error",
-              description: `Failed to update PSD histogram for ${board.name} - Channel ${channelIndex}`,
+              description: `Failed to update the PSD plot of ${channelLabel(board, channelIndex)}`,
               variant: "destructive",
             })
           }
@@ -216,14 +242,13 @@ export default function PSDDashboard() {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <div className="flex-1 pb-4">
+        {boards.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-muted-foreground">
-            {boards.length === 0
-              ? 'No board with PSD (the SIS3316 records none).'
-              : `${totalSelectedChannels} of ${totalChannels} channels shown`}
+            {`${totalSelectedChannels} of ${totalChannels} channels shown`}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={handleShowAllChannels} disabled={boards.length === 0}>
+            <Button variant="outline" size="sm" onClick={handleShowAllChannels}>
               Show all channels
             </Button>
             <Button variant="outline" size="sm" onClick={handleHideAllChannels} disabled={totalSelectedChannels === 0}>
@@ -231,6 +256,13 @@ export default function PSDDashboard() {
             </Button>
           </div>
         </div>
+        )}
+        {boardsLoaded && boards.length === 0 && (
+          <EmptyState title="No board runs DPP-PSD firmware">
+            PSD plots need a DPP-PSD board: they show the long-gate charge against
+            1 − Q<sub>short</sub>/Q<sub>long</sub>, which DPP-PHA firmware and the SIS3316 do not record.
+          </EmptyState>
+        )}
         {boards.map((board: BoardData) => {
           const selectedChannels = getSelectedChannels(board.id)
           const allChannels = Array.from({ length: parseInt(board.chan) }, (_, i) => i)
@@ -241,7 +273,7 @@ export default function PSDDashboard() {
             <Card key={board.id} className="mb-6">
               <CardHeader>
                 <CardTitle className="flex flex-wrap items-center justify-between gap-2">
-                  <span>{board.name} (ID: {board.id})</span>
+                  <span>{boardLabel(board)}</span>
                   <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
                     <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} />
                     {runNumber && <span>Run {runNumber}</span>}
@@ -260,7 +292,7 @@ export default function PSDDashboard() {
                       </Label>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {`${selectedChannels.length}/${board.chan} channels shown`}
+                      {`${selectedChannels.length} of ${board.chan} channels shown`}
                     </div>
                   </div>
                   {/* The same channel chips as the Waveforms page. */}

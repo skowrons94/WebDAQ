@@ -68,6 +68,13 @@ export function NotificationSettings() {
   const [newRuleType, setNewRuleType] = useState<AlertRule['type']>('graphite_metric')
 
   useEffect(() => { refresh(true) }, [])
+  // Opened from an "Alerts are off" link (…#alerts): the card is only there
+  // once the status has loaded, so the browser's own jump to it found nothing.
+  const loaded = status !== null
+  useEffect(() => {
+    if (!loaded || typeof window === 'undefined' || window.location.hash !== '#alerts') return
+    document.getElementById('alerts')?.scrollIntoView({ block: 'start' })
+  }, [loaded])
 
   async function refresh(initial = false) {
     try {
@@ -272,7 +279,8 @@ export function NotificationSettings() {
       </Card>
 
       {/* ── What is worth a message ───────────────────────────────────────── */}
-      <Card>
+      {/* id: the "Alerts are off" links land here, on the watcher control. */}
+      <Card id="alerts" className="scroll-mt-20">
         <CardHeader>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -286,7 +294,9 @@ export function NotificationSettings() {
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
-              <StatusBadge state={status?.watching ? 'running' : 'error'}
+              {/* Amber, as on the Alerts page: a stopped watcher needs attention, it
+                  is not an error of the run. */}
+              <StatusBadge state={status?.watching ? 'running' : 'warning'}
                            label={status?.watching ? 'Watching' : 'Not watching'} />
               {!status?.watching && (
                 <Button size="sm" variant="outline" disabled={busy !== null}
@@ -465,8 +475,10 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
 
   return (
     <div className={`rounded-lg border p-4 ${alerting ? 'border-destructive' : ''}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
+      {/* The delete button stays on the first line, at the right; the
+          badges wrap under the name on a phone instead of squeezing it. */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <Switch aria-label={`Alert "${rule.name}" on`} checked={rule.enabled} disabled={busy}
                   onCheckedChange={(checked) => onChange({ enabled: checked })} />
           <div>
@@ -475,13 +487,13 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
           </div>
           {alerting && <Badge variant="destructive">Alerting now</Badge>}
           {rule.enabled && unmeasured && !alerting && (
-            <Badge className="bg-warning/10 text-warning"
+            <Badge className="whitespace-nowrap bg-warning/10 text-warning"
                    title="This alert is watching, but it has had nothing to read — an unreachable Graphite server, a monitor that stopped, or a counter this CaenDAQ build does not report. That is not the same as everything being fine.">
               nothing to measure{unmeasuredFor ? ` for ${unmeasuredFor} s` : ''}
             </Badge>
           )}
           {rule.enabled && notReady.length === rule.transports.length && (
-            <Badge className="bg-warning/10 text-warning"
+            <Badge className="whitespace-nowrap bg-warning/10 text-warning"
                    title={rule.transports.length
                      ? `${notReady.join(' and ')} ${notReady.length === 1 ? 'is' : 'are'} off or not configured`
                      : 'This alert has no destination'}>
@@ -491,7 +503,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
         </div>
         <ConfirmAction
           trigger={
-            <Button variant="ghost" size="icon" className="text-destructive" disabled={busy}
+            <Button variant="ghost" size="icon" className="shrink-0 text-destructive" disabled={busy}
                     aria-label={`Delete the alert "${rule.name}"`} title="Delete this alert">
               <Trash2 className="h-4 w-4" />
             </Button>

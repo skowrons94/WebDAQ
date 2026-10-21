@@ -16,6 +16,10 @@ import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useJsrootTheme } from '@/lib/jsroot-theme'
+import { plotHex, seriesOption } from '@/lib/jsroot-style'
+import { boardTiming, timingKnown } from '@/components/tuner/units'
+import { boardLabel } from '@/lib/board-label'
+import { formatHz } from '@/lib/format-rate'
 
 type BoardData = {
   id: string;
@@ -33,10 +37,8 @@ const KIND_LABELS: Record<WaveformKind, string> = {
 }
 const KIND_STORAGE_KEY = 'waveform-event-kind'
 
-function rateText(v: number): string {
-  if (v >= 1e3) return `${(v / 1e3).toFixed(1)} kHz`
-  return `${v.toFixed(v < 10 ? 1 : 0)} Hz`
-}
+// The site's one rate format (lib/format-rate.ts).
+const rateText = formatHz
 
 interface RegisterData {
   name: string
@@ -107,10 +109,14 @@ export default function WaveformDashboard() {
   const [selectedWaveform, setSelectedWaveform] = useState<{[boardId: string]: number}>({})
   const [boardSettings, setBoardSettings] = useState<{[boardId: string]: BoardSettings}>({})
   const [waveformConfigs, setWaveformConfigs] = useState<{[boardId: string]: WaveformConfig}>({})
+  // Read by the drawing pass (dual trace halves the sample rate) without
+  // making it a dependency that restarts the refresh.
+  const waveformConfigsRef = useRef(waveformConfigs)
+  useEffect(() => { waveformConfigsRef.current = waveformConfigs }, [waveformConfigs])
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
-  const { settings, updateBoardChannelSelection, clearAllSelections, hydrateFromServer, hydrated } = useVisualizationStore()
+  const { settings, updateBoardChannelSelection, hydrateFromServer, hydrated } = useVisualizationStore()
   const storeReady = hydrated
   const waveConfigSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const waveConfigLoadedRef = useRef(false)
@@ -455,24 +461,38 @@ export default function WaveformDashboard() {
           histogram.fStats = 0
           // The server sends one bin per sample and no axis titles. Fonts and
           // offsets come from lib/jsroot-style.ts; only the words are set here.
+          // Time is in ns, as on the Tuner, when the model's sample period
+          // is known (doubled in dual-trace mode, where each trace keeps
+          // every other sample); otherwise in samples rather than invented ns.
           if (histogram.fName !== 'no_data') {
-            if (histogram.fXaxis && !histogram.fXaxis.fTitle) histogram.fXaxis.fTitle = 'Time (samples)'
-            if (histogram.fYaxis && !histogram.fYaxis.fTitle) histogram.fYaxis.fTitle = 'ADC'
+            const timing = boardTiming(board.name ?? '')
+            const known = !sis && timingKnown(timing)
+            const xa = histogram.fXaxis
+            if (xa && known && !xa.fTitle) {
+              const n = Number(histogram.fXaxis.fNbins) || 0
+              const ns = timing.sampleNs * (waveformConfigsRef.current[board.id]?.dualTrace ? 2 : 1)
+              if (n > 0) { xa.fXmin = 0; xa.fXmax = n * ns }
+            }
+            if (xa && !xa.fTitle) xa.fTitle = known ? 'Time (ns)' : 'Time (samples)'
+            if (histogram.fYaxis && !histogram.fYaxis.fTitle) histogram.fYaxis.fTitle = 'ADC (LSB)'
           }
           // Build a fresh TCanvas every tick so probes never stack from previous frames.
           const canvas = window.JSROOT.create('TCanvas')
           canvas.fName = `wave_${histoId}`
-          canvas.fPrimitives.Add(histogram, 'hist')
+          // The trace in the shared series colour; the probes in green and
+          // red as on the Tuner, given as hex pre-inverted for JSROOT's dark
+          // mode (an index such as 2 or 3 would come out cyan or magenta).
+          canvas.fPrimitives.Add(histogram, seriesOption('hist', false))
 
           if (p1Data) {
             const p1 = window.JSROOT.parse(p1Data)
-            p1.fLineColor = 3 // kGreen
-            canvas.fPrimitives.Add(p1, 'hist same')
+            if (histogram.fXaxis && p1.fXaxis) { p1.fXaxis.fXmin = histogram.fXaxis.fXmin; p1.fXaxis.fXmax = histogram.fXaxis.fXmax }
+            canvas.fPrimitives.Add(p1, `hist same line_${plotHex('16a34a')}`)
           }
           if (p2Data) {
             const p2 = window.JSROOT.parse(p2Data)
-            p2.fLineColor = 2 // kRed
-            canvas.fPrimitives.Add(p2, 'hist same')
+            if (histogram.fXaxis && p2.fXaxis) { p2.fXaxis.fXmin = histogram.fXaxis.fXmin; p2.fXaxis.fXmax = histogram.fXaxis.fXmax }
+            canvas.fPrimitives.Add(p2, `hist same line_${plotHex('dc2626')}`)
           }
 
           await window.JSROOT.redraw(histoElement, canvas)
@@ -723,7 +743,7 @@ export default function WaveformDashboard() {
     ? settings.selectedBoardsChannelsWaveform : [])
     .filter((sel: { boardId: string; channels: number[] }) =>
       sel.channels.length > 0 && boards.some((b: BoardData) => b.id === sel.boardId))
-  const hasAnySelections = liveSelections.length > 0
+  const totalChannels = boards.reduce((n: number, b: BoardData) => n + (parseInt(b.chan) || 0), 0)
   const totalSelectedChannels = liveSelections.reduce(
     (total: number, board: { boardId: string; channels: number[] }) => total + board.channels.length, 0)
 
@@ -734,10 +754,9 @@ export default function WaveformDashboard() {
             controls, which wrap, rather than squeezing into a column. */}
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="text-sm text-muted-foreground">
-            {totalSelectedChannels > 0 ?
-              `${totalSelectedChannels} channel(s) shown on ${liveSelections.length} board(s)` :
-              'No channels selected - only board names shown'
-            }
+            {totalSelectedChannels > 0
+              ? `${totalSelectedChannels} of ${totalChannels} channels shown`
+              : 'No channels selected: pick some on a board below'}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm text-muted-foreground">Show</span>
@@ -773,16 +792,6 @@ export default function WaveformDashboard() {
             >
               Hide all
             </Button>
-            {hasAnySelections && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => clearAllSelections('Waveform')}
-                className="text-destructive hover:text-destructive"
-              >
-                Clear selection
-              </Button>
-            )}
           </div>
         </div>
         {boards.map((board: BoardData) => {
@@ -796,7 +805,7 @@ export default function WaveformDashboard() {
             <Card key={board.id} className="mb-6">
               <CardHeader>
                 <CardTitle className="flex flex-wrap items-center justify-between gap-2">
-                  <span>{board.name} (ID: {board.id})</span>
+                  <span>{boardLabel(board)}</span>
                   {/* Which trace is drawn. With one trace there is nothing to
                       choose, so it is only a label; with two, a neutral
                       segmented switch (not a primary action button). */}
@@ -914,7 +923,7 @@ export default function WaveformDashboard() {
                       </Label>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {`${selectedChannels.length}/${board.chan} channels shown`}
+                      {`${selectedChannels.length} of ${board.chan} channels shown`}
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -961,7 +970,7 @@ export default function WaveformDashboard() {
                           </div>
                           <div
                             ref={(el: HTMLDivElement | null) => { histogramRefs.current[histoId] = el }}
-                            className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-md bg-background"
+                            className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-md"
                           ></div>
                           {plotErrors[histoId] && (
                             <p className="mt-1 text-xs text-destructive">{plotErrors[histoId]}</p>

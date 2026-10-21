@@ -52,6 +52,12 @@ export function BeamControlPanel({
   onPlacementChange,
 }: BeamControlPanelProps) {
   const isRunning = useRunStatus((state) => state.isRunning)
+  const runNumber = useRunStatus((state) => state.runNumber)
+  const unsavedRun = useRunStatus((state) => state.unsavedRun)
+  // Stopped, the server's run number is the next run's; the charge shown is
+  // the run before it (or the same number, when that run was not saved and
+  // its number is used again).
+  const lastRun = runNumber === null ? null : unsavedRun === runNumber ? runNumber : runNumber - 1
   const [beamCurrent, setBeamCurrent] = useState(0)
   const [beamCurrentChange, setBeamCurrentChange] = useState(0)
   const [runCharge, setRunCharge] = useState(0)
@@ -116,21 +122,23 @@ export function BeamControlPanel({
           <span className="text-xs text-muted-foreground">
             {isRunning
               ? `${beamCurrentChange >= 0 ? '+' : ''}${beamCurrentChange.toFixed(2)} µA since start`
-              : 'No run in progress'}
+              : 'No run going'}
           </span>
         </div>
       </div>
       <div>
         <p className="flex items-center gap-1 text-xs text-muted-foreground">
           <Zap className="h-3.5 w-3.5" />
-          This run
+          {isRunning
+            ? (runNumber !== null ? `Run ${runNumber}` : 'This run')
+            : (lastRun !== null && lastRun > 0 ? `Last run (${lastRun})` : 'Last run')}
         </p>
         <p className="mt-1 text-lg font-semibold tabular-nums">{formatCharge(runCharge)}</p>
         <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
           <span className={`h-1.5 w-1.5 rounded-full ${
             isRunning ? 'bg-success' : 'bg-muted-foreground/40'
           }`} />
-          {isRunning ? 'Integrating' : 'Paused'}
+          {isRunning ? 'Integrating' : 'Stopped'}
         </p>
       </div>
       <div>

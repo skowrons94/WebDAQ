@@ -40,7 +40,7 @@ export function healthWarnings(r: ChannelRates, windowNs: number, psd: boolean):
   if (r.lost > 0) {
     out.push({
       severity: 'error',
-      text: `${formatRate(r.lost)} of events are lost: the board cannot keep up. Raise the threshold or lower the rate.`,
+      text: `Events are lost at ${formatRate(r.lost)}: the board cannot keep up. Raise the threshold or lower the rate.`,
     })
   }
   return out

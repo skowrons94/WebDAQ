@@ -29,7 +29,7 @@ export async function readCalibration(boardName: string, boardId: string, channe
 /** X-axis title of the channel spectrum: calibrated energy, or channels (Q-long for PSD). */
 export function spectrumAxisTitle(psd: boolean, calibrated: boolean): string {
   if (calibrated) return psd ? 'Q-long (keV)' : 'Energy (keV)'
-  return psd ? 'Q-long (ch)' : 'Energy (ch)'
+  return psd ? 'Q-long (ADC channel)' : 'ADC channel'
 }
 
 /** A spectrum as plain numbers: bin contents without under/overflow, and the axis. */

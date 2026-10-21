@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from '@/components/ui/use-toast'
+import { channelLabel } from '@/lib/board-label'
 
 type BoardData = {
   id: string;
@@ -149,7 +150,7 @@ export function Stats() {
           const rateResult = boardRatesResults[boardIndex * parseInt(board.chan) + channelIndex]
           if (rateResult.status === 'fulfilled') {
             newStats.push({
-              name: `${board.name} Channel ${channelIndex}`,
+              name: channelLabel(board, channelIndex),
               data: rateResult.value.map((item: any) => ({ time: item[0], value: item[1] })),
               unit: 'Hz'
             })

@@ -367,7 +367,7 @@ export function DAQState({
               </div>
             )}
 
-            {/* Auto-Restart on Board Failure */}
+            {/* Auto-restart on board failure */}
             <div className="border-t pt-4 mt-2">
               <div className="flex items-center space-x-2 mb-4">
                 <Checkbox
@@ -375,7 +375,7 @@ export function DAQState({
                   checked={autoRestartEnabled}
                   onCheckedChange={handleAutoRestartChange}
                 />
-                <Label htmlFor="autoRestart">Auto-Restart on Board Failure</Label>
+                <Label htmlFor="autoRestart">Auto-restart on board failure</Label>
               </div>
               <p className="text-sm text-muted-foreground mb-4">
                 When enabled, if a board sets its FAIL flag during a run (for example a full buffer or a lost link),

@@ -96,6 +96,9 @@ export const getRunMetadataAll = () =>
 export const updateRunFlag = (runNumber: number, flag: string) =>
     api.post('/experiment/update_run_flag', { run_number: runNumber, flag });
 
+export const appendRunNoteApi = (runNumber: number, text: string, author: string) =>
+    api.post('/experiment/append_run_note', { run_number: runNumber, text, author }).then(res => res.data);
+
 export const updateRunNotes = (runNumber: number, notes: string) =>
     api.post('/experiment/update_run_notes', { run_number: runNumber, notes });
 
@@ -396,6 +399,7 @@ export interface BoardConfigDump {
 export interface RunDetail extends RunSummary {
     probe_voltage: number | null
     user_id: number | null
+    username?: string | null
     board_info: CaenBoardInfo[]
     software_versions: Partial<SoftwareVersions>
     files: RunFiles

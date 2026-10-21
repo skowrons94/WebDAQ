@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { ConfirmAction } from "@/components/ui/confirm-action"
+import { cn } from "@/lib/utils"
 import {
   Card,
   CardContent,
@@ -119,6 +120,9 @@ export function RunControlButtons({
   const stopFailed = useRunControlStore((st) => st.stopFailed)
   const setStopFailed = (v: boolean) => useRunControlStore.getState().update({ stopFailed: v })
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
+  // On a phone during a run the form (all greyed out) is folded to one line;
+  // this opens it to read the run's details.
+  const [phoneDetailsOpen, setPhoneDetailsOpen] = useState(false)
 
   // Run metadata states
   const [targetName, setTargetName] = useState<string>('')
@@ -508,12 +512,52 @@ export function RunControlButtons({
     }
   }
 
+  const stopConfirm = (trigger: React.ReactElement) => (
+    <ConfirmAction
+      trigger={trigger}
+      title={runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
+      description={<StopRunBody elapsed={elapsed} saving={saveData} />}
+      confirmLabel={runNumber !== null ? `Stop run ${runNumber}` : 'Stop run'}
+      onConfirm={handleStopRun}
+    />
+  )
+
+  const runTypeLabel: Record<string, string> = {
+    longrun: 'Long run', scan: 'Scan', background: 'Background', calibration: 'Calibration',
+  }
+  // Phones, during a run: one line (what is being taken, and Stop) instead of
+  // a screen of disabled fields above the beam and the rates.
+  const folded = isRunning && !phoneDetailsOpen
+
   return (
     <Card id="run-control" className="scroll-mt-28">
-      <CardHeader className="pb-4">
-        <CardTitle>Run setup &amp; control</CardTitle>
+      <CardHeader className={cn('pb-4', folded && 'max-md:p-3')}>
+        <CardTitle className={cn(folded && 'max-md:hidden')}>Run setup &amp; control</CardTitle>
+        {isRunning && (
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              type="button"
+              onClick={() => setPhoneDetailsOpen((o) => !o)}
+              aria-expanded={phoneDetailsOpen}
+              className="flex min-h-10 min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-sm"
+            >
+              <span className="min-w-0 truncate">
+                <span className="font-semibold">{runNumber !== null ? `Run ${runNumber}` : 'Run'}</span>
+                {' · '}{targetName.trim() || 'Untitled'}{runType ? ` · ${runTypeLabel[runType] ?? runType}` : ''}
+              </span>
+              <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground transition-transform', phoneDetailsOpen && 'rotate-180')} aria-hidden="true" />
+              <span className="sr-only">{phoneDetailsOpen ? 'Fold the run details' : 'Show the run details'}</span>
+            </button>
+            {stopConfirm(
+              <Button variant="destructive" className="h-10 shrink-0" disabled={stopping}>
+                <StopCircle className="mr-1.5 h-4 w-4" />
+                Stop…
+              </Button>,
+            )}
+          </div>
+        )}
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className={cn('grid gap-4', folded && 'max-md:hidden')}>
         {/* Metadata Input Fields */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
@@ -533,7 +577,7 @@ export function RunControlButtons({
                 <SelectValue placeholder="Select" />
               </SelectTrigger>
               <SelectContent position="popper">
-                <SelectItem value="longrun">Long Run</SelectItem>
+                <SelectItem value="longrun">Long run</SelectItem>
                 <SelectItem value="scan">Scan</SelectItem>
                 <SelectItem value="background">Background</SelectItem>
                 <SelectItem value="calibration">Calibration</SelectItem>
@@ -575,22 +619,16 @@ export function RunControlButtons({
             <PlayCircle className="mr-2 h-4 w-4" />
             Start run
           </Button>
-          <ConfirmAction
-            trigger={
-              <Button
-                variant={isRunning ? 'destructive' : 'outline'}
-                className="w-full"
-                disabled={!isRunning || stopping}
-              >
-                <StopCircle className="mr-2 h-4 w-4" />
-                Stop run
-              </Button>
-            }
-            title={runNumber !== null ? `Stop run ${runNumber}?` : 'Stop the run?'}
-            description={<StopRunBody elapsed={elapsed} saving={saveData} />}
-            confirmLabel={runNumber !== null ? `Stop run ${runNumber}` : 'Stop run'}
-            onConfirm={handleStopRun}
-          />
+          {stopConfirm(
+            <Button
+              variant={isRunning ? 'destructive' : 'outline'}
+              className="w-full"
+              disabled={!isRunning || stopping}
+            >
+              <StopCircle className="mr-2 h-4 w-4" />
+              Stop run
+            </Button>,
+          )}
         </div>
 
         {/* Not a block — a run can start without them — but the Logbook entry

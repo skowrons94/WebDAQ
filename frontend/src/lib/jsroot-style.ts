@@ -246,6 +246,12 @@ function clearBackground(painter: any) {
  * few decades JSROOT makes every 2…9 × 10ⁿ a major tick: a fence of lines.
  * Only the decades keep theirs. The frame painter's class is not exported, so
  * its drawGrids is wrapped on the first frame seen.
+ *
+ * JSROOT also puts the grid at the end of the axis layer, above the data: a
+ * line at x = 0 hid the Δt coincidence peak and covered the axis lines. The
+ * grid is moved under the histograms (to the start of the main layer),
+ * lines on the frame's edges are dropped, and in dark mode it gets a grey
+ * that stays visible on the dark card.
  */
 let gridsPatched = false
 function patchGrids(painter: any) {
@@ -265,14 +271,70 @@ function patchGrids(painter: any) {
         return Number.isFinite(decade) && Math.abs(decade - Math.round(decade)) < 0.02
       })
     }
+    // Lines on the frame's border would sit on the axis lines.
+    const w = Number(this.getFrameWidth?.()) || 0
+    const h = Number(this.getFrameHeight?.()) || 0
+    for (const [handle, extent] of [[this.x_handle, w], [this.y_handle, h]] as [any, number][]) {
+      if (!Array.isArray(handle?.ticks) || !extent) continue
+      if (!saved.some(([s]) => s === handle)) saved.push([handle, handle.ticks])
+      handle.ticks = handle.ticks.filter((pos: number) => pos > 1 && pos < extent - 1)
+    }
+    let result
     try {
-      return original.apply(this, args)
+      this.getFrameSvg?.()?.selectChild?.('.main_layer')?.selectAll?.('.xgrid,.ygrid')?.remove?.()
+      result = original.apply(this, args)
     } finally {
       for (const [handle, ticks] of saved) handle.ticks = ticks
     }
+    try { lowerGrids(this) } catch { /* looks only */ }
+    try { clearYTitle(this) } catch { /* looks only */ }
+    return result
   }
   // The frame just drawn still has the fence.
   try { fp.drawGrids(true) } catch { /* next redraw */ }
+}
+
+/** Grid paths go from the top of the axis layer to the bottom of the main layer. */
+function lowerGrids(fp: any) {
+  const frame = fp.getFrameSvg?.()
+  const main = frame?.selectChild?.('.main_layer')?.node?.() as Element | undefined
+  const axis = frame?.selectChild?.('.axis_layer')?.node?.() as Element | undefined
+  if (!main || !axis) return
+  // In dark mode the whole plot is inverted: this light grey shows as a dark one
+  // that is still seen on the card (the default grey vanished into it).
+  const dark = darkMode()
+  for (const grid of Array.from(axis.querySelectorAll(':scope > .xgrid, :scope > .ygrid'))) {
+    if (dark) (grid as SVGElement).style.stroke = '#c4c4c4'
+    // The frame's background is a sibling before the main layer, so the
+    // layer's first place is above it and under every histogram.
+    main.insertBefore(grid, main.firstChild)
+  }
+}
+
+/**
+ * JSROOT puts a y title at offset 0 just past the widest number, measured to
+ * the title's baseline: the rotated letters still touched six-digit labels
+ * ("Counts / bin" over "300000"). Move it left until there is a gap. The axes
+ * are drawn by the time the grid is, so this runs from drawGrids too.
+ */
+function clearYTitle(fp: any) {
+  const axis = fp.getFrameSvg?.()?.selectChild?.('.axis_layer')?.node?.() as Element | undefined
+  if (!axis) return
+  const frameLeft = axis.getBoundingClientRect().left
+  for (const title of Array.from(axis.querySelectorAll('.axis_title'))) {
+    const t = title.getBoundingClientRect()
+    if (!t.height || t.height <= t.width) continue          // the x title
+    const labels = title.parentElement?.querySelector(':scope > .axis_labels')?.getBoundingClientRect()
+    // Only a title left of the frame (the usual y axis), with labels beside it.
+    if (!labels?.width || t.left >= frameLeft) continue
+    const overlap = t.right + 3 - labels.left
+    if (overlap <= 0) continue
+    // JSROOT writes translate(x,y), or translate(x) when y is 0.
+    const m = /translate\(\s*(-?[\d.]+)(?:[ ,]+(-?[\d.]+))?\s*\)/.exec(title.getAttribute('transform') ?? '')
+    if (!m) continue
+    const x = Number(m[1]) - Math.ceil(overlap)
+    title.setAttribute('transform', `translate(${x},${m[2] ?? 0})`)
+  }
 }
 
 function afterDraw(painter: any) {

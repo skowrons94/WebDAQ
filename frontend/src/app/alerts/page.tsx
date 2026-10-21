@@ -22,7 +22,7 @@ function BuiltInNotificationsCard() {
   const label = !known ? 'Checking…' : !watching ? 'Not watching' : problems.length ? problems[0].title : 'Watching'
   return (
     <Link
-      href="/settings?view=notifications"
+      href={problems[0]?.href ?? "/settings?view=notifications"}
       className="mb-4 flex min-h-11 items-start gap-3 rounded-lg border bg-card p-4 hover:bg-muted/50"
     >
       <BellRing className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />

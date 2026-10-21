@@ -401,6 +401,49 @@ def add_note():
         return jsonify({'message': 'Note added successfully'}), 200
     return jsonify({'message': 'Run not found'}), 404
 
+# Appends are read-modify-write on one text field: serialised here so two
+# shifters adding a note at the same moment both keep theirs.
+_note_lock = threading.Lock()
+
+
+def _username(user_id):
+    if user_id is None:
+        return None
+    try:
+        from ..models.user import User
+        user = db.session.get(User, int(user_id))
+        return user.username if user else None
+    except Exception:
+        return None
+
+
+@bp.route("/experiment/append_run_note", methods=['POST'])
+@jwt_required_custom
+def append_run_note():
+    """Add one line to a run's notes, stamped "[HH:MM author]" with the
+    server's time; the author is the name typed by the shifter, else the
+    account. Returns the notes as they now are."""
+    data = request.get_json(silent=True) or {}
+    text = str(data.get('text') or '').strip()
+    if not text:
+        return jsonify({'message': 'The note is empty'}), 400
+    try:
+        run_number = int(data['run_number'])
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'message': 'run_number must be a number'}), 400
+    author = str(data.get('author') or '').strip() or _username(get_current_user()) or ''
+    line = f"[{datetime.now():%H:%M}{' ' + author if author else ''}] {text}"
+    with _note_lock:
+        run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
+        if run_metadata is None:
+            return jsonify({'message': 'Run not found'}), 404
+        existing = (run_metadata.notes or '').rstrip()
+        run_metadata.notes = f"{existing}\n\n{line}\n" if existing else f"{line}\n"
+        db.session.commit()
+        sync_run_metadata_file(run_metadata)
+        return jsonify({'notes': run_metadata.notes}), 200
+
+
 @bp.route("/experiment/add_run_metadata", methods=['POST'])
 @jwt_required_custom
 def add_run_metadata():
@@ -442,6 +485,7 @@ def get_run_metadata(run_number):
             'run_type': run_metadata.run_type,
             'accumulated_charge': run_metadata.accumulated_charge,
             'user_id': run_metadata.user_id,
+            'username': _username(run_metadata.user_id),
             'flag': run_metadata.flag,
             # Acquisition provenance captured at run start (empty for older runs).
             'board_info': run_metadata.get_board_info(),

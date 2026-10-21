@@ -621,7 +621,7 @@ export function Sis3316Dashboard({ board }: BoardProps) {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-xl font-semibold">Struck SIS3316 — board {id}</h2>
+        <h2 className="text-xl font-semibold">Settings for SIS3316 {id}</h2>
         <p className="text-sm text-muted-foreground">Ethernet, {board.link_num}</p>
       </div>
       <Tabs defaultValue="settings">

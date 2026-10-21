@@ -11,6 +11,8 @@ import { addBoard, probeSis3316, type Sis3316Info } from '@/lib/api'
 
 type Props = {
   existingIds: string[]
+  /** IP addresses of the SIS3316 boards already configured. */
+  existingHosts?: string[]
   disabled?: boolean
   onAdded: () => void
 }
@@ -26,7 +28,19 @@ function serverMessage(error: unknown, fallback: string): string {
  * SIS3316 Ethernet addendum), so the form asks for the IP and checks that a
  * board answers there before adding it.
  */
-export function Sis3316AddBoard({ existingIds, disabled, onAdded }: Props) {
+const DEFAULT_HOST = "192.168.1.100"
+
+/** The first address from 192.168.1.100 up that no configured board uses. */
+function freeHost(taken: string[]): string {
+  const [a, b, c, d] = DEFAULT_HOST.split(".").map(Number)
+  for (let last = d; last < 255; last++) {
+    const ip = `${a}.${b}.${c}.${last}`
+    if (!taken.includes(ip)) return ip
+  }
+  return DEFAULT_HOST
+}
+
+export function Sis3316AddBoard({ existingIds, existingHosts = [], disabled, onAdded }: Props) {
   const { toast } = useToast()
   const nextId = String(existingIds.length ? Math.max(...existingIds.map(Number)) + 1 : 0)
   const [id, setId] = useState(nextId)
@@ -34,7 +48,13 @@ export function Sis3316AddBoard({ existingIds, disabled, onAdded }: Props) {
   // is added): an ID that is now taken moves on to the next free one.
   const taken = existingIds.includes(id)
   useEffect(() => { if (taken) setId(nextId) }, [taken, nextId])
-  const [host, setHost] = useState("192.168.1.100")
+  // The suggested address is never one a board already has: offering the
+  // existing board's IP invited adding the same board twice.
+  const suggested = freeHost(existingHosts)
+  const [host, setHost] = useState(suggested)
+  const hostTaken = existingHosts.includes(host)
+  const [hostEdited, setHostEdited] = useState(false)
+  useEffect(() => { if (hostTaken && !hostEdited) setHost(suggested) }, [hostTaken, hostEdited, suggested])
   const [probing, setProbing] = useState(false)
   const [adding, setAdding] = useState(false)
   const [found, setFound] = useState<Sis3316Info | null>(null)
@@ -84,8 +104,8 @@ export function Sis3316AddBoard({ existingIds, disabled, onAdded }: Props) {
           </div>
           <div className="space-y-2">
             <Label htmlFor="sis-host">IP address</Label>
-            <Input id="sis-host" value={host} onChange={(e) => { setHost(e.target.value); setFound(null) }}
-                   placeholder="192.168.1.100" />
+            <Input id="sis-host" value={host} onChange={(e) => { setHost(e.target.value); setHostEdited(true); setFound(null) }}
+                   placeholder={DEFAULT_HOST} />
           </div>
         </div>
 
@@ -106,7 +126,7 @@ export function Sis3316AddBoard({ existingIds, disabled, onAdded }: Props) {
               <dd>{found.temperature_c?.toFixed(1)} °C</dd>
             </dl>
             {found.already_configured && (
-              <p className="mt-2 text-xs text-amber-600">This board is already configured.</p>
+              <p className="mt-2 text-xs text-warning">This board is already configured.</p>
             )}
           </div>
         )}

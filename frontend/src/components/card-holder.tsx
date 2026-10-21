@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useCallback,
+  Fragment,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
@@ -45,6 +46,9 @@ import { useMetricsStore } from '@/store/metrics-store'
 import { useStatsStore } from '@/store/stats-store'
 import { useRunBadge } from '@/hooks/use-run-badge'
 import { useRunStatus } from '@/hooks/use-run-status'
+import { boardLabel, channelLabel } from '@/lib/board-label'
+import { QuickNoteButton } from '@/components/run-notes-editor'
+import { formatHz } from '@/lib/format-rate'
 import useRunControlStore from '@/store/run-control-store'
 import { formatElapsed } from '@/components/run-status-indicator'
 import {
@@ -67,6 +71,7 @@ import {
   deactivateWaveformBoard,
   getCurrentStatus,
   getStatsRunStatus,
+  getExperimentStats,
   setRunNumber,
   setSaveData,
 } from '@/lib/api'
@@ -103,6 +108,7 @@ type ROIMeasurement = ROI & {
 type ROICardData = {
   histogramId: string;
   histogramLabel: string;
+  customLabel: string;
   boardId: string;
   channel: number;
   roi: ROIMeasurement;
@@ -231,6 +237,25 @@ export function CardHolder({
   const [metricValues, setMetricValues] = useState<{ [key: string]: number }>({})
   const [boardStatus, setBoardStatus] = useState<{ [key: string]: BoardStatus }>({})
   const [boardConnectivity, setBoardConnectivity] = useState<{ [key: string]: BoardConnectivity }>({})
+  // Events per second of each board (sum of its channels, the server's last
+  // 1 s window), only while a run is going: the server sends none otherwise.
+  const [boardRates, setBoardRates] = useState<{ [id: string]: number }>({})
+  useEffect(() => {
+    if (!isRunning) { setBoardRates({}); return }
+    let alive = true
+    const poll = () => getExperimentStats().then((stats: any) => {
+      if (!alive || !Array.isArray(stats)) return
+      const rates: { [id: string]: number } = {}
+      for (const b of stats) {
+        const id = String(b.webdaq_id ?? b.board_id)
+        rates[id] = (b.channels ?? []).reduce((sum: number, c: any) => sum + (Number(c.event_rate) || 0), 0)
+      }
+      setBoardRates(rates)
+    }).catch(() => {})
+    poll()
+    const id = setInterval(poll, 2000)
+    return () => { alive = false; clearInterval(id) }
+  }, [isRunning])
   const [boards, setBoards] = useState<BoardInfo[]>([])
   // Only an answered "no boards" shows the empty state, not the first render.
   const [boardsLoaded, setBoardsLoaded] = useState(false)
@@ -567,6 +592,7 @@ export function CardHolder({
           newRoiCards.push({
             histogramId: histogram.id,
             histogramLabel: histogram.customLabel || histogram.label,
+            customLabel: histogram.customLabel || '',
             boardId: histogram.boardId,
             channel: histogram.channel,
             roi: measured,
@@ -827,8 +853,12 @@ export function CardHolder({
       >
         <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
           <div className="flex flex-col min-w-0">
-            <CardTitle className="text-sm font-semibold">Board {board.id}</CardTitle>
-            <p className="text-xs text-muted-foreground truncate">{board.name}</p>
+            <CardTitle className="text-sm font-semibold truncate">{boardLabel(board)}</CardTitle>
+            {isRunning && boardRates[board.id] !== undefined && (
+              <p className="text-xs text-muted-foreground tabular-nums" title="Events per second, all channels, last second">
+                {formatHz(boardRates[board.id])}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
             {isConnected ? (
@@ -870,7 +900,7 @@ export function CardHolder({
                 checked={waveformsOn}
                 onCheckedChange={(checked) => handleBoardWaveformToggle(String(board.id), checked)}
                 disabled={isRunning}
-                aria-label={`Toggle waveforms for board ${board.id}`}
+                aria-label={`Waveforms of ${boardLabel(board)}`}
               />
             </div>
           </div>
@@ -930,20 +960,42 @@ export function CardHolder({
                       {dataSavingEnabled ? 'On' : 'Off: nothing is written'}
                       <Switch
                         id="save-data-switch-phone"
+                        aria-label="Save to disk"
                         checked={dataSavingEnabled}
                         onCheckedChange={toggleDataSaving}
                         disabled={isRunning}
                       />
                     </dd>
-                    <dt className="text-muted-foreground">Boards</dt>
-                    <dd className="text-right font-semibold">
-                      {!boardsLoaded ? '…' : boards.length === 0 ? 'None configured' : (() => {
-                        const connected = boards.filter((b) => boardConnectivity[b.id]?.connected).length
-                        return connected === boards.length
-                          ? `${boards.length} connected`
-                          : <span className="text-destructive">{boards.length - connected} of {boards.length} disconnected</span>
-                      })()}
-                    </dd>
+                    {/* Each board on its line, with its state and, during a
+                        run, its rate: "2 connected" said nothing of either. */}
+                    {!boardsLoaded || boards.length === 0 ? (
+                      <>
+                        <dt className="text-muted-foreground">Boards</dt>
+                        <dd className="text-right font-semibold">{!boardsLoaded ? '…' : 'None configured'}</dd>
+                      </>
+                    ) : boards.map((b) => {
+                      const connected = boardConnectivity[b.id]?.connected ?? false
+                      const failed = isRunning && Boolean(boardStatus[b.id]?.failed)
+                      const rate = boardRates[b.id]
+                      return (
+                        <Fragment key={`phone-board-${b.id}`}>
+                          <dt className="truncate text-muted-foreground">{boardLabel(b)}</dt>
+                          <dd className={cn('text-right font-semibold tabular-nums', (!connected || failed) && 'text-destructive')}>
+                            {!connected ? 'Disconnected'
+                              : failed ? 'Board failure'
+                              : isRunning ? (rate !== undefined ? formatHz(rate) : 'Running') : 'Ready'}
+                          </dd>
+                        </Fragment>
+                      )
+                    })}
+                    {isRunning && Object.keys(boardRates).length > 1 && (
+                      <>
+                        <dt className="text-muted-foreground">Total rate</dt>
+                        <dd className="text-right font-semibold tabular-nums">
+                          {formatHz(Object.values(boardRates).reduce((sum, r) => sum + r, 0))}
+                        </dd>
+                      </>
+                    )}
                     {currentEnabled && currentModuleType !== null && PICOAMMETER_MODULES.has(currentModuleType) && (
                       <>
                         <dt className="text-muted-foreground">{currentModuleName}</dt>
@@ -1002,6 +1054,7 @@ export function CardHolder({
                 </Label>
                 <Switch
                   id="save-data-switch"
+                  aria-label="Save to disk"
                   checked={dataSavingEnabled}
                   onCheckedChange={toggleDataSaving}
                   disabled={isRunning}
@@ -1033,7 +1086,9 @@ export function CardHolder({
                       title="Click to change the run number"
                       className="group inline-flex items-baseline gap-1.5 rounded-sm hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <span>Run {runNumber}</span>
+                      {/* Stopped, the number is the run to come: "Run 4 ·
+                          Stopped" read as if run 4 had been taken. */}
+                      <span>Next: run {runNumber}</span>
                       <Pencil className="h-3.5 w-3.5 self-center opacity-40 transition-opacity group-hover:opacity-100" />
                     </button>
                   )
@@ -1044,8 +1099,9 @@ export function CardHolder({
               </div>
               {/* Unsaved, a run keeps its number for the next one (by design):
                   said here so a reused number is not a surprise. */}
+              <div className="flex items-center justify-between gap-2">
               <p
-                className="truncate text-xs text-muted-foreground"
+                className="min-w-0 truncate text-xs text-muted-foreground"
                 title={isRunning && !runBadge.tuning && !dataSavingEnabled
                   ? 'Save to disk is off: nothing of this run is written, and the next run gets the same number'
                   : !isRunning && unsavedRun !== null && unsavedRun === runNumber
@@ -1073,6 +1129,13 @@ export function CardHolder({
                       </>
                     : 'no finished run yet'}
               </p>
+              {/* A note for this run's Logbook entry, from where the run is
+                  watched (a Tuner session or an unsaved run has no entry). On
+                  this line: beside the run number it wrapped in a narrow card. */}
+              {isRunning && !runBadge.tuning && dataSavingEnabled && (
+                <QuickNoteButton runNumber={runNumber} className="-my-1 h-7 shrink-0 px-2 text-xs" />
+              )}
+              </div>
 
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
@@ -1328,7 +1391,7 @@ export function CardHolder({
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <div className="flex flex-col min-w-0">
                   <CardTitle className="text-sm font-semibold truncate">
-                    {cardData.histogramLabel}
+                    {cardData.customLabel || channelLabel(boards.find((b) => String(b.id) === String(cardData.boardId)), cardData.channel, cardData.boardId)}
                   </CardTitle>
                   <p
                     className="text-xs font-medium truncate flex items-center gap-1.5"
@@ -1340,14 +1403,23 @@ export function CardHolder({
                     />
                     {cardData.roi.name}
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    Board {cardData.boardId} • Channel {cardData.channel}
-                  </p>
                 </div>
                 <BarChart className="h-4 w-4 text-muted-foreground shrink-0" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">{cardData.roi.integral.toFixed(0)}</div>
+                {/* The number alone ("9724") did not say what it counts. The
+                    rate is the run average: the integral over the run's time. */}
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-2xl font-bold tabular-nums">{cardData.roi.integral.toFixed(0)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {isRunning ? 'counts since run start' : 'counts, last run'}
+                  </span>
+                </div>
+                {isRunning && timer > 0 && (
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {(cardData.roi.integral / timer).toFixed(cardData.roi.integral / timer < 10 ? 2 : 1)} counts/s, run average
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Range: {Number(cardData.roi.low).toLocaleString(undefined, { maximumFractionDigits: 2 })} – {Number(cardData.roi.high).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </p>

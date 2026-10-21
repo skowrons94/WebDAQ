@@ -179,15 +179,17 @@ export default function ActivityLog() {
           )}
           {actions.map((action) => (
             <div key={action.name}
-                 className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
+                 // On a phone the button goes under the text: side by side the
+                 // text was squeezed to a few words a line.
+                 className={`flex flex-col gap-3 rounded-lg border p-3 sm:flex-row sm:items-start sm:justify-between ${
                    !action.ok && action.enabled ? 'border-warning/60 bg-warning/5' : ''}`}>
               <div className="min-w-0">
                 {/* A div, not a <p>: the badge is a div, and a div inside a
                     <p> is invalid HTML that breaks hydration. */}
-                <div className="flex items-center gap-2 text-sm font-medium">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
                   {action.label}
                   {!action.ok && action.enabled && (
-                    <Badge className="bg-warning/10 text-warning">
+                    <Badge className="whitespace-nowrap bg-warning/10 text-warning">
                       needs attention
                     </Badge>
                   )}
@@ -195,7 +197,7 @@ export default function ActivityLog() {
                 <p className="mt-0.5 text-xs text-muted-foreground">{action.detail}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-1">
+              <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
                 {/* Disabled is grey, never the accent colour: a pink button
                     that cannot be pressed looks like one that can. */}
                 <Button size="sm" variant={action.ok || !action.enabled ? 'outline' : 'default'}
@@ -211,7 +213,7 @@ export default function ActivityLog() {
                 {/* A disabled button shows no tooltip in most browsers, so the
                     reason has to be on the page — with the way out of it. */}
                 {action.blocked_reason && (
-                  <span className="max-w-[9rem] text-right text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground sm:max-w-[9rem] sm:text-right">
                     {action.blocked_reason}
                     {isRunning && (
                       <>

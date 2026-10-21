@@ -4,6 +4,7 @@
  */
 import {
   getCurrentRunNumber,
+  appendRunNoteApi,
   getSaveData,
   reset,
   setRunNumber,
@@ -121,3 +122,25 @@ export async function forceResetSequence(runNumber: number | null, saveData?: bo
   return { warnings, nextRun }
 }
 
+
+/** The name a shifter signs quick notes with, remembered in this browser. */
+const AUTHOR_KEY = 'run-note-author'
+
+export function savedNoteAuthor(): string {
+  try { return localStorage.getItem(AUTHOR_KEY) ?? '' } catch { return '' }
+}
+
+/**
+ * Add a note to a run's notes, below what is there: "[14:05 Anna] text".
+ * The server appends it under a lock and stamps its own time, so a note
+ * another shifter adds at the same moment is never lost. Returns the notes
+ * as they now are.
+ */
+export async function appendRunNote(runNumber: number, text: string, author: string): Promise<string> {
+  const body = text.trim()
+  if (!body) throw new Error('The note is empty')
+  const who = author.trim()
+  try { localStorage.setItem(AUTHOR_KEY, who) } catch { /* private mode */ }
+  const res = await appendRunNoteApi(runNumber, body, who)
+  return res.notes as string
+}

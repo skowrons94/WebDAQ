@@ -13,9 +13,11 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { useToast } from '@/components/ui/use-toast'
+import { useRunStatus } from '@/hooks/use-run-status'
 
 export function GraphiteSettings() {
   const { toast } = useToast()
+  const isRunning = useRunStatus((st) => st.isRunning)
   const [host, setHost] = useState('localhost')
   const [port, setPort] = useState('80')
   const [carbonPort, setCarbonPort] = useState('2003')
@@ -93,6 +95,13 @@ export function GraphiteSettings() {
             A running acquisition picks a change up at its next statistics interval.
           </p>
         </div>
+        {/* The running acquisition takes the new address up within one
+            statistics interval: say so before it is changed mid-run. */}
+        {isRunning && (
+          <p className="text-xs text-warning" role="note">
+            A run is going: this applies now, and the run&apos;s rates go to the new server from its next statistics interval.
+          </p>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
           <p className="text-xs text-muted-foreground">

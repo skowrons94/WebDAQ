@@ -1,5 +1,6 @@
 'use client'
 
+import { useRunStatus } from '@/hooks/use-run-status'
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
@@ -50,6 +51,21 @@ interface ModuleSettings {
   baudrate?: number
   high_speed?: boolean
   settings?: any
+}
+
+/**
+ * Said above a Save that changes the running acquisition: during a run the
+ * new range, sample count or address takes effect at once, in the middle of
+ * the run, and nothing else warned about it.
+ */
+function RunGoingNote() {
+  const isRunning = useRunStatus((st) => st.isRunning)
+  if (!isRunning) return null
+  return (
+    <p className="text-xs text-warning" role="note">
+      A run is going: this applies now, to the running acquisition.
+    </p>
+  )
 }
 
 export function CurrentModuleSettings() {
@@ -403,7 +419,7 @@ export function CurrentModuleSettings() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="tetramm">TetrAMM (4-channel TCP/IP)</SelectItem>
-                  <SelectItem value="rbd9103">RBD 9103 (Single-channel Serial)</SelectItem>
+                  <SelectItem value="rbd9103">RBD 9103 (single-channel serial)</SelectItem>
                   <SelectItem value="graphite">Monitored value (Graphite metric)</SelectItem>
                 </SelectContent>
               </Select>
@@ -439,7 +455,7 @@ export function CurrentModuleSettings() {
         <TabsContent value="tetramm">
           <Card>
             <CardHeader>
-              <CardTitle>TetrAMM Configuration</CardTitle>
+              <CardTitle>TetrAMM configuration</CardTitle>
               <CardDescription>
                 Configure TCP/IP connection and device parameters for TetrAMM 4-channel picoammeter
               </CardDescription>
@@ -448,7 +464,7 @@ export function CurrentModuleSettings() {
               {/* Connection Settings */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="tetram-ip">IP Address</Label>
+                  <Label htmlFor="tetram-ip">IP address</Label>
                   <Input
                     id="tetram-ip"
                     value={tetramIp}
@@ -476,9 +492,9 @@ export function CurrentModuleSettings() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">1 Channel</SelectItem>
-                    <SelectItem value="2">2 Channels</SelectItem>
-                    <SelectItem value="3">3 Channels</SelectItem>
-                    <SelectItem value="4">4 Channels</SelectItem>
+                    <SelectItem value="2">2 channels</SelectItem>
+                    <SelectItem value="3">3 channels</SelectItem>
+                    <SelectItem value="4">4 channels</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -526,8 +542,9 @@ export function CurrentModuleSettings() {
                 </p>
               </div>
 
+              <RunGoingNote />
               <Button onClick={handleSaveTetrammSettings} className="w-full">
-                Save TetrAMM Settings
+                Save TetrAMM settings
               </Button>
             </CardContent>
           </Card>
@@ -536,7 +553,7 @@ export function CurrentModuleSettings() {
         <TabsContent value="rbd9103">
           <Card>
             <CardHeader>
-              <CardTitle>RBD 9103 Configuration</CardTitle>
+              <CardTitle>RBD 9103 configuration</CardTitle>
               <CardDescription>
                 Configure serial connection and device parameters for RBD 9103 picoammeter
               </CardDescription>
@@ -640,7 +657,7 @@ export function CurrentModuleSettings() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="false">Standard (1 sample/msg)</SelectItem>
-                      <SelectItem value="true">High Speed (10 samples/msg)</SelectItem>
+                      <SelectItem value="true">High speed (10 samples/msg)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -719,8 +736,9 @@ export function CurrentModuleSettings() {
                 </p>
               </div>
 
+              <RunGoingNote />
               <Button onClick={handleSaveRbdSettings} className="w-full">
-                Save RBD 9103 Settings
+                Save RBD 9103 settings
               </Button>
             </CardContent>
           </Card>
@@ -827,8 +845,9 @@ export function CurrentModuleSettings() {
                 </div>
               </div>
 
+              <RunGoingNote />
               <Button onClick={handleSaveMetricSettings} className="w-full">
-                Save Monitored Value Settings
+                Save monitored value settings
               </Button>
             </CardContent>
           </Card>
@@ -844,7 +863,7 @@ export function CurrentModuleSettings() {
           <CardContent>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="font-medium">Module Type:</span>{' '}
+                <span className="font-medium">Module:</span>{' '}
                 {MODULE_LABELS[status.module_type] ?? status.module_type}
               </div>
               {status.metric && (
@@ -857,23 +876,32 @@ export function CurrentModuleSettings() {
                 <span className="font-medium">Connected:</span>{' '}
                 {status.connected ? 'Yes' : 'No'}
               </div>
+              {/* "Acquiring" is the driver's own flag: it is reading values.
+                  The reader thread is the background loop that takes them
+                  from the device; a module that reads on demand (a Graphite
+                  metric) has none, so its absence is said plainly rather than
+                  as "Thread alive: No", which read like a fault. */}
               <div>
-                <span className="font-medium">Acquiring:</span>{' '}
+                <span className="font-medium">Reading values:</span>{' '}
                 {status.acquiring ? 'Yes' : 'No'}
               </div>
               <div>
-                <span className="font-medium">Thread Alive:</span>{' '}
-                {status.thread_alive ? 'Yes' : 'No'}
+                <span className="font-medium">Background reader:</span>{' '}
+                {status.thread_alive
+                  ? 'Running'
+                  : status.acquiring
+                    ? <span className="text-muted-foreground">not reported</span>
+                    : 'Stopped'}
               </div>
               {status.latest_measurement !== undefined && (
                 <div className="col-span-2">
-                  <span className="font-medium">Latest Measurement:</span>{' '}
+                  <span className="font-medium">Latest reading:</span>{' '}
                   {status.latest_measurement.toFixed(3)} µA
                 </div>
               )}
               {status.latest_measurements && (
                 <div className="col-span-2">
-                  <span className="font-medium">Latest Measurements (µA):</span>
+                  <span className="font-medium">Latest readings (µA):</span>
                   <div className="grid grid-cols-4 gap-2 mt-2">
                     {Object.entries(status.latest_measurements).map(([ch, val]: [string, any]) => (
                       <div key={ch}>
@@ -919,8 +947,9 @@ export function CurrentModuleSettings() {
               />
             </div>
           </div>
+          <RunGoingNote />
           <Button onClick={handleSaveGraphiteConfig} className="w-full">
-            Save Graphite Configuration
+            Save Graphite configuration
           </Button>
         </CardContent>
       </Card>

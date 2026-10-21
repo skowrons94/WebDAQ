@@ -22,9 +22,11 @@ import {
 } from "@/lib/api"
 import { Sparkline } from "@/components/stats/sparkline"
 import {
-  rateUnit, byteRateUnit, maxMagnitude, formatValue,
+  rateUnit, byteRateUnit, maxMagnitude,
   CHART_MARGIN, yAxisLabel, xAxisLabel,
 } from "@/lib/chart-format"
+import { formatHz } from "@/lib/format-rate"
+import { boardLabel } from "@/lib/board-label"
 
 // Shape returned by GET /experiment/stats — present only while a run is active.
 interface ChannelRate {
@@ -116,15 +118,37 @@ const SERIES_LIGHT = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#0
 const SERIES_DARK = ["#3987e5", "#d95926", "#199e70", "#c98500", "#d55181", "#008300"]
 const MAX_PLOTTED_CHANNELS = SERIES_LIGHT.length
 
-/** A counting rate, always with its unit: "12 events/s", "1.2 k events/s". */
-function formatRate(value: number, noun = ""): string {
-  if (!Number.isFinite(value)) return "—"
-  const tail = noun ? `${noun}/s` : "/s"
-  if (value >= 1e6) return `${(value / 1e6).toFixed(2)} M ${tail}`
-  if (value >= 1e3) return `${(value / 1e3).toFixed(1)} k ${tail}`
-  if (value >= 10) return `${value.toFixed(0)} ${tail}`
-  if (value >= 0.1) return `${value.toFixed(1)} ${tail}`
-  return `${value === 0 ? "0" : value.toPrecision(2)} ${tail}`
+/**
+ * A counting rate in the site's one format ("96 Hz", "1.23 kHz"); what it
+ * counts is said by the label beside it (Events, Pile-ups…).
+ */
+function formatRate(value: number, _noun = ""): string {
+  return formatHz(value)
+}
+
+/**
+ * Time ticks on round values (5, 10, 15, 30 s; 1, 2, 5, 10, 15, 30 min;
+ * 1, 2, 3, 6, 12 h) about every `px` pixels, and one way of writing them for
+ * the whole axis: Recharts' own picks gave "1 s, 7 s, 13 s" on a desktop and
+ * "1 s, 1:21, 2:37" on a phone.
+ */
+const TIME_STEPS = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200]
+function timeTicks(from: number, to: number, widthPx: number): { ticks: number[]; format: (s: number) => string } {
+  const span = Math.max(1, to - from)
+  const wanted = Math.max(2, Math.floor(widthPx / 80))
+  const step = TIME_STEPS.find((s) => span / s <= wanted) ?? Math.ceil(span / wanted / 3600) * 3600
+  const ticks: number[] = []
+  for (let t = Math.ceil(from / step) * step; t <= to + 1e-6; t += step) ticks.push(t)
+  const format = (s: number) => {
+    const v = Math.round(s)
+    if (to < 60) return `${v} s`
+    if (step % 3600 === 0) return `${v / 3600} h`
+    if (step % 60 === 0 && to < 3600) return `${v / 60} min`
+    const h = Math.floor(v / 3600), m = Math.floor((v % 3600) / 60), r = v % 60
+    if (to >= 3600) return step % 60 === 0 ? `${h}:${String(m).padStart(2, "0")}` : `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`
+    return `${m}:${String(r).padStart(2, "0")}`
+  }
+  return { ticks, format }
 }
 
 /**
@@ -409,16 +433,16 @@ export default function RunStats() {
         if (typeof v === "number") values.push(v)
       }
     }
-    // The prefix is said once: the axis reads "Events (k/s)", the tooltip
-    // "1.23 k events/s".
-    const noun = METRICS.find((m) => m.key === metric)?.noun ?? ""
+    // The prefix is said once: the axis reads "Events (kHz)", the tooltip
+    // "1.23 kHz".
     const max = maxMagnitude(values)
     const choice = rateUnit(max)
     const prefix = choice.unit.replace("/s", "")
     return {
       scale: choice.scale,
-      unit: `${prefix ? `${prefix} ` : ""}${noun}/s`,
-      axisUnit: choice.unit,
+      unit: `${prefix}Hz`,
+      // Hz like every other rate on the site: "Events (kHz)".
+      axisUnit: `${prefix}Hz`,
       yTicks: niceTicks(max * choice.scale),
     }
   }, [history, selected, metric])
@@ -433,6 +457,26 @@ export default function RunStats() {
     }
     return next
   }), [history, selected, scale, metric])
+
+  // The chart's width, for how many time ticks fit.
+  const chartBoxRef = useRef<HTMLDivElement>(null)
+  const [chartWidth, setChartWidth] = useState(600)
+  useEffect(() => {
+    const el = chartBoxRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setChartWidth(el.clientWidth || 600))
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
+  const xAxis = useMemo(() => {
+    const first = Number(scaledHistory[0]?.time ?? 0)
+    const last = Number(scaledHistory[scaledHistory.length - 1]?.time ?? 1)
+    // The whole run starts at 0; a window starts where its data does.
+    const from = windowS ? first : 0
+    const plotPx = Math.max(120, chartWidth - 64 - CHART_MARGIN.left - CHART_MARGIN.right)
+    const { ticks, format } = timeTicks(from, Math.max(last, from + 1), plotPx)
+    return { from, to: Math.max(last, from + 1), ticks, format }
+  }, [scaledHistory, chartWidth, windowS])
 
   const yLabel = useMemo(() => {
     const base = METRICS.find((m) => m.key === metric)?.axis ?? ""
@@ -480,8 +524,7 @@ export default function RunStats() {
               <div className="flex items-center justify-between gap-2">
                 <span className="flex min-w-0 items-center gap-1.5">
                   <Cpu className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-sm font-medium">{board.name}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">#{board.id}</span>
+                  <span className="truncate text-sm font-medium">{boardLabel(board)}</span>
                 </span>
                 {live?.failed && (
                   <Badge variant="destructive" className="shrink-0 gap-1 text-xs">
@@ -493,8 +536,11 @@ export default function RunStats() {
               <div className="mt-2 text-xl font-semibold tabular-nums">
                 {boardEvents === null ? "—" : formatRate(boardEvents, "events")}
               </div>
+              {/* The window of the number: Board health, the chips and the
+                  run average count over other windows, and a pulser's
+                  one-second counts wander by ±15 %. */}
               <div className="text-xs text-muted-foreground">
-                all channels together
+                events, all channels, last {samplingLabel(samplingMs)}
               </div>
               <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{board.dpp} · {board.channelCount} ch</span>
@@ -549,7 +595,7 @@ export default function RunStats() {
                       {activeBoard.live ? formatRate(value, m.noun) : "—"}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      board {activeBoard.id}, all channels
+                      {boardLabel(activeBoard)}, all channels, last {samplingLabel(samplingMs)}
                     </p>
                   </CardContent>
                 </Card>
@@ -565,7 +611,7 @@ export default function RunStats() {
               </span>
               <span className="flex flex-wrap items-center gap-x-6 gap-y-1">
                 <span>
-                  <span className="text-muted-foreground">board {activeBoard.id}: </span>
+                  <span className="text-muted-foreground">{boardLabel(activeBoard)}: </span>
                   <span className="font-semibold tabular-nums">
                     {activeBoard.live ? formatBytes(totals.write) : "—"}
                   </span>
@@ -593,7 +639,7 @@ export default function RunStats() {
           <div>
             <CardTitle>
               {METRICS.find((m) => m.key === metric)?.axis} per second
-              {activeBoard ? ` · board ${activeBoard.id} (${activeBoard.name})` : ""}
+              {activeBoard ? ` · ${boardLabel(activeBoard)}` : ""}
             </CardTitle>
             <p className="text-xs text-muted-foreground">
               {points.length
@@ -724,16 +770,18 @@ export default function RunStats() {
               )}
             </div>
           ) : (
+            <div ref={chartBoxRef}>
             <ResponsiveContainer width="100%" height={340}>
               <LineChart data={scaledHistory} margin={CHART_MARGIN}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis
                   dataKey="time"
                   type="number"
-                  domain={["dataMin", "dataMax"]}
+                  domain={[xAxis.from, xAxis.to]}
+                  ticks={xAxis.ticks}
                   tick={{ fontSize: 11 }}
-                  tickFormatter={(v: number) => formatElapsed(v)}
-                  minTickGap={40}
+                  tickFormatter={xAxis.format}
+                  interval={0}
                   label={xAxisLabel("Time since run start")}
                 />
                 <YAxis
@@ -755,7 +803,7 @@ export default function RunStats() {
                     border: '1px solid hsl(var(--border))',
                   }}
                   itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
-                  formatter={(v: number, name: string) => [formatValue(v, unit), name]}
+                  formatter={(v: number, name: string) => [formatHz(v / scale), name]}
                   labelFormatter={(v) => `t = ${formatElapsed(Number(v))}`}
                 />
                 {/* No chart legend: the channel buttons above carry the colours
@@ -774,6 +822,7 @@ export default function RunStats() {
                 ))}
               </LineChart>
             </ResponsiveContainer>
+            </div>
           )}
 
           {/* The numbers behind the lines: three of these hues sit below 3:1

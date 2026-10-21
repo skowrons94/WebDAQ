@@ -178,15 +178,17 @@ interface ColumnsProps {
 }
 
 // Reusable sortable header with friendly label.
-const sortableHeader = (label: string) =>
+// Numbers are right-aligned in their cells, and so are their headers, so a
+// header stands over its column's digits.
+const sortableHeader = (label: string, align: "left" | "right" = "left") =>
     function SortableHeader({ column }: any) {
         const sorted = column.getIsSorted()
-        return (
+        const button = (
             <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => column.toggleSorting(sorted === "asc")}
-                className="-ml-2 h-8 data-[state=open]:bg-accent"
+                className={`${align === "right" ? "-mr-2" : "-ml-2"} h-8 data-[state=open]:bg-accent`}
             >
                 {label}
                 <ArrowUpDown
@@ -194,6 +196,7 @@ const sortableHeader = (label: string) =>
                 />
             </Button>
         )
+        return align === "right" ? <div className="flex justify-end">{button}</div> : button
     }
 
 /** "1h 05m", "4m 09s", "12s". */
@@ -216,9 +219,9 @@ function LiveDuration({ runNumber }: { runNumber: number }) {
     const startTime = useRunStatus((s) => s.startTime)
     const live = isRunning && current === runNumber
     const elapsed = useElapsed(live, startTime)
-    if (!live) return <div className="text-muted-foreground text-center">—</div>
+    if (!live) return <div className="text-muted-foreground text-right">—</div>
     return (
-        <div className="text-center text-sm tabular-nums" title="Still running">
+        <div className="text-right text-sm tabular-nums" title="Still running">
             <span className="font-mono">{formatElapsed(elapsed)}</span>
             <span className="ml-1 text-xs text-muted-foreground">running</span>
         </div>
@@ -242,7 +245,7 @@ export function startedWithin(start: string | null | undefined, range: string | 
 }
 
 const RUN_TYPE_LABEL: Record<string, string> = {
-    longrun: "Long Run",
+    longrun: "Long run",
     scan: "Scan",
     background: "Background",
     calibration: "Calibration",
@@ -334,7 +337,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
     {
         id: "duration",
         meta: { label: COLUMN_LABELS.duration },
-        header: sortableHeader("Duration"),
+        header: sortableHeader("Duration", "right"),
         accessorFn: (row) => {
             if (!row.start_time || !row.end_time) return 0
             return Math.round(
@@ -345,15 +348,15 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
             const start = row.original.start_time ? new Date(row.original.start_time) : null
             const end = row.original.end_time ? new Date(row.original.end_time) : null
             if (start && !end) return <LiveDuration runNumber={row.original.run_number} />
-            if (!start || !end) return <div className="text-muted-foreground text-center">—</div>
+            if (!start || !end) return <div className="text-muted-foreground text-right">—</div>
             const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000))
-            return <div className="text-center text-sm tabular-nums">{prettyDuration(seconds)}</div>
+            return <div className="text-right text-sm tabular-nums">{prettyDuration(seconds)}</div>
         },
     },
     {
         accessorKey: "accumulated_charge",
         meta: { label: COLUMN_LABELS.accumulated_charge },
-        header: sortableHeader("Charge"),
+        header: sortableHeader("Charge", "right"),
         // The same µC / mC / C rule as the overview (lib/format-charge.ts).
         cell: ({ row }) => (
             <div className="whitespace-nowrap text-right tabular-nums text-sm">
@@ -366,43 +369,13 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
         meta: { label: COLUMN_LABELS.target_name },
         header: sortableHeader("Run name"),
         cell: ({ row }) => (
-            <div className="text-sm font-medium">{row.original.target_name || "—"}</div>
+            // A long run name wraps instead of pushing the flag off the
+            // right edge of a 1440 px screen.
+            <div className="min-w-[8rem] max-w-[15rem] whitespace-normal break-words text-sm font-medium">{row.original.target_name || "—"}</div>
         ),
     },
-    {
-        accessorKey: "terminal_voltage",
-        meta: { label: COLUMN_LABELS.terminal_voltage },
-        header: sortableHeader("Terminal voltage (kV)"),
-        cell: ({ row }) => (
-            <div className="text-right tabular-nums text-sm">
-                {row.original.terminal_voltage ?? "—"}
-            </div>
-        ),
-    },
-    {
-        accessorKey: "probe_voltage",
-        meta: { label: COLUMN_LABELS.probe_voltage },
-        header: sortableHeader("Probe voltage (kV)"),
-        cell: ({ row }) => (
-            <div className="text-right tabular-nums text-sm">
-                {row.original.probe_voltage ?? "—"}
-            </div>
-        ),
-    },
-    {
-        accessorKey: "run_type",
-        meta: { label: COLUMN_LABELS.run_type },
-        header: sortableHeader("Type"),
-        // Equality filter (drives the type dropdown)
-        filterFn: (row, columnId, value) =>
-            !value || value === "all" ? true : row.getValue(columnId) === value,
-        cell: ({ row }) => {
-            const type = row.original.run_type
-            return (
-                <div className="text-sm">{RUN_TYPE_LABEL[type] ?? type ?? "—"}</div>
-            )
-        },
-    },
+    // The flag and the notes right after the run name: the columns people
+    // set and write in, in view without scrolling the table sideways.
     {
         accessorKey: "flag",
         meta: { label: COLUMN_LABELS.flag },
@@ -502,7 +475,9 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
             }
 
             return (
-                <div className="min-w-[28rem] w-full">
+                // Wide enough to read a line of a note, narrow enough that the
+                // flag and the other columns still fit at 1440 px.
+                <div className="min-w-[11rem] w-full">
                     {isEditing ? (
                         <div className="grid gap-2">
                             <Textarea
@@ -552,6 +527,41 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
                         </div>
                     )}
                 </div>
+            )
+        },
+    },
+    {
+        accessorKey: "terminal_voltage",
+        meta: { label: COLUMN_LABELS.terminal_voltage },
+        // Short header: the column picker gives the full name.
+        header: sortableHeader("Terminal (kV)", "right"),
+        cell: ({ row }) => (
+            <div className="text-right tabular-nums text-sm">
+                {row.original.terminal_voltage ?? "—"}
+            </div>
+        ),
+    },
+    {
+        accessorKey: "probe_voltage",
+        meta: { label: COLUMN_LABELS.probe_voltage },
+        header: sortableHeader("Probe (kV)", "right"),
+        cell: ({ row }) => (
+            <div className="text-right tabular-nums text-sm">
+                {row.original.probe_voltage ?? "—"}
+            </div>
+        ),
+    },
+    {
+        accessorKey: "run_type",
+        meta: { label: COLUMN_LABELS.run_type },
+        header: sortableHeader("Type"),
+        // Equality filter (drives the type dropdown)
+        filterFn: (row, columnId, value) =>
+            !value || value === "all" ? true : row.getValue(columnId) === value,
+        cell: ({ row }) => {
+            const type = row.original.run_type
+            return (
+                <div className="text-sm">{RUN_TYPE_LABEL[type] ?? type ?? "—"}</div>
             )
         },
     },

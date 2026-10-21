@@ -15,6 +15,7 @@ import os
 from flask import Blueprint, jsonify, request
 
 from ..models.run_metadata import RunMetadata
+from .experiment import _username
 from ..utils.jwt_utils import jwt_required_custom
 from ..services import run_data
 from ..services.run_data import get_conversion_manager
@@ -81,6 +82,7 @@ def run_detail(run_number):
     detail.update({
         'probe_voltage': run.probe_voltage,
         'user_id': run.user_id,
+        'username': _username(run.user_id),
         # Captured at run start from the CAEN API — model, serial, firmware and
         # the acquisition registers each board actually ran with.
         'board_info': run.get_board_info(),

@@ -913,12 +913,14 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
           <Field label="Run number" value={detail.run_number} />
           <Field label="Type" value={detail.run_type} />
           <Field label="Run name" value={detail.target_name} />
+          <Field label="Started by" value={detail.username ?? undefined} />
           <Field label="Started" value={formatTime(detail.start_time)} />
           <Field label="Stopped" value={formatTime(detail.end_time)} />
           <Field label="Duration" value={formatDuration(detail.duration_s)} />
           <Field label="Terminal voltage" value={detail.terminal_voltage != null ? `${detail.terminal_voltage} kV` : undefined} />
           <Field label="Probe voltage" value={detail.probe_voltage != null ? `${detail.probe_voltage} kV` : undefined} />
-          <Field label="User ID" value={detail.user_id} />
+          {/* The run record holds only a user number, which says nothing to a
+              shifter; the user name would need the server to send it. */}
           <Field
             label="Accumulated charge"
             value={detail.accumulated_charge !== null ? formatCharge(detail.accumulated_charge) : undefined}
@@ -1001,7 +1003,7 @@ function LogbookRunHeader({
   action?: React.ReactNode
 }) {
   const runTypeLabels: Record<string, string> = {
-    longrun: "Long Run",
+    longrun: "Long run",
     background: "Background",
     calibration: "Calibration",
     scan: "Scan",
@@ -1228,7 +1230,6 @@ function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
         <CardContent>
           <Field label="Terminal voltage" value={detail.terminal_voltage != null ? `${detail.terminal_voltage} kV` : undefined} />
           <Field label="Probe voltage" value={detail.probe_voltage != null ? `${detail.probe_voltage} kV` : undefined} />
-          <Field label="User ID" value={detail.user_id} />
         </CardContent>
       </Card>
 

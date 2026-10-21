@@ -509,7 +509,7 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
                                 />
                                 <FlaskConical className="h-3.5 w-3.5 text-warning" />
                                 <div className="flex flex-col">
-                                    <span className="text-xs font-medium">Test Mode</span>
+                                    <span className="text-xs font-medium">Test mode</span>
                                     <span className="text-xs text-muted-foreground">
                                         Use mock boards — for debugging without hardware.
                                     </span>

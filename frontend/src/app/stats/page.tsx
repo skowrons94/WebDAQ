@@ -303,18 +303,27 @@ function StatsPageContent() {
         )}
 
         {/* Metrics — the reason for the page, so they come first */}
-        {paths.length === 0 ? (
+        {/* With Graphite unreachable there is nothing to browse: say so and
+            point to where its address is set. The header has the one
+            "Add metric" button; the empty state does not repeat it. */}
+        {paths.length === 0 && connection && !connection.reachable ? (
           <EmptyState
             icon={Gauge}
-            title="No metrics yet"
+            title="Graphite is unreachable"
             action={
-              <Button onClick={() => setBrowserOpen(true)} size="sm" variant="outline">
-                <Plus className="mr-2 h-4 w-4" />
-                Add metric
+              <Button asChild size="sm" variant="outline">
+                <Link href="/settings?view=graphite">Settings → Graphite</Link>
               </Button>
             }
           >
-            Browse what Graphite is collecting and pick the ones to watch.
+            No answer from {graphiteHost}:{graphitePort}
+            {connection.error && !/^no answer/i.test(connection.error) ? ` (${connection.error})` : ''}. Check the address,
+            or whether the Graphite server is up.
+          </EmptyState>
+        ) : paths.length === 0 ? (
+          <EmptyState icon={Gauge} title="No metrics yet">
+            Use Add metric above to browse what Graphite is collecting and pick
+            the ones to watch.
           </EmptyState>
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

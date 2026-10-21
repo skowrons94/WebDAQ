@@ -14,17 +14,15 @@ import { useRunStatus } from '@/hooks/use-run-status'
 import { deriveRunBadge } from '@/hooks/use-run-badge'
 import { getDataCurrent, getSaveData } from '@/lib/api'
 import { StopRunBody } from '@/components/stop-run-body'
+import { QuickNoteButton } from '@/components/run-notes-editor'
 import { forceResetSequence, stopRunSequence } from '@/lib/run-actions'
 import useRunControlStore from '@/store/run-control-store'
+import { formatHz } from '@/lib/format-rate'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
 
-/** Hz → "812 Hz", "12.4 kHz", "1.20 MHz". */
-export function formatRate(hz: number): string {
-  if (hz >= 1e6) return `${(hz / 1e6).toFixed(2)} MHz`
-  if (hz >= 1e3) return `${(hz / 1e3).toFixed(1)} kHz`
-  return `${Math.round(hz)} Hz`
-}
+// One rate format on every page (lib/format-rate.ts).
+export const formatRate = (hz: number) => formatHz(hz)
 
 /**
  * The phone's run bar: fixed at the bottom of every page below 768 px, so the
@@ -175,6 +173,11 @@ export function RunBar() {
             {beamText && <> · beam {beamText}</>}
           </p>
         </div>
+        {/* A note for the run being taken, without going to the Logbook. Not
+            for a Tuner session or an unsaved run: neither has a Logbook entry. */}
+        {isRunning && !badge.tuning && saving !== false && (
+          <QuickNoteButton runNumber={runNumber} compact className="h-11 w-11 shrink-0" />
+        )}
         {isRunning ? (
           <ConfirmAction
             trigger={

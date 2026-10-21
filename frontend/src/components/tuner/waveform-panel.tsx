@@ -330,7 +330,8 @@ export function WaveformPanel(p: Props) {
 function Ok({ ok, children }: { ok: boolean; children: React.ReactNode }) {
   return (
     <span className={`inline-flex items-center gap-1 ${ok ? '' : 'font-medium text-warning'}`}>
-      {ok ? <CheckCircle2 className="h-3.5 w-3.5 text-success" aria-hidden="true" /> : <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />}
+      {/* shrink-0: next to text that wraps, the icon was squeezed to a dot. */}
+      {ok ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-success" aria-hidden="true" /> : <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
       {children}
     </span>
   )

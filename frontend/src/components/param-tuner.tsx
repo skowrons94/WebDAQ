@@ -43,6 +43,7 @@ import type { TraceReadout } from '@/components/tuner/waveform-panel'
 import type { FitSummary } from '@/components/tuner/spectrum-panel'
 import type { GuideStatus } from '@/components/tuner/guided-flow'
 import dynamic from 'next/dynamic'
+import { boardLabel } from '@/lib/board-label'
 
 // History and the guided checklist load on demand.
 const loadingPanel = () => <p className="text-sm text-muted-foreground">Loading…</p>
@@ -664,7 +665,7 @@ export default function ParamTuner() {
             <SelectContent>
               {boards.map(b => (
                 <SelectItem key={b.id} value={b.id}>
-                  {b.name} (ID: {b.id}) · {b.dpp}
+                  {boardLabel(b)} · {b.dpp}
                 </SelectItem>
               ))}
             </SelectContent>

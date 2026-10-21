@@ -1,10 +1,8 @@
-/** Events per second → "812 /s", "12.4 k/s", "1.20 M/s". */
+import { formatHz } from '@/lib/format-rate'
+
+/** A counting rate, written as on every other page ("812 Hz", "12.40 kHz"). */
 export function formatRate(perS: number): string {
-  if (!Number.isFinite(perS)) return '–'
-  if (perS >= 1e6) return `${(perS / 1e6).toFixed(2)} M/s`
-  if (perS >= 1e3) return `${(perS / 1e3).toFixed(1)} k/s`
-  if (perS >= 10) return `${Math.round(perS)} /s`
-  return `${perS.toFixed(1)} /s`
+  return formatHz(perS)
 }
 
 /** ns → "480 ns", "4.0 µs". */

@@ -937,8 +937,10 @@ const BOARD_SECTIONS: SettingSection[] = [
       "The oscilloscope-like trace saved with each event. Recording waveforms multiplies the data volume — leave it off for production runs.",
     settings: [
       { register: "Board Configuration", field: "Enable Waveform", label: "Record waveforms" },
-      { register: "Record Length", label: "Record length (samples)" },
-      { register: "Pre Trigger" },
+      // The registers count in blocks of samples, not samples (UM5678/UM4380):
+      // the label says so, as the raw value is what is shown and written.
+      { register: "Record Length", label: "Record length (× 8 samples)" },
+      { register: "Pre Trigger", label: "Pre-trigger (× 4 samples)" },
       { register: "Board Configuration", field: "Dual Trace" },
       { register: "Board Configuration", field: "Analog Probe" },
       { register: "Board Configuration", field: "Analog Probe 1" },

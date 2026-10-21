@@ -142,8 +142,9 @@ export function RunControl() {
     className?: string,
     style?: CSSProperties,
   ) => beamVisible && beamPlacement === placement ? (
-    // Phones: right after the run controls, wherever it sits on a desktop.
-    <div style={style} className={cn('h-full min-h-0 min-w-0 max-md:order-2', className)}>
+    // Phones: right after the run controls, wherever it sits on a desktop;
+    // during a run, first (the run controls fold to one line further down).
+    <div style={style} className={cn('h-full min-h-0 min-w-0', isRunning ? 'max-md:order-1' : 'max-md:order-2', className)}>
       <BeamControlPanel
         placement={beamPlacement}
         onPlacementChange={setBeamPlacement}
@@ -167,7 +168,7 @@ export function RunControl() {
             beamPlacement === 'status' &&
               'xl:grid-cols-[minmax(0,3fr)_minmax(26rem,2fr)]',
           )}>
-            <div ref={statusPanelRef} className="min-w-0 max-md:order-3">
+            <div ref={statusPanelRef} className={cn('min-w-0', isRunning ? 'max-md:order-2' : 'max-md:order-3')}>
               <CardHolder
                 isRunning={isRunning}
                 timer={timer}
@@ -203,7 +204,9 @@ export function RunControl() {
                 ? 'grid-rows-[auto_auto_1fr]'
                 : 'xl:grid-cols-[minmax(0,2fr)_minmax(22rem,1fr)] xl:items-start',
             )}>
-              <div className="min-w-0 max-md:order-1">
+              {/* Stopped, a phone needs the run form first; running, the beam,
+                  the rates and the boards come first and this is one line. */}
+              <div className={cn('min-w-0', isRunning ? 'max-md:order-3' : 'max-md:order-1')}>
               <RunControlButtons
                 elapsed={timer}
                 saveData={saveData}

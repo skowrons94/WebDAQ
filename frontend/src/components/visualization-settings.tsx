@@ -51,6 +51,7 @@ export function VisualizationSettings() {
                         </div>
                         <Switch
                             id="currentEnabled"
+                            aria-label="Enable current acquisition"
                             checked={settings.currentEnabled !== false}
                             onCheckedChange={(checked) => updateSettings({ currentEnabled: checked })}
                         />
@@ -60,6 +61,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showStats">Show stats</Label>
                         <Switch
                             id="showStats"
+                            aria-label="Show stats"
                             checked={settings.showStats}
                             onCheckedChange={(checked) => updateSettings({ showStats: checked })}
                         />
@@ -69,6 +71,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showHistograms">Show histograms</Label>
                         <Switch
                             id="showHistograms"
+                            aria-label="Show histograms"
                             checked={settings.showHistograms}
                             onCheckedChange={(checked) => updateSettings({ showHistograms: checked })}
                         />
@@ -78,6 +81,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showWaveforms">Show waveforms</Label>
                         <Switch
                             id="showWaveforms"
+                            aria-label="Show waveforms"
                             checked={settings.showWaveforms}
                             onCheckedChange={(checked) => updateSettings({ showWaveforms: checked })}
                         />
@@ -87,6 +91,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showPSD">Show PSD</Label>
                         <Switch
                             id="showPSD"
+                            aria-label="Show PSD"
                             checked={settings.showPSD ?? true}
                             onCheckedChange={(checked) => updateSettings({ showPSD: checked })}
                         />
@@ -97,6 +102,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showStatus">Show run status</Label>
                         <Switch
                             id="showStatus"
+                            aria-label="Show run status"
                             checked={settings.showStatus}
                             onCheckedChange={(checked) => updateSettings({ showStatus: checked })}
                         />
@@ -105,6 +111,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showCurrent">Show current and accumulated charge</Label>
                         <Switch
                             id="showCurrent"
+                            aria-label="Show current and accumulated charge"
                             checked={settings.showCurrent}
                             onCheckedChange={(checked) => updateSettings({ showCurrent: checked })}
                         />
@@ -113,6 +120,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showROIs">Show monitored ROIs</Label>
                         <Switch
                             id="showROIs"
+                            aria-label="Show monitored ROIs"
                             checked={settings.showROIs}
                             onCheckedChange={(checked) => updateSettings({ showROIs: checked })}
                         />
@@ -121,6 +129,7 @@ export function VisualizationSettings() {
                         <Label htmlFor="showMetrics">Show monitored metrics</Label>
                         <Switch
                             id="showMetrics"
+                            aria-label="Show monitored metrics"
                             checked={settings.showMetrics}
                             onCheckedChange={(checked) => updateSettings({ showMetrics: checked })}
                         />
@@ -129,10 +138,10 @@ export function VisualizationSettings() {
 
                 <div className="flex justify-end space-x-2">
                     <Button variant="outline" onClick={resetSettings}>
-                        Reset to Defaults
+                        Reset to defaults
                     </Button>
                     <Button onClick={() => toast({ title: 'Settings saved successfully' })}>
-                        Save Changes
+                        Save changes
                     </Button>
                 </div>
             </CardContent>

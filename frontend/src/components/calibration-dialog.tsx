@@ -34,7 +34,7 @@ function fmt(v: number, digits = 4): string {
   return Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(digits - 1) : v.toPrecision(digits + 2).replace(/\.?0+$/, '')
 }
 
-export function CalibrationDialog({ open, onOpenChange, boardId, channel, label, psd = false, running, onSaved }: {
+export function CalibrationDialog({ open, onOpenChange, boardId, channel, label, psd = false, running, onSaved, zoom = null, zoomInKeV = false }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   boardId: string
@@ -43,6 +43,10 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
   psd?: boolean
   running: boolean
   onSaved: () => void
+  /** The card's zoom when the dialog is opened, in the card's units. */
+  zoom?: { xmin: number; xmax: number } | null
+  /** Whether that zoom is in keV (the card is calibrated) rather than channels. */
+  zoomInKeV?: boolean
 }) {
   const { toast } = useToast()
   const [current, setCurrent] = useState<CalibChannel | null>(null)
@@ -53,7 +57,8 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
   const [fit, setFit] = useState<PeakFit | null>(null)
   const [fitError, setFitError] = useState<string | null>(null)
   const [fitting, setFitting] = useState(false)
-  const [energy, setEnergy] = useState<number>(0)
+  // Empty until typed or picked: a "0" had to be deleted before typing.
+  const [energy, setEnergy] = useState<number | null>(null)
   const [lineName, setLineName] = useState<string>('')
   const [lines, setLines] = useState<ReferenceLine[]>([])
   const [offset, setOffset] = useState(0)
@@ -61,10 +66,10 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
   const [logy, setLogy] = useState(true)
   const [saving, setSaving] = useState(false)
   const painter = useRef<any>(null)
-
   useEffect(() => {
     if (!open) return
     setFit(null); setFitError(null); setSolution(null); setSolveError(null)
+    setEnergy(null); setLineName('')
     getChannelCalib(boardId, channel).then((c) => {
       setCurrent(c)
       setPoints(c.points ?? [])
@@ -105,13 +110,13 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
   }
 
   const addPoint = () => {
-    if (!fit || !(energy > 0)) return
+    if (!fit || energy === null || !(energy > 0)) return
     setPoints((p) => [...p, {
       channel: fit.centroid, channel_error: fit.centroid_error, energy,
       line: lineName || undefined, fwhm: fit.fwhm,
     }].sort((a, b) => a.channel - b.channel))
     setFit(null)
-    setEnergy(0)
+    setEnergy(null)
     setLineName('')
   }
 
@@ -121,6 +126,19 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
     setEnergy(l.energy)
     setLineName(`${l.name} ${l.energy}`)
   }
+
+  // The plot opens on the part of the spectrum the card was zoomed on, so the
+  // peak being looked at is not lost in 0–16k channels. The dialog's plot is in
+  // channels: a zoom in keV is turned back with the calibration the card uses
+  // (so it waits for that calibration to arrive).
+  const cardRange = useMemo<[number, number] | null>(() => {
+    if (!zoom || !(zoom.xmax > zoom.xmin)) return null
+    if (!zoomInKeV) return [zoom.xmin, zoom.xmax]
+    if (!current?.slope) return null
+    const a = (zoom.xmin - current.offset) / current.slope
+    const b = (zoom.xmax - current.offset) / current.slope
+    return Number.isFinite(a) && Number.isFinite(b) && a !== b ? [Math.min(a, b), Math.max(a, b)] : null
+  }, [zoom?.xmin, zoom?.xmax, zoomInKeV, current?.offset, current?.slope])
 
   // With a calibration at hand, the fitted peak is shown in keV too.
   const preview = tab === 'peaks' ? solution : { offset, slope }
@@ -149,9 +167,10 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto overflow-x-hidden">
         <DialogHeader>
-          <DialogTitle>Calibrate {label}</DialogTitle>
+          {/* Room on the right for the close button, which sat on a long title. */}
+          <DialogTitle className="pr-8">Calibrate {label}</DialogTitle>
           <DialogDescription>
             E = offset + slope × channel. Now:{' '}
             {current
@@ -182,6 +201,7 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
               {open && (
                 <RootPlot fetch={() => getRawHistogram(boardId, channel, psd ? 'qlong' : 'energy')}
                           deps={[boardId, channel, psd]} logy={logy} height={280}
+                          xRange={cardRange} xTitle="ADC channel" yTitle="Counts / bin"
                           onPainter={(p) => { painter.current = p }} />
               )}
             </div>
@@ -201,20 +221,24 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
                   FWHM {fit.fwhm.toFixed(2)} ch, {Math.round(fit.area).toLocaleString()} counts
                   {preview && Number.isFinite(asEnergy(fit.centroid)) && <> (≈ {asEnergy(fit.centroid).toFixed(1)} keV)</>}
                 </span>
-                <span className="ml-auto flex items-center gap-2">
+                {/* Wraps on a phone: the energy on one line, the list of lines
+                    across the full width below it, then Add — it used to run
+                    off the screen to the right. */}
+                <span className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto">
                   <Label className="text-sm">is</Label>
-                  <NumericInput value={energy} min={0} step={0.01} className="h-8 w-28" aria-label="Energy in keV"
+                  <NumericInput value={energy ?? ''} min={0} step={0.01} className="h-9 w-28 sm:h-8" aria-label="Energy in keV"
+                                placeholder="energy"
                                 onValueChange={(v) => { setEnergy(v); setLineName('') }} />
                   <span>keV</span>
                   <Select onValueChange={pickLine}>
-                    <SelectTrigger className="h-8 w-44"><SelectValue placeholder="or pick a line" /></SelectTrigger>
+                    <SelectTrigger className="h-9 w-full sm:h-8 sm:w-44"><SelectValue placeholder="or pick a line" /></SelectTrigger>
                     <SelectContent>
                       {lines.map((l, i) => (
                         <SelectItem key={`${l.name}-${l.energy}`} value={String(i)}>{l.name} — {l.energy} keV</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button size="sm" onClick={addPoint} disabled={!(energy > 0)}><Plus className="mr-1 h-4 w-4" />Add</Button>
+                  <Button size="sm" className="max-sm:ml-auto max-sm:h-9" onClick={addPoint} disabled={energy === null || !(energy > 0)}><Plus className="mr-1 h-4 w-4" />Add</Button>
                 </span>
               </div>
             )}

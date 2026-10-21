@@ -20,6 +20,11 @@ import {
 } from "lucide-react"
 
 import { updateRunNotes } from "@/lib/api"
+import { appendRunNote, savedNoteAuthor } from "@/lib/run-actions"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { MessageSquarePlus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
@@ -336,5 +341,82 @@ export function RunNotesEditor({ runNumber, notes, onSaved }: RunNotesEditorProp
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+/**
+ * "Add note" for the run being taken, from the Overview and the phone run
+ * bar: one line of text, signed and timed ("[14:05 Anna] …"), added below the
+ * run's notes in the Logbook without opening it or overwriting what is there.
+ */
+export function QuickNoteButton({ runNumber, className, compact = false }: {
+  runNumber: number | null
+  className?: string
+  /** Icon only (the phone run bar has no room for the words). */
+  compact?: boolean
+}) {
+  const { toast } = useToast()
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState("")
+  const [author, setAuthor] = useState("")
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (open) setAuthor(savedNoteAuthor())
+  }, [open])
+
+  if (runNumber === null) return null
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await appendRunNote(runNumber, text, author)
+      toast({ title: "Note added", description: `In the Logbook notes of run ${runNumber}.` })
+      setText("")
+      setOpen(false)
+    } catch (e: any) {
+      toast({ title: "Note not saved", description: e?.response?.data?.message ?? e?.message ?? String(e), variant: "destructive" })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <Button type="button" variant="outline" size={compact ? "icon" : "sm"} className={className}
+              onClick={() => setOpen(true)} aria-label={`Add a note to run ${runNumber}`} title={`Add a note to run ${runNumber}`}>
+        <MessageSquarePlus className={cn("h-4 w-4", !compact && "mr-1.5")} />
+        {!compact && "Add note"}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="pr-8">Note for run {runNumber}</DialogTitle>
+            <DialogDescription>
+              Added below the run&apos;s notes in the Logbook with the time and your name.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="quick-note-text">Note</Label>
+              <Textarea id="quick-note-text" value={text} onChange={(e) => setText(e.target.value)} rows={4}
+                        placeholder="e.g. Beam retuned, current back to 80 µA"
+                        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void save() }} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="quick-note-author">Your name</Label>
+              <Input id="quick-note-author" value={author} onChange={(e) => setAuthor(e.target.value)}
+                     autoComplete="name" placeholder="Remembered in this browser" className="sm:max-w-xs" />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={() => void save()} disabled={saving || !text.trim()}>
+              <Save className="mr-1.5 h-4 w-4" />{saving ? "Saving…" : "Add note"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
