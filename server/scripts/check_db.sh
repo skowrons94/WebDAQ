@@ -54,11 +54,20 @@ revisions=$(grep -rh '^revision = ' "$MIGRATIONS_DIR/versions" 2>/dev/null \
     | sed -E "s/.*['\"]([^'\"]+)['\"].*/\1/" | sort -u)
 downs=$(grep -rh '^down_revision = ' "$MIGRATIONS_DIR/versions" 2>/dev/null \
     | sed -E "s/.*['\"]([^'\"]+)['\"].*/\1/" | sort -u)
-HEAD_REV=""
+heads=()
 for rev in $revisions; do
-    echo "$downs" | grep -qx "$rev" || { HEAD_REV="$rev"; break; }
+    echo "$downs" | grep -qx "$rev" || heads+=("$rev")
 done
-[ -n "$HEAD_REV" ] || die "Could not determine the migration head in $MIGRATIONS_DIR/versions"
+[ "${#heads[@]}" -gt 0 ] || die "Could not determine the migration head in $MIGRATIONS_DIR/versions"
+# Two heads usually means a second "initial migration" was generated locally
+# (flask db migrate) next to the committed one. Alembic would refuse with
+# "Multiple head revisions"; name the files so the stray one is easy to remove.
+if [ "${#heads[@]}" -gt 1 ]; then
+    files=$(for h in "${heads[@]}"; do grep -l "^revision = ['\"]$h['\"]" "$MIGRATIONS_DIR/versions"/*.py; done)
+    die "Migration history has ${#heads[@]} heads (${heads[*]}) in $MIGRATIONS_DIR/versions — one of these files is stray, remove it:
+$files"
+fi
+HEAD_REV="${heads[0]}"
 info "Latest migration head: ${BOLD}$HEAD_REV${RESET}"
 
 # ── Case 1: no DB yet ────────────────────────────────────────────────────────
