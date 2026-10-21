@@ -67,9 +67,12 @@ press them again to return to the grid.
 
 ## 3. Regions of interest
 
-An ROI is a named energy window on one spectrum. The quickest way: zoom on the
-peak (drag along the x axis) and click the target button on the card — the ROI
-covers exactly the visible range, with the next free colour. Rename or adjust it
+An ROI is a named energy window on one spectrum. The quickest way, as in
+Maestro: switch on **Mark ROIs** in the toolbar and drag across the peak — the
+range is shaded while you drag and becomes an ROI when you let go, without
+zooming. Switch it off to zoom by dragging again. Or zoom on the peak and click
+the target button on the card: the ROI covers exactly the visible range. Either
+way it gets the next free colour. Rename or adjust it
 by clicking it in the card's legend. An enlarged card also lists its ROIs, where
 each can be zoomed to, switched off or edited, and new ones added by typing the
 range (**By range**).
@@ -86,10 +89,31 @@ refreshed on the dashboard's update interval. The overlay on the spectrum is the
 same bins, filled in the ROI's colour, so what you see shaded is exactly what is
 being counted.
 
-**Bounds follow the calibration.** If you calibrate a channel after defining its
-ROIs, the ROIs stay where they were put in axis units — which is what you want if
-you entered them in keV, and not if you entered them in channels. Check them
-after a calibration change.
+**Bounds follow the calibration.** ROIs are stored in axis units. When a
+channel's calibration changes from its card (below), its ROIs and saved zoom are
+moved to the new axis, so they stay on the same peaks. A calibration edited by
+hand in `calib/` does not move them.
+
+### Energy calibration
+
+Each card says whether its channel is calibrated: **keV**, or **channels** for the
+raw axis. Click it, or the ruler button, to calibrate the channel
+(E = offset + slope × channel):
+
+* **From peaks** — the spectrum in channels. Drag across a peak to zoom on it and
+  click **Fit peak in view**: a Gaussian on a straight background gives its
+  centroid, width and area. Type its energy, or pick it from the list of usual
+  lines (⁴⁰K, ²⁰⁸Tl, ¹³⁷Cs, ⁶⁰Co, ²²Na, ¹⁵²Eu…), and **Add**. Two peaks or more
+  give the line through them with the residual of each; one peak gives a line
+  through zero. Peaks are fitted on the live spectrum, so a run must be going.
+* **Numbers** — type the offset and the slope.
+
+**Save** applies it at once. The peaks it came from are kept with it
+(`calib/<board>_<id>.points.json`) and come back the next time the window opens.
+Every run copies the calibration in force at its start into its directory, and
+a change made during a run is logged there, with its time, in
+`calib_history.jsonl` — so the analysis knows which calibration applied when.
+**Back to channels** removes the calibration.
 
 ---
 

@@ -347,6 +347,28 @@ class HistogramConfigStore:
             self._commit()
             return json.loads(json.dumps(entry))
 
+    def rescale_axis(self, board_id: str, channel: int, convert) -> int:
+        """Move the ROIs and the saved zoom of one channel's histograms to a
+        new x axis — after its energy calibration changed — so they stay on
+        the same peaks. `convert` maps an old axis value to the new one.
+        Returns how many histograms were touched."""
+        touched = 0
+        with self._lock:
+            for entry in self._config["histograms"]:
+                if entry["boardId"] != str(board_id) or entry["channel"] != int(channel):
+                    continue
+                for roi in entry["rois"]:
+                    low, high = convert(roi["low"]), convert(roi["high"])
+                    roi["low"], roi["high"] = min(low, high), max(low, high)
+                zoom = entry.get("zoom")
+                if zoom:
+                    lo, hi = convert(zoom["xmin"]), convert(zoom["xmax"])
+                    zoom["xmin"], zoom["xmax"] = min(lo, hi), max(lo, hi)
+                touched += 1
+            if touched:
+                self._commit()
+        return touched
+
     def clear_all_zoom(self) -> List[Dict[str, Any]]:
         with self._lock:
             for entry in self._config["histograms"]:

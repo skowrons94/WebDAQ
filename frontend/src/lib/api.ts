@@ -1323,3 +1323,26 @@ export const getCoincMatrix = (gateId: string) =>
 // Time between consecutive hits of one channel (log time axis).
 export const getIntervalHistogram = (boardId: string, channel: number) =>
     api.get(`/histograms/${boardId}/${channel}/interval`).then(res => res.data);
+
+// ─── Energy calibration (E = offset + slope × channel) ──────────────────────
+export type CalibPoint = { channel: number; channel_error?: number; energy: number; line?: string; fwhm?: number };
+export type CalibChannel = { offset: number; slope: number; calibrated: boolean; points: CalibPoint[]; updated?: string | null };
+export type CalibStatus = Record<string, { offset: number; slope: number; calibrated: boolean }[]>;
+export type PeakFit = { centroid: number; centroid_error: number; sigma: number; fwhm: number; area: number; chi2_ndf: number; range: [number, number] };
+export type CalibSolution = { offset: number; slope: number; residuals: number[]; method: string };
+export type ReferenceLine = { name: string; energy: number };
+export const getCalibStatus = () =>
+    api.get('/calib/status').then(res => res.data as CalibStatus);
+export const getChannelCalib = (boardId: string, channel: number) =>
+    api.get(`/calib/${boardId}/${channel}`).then(res => res.data as CalibChannel);
+export const saveChannelCalib = (boardId: string, channel: number, offset: number, slope: number, points?: CalibPoint[]) =>
+    api.put(`/calib/${boardId}/${channel}`, { offset, slope, points }).then(res => res.data);
+export const fitCalibPeak = (boardId: string, channel: number, xmin: number, xmax: number) =>
+    api.post(`/calib/${boardId}/${channel}/fit`, { xmin, xmax }).then(res => res.data as PeakFit);
+export const solveCalib = (points: CalibPoint[]) =>
+    api.post('/calib/solve', { points }).then(res => res.data as CalibSolution);
+export const getReferenceLines = () =>
+    api.get('/calib/lines').then(res => res.data as ReferenceLine[]);
+// The spectrum in channels, without the energy calibration (peak picking).
+export const getRawHistogram = (boardId: string, channel: number, type: string = 'energy') =>
+    api.get(`/histograms/${boardId}/${channel}/${type}`, { params: { raw: 1 } }).then(res => res.data);

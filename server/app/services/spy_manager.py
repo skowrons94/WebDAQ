@@ -113,7 +113,8 @@ class SpyManager:
             return False
     
     def get_histogram(self, board_id: str, channel: int, boards: List[Dict[str, Any]], 
-                     histogram_type: Optional[str] = None, rebin: int = 16) -> Any:
+                     histogram_type: Optional[str] = None, rebin: int = 16,
+                     calibrate: bool = True) -> Any:
         """
         Get histogram for a specific board and channel.
         
@@ -153,7 +154,8 @@ class SpyManager:
                 # Rebin preserves the axis limits.
                 board_name = next((str(b['name']) for b in boards
                                    if str(b['id']) == str(board_id)), None)
-                if board_name:
+                # raw: the axis in channels, for picking calibration peaks.
+                if board_name and calibrate:
                     offset, slope = self._read_calibration(board_name, str(board_id), int(channel))
                     if (offset, slope) != (0.0, 1.0):
                         calibrate_x_axis(histo, offset, slope)

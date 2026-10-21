@@ -2,7 +2,8 @@
 
 import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
-import { getBoardConfiguration, getExperimentStats, getHistogram, setRebinFactor } from "@/lib/api"
+import { getBoardConfiguration, getCalibStatus, getExperimentStats, getHistogram, setRebinFactor, type CalibStatus } from "@/lib/api"
+import { CalibrationDialog } from "@/components/calibration-dialog"
 import { useRunStatus } from "@/hooks/use-run-status"
 import { pickChannel, type ChannelRates } from "@/components/tuner/use-channel-rates"
 // The dashboard's configuration lives on the DAQ server (conf/histograms.json).
@@ -23,7 +24,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTheme } from "next-themes"
-import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle } from "lucide-react"
+import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle, Ruler } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -67,13 +68,52 @@ function Stat({ label, value, warn }: { label: string; value: string; warn?: boo
   )
 }
 
+/**
+ * Maestro-style ROI marking: over the plot while marking is on, a drag shades
+ * the range and, on release, hands its two ends (in client pixels) over to be
+ * turned into an ROI. JSROOT never sees the drag, so nothing zooms.
+ */
+function ROIMarker({ onMark }: { onMark: (fromPx: number, toPx: number) => void }) {
+  const [drag, setDrag] = useState<{ start: number; now: number } | null>(null)
+  const box = useRef<HTMLDivElement>(null)
+  const local = (clientX: number) => clientX - (box.current?.getBoundingClientRect().left ?? 0)
+  return (
+    <div
+      ref={box}
+      className="absolute inset-0 z-20 cursor-crosshair touch-none"
+      title="Drag across a peak to mark an ROI"
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        setDrag({ start: e.clientX, now: e.clientX })
+      }}
+      onPointerMove={(e) => { if (drag) setDrag({ ...drag, now: e.clientX }) }}
+      onPointerUp={(e) => {
+        if (drag && Math.abs(e.clientX - drag.start) > 3) onMark(drag.start, e.clientX)
+        setDrag(null)
+      }}
+      onPointerCancel={() => setDrag(null)}
+    >
+      {drag && (
+        <div className="pointer-events-none absolute inset-y-0 border-x border-primary bg-primary/15"
+             style={{ left: Math.min(local(drag.start), local(drag.now)), width: Math.abs(drag.now - drag.start) }} />
+      )}
+    </div>
+  )
+}
+
 // Sortable Histogram Card Component
 const SortableHistogramCard = ({
-  config, roiIntegrals, stats, counts, running, expanded,
-  onAddROI, onROIFromView, onEditHistogram, onEditROI, onToggleExpand, onHide,
+  config, roiIntegrals, stats, counts, running, expanded, calibrated, markingROIs, onMarkROI,
+  onAddROI, onROIFromView, onCalibrate, onEditHistogram, onEditROI, onToggleExpand, onHide,
   onZoomToROI, onToggleROI, dashboardSettings, getHistogramSize, histogramRefs,
 }: {
   config: HistogramConfig
+  /** Energy-calibrated channel (axis in keV); undefined while unknown. */
+  calibrated: boolean | undefined
+  /** ROI marking mode: a drag across the plot marks an ROI instead of zooming. */
+  markingROIs: boolean
+  onMarkROI: (id: string, fromPx: number, toPx: number, plot: HTMLDivElement) => void
+  onCalibrate: (config: HistogramConfig) => void
   roiIntegrals: { [key: string]: number }
   stats: ChannelStats | null
   counts: number | undefined
@@ -124,6 +164,14 @@ const SortableHistogramCard = ({
               </span>
             )}
             <span className="truncate">{config.label}</span>
+            {calibrated !== undefined && (
+              <button type="button" onClick={() => onCalibrate(config)}
+                      className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none ${calibrated
+                        ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
+                      title={calibrated ? "Energy calibrated — click to change" : "Not calibrated: the axis is in channels — click to calibrate"}>
+                {calibrated ? "keV" : "channels"}
+              </button>
+            )}
           </CardTitle>
           {/* What the channel is doing, so a quiet or saturated detector shows
               without opening the run statistics. */}
@@ -149,6 +197,10 @@ const SortableHistogramCard = ({
           )}
         </div>
         <div className="flex shrink-0 items-center">
+          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onCalibrate(config)}
+                  title="Energy calibration" aria-label={`Calibrate ${config.label}`}>
+            <Ruler className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onROIFromView(config.id)}
                   title="Add an ROI over the visible range (zoom on the peak first)" aria-label={`Add an ROI from the view of ${config.label}`}>
             <Crosshair className="h-4 w-4" />
@@ -177,6 +229,12 @@ const SortableHistogramCard = ({
             }}
             className={`w-full ${expanded ? "h-[65vh]" : `${getHistogramSize(config.size)} max-md:h-auto max-md:aspect-[4/3]`} rounded-md border bg-background`}
           />
+          {markingROIs && (
+            <ROIMarker onMark={(from, to) => {
+              const plot = histogramRefs.current[config.id]
+              if (plot) onMarkROI(config.id, from, to, plot)
+            }} />
+          )}
 
           {!expanded && dashboardSettings.showROIs && config.rois.filter((r) => r.enabled).length > 0 && (
             <div className="pointer-events-none absolute top-2 left-2 right-2 z-10 flex justify-end">
@@ -778,6 +836,15 @@ export default function EnhancedHistogramDashboard() {
   const entriesRef = useRef<{ [id: string]: number }>({})
   const [entries, setEntries] = useState<{ [id: string]: number }>({})
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  // ROI marking mode (Maestro-like): drags mark ROIs instead of zooming.
+  const [markingROIs, setMarkingROIs] = useState(false)
+  // Energy calibration: which channels are calibrated, and the one being calibrated.
+  const [calibStatus, setCalibStatus] = useState<CalibStatus | null>(null)
+  const [calibrating, setCalibrating] = useState<HistogramConfig | null>(null)
+  const refreshCalibStatus = useCallback(() => {
+    getCalibStatus().then(setCalibStatus).catch(() => setCalibStatus(null))
+  }, [])
+  useEffect(() => { refreshCalibStatus() }, [refreshCalibStatus, boards])
   const [browserOpen, setBrowserOpen] = useState(true)
 
   // Keep ref in sync so callbacks can read latest histograms without stale closures
@@ -1498,6 +1565,22 @@ export default function EnhancedHistogramDashboard() {
   }
 
   // An ROI over exactly what is on screen: zoom on the peak, one click.
+  // After a calibration is saved the axis of that channel changed: the server
+  // has moved its ROIs and zoom to the new axis, so reload them and draw its
+  // cards from scratch (a plain rebuild would carry the old zoom across).
+  const afterCalibration = async (boardId: string, channel: number) => {
+    refreshCalibStatus()
+    await loadConfig()
+    for (const h of histogramsRef.current) {
+      if (h.boardId !== boardId || h.channel !== channel || !h.visible) continue
+      const el = histogramRefs.current[h.id]
+      if (el) { try { window.JSROOT?.cleanup(el) } catch { /* not drawn */ } }
+      histogramPainters.current[h.id] = null
+      canvasObjects.current[h.id] = null
+      void updateHistogramData(h, h.zoom, { forceRebuild: true })
+    }
+  }
+
   const roiFromView = async (histogramId: string) => {
     const fp = histogramPainters.current[histogramId]?.getFramePainter?.()
     const xmin = Number(fp?.zoom_xmin), xmax = Number(fp?.zoom_xmax)
@@ -1505,6 +1588,23 @@ export default function EnhancedHistogramDashboard() {
       toast({ title: "Zoom in first", description: "Drag along the x axis over the peak, then add the ROI from the view." })
       return
     }
+    await addRoiRange(histogramId, xmin, xmax)
+  }
+
+  // Marking mode: the two ends of a drag, in client pixels, into axis units.
+  const markROI = async (histogramId: string, fromPx: number, toPx: number, plot: HTMLDivElement) => {
+    const fp = histogramPainters.current[histogramId]?.getFramePainter?.()
+    const svg = plot.querySelector("svg")
+    if (!fp || !svg || typeof fp.revertAxis !== "function") return
+    const left = svg.getBoundingClientRect().left + Number(fp.getFrameX?.() ?? 0)
+    const width = Number(fp.getFrameWidth?.() ?? 0)
+    const toAxis = (px: number) => fp.revertAxis("x", Math.min(width, Math.max(0, px - left)))
+    const a = Number(toAxis(fromPx)), b = Number(toAxis(toPx))
+    if (!(Number.isFinite(a) && Number.isFinite(b)) || a === b) return
+    await addRoiRange(histogramId, Math.min(a, b), Math.max(a, b))
+  }
+
+  const addRoiRange = async (histogramId: string, xmin: number, xmax: number) => {
     const config = histogramsRef.current.find((h) => h.id === histogramId)
     const norm = (c: string) => (c.startsWith("#") ? c : `#${c}`).toLowerCase()
     const used = new Set((config?.rois ?? []).map((r) => norm(r.color)))
@@ -1662,6 +1762,12 @@ export default function EnhancedHistogramDashboard() {
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset zoom
             </Button>
+            <Button onClick={() => setMarkingROIs((m) => !m)} variant={markingROIs ? "default" : "outline"}
+                    aria-pressed={markingROIs}
+                    title={markingROIs ? "Dragging marks ROIs; click to zoom by dragging again" : "Mark ROIs by dragging across a peak, without zooming"}>
+              <Crosshair className="h-4 w-4 mr-2" />
+              {markingROIs ? "Marking ROIs" : "Mark ROIs"}
+            </Button>
             <Button
               onClick={() => saveDashboardSettings({ ...dashboardSettings, isLogScale: !dashboardSettings.isLogScale })}
               variant={dashboardSettings.isLogScale ? "default" : "outline"}
@@ -1759,6 +1865,10 @@ export default function EnhancedHistogramDashboard() {
                     expanded={expandedId === config.id}
                     onAddROI={addROI}
                     onROIFromView={(id) => void roiFromView(id)}
+                    calibrated={calibStatus?.[config.boardId]?.[config.channel]?.calibrated}
+                    markingROIs={markingROIs}
+                    onMarkROI={(id, from, to, plot) => void markROI(id, from, to, plot)}
+                    onCalibrate={setCalibrating}
                     onToggleExpand={(id) => setExpandedId((cur) => (cur === id ? null : id))}
                     onHide={(id) => void hideHistogram(id)}
                     onZoomToROI={zoomToROI}
@@ -1795,6 +1905,18 @@ export default function EnhancedHistogramDashboard() {
         />
 
         {/* Settings Dialog */}
+        {calibrating && (
+          <CalibrationDialog
+            open={calibrating !== null}
+            onOpenChange={(o) => { if (!o) setCalibrating(null) }}
+            boardId={calibrating.boardId}
+            channel={calibrating.channel}
+            label={calibrating.label}
+            psd={String(boards.find((b) => String(b.id) === calibrating.boardId)?.dpp ?? "").toUpperCase().endsWith("PSD")}
+            running={running}
+            onSaved={() => void afterCalibration(calibrating.boardId, calibrating.channel)}
+          />
+        )}
         <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
           <DialogContent>
             <DialogHeader>

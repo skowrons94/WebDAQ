@@ -20,6 +20,7 @@ fills spectra and publishes rates, it just writes nothing.
 | `run_<N>_0001.caendat`, … | during | The next parts, when a size limit is set. The header is written once, in the first file. |
 | `<model>_<id>.json` | at start | The board's complete register dump, copied out of `conf/`. This is what makes the run reproducible: thresholds, gates, trapezoid parameters, start mode, as they were. |
 | `<model>_<id>.cal` | at start | The board's energy calibration (offset and slope per channel), copied out of `calib/`. |
+| `calib_history.jsonl` | on change | One line per calibration changed during the run: time, board, channel, new and previous coefficients, and the peaks it came from. |
 | `coincidences.json` | at start | The coincidence gates and per-channel time offsets the online spectra used. |
 | `current.txt` | during | The beam current, one row per sample, with the time relative to the start of the log. The first two lines name the start time and the columns. |
 | `stats.csv` | during | The accelerator readings you selected on the Stats page, one row per sampling tick. |
