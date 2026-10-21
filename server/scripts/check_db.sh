@@ -1,20 +1,12 @@
 #!/usr/bin/env bash
-# Check whether server/app.db is compatible with the current Alembic migration
-# head, and upgrade (or stamp) it if not. A timestamped backup is taken before
-# any change. Safe to re-run.
+# Bring app.db up to the current Alembic migration head, repairing it when an
+# upgrade alone cannot. Safe to re-run; a copy is kept before any change.
 #
-# Cases handled:
-#   1. No app.db                       → run 'flask db upgrade' to create it.
-#   2. app.db at the head revision      → nothing to do.
-#   3. app.db at a known older revision → 'flask db upgrade' walks it forward.
-#   4. app.db has no alembic_version    → stamp at head if the expected tables
-#      table but expected tables exist    already exist (legacy db.create_all
-#                                         databases).
-#   5. app.db has no alembic_version
-#      and no recognised tables        → fresh 'flask db upgrade'.
-#   6. app.db is stamped at a revision  → treat like case 4: if the expected
-#      that no longer exists in the       tables exist, re-stamp at head;
-#      repo (e.g. history was squashed)   otherwise bail with a clear message.
+# Handled: no app.db or an empty one (created), an older revision (upgraded),
+# no alembic_version / an unknown revision / the head stamped without its
+# columns / a half-created file (missing tables and columns added, re-stamped),
+# an unreadable file (set aside, a new one created), and a project migrations
+# copy with two heads (set aside, the server's copy taken again).
 
 set -eo pipefail
 
@@ -44,8 +36,7 @@ warn() { echo -e "  ${YELLOW}!${RESET} $*"; }
 die()  { echo -e "${RED}✗ $*${RESET}" >&2; exit 1; }
 
 [ -d "$MIGRATIONS_DIR/versions" ] || die "Migrations directory not found: $MIGRATIONS_DIR/versions"
-command -v sqlite3 >/dev/null 2>&1 || die "sqlite3 is required but not installed"
-command -v flask   >/dev/null 2>&1 || die "flask is required (activate the 'luna' conda env first)"
+command -v python  >/dev/null 2>&1 || die "python is required (activate the 'luna' conda env first)"
 
 # ── Find the latest migration head ───────────────────────────────────────────
 # The head is the revision that no other migration points back to via
@@ -60,84 +51,24 @@ for rev in $revisions; do
 done
 [ "${#heads[@]}" -gt 0 ] || die "Could not determine the migration head in $MIGRATIONS_DIR/versions"
 # Two heads usually means a second "initial migration" was generated locally
-# (flask db migrate) next to the committed one. Alembic would refuse with
-# "Multiple head revisions"; name the files so the stray one is easy to remove.
-if [ "${#heads[@]}" -gt 1 ]; then
-    files=$(for h in "${heads[@]}"; do grep -l "^revision = ['\"]$h['\"]" "$MIGRATIONS_DIR/versions"/*.py; done)
-    die "Migration history has ${#heads[@]} heads (${heads[*]}) in $MIGRATIONS_DIR/versions — one of these files is stray, remove it:
-$files"
+# (flask db migrate) next to the committed one, and Alembic would refuse with
+# "Multiple head revisions". A project's migrations are only a copy of the
+# server's, so set the broken copy aside and take the server's again.
+if [ "${#heads[@]}" -gt 1 ] && [ "$MIGRATIONS_DIR" != "$SERVER_DIR/migrations" ]; then
+    aside="$MIGRATIONS_DIR.broken-$(date +%Y%m%d-%H%M%S)"
+    warn "Migration history has ${#heads[@]} heads (${heads[*]}) — kept as $aside, taking the server's copy"
+    mv "$MIGRATIONS_DIR" "$aside"
+    cp -r "$SERVER_DIR/migrations" "$MIGRATIONS_DIR"
+    rm -rf "$MIGRATIONS_DIR/__pycache__" "$MIGRATIONS_DIR/versions/__pycache__"
+    exec "$0" "$@"
 fi
+[ "${#heads[@]}" -eq 1 ] || die "Migration history has ${#heads[@]} heads (${heads[*]}) in $MIGRATIONS_DIR/versions — remove the stray one"
 HEAD_REV="${heads[0]}"
 info "Latest migration head: ${BOLD}$HEAD_REV${RESET}"
 
-# ── Case 1: no DB yet ────────────────────────────────────────────────────────
-if [ ! -f "$DB_FILE" ]; then
-    warn "No app.db found at $DB_FILE — running 'flask db upgrade' to create one"
-    flask --app main.py db upgrade -d "$MIGRATIONS_DIR"
-    ok "Database created at $DB_FILE (revision $HEAD_REV)"
-    exit 0
-fi
-
-# ── Read current alembic revision (if any) ───────────────────────────────────
-CURRENT_REV=""
-if sqlite3 "$DB_FILE" \
-    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='alembic_version';" \
-    | grep -q 1; then
-    CURRENT_REV=$(sqlite3 "$DB_FILE" "SELECT version_num FROM alembic_version LIMIT 1;")
-fi
-
-# ── Case 2: already at head ──────────────────────────────────────────────────
-if [ "$CURRENT_REV" = "$HEAD_REV" ]; then
-    ok "app.db already at revision $HEAD_REV — nothing to do"
-    exit 0
-fi
-
-# ── Backup before any change ─────────────────────────────────────────────────
-backup="$DB_FILE.bak.$(date +%Y%m%d-%H%M%S)"
-cp "$DB_FILE" "$backup"
-ok "Backup written to $backup"
-
-# ── Detect orphaned revisions (case 6) ───────────────────────────────────────
-# If CURRENT_REV is set but no migration file in the repo defines it, alembic
-# can't find a path forward and 'db upgrade' would die with "Can't locate
-# revision". This happens whenever migration history is replaced (e.g., the
-# old initial migration is removed and a new one committed in its place).
-# Treat such DBs the same as legacy "no alembic_version" ones.
-orphaned=0
-if [ -n "$CURRENT_REV" ] && ! echo "$revisions" | grep -qx "$CURRENT_REV"; then
-    warn "app.db is stamped at $CURRENT_REV, which no migration in this repo defines"
-    info "The repo's migration history was likely rewritten — will re-stamp at $HEAD_REV"
-    orphaned=1
-fi
-
-# ── Cases 4 / 5 / 6: no usable alembic revision ──────────────────────────────
-if [ -z "$CURRENT_REV" ] || [ "$orphaned" -eq 1 ]; then
-    have_user=$(sqlite3 "$DB_FILE" \
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='user';")
-    have_runs=$(sqlite3 "$DB_FILE" \
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='run_metadata';")
-
-    if [ -n "$have_user" ] && [ -n "$have_runs" ]; then
-        if [ "$orphaned" -eq 1 ]; then
-            info "Expected tables present — clearing the stale alembic_version row…"
-            sqlite3 "$DB_FILE" "DELETE FROM alembic_version;"
-        else
-            warn "app.db is pre-migrations (no alembic_version) but already has the expected tables"
-        fi
-        info "Stamping it at $HEAD_REV so future upgrades work cleanly…"
-        flask --app main.py db stamp -d "$MIGRATIONS_DIR" "$HEAD_REV"
-        ok "Stamped at $HEAD_REV"
-        exit 0
-    fi
-
-    if [ "$orphaned" -eq 1 ]; then
-        die "app.db is stamped at an unknown revision ($CURRENT_REV) and does not contain the expected tables — refusing to guess. Backup is at $backup."
-    fi
-
-    warn "app.db has no alembic_version and no recognised tables — running a fresh upgrade"
-fi
-
-# ── Case 3: known older revision (or fresh upgrade above) ────────────────────
-info "Upgrading from ${CURRENT_REV:-<none>} to $HEAD_REV…"
-flask --app main.py db upgrade -d "$MIGRATIONS_DIR"
-ok "Database upgraded to $HEAD_REV"
+# ── Upgrade, repairing whatever an upgrade alone cannot ────────────────────
+# Missing, empty, unreadable, pre-migration, half-created, stamped at an unknown
+# revision or at the head without its columns: scripts/ensure_db.py (through
+# app/utils/db_repair.py, which the server also runs at start) handles them all
+# and keeps a copy of the file before changing it.
+python scripts/ensure_db.py "$MIGRATIONS_DIR"

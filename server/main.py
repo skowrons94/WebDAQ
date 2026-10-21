@@ -36,35 +36,6 @@ logger = logging.getLogger(__name__)
 app = create_app()
 
 
-def _columns_missing_from_database(flask_app):
-    """Columns the models declare that the database does not have.
-
-    Used to decide whether a failed migration is safe to ignore: if nothing is
-    missing, the schema is already what the code expects and only the recorded
-    revision is wrong. Any error here counts as "cannot verify", which returns a
-    non-empty result so the caller reports the failure instead of papering over
-    it.
-    """
-    try:
-        from sqlalchemy import inspect as sa_inspect
-
-        with flask_app.app_context():
-            inspector = sa_inspect(db.engine)
-            existing_tables = set(inspector.get_table_names())
-            missing = []
-            for table in db.metadata.sorted_tables:
-                if table.name not in existing_tables:
-                    missing.append(f"{table.name} (whole table)")
-                    continue
-                have = {c["name"] for c in inspector.get_columns(table.name)}
-                for column in table.columns:
-                    if column.name not in have:
-                        missing.append(f"{table.name}.{column.name}")
-            return missing
-    except Exception as e:
-        return [f"could not inspect the database ({e})"]
-
-
 def ensure_schema_current(flask_app) -> None:
     """
     Bring the database schema up to date with the code before serving.
@@ -88,7 +59,7 @@ def ensure_schema_current(flask_app) -> None:
         logger.info("Skipping the database schema check (WEBDAQ_SKIP_DB_UPGRADE set)")
         return
 
-    from flask_migrate import upgrade as alembic_upgrade, stamp as alembic_stamp
+    from app.utils.db_repair import repair_database
 
     migrations_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
     if not os.path.isdir(migrations_dir):
@@ -105,23 +76,12 @@ def ensure_schema_current(flask_app) -> None:
     saved_handlers = root_logger.handlers[:]
 
     failure = None
-    healed = None
+    actions = []
     try:
-        with flask_app.app_context():
-            try:
-                alembic_upgrade(directory=migrations_dir)
-            except Exception as e:
-                # The schema can already be correct while the revision stamp
-                # says otherwise (two servers starting at once, a manual upgrade
-                # racing this one, a restored database). Alembic then tries to
-                # re-apply a migration and fails — every start, for ever. If the
-                # tables genuinely match the models, record the revision and
-                # carry on rather than making the operator fix it by hand.
-                missing = _columns_missing_from_database(flask_app)
-                if missing:
-                    raise
-                alembic_stamp(directory=migrations_dir)
-                healed = str(e).splitlines()[0]
+        # Upgrades, and repairs what an upgrade cannot: an unreadable file, a
+        # pre-migration or half-created database, a revision stamp out of step
+        # with the tables (see app/utils/db_repair.py).
+        actions = repair_database(flask_app, migrations_dir)
     except Exception as e:
         failure = e
     finally:
@@ -131,11 +91,8 @@ def ensure_schema_current(flask_app) -> None:
     # Reported only after logging has been restored — otherwise these messages
     # would be swallowed by the configuration Alembic just applied.
     if failure is None:
-        if healed:
-            logger.warning(
-                f"Database schema already matched the models but its migration "
-                f"revision was out of step ({healed}) — revision recorded, "
-                f"continuing normally.")
+        for action in actions:
+            logger.warning(f"Database repaired: {action}")
         logger.info(f"Database schema is up to date ({database})")
         return
 
