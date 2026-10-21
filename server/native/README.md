@@ -6,6 +6,7 @@ The two C++ components WebDAQ builds on, pinned as **git submodules**:
 |------|-----------|------------|
 | `caendaq/` | [skowrons94/CaenDAQ](https://github.com/skowrons94/CaenDAQ) | The acquisition backend (`import caendaq`) — reads the boards, writes `.caendat`, decodes online spectra |
 | `rureader/` | [skowrons94/RUReader](https://github.com/skowrons94/RUReader) | Offline `.caendat` → ROOT converter (installed as `/usr/local/bin/RUReader`) |
+| `sis3316daq/` | in this repository (pure Python, not a submodule) | Struck SIS3316 backend over Ethernet/UDP — writes HDF5 run files; see its README |
 
 Together they replace the old XDAQ + Docker + LunaSpy/RUSpy chain. The
 `.caendat` **file format** is unchanged — it keeps the XDAQ header layout on

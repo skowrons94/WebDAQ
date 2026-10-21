@@ -11,6 +11,8 @@
 # The two C++ components are git submodules pinned under server/native/:
 #   server/native/caendaq   — CaenDAQ, the acquisition backend (Python module)
 #   server/native/rureader  — RUReader, the offline .caendat → ROOT converter
+# server/native/sis3316daq is the pure-Python backend for Struck SIS3316 boards
+# (Ethernet/UDP); it lives in this repository and is installed editable.
 #
 # Steps:
 #   1. System build tools (git, cmake, make, g++, curl)
@@ -18,7 +20,7 @@
 #   3. Install Miniforge (conda)            — skipped if conda is already present
 #   4. Create the `luna` conda environment  — skipped if it already exists
 #   5. Build RUReader (offline .caendat → ROOT converter) and the caendaq
-#      Python module (installed into the luna environment)
+#      Python module, and install sis3316daq (into the luna environment)
 #   6. Configure frontend/.env and build the frontend
 #   7. Add a `LunaDAQ` alias to ~/.bashrc that launches the frontend
 #
@@ -182,7 +184,7 @@ ensure_luna_env() {
 verify_env_packages() {
     local missing=()
     local module
-    for module in flask waitress serial elog requests; do
+    for module in flask waitress serial elog requests h5py; do
         python -c "import $module" >/dev/null 2>&1 || missing+=("$module")
     done
 
@@ -279,6 +281,16 @@ build_caendaq() {
     fi
 }
 
+# ── 5b. sis3316daq Python module (Struck SIS3316 backend) ───────────────────────
+install_sis3316daq() {
+    step "Installing the sis3316daq Python module"
+    # Editable: pure Python, so a 'git pull' updates it without re-installing.
+    pip install --no-deps -e "$NATIVE_DIR/sis3316daq" || die "sis3316daq install failed"
+    python -c "import sis3316daq; print('    sis3316daq', sis3316daq.__file__)" \
+        || die "sis3316daq did not import after install (wrong env?)"
+    ok "sis3316daq installed (run files need h5py, from environment.yml)"
+}
+
 # ── 6. Frontend ────────────────────────────────────────────────────────────────
 configure_and_build_frontend() {
     step "Configuring and building the frontend"
@@ -363,6 +375,7 @@ main() {
     ensure_luna_env
     build_rureader
     build_caendaq
+    install_sis3316daq
     configure_and_build_frontend
     add_alias
 

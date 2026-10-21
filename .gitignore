@@ -61,3 +61,6 @@ manual/*.toc
 manual/*.fls
 manual/*.fdb_latexmk
 manual/*.synctex.gz
+
+# Editable pip install metadata (server/native/sis3316daq)
+*.egg-info/

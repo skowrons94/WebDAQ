@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sis3316daq"
+version = "1.0.0"
+description = "Struck SIS3316 digitizer DAQ over Ethernet/UDP (acquisition, raw file writing, online decode, statistics)"
+requires-python = ">=3.8"
+dependencies = ["numpy"]
+
+[tool.setuptools]
+packages = ["sis3316daq"]

@@ -29,6 +29,7 @@ dependencies:
   - pybind11        # builds the caendaq Python module
   - jsoncpp         # CaenDigitizer register-config parsing (CAEN build)
   - elog            # PSI py_elog client for the ELOG logbook integration
+  - h5py            # SIS3316 run files (sis3316daq writes HDF5)
   - pip:
     - waitress
     - pyjwt>=2.10
