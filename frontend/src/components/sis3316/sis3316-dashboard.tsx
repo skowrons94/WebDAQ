@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -258,8 +259,20 @@ function SettingsTab({ boardId }: { boardId: string }) {
   }
 
   const b = draft.board
+  // Channels start switched off, so a freshly added board records nothing
+  // until at least one is turned on: say so rather than show empty spectra.
+  const anyEnabled = CHANNELS.some((ch) => effective(ch).enabled)
   return (
     <div className="space-y-6">
+      {!anyEnabled && (
+        <Alert variant="destructive">
+          <AlertTitle>No channel is switched on</AlertTitle>
+          <AlertDescription>
+            This board records nothing, so its histograms stay empty. Switch on the channels in use
+            (the On column below, or the Defaults row for all of them) and save.
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {running ? "A run is going: changes reach the board at the next bank swap. Waveform and trapezoid lengths and the clock are fixed until it stops."
