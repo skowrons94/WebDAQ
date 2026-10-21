@@ -20,7 +20,7 @@ from app.services import calibration as C
 
 def spectrum(peaks, background=20.0, bins=4096, seed=1):
     rng = np.random.default_rng(seed)
-    x = np.arange(bins) + 0.5
+    x = np.arange(bins, dtype=float)   # bin k holds the energy value k
     y = np.full(bins, background) - 0.002 * x
     for mu, sigma, area in peaks:
         y += area / (sigma * np.sqrt(2 * np.pi)) * np.exp(-0.5 * ((x - mu) / sigma) ** 2)
@@ -35,6 +35,25 @@ class FitTests(unittest.TestCase):
         self.assertAlmostEqual(r["fwhm"], 2.3548 * 4.0, delta=0.4)
         self.assertAlmostEqual(r["area"], 20000, delta=600)
         self.assertLess(r["centroid_error"], 0.1)
+
+    def test_centroid_is_the_mean_of_the_integer_energies(self):
+        # The run files hold integer energies; E = offset + slope * Energy must
+        # hold for them, so the centroid is their mean, not a bin centre.
+        rng = np.random.default_rng(3)
+        values = np.floor(rng.normal(999.99, 3.0, 50000)).astype(int)
+        h = np.bincount(values, minlength=4096).astype(np.uint32)
+        r = C.fit_peak(h, 980, 1020)
+        self.assertAlmostEqual(r["centroid"], values.mean(), delta=0.05)
+
+    def test_line_narrower_than_a_channel(self):
+        # A pulser: almost every count in one channel, a few in the next.
+        h = np.zeros(4096, np.uint32)
+        h[1126], h[1127] = 9000, 1000
+        h[1100:1150] += 2
+        r = C.fit_peak(h, 1110, 1140)
+        self.assertAlmostEqual(r["centroid"], 1126.1, delta=0.1)
+        self.assertLess(r["centroid_error"], 1.0)
+        self.assertAlmostEqual(r["area"], 10000, delta=500)
 
     def test_nothing_to_fit_says_why(self):
         with self.assertRaisesRegex(ValueError, "Zoom on a peak"):
@@ -93,9 +112,10 @@ class SaveTests(unittest.TestCase):
         self.assertEqual(table[15], (0.0, 1.0))
         self.assertEqual(C.read_points("V1725S", "0")["5"]["points"][0]["energy"], 26.5)
         board_id, channel, convert = rescale.call_args.args
-        # An ROI drawn at raw channel 100 on the old axis is at 26.5 keV now.
+        # The raw axis shows value k at k + 0.5: an ROI edge drawn at 100.5
+        # there is at E(100) = 26.5 keV now, and back again.
         self.assertEqual((board_id, channel), ("0", 5))
-        self.assertAlmostEqual(convert(100.0), 26.5)
+        self.assertAlmostEqual(convert(100.5), 26.5)
 
     def test_a_change_during_a_run_is_logged_there(self):
         os.makedirs("data/run7")

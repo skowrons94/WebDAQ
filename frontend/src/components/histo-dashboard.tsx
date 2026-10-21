@@ -4,7 +4,10 @@ import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { getBoardConfiguration, getCalibStatus, getExperimentStats, getHistogram, setRebinFactor, type CalibStatus } from "@/lib/api"
 import { CalibrationDialog } from "@/components/calibration-dialog"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useRunStatus } from "@/hooks/use-run-status"
 import { pickChannel, type ChannelRates } from "@/components/tuner/use-channel-rates"
 // The dashboard's configuration lives on the DAQ server (conf/histograms.json).
@@ -20,12 +23,13 @@ import useHistogramStore from "@/store/histogram-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from "@/lib/load-jsroot"
+import { plotHex, seriesOption } from "@/lib/jsroot-style"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTheme } from "next-themes"
-import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle, Ruler, MoreHorizontal } from "lucide-react"
+import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle, Ruler, MoreHorizontal, SlidersHorizontal } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -121,11 +125,13 @@ function ROIMarker({ onMark, frame }: {
 
 // Sortable Histogram Card Component
 const SortableHistogramCard = ({
-  config, roiIntegrals, stats, counts, running, expanded, calibrated, markingROIs, onMarkROI, frameRect,
+  config, title, roiIntegrals, stats, counts, running, expanded, calibrated, markingROIs, onMarkROI, frameRect,
   onAddROI, onROIFromView, onCalibrate, onResetZoom, onEditHistogram, onEditROI, onToggleExpand, onHide,
   onZoomToROI, onToggleROI, dashboardSettings, getHistogramSize, histogramRefs,
 }: {
   config: HistogramConfig
+  /** What the header calls it: the custom label, or "V1725S 0 · ch 3". */
+  title: string
   /** Energy-calibrated channel (axis in keV); undefined while unknown. */
   calibrated: boolean | undefined
   /** ROI marking mode: a drag across the plot marks an ROI instead of zooming. */
@@ -171,21 +177,24 @@ const SortableHistogramCard = ({
     <Card ref={setNodeRef} style={style}
           className={`relative ${isDragging ? 'z-50' : ''} ${expanded ? 'md:col-span-2 lg:col-span-full' : ''}`}>
       {/* Title and actions share the top row; what the channel is doing goes
-          underneath at full width, so on a phone neither squeezes the other. */}
+          underneath at full width, so on a phone neither squeezes the other.
+          Only Enlarge stays beside the title, at every width: the five
+          buttons that used to be there cut the title down to "Board 0 …" in
+          a three-column grid. The rest is in the menu. */}
       <CardHeader className="space-y-1 p-3 pb-2">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-1">
           <CardTitle className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-tight">
             {!expanded && (
               <span
                 {...attributes}
                 {...listeners}
-                className="cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground hover:bg-muted"
+                className="shrink-0 cursor-grab active:cursor-grabbing rounded p-0.5 text-muted-foreground hover:bg-muted"
                 title="Drag to reorder"
               >
                 <GripVertical className="h-4 w-4" />
               </span>
             )}
-            <span className="truncate">{config.label}</span>
+            <span className="truncate" title={title}>{title}</span>
             {calibrated !== undefined && (
               <button type="button" onClick={() => onCalibrate(config)}
                       className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium leading-none ${calibrated
@@ -195,38 +204,15 @@ const SortableHistogramCard = ({
               </button>
             )}
           </CardTitle>
-          <div className="hidden shrink-0 items-center sm:flex">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onCalibrate(config)}
-                    title="Energy calibration" aria-label={`Calibrate ${config.label}`}>
-              <Ruler className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onROIFromView(config.id)}
-                    title="Add an ROI over the visible range (zoom on the peak first)" aria-label={`Add an ROI from the view of ${config.label}`}>
-              <Crosshair className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onToggleExpand(config.id)}
-                    title={expanded ? "Back to the grid" : "Enlarge, with the ROI table"} aria-label={expanded ? `Shrink ${config.label}` : `Enlarge ${config.label}`}>
-              {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditHistogram(config)}
-                    title="Edit histogram" aria-label={`Edit ${config.label}`}>
-              <Edit className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onHide(config.id)}
-                    title="Hide (show it again from the channel list)" aria-label={`Hide ${config.label}`}>
-              <EyeOff className="h-4 w-4" />
-            </Button>
-          </div>
-          {/* Phones: the one action used all the time, the rest in a menu, so
-              the title keeps its room. */}
-          <div className="flex shrink-0 items-center sm:hidden">
-            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => onToggleExpand(config.id)}
-                    aria-label={expanded ? `Shrink ${config.label}` : `Enlarge ${config.label}`}>
+          <div className="-mr-1 -mt-1 flex shrink-0 items-center">
+            <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" onClick={() => onToggleExpand(config.id)}
+                    title={expanded ? "Back to the grid" : "Enlarge, with the ROI table"}
+                    aria-label={expanded ? `Shrink ${title}` : `Enlarge ${title}`}>
               {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`More for ${config.label}`}>
+                <Button variant="ghost" size="icon" className="h-9 w-9 sm:h-8 sm:w-8" title="More" aria-label={`More for ${title}`}>
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -271,12 +257,15 @@ const SortableHistogramCard = ({
             ref={(el) => {
               histogramRefs.current[config.id] = el
             }}
-            className={`w-full ${expanded ? "h-[65vh]" : `${getHistogramSize(config.size)} max-md:h-auto max-md:aspect-[4/3]`} rounded-md border bg-background`}
+            className={`w-full ${expanded ? "h-[65vh]" : `${getHistogramSize(config.size)} max-md:h-auto max-md:aspect-[4/3]`} rounded-md border`}
           />
-          {/* One click back from a zoom that went wrong, where the eye already is. */}
+          {/* One click back from a zoom that went wrong. In the corner under
+              the y numbers and left of the x numbers, which the plot style
+              keeps empty (58 × 40 px margins), so it covers no label, no
+              exponent and no ROI legend, on a phone as on a desktop. */}
           <Button variant="outline" size="icon" onClick={() => onResetZoom(config.id)}
-                  className="absolute bottom-2 right-2 z-10 h-7 w-7 bg-background/80 backdrop-blur-sm"
-                  title="Reset the zoom of this histogram" aria-label={`Reset the zoom of ${config.label}`}>
+                  className="absolute bottom-1.5 left-1.5 z-10 h-7 w-7 bg-card/80 backdrop-blur-sm"
+                  title="Reset the zoom of this histogram" aria-label={`Reset the zoom of ${title}`}>
             <RotateCcw className="h-3.5 w-3.5" />
           </Button>
           {markingROIs && (
@@ -779,41 +768,30 @@ const HistogramDialog = ({ isOpen, onClose, histogram, onSave, onDelete, boards 
 // Main Enhanced Dashboard Component
 /**
  * Axis titles for a spectrum: "Energy (keV)" on a calibrated axis, "ADC channel"
- * on a raw one (an uncalibrated spectrum spans 0 … 2^n channels, rebinned or
- * not), and "Counts / bin". Bigger tick labels on a narrow (phone) canvas: at
- * JSROOT's default they were about 7 px.
+ * on a raw one, and "Counts / bin". Whether the axis is calibrated is what the
+ * server's calibration status says (the badge on the card), not a guess from
+ * the range: an empty raw spectrum used to be labelled in keV.
  */
-function labelHistogramAxes(histogram: any, showTitles: boolean, widthPx: number, heightPx = 0) {
+function labelHistogramAxes(histogram: any, showTitles: boolean, calibrated: boolean | undefined) {
   const x = histogram?.fXaxis
   const y = histogram?.fYaxis
   if (!x || !y) return
-  const xmax = Number(x.fXmax)
-  const raw = Number(x.fXmin) === 0 && Number.isInteger(xmax) && xmax >= 256 && (xmax & (xmax - 1)) === 0
-  x.fTitle = showTitles ? (x.fTitle || (raw ? "ADC channel" : "Energy (keV)")) : ""
+  x.fTitle = showTitles ? (x.fTitle || (calibrated ? "Energy (keV)" : "ADC channel")) : ""
   y.fTitle = showTitles ? (y.fTitle || "Counts / bin") : ""
   // Sizes, offsets and margins come from the shared plot style (lib/jsroot-style).
-  void widthPx; void heightPx
 }
 
-/**
- * --chart-1 ("220 70% 50%") as "rrggbb", or null when it cannot be read.
- * JSROOT's dark mode inverts the whole SVG (filter: invert(100%)), so there
- * the colour is passed pre-inverted and shows as the dark theme's token.
- */
-function seriesHex(inverted = false): string | null {
-  if (typeof window === "undefined") return null
-  const v = getComputedStyle(document.documentElement).getPropertyValue("--chart-1").trim()
-  const m = v.match(/^([\d.]+)\s+([\d.]+)%\s+([\d.]+)%$/)
-  if (!m) return null
-  const h = Number(m[1]) / 360, sat = Number(m[2]) / 100, l = Number(m[3]) / 100
-  const f = (n: number) => {
-    const k = (n + h * 12) % 12
-    const a = sat * Math.min(l, 1 - l)
-    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
-    const v = Math.round(c * 255)
-    return (inverted ? 255 - v : v).toString(16).padStart(2, "0")
+/** Sum of the bins whose centre lies in [low, high], as the ROI overlay shades them. */
+function localIntegral(histogram: any, low: number, high: number): number | null {
+  const ax = histogram?.fXaxis
+  if (!ax?.fNbins || !histogram.fArray) return null
+  const n: number = ax.fNbins, w = (ax.fXmax - ax.fXmin) / n
+  let sum = 0
+  for (let i = 1; i <= n; i++) {
+    const c = ax.fXmin + (i - 0.5) * w
+    if (c >= low && c <= high) sum += Number(histogram.fArray[i]) || 0
   }
-  return `${f(0)}${f(8)}${f(4)}`
+  return sum
 }
 
 export default function EnhancedHistogramDashboard() {
@@ -860,7 +838,9 @@ export default function EnhancedHistogramDashboard() {
   // window carries it over instead of losing it.
   const pendingZoom = useRef<{ [key: string]: { xmin: number; xmax: number } | null }>({})
   // Channels whose add/show/hide is waiting for the server (no double adds).
-  const pendingChannels = useRef<Set<string>>(new Set())
+  // Each channel's changes run one after the other, each deciding from the
+  // state the previous one left (no double adds, and no click dropped).
+  const pendingChannels = useRef<Map<string, Promise<void>>>(new Map())
   // Per-histogram serialization. Each histogram has a chain so updates run in order;
   // a queued bit collapses redundant in-flight requests, and pendingForce carries the
   // forceRebuild flag forward across coalesced calls.
@@ -886,7 +866,15 @@ export default function EnhancedHistogramDashboard() {
     getCalibStatus().then(setCalibStatus).catch(() => setCalibStatus(null))
   }, [])
   useEffect(() => { refreshCalibStatus() }, [refreshCalibStatus, boards])
+  // Read when a canvas is built (the axis title), from the interval's closure.
+  const calibStatusRef = useRef<CalibStatus | null>(null)
+  calibStatusRef.current = calibStatus
   const [browserOpen, setBrowserOpen] = useState(true)
+  // On a phone the chips of every channel are a screenful before the first
+  // plot: closed there once something is shown (the empty state opens them).
+  useEffect(() => {
+    try { if (window.matchMedia("(max-width: 639px)").matches) setBrowserOpen(false) } catch { /* old browser */ }
+  }, [])
 
   // Keep ref in sync so callbacks can read latest histograms without stale closures
   useEffect(() => {
@@ -1180,7 +1168,8 @@ export default function EnhancedHistogramDashboard() {
     histogram.fTitle = ""
     histogram.fName = `hist_${config.id}`
     histogram.fStats = 0
-    labelHistogramAxes(histogram, settings.showLabels, element.clientWidth, element.clientHeight)
+    labelHistogramAxes(histogram, settings.showLabels,
+                       calibStatusRef.current?.[config.boardId]?.[config.channel]?.calibrated)
 
     const existingCanvas = canvasObjects.current[config.id]
     const existingHist = existingCanvas?.fPrimitives?.arr?.find(
@@ -1202,9 +1191,11 @@ export default function EnhancedHistogramDashboard() {
     const roiCountChanged = expectedROIs !== currentROIs
 
     const logChanged = !!existingCanvas && existingCanvas.fLogy !== (settings.isLogScale ? 1 : 0)
+    // The calibration status arrived or changed: the x axis gets its title anew.
+    const titleChanged = !!existingHist && existingHist.fXaxis?.fTitle !== histogram.fXaxis?.fTitle
 
     const needsRebuild =
-      isFirstTime || forceRebuild || binCountChanged || roiCountChanged || logChanged
+      isFirstTime || forceRebuild || binCountChanged || roiCountChanged || logChanged || titleChanged
 
     if (needsRebuild) {
       // Capture current zoom from the OLD painter before we tear it down.
@@ -1237,9 +1228,9 @@ export default function EnhancedHistogramDashboard() {
       canvas.fTitle = config.label
       canvas.fLogy = settings.isLogScale ? 1 : 0
       // The series colour comes from the theme's chart token (--chart-1), as a
-      // JSROOT draw option: translucent fill, solid line.
-      const series = seriesHex(Boolean(window.JSROOT.settings?.DarkMode))
-      canvas.fPrimitives.Add(histogram, series ? `hist nostat fill_${series}55 line_${series}` : "hist nostat")
+      // JSROOT draw option: translucent fill, solid line (lib/jsroot-style,
+      // shared with every other spectrum of the site).
+      canvas.fPrimitives.Add(histogram, seriesOption())
       if (settings.showROIs && config.rois.length > 0) {
         addROIOverlaysToCanvas(canvas, config, histogram)
       }
@@ -1377,7 +1368,11 @@ export default function EnhancedHistogramDashboard() {
             binCenter >= roi.low && binCenter <= roi.high ? histogram.fArray[i] : 0
         }
 
-        canvas.fPrimitives.Add(overlay, "hist same")
+        // Also as a draw option, pre-inverted in dark mode by plotHex: a ROOT
+        // colour index is inverted with the rest of the plot, and a red ROI
+        // showed cyan beside its red legend.
+        const hex = plotHex(roi.color)
+        canvas.fPrimitives.Add(overlay, `hist same fill_${hex} line_${hex}`)
       } catch (error) {
         console.error(`Failed to add ROI overlay for ${roi.name}:`, error)
       }
@@ -1521,16 +1516,32 @@ export default function EnhancedHistogramDashboard() {
       await store.addRoi(histogramId, roi)
     }
 
-    // Targeted redraw of the affected histogram so ROI overlays refresh immediately
-    const affected = useHistogramStore.getState().histograms.find((h) => h.id === histogramId)
-    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
+    roisChanged(histogramId)
   }
 
   const deleteROI = async (histogramId: string, roiId: string) => {
     await useHistogramStore.getState().removeRoi(histogramId, roiId)
+    roisChanged(histogramId)
+  }
 
+  // After an ROI is added, moved, switched or removed: redraw its histogram so
+  // the overlay follows at once, and give its legend a number straight away —
+  // counted from the spectrum on screen, then the server's as soon as asked
+  // for, instead of a 0 until the next periodic refresh.
+  const roisChanged = (histogramId: string) => {
     const affected = useHistogramStore.getState().histograms.find((h) => h.id === histogramId)
-    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
+    if (!affected) return
+    void updateHistogramData(affected, undefined, { forceRebuild: true })
+    const hist = canvasObjects.current[histogramId]?.fPrimitives?.arr
+      ?.find((p: any) => p._typename === "TH1F" || p._typename === "TH1I")
+    const integrals = { ...useHistogramStore.getState().integrals }
+    for (const roi of affected.rois) {
+      const sum = localIntegral(hist, roi.low, roi.high)
+      if (sum === null) continue
+      integrals[roiKey(histogramId, roi.id)] = { histogramId, roiId: roi.id, gross: sum, background: null, net: sum }
+    }
+    useHistogramStore.setState({ integrals })
+    void updateROIIntegrals()
   }
 
   // A painter whose element is gone (the card was hidden) must not be reused:
@@ -1551,13 +1562,13 @@ export default function EnhancedHistogramDashboard() {
     forgetPainter(id)
   }
 
-  const showChannel = async (boardId: string, channel: number, show: boolean) => {
+  const showChannel = async (boardId: string, channel: number, wanted: boolean | "toggle") => {
     const key = `${boardId}/${channel}`
-    if (pendingChannels.current.has(key)) return       // a click is already on its way
-    pendingChannels.current.add(key)
-    try {
+    const previous = pendingChannels.current.get(key) ?? Promise.resolve()
+    const run = previous.then(async () => {
       const store = useHistogramStore.getState()
       const matches = store.histograms.filter((h) => h.boardId === boardId && h.channel === channel)
+      const show = wanted === "toggle" ? !matches.some((m) => m.visible) : wanted
       if (!show) {
         // Hide every histogram of the channel (a Custom one too), as the chip shows.
         for (const h of matches.filter((m) => m.visible)) {
@@ -1573,20 +1584,30 @@ export default function EnhancedHistogramDashboard() {
                                      label: `Board ${boardId} - Channel ${channel}`, customLabel: "", visible: true })
         }
       }
-    } finally {
-      pendingChannels.current.delete(key)
-    }
+    }).catch((error) => console.error(`Could not show or hide ${key}:`, error))
+    pendingChannels.current.set(key, run)
+    await run
+    if (pendingChannels.current.get(key) === run) pendingChannels.current.delete(key)
   }
 
+  // "All" and "None" go through a board one channel and one server round trip
+  // at a time. A later click — the other button, or a chip — must stop that
+  // walk: it used to carry on behind the click and show or hide the rest of
+  // the board after it (All, then a chip or None, left ch 1–15 shown).
+  const boardWalk = useRef(0)
+
   const toggleChannel = (boardId: string, channel: number) => {
-    const shown = histogramsRef.current.some((h) => h.boardId === boardId && h.channel === channel && h.visible)
-    void showChannel(boardId, channel, !shown)
+    boardWalk.current += 1
+    // Decided when its turn comes, from the store (histogramsRef is synced
+    // only after a render), so a click queued behind another still toggles.
+    void showChannel(boardId, channel, "toggle")
   }
 
   const showBoard = async (boardId: string, show: boolean) => {
+    const walk = ++boardWalk.current
     const board = boards.find((b) => b.id === boardId)
     const n = Number(board?.chan) || 0
-    for (let ch = 0; ch < n; ch++) await showChannel(boardId, ch, show)
+    for (let ch = 0; ch < n && boardWalk.current === walk; ch++) await showChannel(boardId, ch, show)
   }
 
   // An ROI over exactly what is on screen: zoom on the peak, one click.
@@ -1650,8 +1671,7 @@ export default function EnhancedHistogramDashboard() {
     await useHistogramStore.getState().addRoi(histogramId, {
       name: `ROI ${highest + 1}`, low: round(xmin), high: round(xmax), color, enabled: true,
     })
-    const affected = useHistogramStore.getState().histograms.find((h) => h.id === histogramId)
-    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
+    roisChanged(histogramId)
     toast({ title: "ROI added", description: `${round(xmin)} – ${round(xmax)}. Click its name to rename or adjust it.` })
   }
 
@@ -1663,8 +1683,7 @@ export default function EnhancedHistogramDashboard() {
 
   const toggleROI = async (histogramId: string, roi: ROI) => {
     await useHistogramStore.getState().updateRoi(histogramId, roi.id, { enabled: !roi.enabled })
-    const affected = useHistogramStore.getState().histograms.find((h) => h.id === histogramId)
-    if (affected) updateHistogramData(affected, undefined, { forceRebuild: true })
+    roisChanged(histogramId)
   }
 
   // Every ROI's counts in a single request, rather than one request per ROI per
@@ -1781,6 +1800,15 @@ export default function EnhancedHistogramDashboard() {
     return `grid-cols-1 md:grid-cols-2 ${LG_GRID_COLS[n]}`
   }
 
+  // A card is named as the rest of the site names a channel ("V1725S 0 · ch 3"),
+  // unless it was given a label of its own. The stored default label
+  // ("Board 0 - Channel 3") is the server's, kept for older configurations.
+  const titleOf = (h: HistogramConfig) => {
+    if (h.customLabel) return h.customLabel
+    const board = boards.find((b) => b.id === String(h.boardId))
+    return board ? `${board.name} ${board.id} · ch ${h.channel}` : h.label
+  }
+
   // An enlarged histogram comes first, so it opens in view.
   const visibleHistograms = histograms.filter((h) => h.visible).sort((a, b) =>
     (a.id === expandedId ? -1 : b.id === expandedId ? 1 : 0) || a.order - b.order)
@@ -1788,9 +1816,10 @@ export default function EnhancedHistogramDashboard() {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <div className="flex-1 w-full px-0 py-4 sm:px-4">
-        {/* Header Controls */}
-        <div className="flex flex-wrap justify-between items-center mb-4 gap-4">
-          {/* Wraps on a narrow screen instead of cutting off Log scale and Rebin. */}
+        {/* Header Controls. On a phone the view controls (fit, zoom, ROI
+            marking, log scale, rebin) are one "View" menu, so the first plot
+            is not a screen away; on a wider screen they are buttons. */}
+        <div className="flex flex-wrap justify-between items-center mb-4 gap-2 sm:gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <Button onClick={() => setBrowserOpen((v) => !v)} variant={browserOpen ? "default" : "outline"}>
               <ListChecks className="h-4 w-4 mr-2" />
@@ -1800,15 +1829,47 @@ export default function EnhancedHistogramDashboard() {
               <Plus className="h-4 w-4 mr-2" />
               Custom
             </Button>
-            <Button onClick={fitAllToData} variant="outline" title="Zoom every histogram onto its counts">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant={markingROIs || dashboardSettings.isLogScale ? "secondary" : "outline"} className="sm:hidden">
+                  <SlidersHorizontal className="h-4 w-4 mr-2" />
+                  View
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuItem onClick={fitAllToData}><Scan className="mr-2 h-4 w-4" />Fit to data</DropdownMenuItem>
+                <DropdownMenuItem onClick={resetAllZoom}><RotateCcw className="mr-2 h-4 w-4" />Reset zoom</DropdownMenuItem>
+                <DropdownMenuCheckboxItem checked={markingROIs} onCheckedChange={(v) => setMarkingROIs(v === true)}>
+                  Mark ROIs by dragging
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={dashboardSettings.isLogScale}
+                  onCheckedChange={(v) => saveDashboardSettings({ ...dashboardSettings, isLogScale: v === true })}>
+                  Log scale
+                </DropdownMenuCheckboxItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Rebin (any factor in the settings)</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={String(dashboardSettings.rebinFactor)}
+                  onValueChange={(v) => saveDashboardSettings({ ...dashboardSettings, rebinFactor: Number(v) })}>
+                  {Array.from(new Set([1, 2, 4, 8, 16, dashboardSettings.rebinFactor])).sort((a, b) => a - b).map((f) => (
+                    <DropdownMenuRadioItem key={f} value={String(f)}>{f === 1 ? "None" : `× ${f}`}</DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSettingsDialogOpen(true)}><Settings className="mr-2 h-4 w-4" />Dashboard settings</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button onClick={fitAllToData} variant="outline" className="hidden sm:inline-flex" title="Zoom every histogram onto its counts">
               <Scan className="h-4 w-4 mr-2" />
               Fit to data
             </Button>
-            <Button onClick={resetAllZoom} variant="outline">
+            <Button onClick={resetAllZoom} variant="outline" className="hidden sm:inline-flex">
               <RotateCcw className="h-4 w-4 mr-2" />
               Reset zoom
             </Button>
+            {/* While marking, the button stays in sight on a phone too: it is
+                how to get back to zooming. */}
             <Button onClick={() => setMarkingROIs((m) => !m)} variant={markingROIs ? "default" : "outline"}
+                    className={markingROIs ? "" : "hidden sm:inline-flex"}
                     aria-pressed={markingROIs}
                     title={markingROIs ? "Dragging marks ROIs; click to zoom by dragging again" : "Mark ROIs by dragging across a peak, without zooming"}>
               <Crosshair className="h-4 w-4 mr-2" />
@@ -1817,11 +1878,12 @@ export default function EnhancedHistogramDashboard() {
             <Button
               onClick={() => saveDashboardSettings({ ...dashboardSettings, isLogScale: !dashboardSettings.isLogScale })}
               variant={dashboardSettings.isLogScale ? "default" : "outline"}
+              className="hidden sm:inline-flex"
             >
               {dashboardSettings.isLogScale ? "Linear scale" : "Log scale"}
             </Button>
 
-            <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 sm:flex">
               <Label htmlFor="rebin-factor" className="text-sm font-medium">
                 Rebin
               </Label>
@@ -1840,7 +1902,9 @@ export default function EnhancedHistogramDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Grid or rows means nothing on a phone (one column either way);
+              its settings are in the View menu there. */}
+          <div className="hidden items-center gap-2 sm:flex">
             <ToggleGroup
               type="single"
               value={dashboardSettings.layout}
@@ -1904,6 +1968,7 @@ export default function EnhancedHistogramDashboard() {
                   <SortableHistogramCard
                     key={config.id}
                     config={config}
+                    title={titleOf(config)}
                     roiIntegrals={roiIntegrals}
                     stats={statsFor(config.boardId, config.channel)}
                     counts={entries[config.id]}
@@ -1959,7 +2024,7 @@ export default function EnhancedHistogramDashboard() {
             onOpenChange={(o) => { if (!o) setCalibrating(null) }}
             boardId={calibrating.boardId}
             channel={calibrating.channel}
-            label={calibrating.label}
+            label={titleOf(calibrating)}
             psd={String(boards.find((b) => String(b.id) === calibrating.boardId)?.dpp ?? "").toUpperCase().endsWith("PSD")}
             running={running}
             onSaved={() => void afterCalibration(calibrating.boardId, calibrating.channel)}

@@ -96,9 +96,13 @@ def _stats_state() -> Dict[str, Any]:
                     'detail': f'Statistics are still being collected for run '
                               f'{stats.current_run_number} although no run is active — '
                               'the rows are going into that run\'s file.'}
-        return {'ok': True, 'detail': 'Statistics run with the run; none is active.'}
+        # Nothing to restart: offering the button anyway invites a press that
+        # can only answer "no run is active".
+        return {'ok': True, 'detail': 'Statistics run with the run; none is active.',
+                'blocked': 'Only during a run that saves data.'}
     if not daq.get_save_data():
-        return {'ok': True, 'detail': 'This run saves no data, so no stats.csv is written.'}
+        return {'ok': True, 'detail': 'This run saves no data, so no stats.csv is written.',
+                'blocked': 'This run saves no data.'}
     if collecting:
         return {'ok': True, 'detail': f'Writing stats.csv for run {stats.current_run_number}.'}
     return {'ok': False, 'detail': 'This run is saving data but no stats.csv is being written.'}
@@ -296,6 +300,11 @@ def actions() -> List[Dict[str, Any]]:
             state = spec['state']()
         except Exception as e:
             state = {'ok': False, 'detail': f'Unknown: {e}'}
+        # A state may itself say the action has nothing to act on (statistics
+        # with no saving run); otherwise only a run can block it.
+        blocked = state.get('blocked') or (
+            '' if spec['available_while_running'] or not running
+            else 'Not while a run is in progress.')
         out.append({
             'name': name,
             'label': spec['label'],
@@ -303,9 +312,8 @@ def actions() -> List[Dict[str, Any]]:
             'ok': bool(state.get('ok')),
             'detail': state.get('detail', ''),
             # Refusing in the UI beats refusing after the click.
-            'enabled': bool(spec['available_while_running'] or not running),
-            'blocked_reason': ('' if spec['available_while_running'] or not running
-                               else 'Not while a run is in progress.'),
+            'enabled': not blocked,
+            'blocked_reason': blocked,
         })
     return out
 

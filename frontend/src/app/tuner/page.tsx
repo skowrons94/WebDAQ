@@ -3,6 +3,7 @@
 import { AuthGate } from '@/components/auth-gate'
 import { Layout } from '@/components/dashboard-layout'
 import ParamTuner from '@/components/param-tuner'
+import { PageHeader } from '@/components/page-header'
 
 
 function TunerPageContent() {
@@ -10,17 +11,11 @@ function TunerPageContent() {
     return (
         <>
             <Layout>
-                <div className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col gap-4 rounded-lg border bg-muted/40 p-3 sm:p-4 md:gap-8 md:p-10">
-                    <div className="mx-auto w-full max-w-7xl">
-                        <div className="mb-6">
-                            <h1 className="text-2xl font-semibold">Parameter tuner</h1>
-                            <p className="text-muted-foreground mt-2">
-                                Tune one channel at a time against its live trace, rates and spectrum. A run started here is not saved to disk; a production run keeps saving as usual.
-                            </p>
-                        </div>
-                        <ParamTuner />
-                    </div>
-                </div>
+                <PageHeader
+                    title="Parameter tuner"
+                    description="Tune one channel at a time against its live trace, rates and spectrum. A run started here is not saved to disk; a production run keeps saving as usual."
+                />
+                <ParamTuner />
             </Layout>
         </>
     )

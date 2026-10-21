@@ -1,6 +1,7 @@
 # app/routes/experiment.py
 import os
 import logging
+import threading
 from datetime import datetime
 
 from flask import Blueprint, request, jsonify
@@ -24,6 +25,17 @@ TEST_FLAG = os.getenv('TEST_FLAG', False)
 # conf/stats.json by caen_acquisition (see _graphite_from_stats).
 
 bp = Blueprint('experiment', __name__)
+
+# One start, stop or auto-restart at a time. Two Start requests arriving
+# together (a double click, two browsers) used to configure a second
+# acquisition under the one already starting: both reported success, and the
+# coincidences failed until the next stop.
+_run_lock = threading.Lock()
+
+
+def _busy():
+    return jsonify({'message': 'A start or stop is already in progress — wait a moment.'}), 409
+
 
 # Initialize managers (acquisition runs in-process via caendaq)
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
@@ -115,7 +127,7 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
     from .stats import stats_manager
 
     # We need to create an app context since this runs in a background thread
-    with app.app_context():
+    with _run_lock, app.app_context():
         try:
             current_run_number = daq_mgr.get_run_number()
             save_data = daq_mgr.get_save_data()
@@ -247,6 +259,15 @@ daq_mgr.register_restart_callback(perform_auto_restart)
 @bp.route("/experiment/start_run", methods=['POST'])
 @jwt_required_custom
 def start_run():
+    if not _run_lock.acquire(blocking=False):
+        return _busy()
+    try:
+        return _start_run()
+    finally:
+        _run_lock.release()
+
+
+def _start_run():
     # Check if DAQ is already running
     if daq_mgr.is_running():
         return jsonify({'message': 'DAQ is already running!'}), 404
@@ -290,6 +311,15 @@ def start_run():
 @bp.route("/experiment/stop_run", methods=['POST'])
 @jwt_required_custom
 def stop_run():
+    if not _run_lock.acquire(blocking=False):
+        return _busy()
+    try:
+        return _stop_run()
+    finally:
+        _run_lock.release()
+
+
+def _stop_run():
     if not caen_acq.is_running() and not daq_mgr.is_running():
         return jsonify({'message': 'Run stopped successfully!'}), 200
 
@@ -298,17 +328,6 @@ def stop_run():
     daq_mgr.stop_board_monitoring()
     spy_mgr.stop_spy()
     caen_acq.stop()
-    # Retries inside: the boards were closed by caendaq a moment ago and a CAEN
-    # link is not always ready to be reopened that fast. Say which ones stayed
-    # shut — they are the boards that will read "Disconnected" on the dashboard,
-    # and "Reset acquisition" is what reopens them.
-    reacquired = daq_mgr.reacquire_digitizers()
-    still_closed = [bid for bid, ok in reacquired.items() if not ok]
-    if still_closed:
-        logger.warning(
-            f"Run stopped, but board(s) {', '.join(still_closed)} did not reopen. "
-            "They will show as disconnected until 'Reset acquisition' is used.")
-
     # Update run metadata in database
     if daq_mgr.get_save_data():
         run_number = daq_mgr.get_run_number()
@@ -327,8 +346,21 @@ def stop_run():
     if daq_mgr.get_save_data():
         daq_mgr.increment_run_number()
 
-    # Set not running state
+    # Set not running state. This also ends the run's charge integration, so
+    # it comes straight after the acquisition stopped: reopening the boards
+    # below takes a few seconds that are no part of the run.
     daq_mgr.set_running_state(False)
+
+    # Retries inside: the boards were closed by caendaq a moment ago and a CAEN
+    # link is not always ready to be reopened that fast. Say which ones stayed
+    # shut — they are the boards that will read "Disconnected" on the dashboard,
+    # and "Reset acquisition" is what reopens them.
+    reacquired = daq_mgr.reacquire_digitizers()
+    still_closed = [bid for bid, ok in reacquired.items() if not ok]
+    if still_closed:
+        logger.warning(
+            f"Run stopped, but board(s) {', '.join(still_closed)} did not reopen. "
+            "They will show as disconnected until 'Reset acquisition' is used.")
 
     return jsonify({'message': 'Run stopped successfully!'}), 200
 

@@ -116,7 +116,10 @@ def fit_peak(spectrum: np.ndarray, xmin: float, xmax: float) -> Dict[str, Any]:
     y = np.asarray(spectrum[lo:hi], dtype=float)
     if y.sum() < 20:
         raise ValueError("Too few counts in this range to fit a peak")
-    x = np.arange(lo, hi) + 0.5
+    # Bin k holds the integer energy value k, so x = k: the centroid is then
+    # in the same units as the Energy values of the run files, and
+    # E = offset + slope * Energy holds offline as it does online.
+    x = np.arange(lo, hi, dtype=float)
 
     # Start values: the background through the averages of both ends, the peak
     # at the highest channel above it, its width from where it falls to half.
@@ -129,27 +132,44 @@ def fit_peak(spectrum: np.ndarray, xmin: float, xmax: float) -> Dict[str, Any]:
     above = np.flatnonzero(net > amp / 2)
     sigma0 = max(0.5, (above[-1] - above[0] + 1) / 2.355) if above.size else (hi - lo) / 6
 
-    def model(x, a, mu, sigma, c0, c1):
-        return a * np.exp(-0.5 * ((x - mu) / sigma) ** 2) + c0 + c1 * x
+    # The Gaussian integrated over each channel (value k collects [k-0.5, k+0.5)),
+    # so a line a channel or two wide (a pulser) is fitted as well as a broad one.
+    from scipy.special import erf
+
+    def model(x, area, mu, sigma, c0, c1):
+        z = np.sqrt(2.0) * sigma
+        return 0.5 * area * (erf((x + 0.5 - mu) / z) - erf((x - 0.5 - mu) / z)) + c0 + c1 * x
 
     err = np.sqrt(np.maximum(y, 1.0))
+    p0 = [amp * sigma0 * np.sqrt(2 * np.pi), x[top], sigma0, b0, b1]
+    bounds = ([0.0, lo - 0.5, 0.05, -np.inf, -np.inf], [np.inf, hi - 0.5, np.inf, np.inf, np.inf])
     try:
-        p, cov = curve_fit(model, x, y, p0=[amp, x[top], sigma0, b0, b1], sigma=err,
-                           absolute_sigma=True, maxfev=5000)
+        p, cov = curve_fit(model, x, y, p0=p0, sigma=err, absolute_sigma=True,
+                           bounds=bounds, maxfev=5000)
     except Exception:
         raise ValueError("The fit did not converge: zoom so the peak fills most of the view")
-    a, mu, sigma = p[0], p[1], abs(p[2])
+    area, mu, sigma = p[0], p[1], abs(p[2])
     perr = np.sqrt(np.clip(np.diag(cov), 0, None)) if cov is not None and np.all(np.isfinite(cov)) else [np.nan] * 5
-    if not (lo <= mu <= hi) or a <= 0 or not np.isfinite(mu):
+    if not (lo - 0.5 <= mu <= hi - 0.5) or area <= 0 or not np.isfinite(mu):
         raise ValueError("No peak found in this range")
+    mu_err = float(perr[1])
+    if sigma < 0.5:
+        # Narrower than a channel: the shape no longer tells where in the
+        # channel the line sits. Its counts do: their mean, known to within
+        # the channel's own width (1/sqrt(12)) at best.
+        w = np.clip(y - (p[3] + p[4] * x), 0, None)
+        if w.sum() > 0:
+            mu = float((w * x).sum() / w.sum())
+            spread = float(np.sqrt((w * (x - mu) ** 2).sum() / w.sum()))
+            mu_err = max(spread / np.sqrt(w.sum()), 1 / np.sqrt(12))
     chi2 = float((((y - model(x, *p)) / err) ** 2).sum())
     ndf = max(1, len(x) - 5)
     return {
         "centroid": float(mu),
-        "centroid_error": float(perr[1]),
+        "centroid_error": mu_err,
         "sigma": float(sigma),
         "fwhm": float(2.3548 * sigma),
-        "area": float(a * sigma * np.sqrt(2 * np.pi)),
+        "area": float(area),
         "chi2_ndf": chi2 / ndf,
         "range": [lo, hi],
     }
@@ -230,9 +250,16 @@ def _move_axis_objects(board_id: str, channel: int, old: Tuple[float, float],
     if old == new:
         return
 
-    def convert(value: float) -> float:
-        raw = (value - old[0]) / old[1]
-        return new[0] + new[1] * raw
+    # An uncalibrated axis shows bin k (energy value k) at k + 0.5, a
+    # calibrated one at offset + slope * k (spy_manager.calibrate_x_axis).
+    def to_value(axis: float, cal: Tuple[float, float]) -> float:
+        return axis - 0.5 if cal == (0.0, 1.0) else (axis - cal[0]) / cal[1]
+
+    def to_axis(value: float, cal: Tuple[float, float]) -> float:
+        return value + 0.5 if cal == (0.0, 1.0) else cal[0] + cal[1] * value
+
+    def convert(axis: float) -> float:
+        return to_axis(to_value(axis, old), new)
 
     try:
         from .histogram_config import get_histogram_config

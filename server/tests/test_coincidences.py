@@ -206,6 +206,47 @@ class BuilderTests(unittest.TestCase):
             problems = C.check_gates(cfg, boards)
         self.assertTrue(any("share a clock" in p for p in problems["g"]))
 
+    def test_saving_keeps_what_unchanged_gates_collected(self):
+        data, _ = synthetic()
+        board = FakeBoard(data)
+        b = self._run([self.gate(), self.gate(id="h", window_ns=200)], board)
+        kept = b._gates["g"]
+        self.assertGreater(sum(kept.passed.values()), 0)
+        b._acq = mock.Mock()
+        b._acq.get_boards.return_value = [{"id": "0", "name": "V1725S", "dpp": "DPP-PHA"}]
+        src = C.HitSource("0", "board-0", take=board.drain, dropped=lambda: 0,
+                          enable=lambda on: None, energy_bins=32768)
+        with mock.patch.object(C, "sources_for_run", return_value={"0": src}), \
+             mock.patch.object(C, "clock_domains", return_value={"0": "board-0"}):
+            cfg = b.get_config()
+            cfg["gates"][1]["window_ns"] = 300
+            b.set_config(cfg)
+            self.assertIs(b._gates["g"], kept)
+            self.assertEqual(sum(b._gates["h"].passed.values()), 0)
+            # A time offset of one of its channels does start it over.
+            cfg["offsets_ns"] = {"0:1": 5.0}
+            b.set_config(cfg)
+            self.assertIsNot(b._gates["g"], kept)
+
+    def test_chained_boards_share_a_clock_only_through_clk_in(self):
+        def domains(controls):
+            boards = [{"id": str(i), "name": "V1725S", "dpp": "DPP-PHA", "_8100": c}
+                      for i, c in enumerate(controls)]
+            with mock.patch("app.services.caen_acquisition.acquisition_control_of",
+                            side_effect=lambda b: b["_8100"]):
+                return C.clock_domains(boards)
+        first_trigger, sin, ext_clock = 0x3, 0x1, 1 << 6
+        # Master on its own clock, the slave on CLK-IN: one time base.
+        d = domains([first_trigger, sin | ext_clock])
+        self.assertEqual(d["0"], d["1"])
+        # Started together, each on its own oscillator: they drift apart.
+        d = domains([first_trigger, sin])
+        self.assertNotEqual(d["0"], d["1"])
+        # Not in a chain (software start): its own clock, whatever bit 6 says.
+        d = domains([first_trigger, sin | ext_clock, 0x0 | ext_clock])
+        self.assertEqual(d["0"], d["1"])
+        self.assertNotEqual(d["2"], d["0"])
+
 
 if __name__ == "__main__":
     unittest.main()

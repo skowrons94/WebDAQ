@@ -9,18 +9,16 @@ import { Layout } from '@/components/dashboard-layout'; import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { useVisualizationStore } from '@/store/visualization-settings-store'
+import { PageHeader } from '@/components/page-header'
 
 
 
 function DaqPageContent() {
-  const { settings } = useVisualizationStore()
-
   return (
     <>
       <Layout>
         {/* Energy calibration lives on the histogram cards (the ruler button). */}
-        <h1 className="mb-4 text-xl font-semibold tracking-tight">DAQ settings</h1>
+        <PageHeader title="DAQ settings" description="Board registers, channel settings and synchronisation." />
         <Tabs defaultValue="caen" orientation='vertical'>
             <div className="flex items-center">
             <TabsList>
@@ -32,9 +30,7 @@ function DaqPageContent() {
             <CAENDashboard />
           </TabsContent>
           <TabsContent value="hardware">
-            <div className="container mx-auto p-4">
-              <BoardInfoPanel />
-            </div>
+            <BoardInfoPanel />
           </TabsContent>
         </Tabs>
       </Layout>

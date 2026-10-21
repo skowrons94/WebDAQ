@@ -17,6 +17,7 @@ const PSDDashboard = dynamic(() => import('@/components/psd-dashboard'), { ssr: 
 const CoincidencesDashboard = dynamic(() => import('@/components/coincidences-dashboard'), { ssr: false, loading: TabLoading });
 import { Layout } from '@/components/dashboard-layout';
 import { useActiveItem } from '@/components/app-nav';
+import { PageHeader } from '@/components/page-header';
 import {
   Tabs,
   TabsContent,
@@ -59,7 +60,7 @@ function DashboardContent() {
       <Layout>
         {/* The views are chosen from the sidebar (or the menu on a phone); the
             heading says which one this is. */}
-        <h1 className="mb-4 text-xl font-semibold tracking-tight">{active?.label ?? 'Dashboard'}</h1>
+        <PageHeader title={active?.label ?? 'Dashboard'} />
         <Tabs value={tab} onValueChange={setTab} orientation='vertical'>
           <TabsContent value="health">
               <BoardHealth />

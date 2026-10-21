@@ -87,11 +87,13 @@ function ChannelChips({ value, boards, onRemove, empty }: {
   return (
     <span className="inline-flex flex-wrap gap-1">
       {value.map((c) => (
-        <Badge key={key(c)} variant="secondary" className="gap-1 font-normal">
+        // One chip never breaks between the board's name and its number.
+        <Badge key={key(c)} variant="secondary" className={`gap-1 whitespace-nowrap font-normal ${onRemove ? 'py-0 pr-0' : ''}`}>
           {boardLabel(boards.find((b) => b.id === c.board), c.board)} · ch {c.channel}
           {onRemove && (
+            // The × is small, its hit area is not: 32 px, enough for a finger.
             <button type="button" aria-label={`Remove channel ${c.channel}`} onClick={() => onRemove(c)}
-                    className="rounded-sm opacity-60 hover:opacity-100">
+                    className="-my-1 inline-flex h-8 w-8 items-center justify-center rounded-sm opacity-60 hover:opacity-100">
               <X className="h-3 w-3" />
             </button>
           )}
@@ -137,16 +139,18 @@ function ChannelPicker({ open, onOpenChange, title, boards, value, other, domain
             return (
               <div key={b.id} role="group" aria-label={boardLabel(b, b.id)} className={foreign ? 'opacity-50' : ''}>
                 <div className="mb-1 flex items-baseline justify-between gap-2">
-                  <p className="text-sm font-medium">{boardLabel(b, b.id)}</p>
+                  <p className="whitespace-nowrap text-sm font-medium">{boardLabel(b, b.id)}</p>
                   {foreign && <p className="text-xs text-muted-foreground">Different clock from the channels already chosen</p>}
                 </div>
-                <div className="grid grid-cols-8 gap-1">
+                {/* Four across on a phone: eight buttons of a dialog's width
+                    each cut off the last one. */}
+                <div className="grid grid-cols-4 gap-1 sm:grid-cols-8">
                   {Array.from({ length: Number(b.chan) || 16 }, (_, ch) => {
                     const c = { board: b.id, channel: ch }
                     const on = picked.has(key(c))
                     return (
                       <Button key={ch} type="button" size="sm" variant={on ? 'default' : 'outline'}
-                              disabled={foreign && !on} onClick={() => toggle(c)} aria-pressed={on}>
+                              className="min-w-0 px-0" disabled={foreign && !on} onClick={() => toggle(c)} aria-pressed={on}>
                         {ch}
                       </Button>
                     )

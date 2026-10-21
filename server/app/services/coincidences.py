@@ -190,10 +190,10 @@ class HitSource:
 
 def sources_for_run(acq) -> Dict[str, HitSource]:
     """The hit sources of the boards in the current run, by WebDAQ board id."""
-    from .caen_acquisition import is_synchronised
     from .sis3316_acquisition import is_sis3316
 
     out: Dict[str, HitSource] = {}
+    domains = clock_domains(acq.get_boards())
     for board in acq.get_boards():
         bid = str(board["id"])
         if is_sis3316(board):
@@ -214,7 +214,7 @@ def sources_for_run(acq) -> Dict[str, HitSource]:
             idx = acq.caen_index(bid)
             if idx is None or daq is None or not hasattr(daq, "take_hits"):
                 continue
-            domain = "caen-chain" if is_synchronised(board) else f"board-{bid}"
+            domain = domains.get(bid, f"board-{bid}")
             bins = 65536 if str(board.get("dpp", "")).upper().endswith("PSD") else 32768
             out[bid] = HitSource(
                 bid, domain,
@@ -227,16 +227,29 @@ def sources_for_run(acq) -> Dict[str, HitSource]:
 
 
 def clock_domains(boards: List[Dict[str, Any]]) -> Dict[str, str]:
-    """board id -> clock domain, for checking gates before a run."""
-    from .caen_acquisition import is_synchronised
+    """board id -> clock domain, for checking gates and for sorting hits.
+
+    CAEN boards share a time base when they are in a chain (started together,
+    0x8100 bits[1:0]) AND run on one oscillator: the ones taking their clock
+    from CLK-IN (0x8100 bit 6) plus the single one on its own clock that feeds
+    them. Two chained boards on their own oscillators start together but drift
+    apart, so each is a domain of its own, as is every SIS3316.
+    """
+    from .caen_acquisition import acquisition_control_of, is_synchronised
     from .sis3316_acquisition import is_sis3316
-    out = {}
+    out: Dict[str, str] = {}
+    chained = [b for b in boards if not is_sis3316(b) and is_synchronised(b)]
+    external = [b for b in chained if acquisition_control_of(b) & (1 << 6)]
+    internal = [b for b in chained if not acquisition_control_of(b) & (1 << 6)]
+    # Several boards on their own clock: which one feeds the others is not
+    # known, so none of them is put with the chain.
+    on_chain = external + (internal if len(internal) == 1 else [])
+    if len(on_chain) < 2:
+        on_chain = []
+    shared = {str(b["id"]) for b in on_chain}
     for b in boards:
         bid = str(b["id"])
-        if is_sis3316(b) or not is_synchronised(b):
-            out[bid] = f"board-{bid}"
-        else:
-            out[bid] = "caen-chain"
+        out[bid] = "caen-chain" if bid in shared else f"board-{bid}"
     return out
 
 
@@ -286,14 +299,17 @@ class GateState:
         self.dt = {(a, p): np.zeros(DT_BINS, np.uint32)
                    for a in self.channels for p in self.partners if a != p}
         self.matrix = np.zeros((MATRIX_BINS, MATRIX_BINS), np.uint32) if gate["matrix"] else None
-        self.matrix_bins = (self.bins[self.channels[0]] if self.channels else 32768,
-                            self.bins[self.partners[0]] if self.partners else 32768)
+        # One channel scale per axis, the widest of its channels: boards with
+        # fewer bins fill the lower part instead of being stretched over it.
+        self.matrix_bins = (max((self.bins[k] for k in self.channels), default=32768),
+                            max((self.bins[k] for k in self.partners), default=32768))
         # The offsets this gate's times were shifted by: what Align corrects.
         self.offsets_ns = dict(offsets_ns or {})
         self.singles = {k: 0 for k in self.channels}
         self.passed = {k: 0 for k in self.channels}
         self.pairs_skipped = 0
         self.history: List[Tuple[float, int, int]] = []   # (wall time, singles, passed)
+        self.since = time.time()                            # collecting since
 
     @property
     def reach_ps(self) -> int:
@@ -342,7 +358,7 @@ class GateState:
                 gap = np.minimum(gap_n, gap_p)
                 better = found & ~selfrow & (gap < partner_gap)
                 partner_gap[better] = gap[better]
-                partner_y[better] = (e[pidx[pick[better]]].astype(np.int64) * MATRIX_BINS) // self.bins[pkey]
+                partner_y[better] = (e[pidx[pick[better]]].astype(np.int64) * MATRIX_BINS) // self.matrix_bins[1]
             self._fill_dt(tA, dA, tp, pkey, selfrow, keys)
 
         mode = self.gate["mode"]
@@ -365,11 +381,7 @@ class GateState:
         if self.matrix is not None and mode == "coincidence":
             ok = passed & (partner_y >= 0)
             if ok.any():
-                lookup = np.full(max(keys.values()) + 1, 32768, np.int64)
-                for k in self.channels:
-                    if k in keys:
-                        lookup[keys[k]] = self.bins[k]
-                x = (eA[ok].astype(np.int64) * MATRIX_BINS) // lookup[dA[ok]]
+                x = (eA[ok].astype(np.int64) * MATRIX_BINS) // self.matrix_bins[0]
                 y = partner_y[ok]
                 keep = (x < MATRIX_BINS) & (y < MATRIX_BINS)
                 np.add.at(self.matrix, (x[keep], y[keep]), 1)
@@ -419,6 +431,7 @@ class GateState:
         span = now - t0
         return {
             "id": self.gate["id"],
+            "since": self.since,
             "singles": singles,
             "passed": passed,
             "fraction": (passed / singles) if singles else None,
@@ -440,6 +453,7 @@ class Domain:
         self.det = np.zeros(0, np.int32)
         self.e = np.zeros(0, np.uint16)
         self.done = None                 # every hit before this has been evaluated
+        self.promised = None             # the cutoff: no hit before it should still come
         self.max_t: Dict[str, int] = {}
         self.last_seen: Dict[str, float] = {}
         self.late = 0
@@ -457,12 +471,16 @@ class Domain:
     def add(self, t: np.ndarray, det: np.ndarray, e: np.ndarray, reach: int) -> None:
         if t.size == 0:
             return
-        if self.done is not None:
-            # Already past: these hits were not evaluated themselves. The
-            # recent ones still serve as partners of hits yet to come.
-            late = t < self.done
+        if self.promised is not None:
+            # Later than the cutoff said: before `done` these hits were not
+            # evaluated themselves; up to the cutoff they came too late to be
+            # the partners of hits already evaluated. Either way some
+            # coincidences were missed. The recent ones still serve as
+            # partners of hits yet to come.
+            late = t < self.promised
             if late.any():
                 self.late += int(late.sum())
+            if self.done is not None:
                 old = t < self.done - reach
                 t, det, e = t[~old], det[~old], e[~old]
         # The buffer is sorted: sort only the new hits and merge them in.
@@ -520,7 +538,9 @@ class CoincidenceBuilder:
             save_config(clean, self.config_path)
             self._config = clean
             if self._acq is not None:
-                self._setup()           # a running build restarts with the new gates
+                # A running build restarts with the new gates; the ones not
+                # changed (gate and time offsets alike) keep what they collected.
+                self._setup(keep_unchanged=True)
         return self.get_config()
 
     def needed(self) -> bool:
@@ -576,7 +596,7 @@ class CoincidenceBuilder:
     def _energy_bins(self) -> Dict[str, int]:
         return {bid: s.energy_bins for bid, s in self._sources.items()}
 
-    def _setup(self) -> None:
+    def _setup(self, keep_unchanged: bool = False) -> None:
         """(Re)build the evaluation state from the configuration (lock held)."""
         cfg = self._config
         acq = self._acq
@@ -620,8 +640,19 @@ class CoincidenceBuilder:
                 continue
             self._domains.setdefault(src.domain, Domain(src.domain, [])).boards.append(bid)
         bins = self._energy_bins()
-        self._gates = {g["id"]: GateState(g, bins, cfg["offsets_ns"]) for g in gates}
-        self._started_at = time.time()
+        previous = self._gates if keep_unchanged else {}
+        self._gates = {}
+        for g in gates:
+            fresh = GateState(g, bins, cfg["offsets_ns"])
+            old = previous.get(g["id"])
+            if old is not None and old.gate == g and old.bins == fresh.bins and all(
+                    old.offsets_ns.get(k, 0.0) == fresh.offsets_ns.get(k, 0.0)
+                    for k in fresh.channels + fresh.partners):
+                old.offsets_ns = fresh.offsets_ns
+                fresh = old
+            self._gates[g["id"]] = fresh
+        if not keep_unchanged:
+            self._started_at = time.time()
         if gates:
             logger.info(f"Coincidences: {len(gates)} gate(s) over {len(self._keys)} channel(s)")
 
@@ -685,6 +716,7 @@ class CoincidenceBuilder:
             for g in gates:
                 g.evaluate(dom.t, dom.det, dom.e, self._keys, lo, hi)
             dom.done = hi
+            dom.promised = cut
             keep_from = np.searchsorted(dom.t, hi - reach, "left")
             if keep_from:
                 dom.t, dom.det, dom.e = dom.t[keep_from:], dom.det[keep_from:], dom.e[keep_from:]

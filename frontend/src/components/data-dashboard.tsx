@@ -26,6 +26,9 @@ import {
   type ConversionStatus, type ConversionOptions, type AlertEvent,
 } from "@/lib/api"
 import { alertCount, getAlertsByRun } from "@/lib/run-alerts"
+import { formatCharge } from "@/lib/format-charge"
+import { useRunStatus } from "@/hooks/use-run-status"
+import { formatElapsed, useElapsed } from "@/components/run-status-indicator"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   currentUnit, maxMagnitude, formatTick, formatValue,
@@ -65,28 +68,68 @@ const formatDuration = (seconds: number | null): string => {
 const formatTime = (iso: string | null): string =>
   iso ? new Date(iso).toLocaleString() : "—"
 
-/** Charge in whichever unit keeps the number readable. */
-const formatCharge = (uC: number): string => {
-  const abs = Math.abs(uC)
-  if (abs >= 1e3) return `${(uC / 1e3).toFixed(4)} mC`
-  if (abs < 1e-1 && abs > 0) return `${(uC * 1e3).toFixed(3)} nC`
-  return `${uC.toFixed(4)} µC`
-}
-
 const FLAG_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   good: "default", bad: "destructive", unknown: "secondary",
+}
+
+/**
+ * The run's badges, each saying what it is about ("Flag: Good", "Sync:
+ * independent boards") instead of a bare "unknown" or "independent". A flag
+ * nobody has set yet, and a value that is not known, are simply not shown.
+ */
+const SYNC_LABEL: Record<string, { label: string; title: string }> = {
+  "daisy-chain": {
+    label: "Sync: daisy-chain",
+    title: "The boards were armed and started together, so their timestamps share one time origin.",
+  },
+  independent: {
+    label: "Sync: independent boards",
+    title: "Each board ran on its own clock and start: timestamps of different boards are not comparable.",
+  },
+}
+
+function RunBadges({ detail }: { detail: RunDetail }) {
+  const flag = (detail.flag || "").toLowerCase()
+  const sync = detail.sync_mode && detail.sync_mode !== "unknown" ? detail.sync_mode : null
+  return (
+    <>
+      {flag && flag !== "unknown" && (
+        <Badge variant={FLAG_VARIANT[flag] ?? "secondary"} title="Data quality, set by the shift in the Logbook">
+          Flag: {flag.charAt(0).toUpperCase() + flag.slice(1)}
+        </Badge>
+      )}
+      {sync && (
+        <Badge variant="outline" title={SYNC_LABEL[sync]?.title}>
+          {SYNC_LABEL[sync]?.label ?? `Sync: ${sync}`}
+        </Badge>
+      )}
+    </>
+  )
+}
+
+/** The duration of a finished run, or the live elapsed time of the one being
+ *  taken (the header's clock), never "—" while it runs. */
+function useRunDuration(detail: RunDetail): string {
+  const isRunning = useRunStatus((s) => s.isRunning)
+  const current = useRunStatus((s) => s.runNumber)
+  const startTime = useRunStatus((s) => s.startTime)
+  const live = !detail.complete && isRunning && current === detail.run_number
+  const elapsed = useElapsed(live, startTime)
+  return live ? formatElapsed(elapsed) : formatDuration(detail.duration_s)
 }
 
 /** One label/value row. */
 function Field({ label, value, hint }: { label: string; value?: React.ReactNode; hint?: string }) {
   const empty = value === undefined || value === null || value === ""
   return (
-    <div className="flex justify-between gap-4 py-1 border-b border-border/40 last:border-0">
-      <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1.5">
+    // items-baseline: the label sits on the first line of its value. Stretched
+    // and centred, it floated below a value that wrapped onto two lines.
+    <div className="flex items-baseline justify-between gap-4 py-1 border-b border-border/40 last:border-0">
+      <span className="text-xs text-muted-foreground shrink-0 inline-flex items-baseline gap-1.5">
         {label}
-        {hint && <InfoTooltip text={hint} />}
+        {hint && <span className="self-center"><InfoTooltip text={hint} /></span>}
       </span>
-      <span className={`text-xs text-right ${empty ? "text-muted-foreground" : ""}`}>
+      <span className={`min-w-0 break-words text-xs text-right ${empty ? "text-muted-foreground" : ""}`}>
         {empty ? "—" : value}
       </span>
     </div>
@@ -175,10 +218,17 @@ function CurrentTab({ runNumber }: { runNumber: number }) {
       <div>
         <h4 className="text-sm font-semibold mb-1">Integrated charge</h4>
         <p className="text-xs text-muted-foreground mb-3">
-          Trapezoidal integration of the measured current over{" "}
-          {formatDuration(data.integration?.duration_s ?? null)}, computed on all{" "}
+          The measured current integrated over{" "}
+          {data.integration?.span === "run" ? "the run, from its start to its stop" : "the recorded readings"}{" "}
+          ({formatDuration(data.integration?.duration_s ?? null)}), from all{" "}
           {data.n_samples.toLocaleString()} samples.
         </p>
+        {(data.integration?.uncovered_s ?? 0) >= 1 && (
+          <p className="mb-3 rounded-md border border-warning/40 bg-warning/5 p-2 text-xs text-warning">
+            The current monitor gave no reading for {formatDuration(data.integration!.uncovered_s!)} of
+            this run. That time is not in the charge below: the beam it saw is unknown, not zero.
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {data.integration?.channels.map((c, i) => (
             <Card key={c.name}>
@@ -423,12 +473,15 @@ function BoardsTab({ detail }: { detail: RunDetail }) {
                 <CardTitle className="flex items-center gap-2 flex-wrap">
                   {b.configured_name ?? b.model_name}
                   <Badge variant="outline" className="text-xs font-mono">{b.dpp_type}</Badge>
-                  <Badge
-                    variant={b.sync_role === "master" ? "default" : b.sync_role === "slave" ? "outline" : "secondary"}
-                    className="text-xs"
-                  >
-                    {b.sync_role}
-                  </Badge>
+                  {b.sync_role && (b.sync_role as string) !== "unknown" && (
+                    <Badge
+                      variant={b.sync_role === "master" ? "default" : b.sync_role === "slave" ? "outline" : "secondary"}
+                      className="text-xs"
+                      title="This board's place in the synchronisation chain"
+                    >
+                      Sync: {b.sync_role === "independent" ? "independent board" : b.sync_role}
+                    </Badge>
+                  )}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -868,10 +921,12 @@ function OverviewTab({ detail }: { detail: RunDetail }) {
           <Field label="User ID" value={detail.user_id} />
           <Field
             label="Accumulated charge"
-            value={detail.accumulated_charge !== null ? `${detail.accumulated_charge} µC` : undefined}
+            value={detail.accumulated_charge !== null ? formatCharge(detail.accumulated_charge) : undefined}
             hint="Recorded by the current module at run stop. The Beam Current tab re-integrates the logged series independently."
           />
-          <Field label="Quality flag" value={<Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>} />
+          <Field label="Quality flag" value={detail.flag && detail.flag !== "unknown"
+            ? <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
+            : "not flagged"} />
         </CardContent>
       </Card>
 
@@ -956,6 +1011,8 @@ function LogbookRunHeader({
       ?? detail.run_type.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase())
     : "Unspecified run type"
 
+  const duration = useRunDuration(detail)
+
   // The alerts that fired during this run (they carry its number): a run with
   // a board failure must not read as a clean "completed run".
   const [alerts, setAlerts] = useState<AlertEvent[] | null>(null)
@@ -977,8 +1034,7 @@ function LogbookRunHeader({
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-3xl font-bold tracking-tight">Run {detail.run_number}</h1>
-              <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
-              {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
+              <RunBadges detail={detail} />
               {!detail.complete && <StatusBadge state="running" label="In progress" />}
               {alerts && alerts.length > 0 && (
                 <StatusBadge state="error" label={`${alertCount(alerts.length)} during this run`} />
@@ -998,7 +1054,7 @@ function LogbookRunHeader({
           <SummaryMetric
             icon={CalendarClock}
             label="Duration"
-            value={formatDuration(detail.duration_s)}
+            value={duration}
             detail={!detail.complete ? "still in progress"
               : alerts && alerts.length ? `completed, with ${alertCount(alerts.length)}` : "completed run"}
           />
@@ -1186,17 +1242,28 @@ function LogbookOverviewTab({ detail }: { detail: RunDetail }) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 gap-x-8 md:grid-cols-2 xl:grid-cols-5">
-            <Field
-              label="Mode"
-              value={sw.acquisition_mode}
-              hint="'mock' means the data was generated in test mode, not read from real boards."
-            />
-            <Field label="LUNADAQ" value={sw.webdaq} />
-            <Field label="CaenDAQ" value={sw.caendaq ?? undefined} />
-            <Field label="Python" value={sw.python} />
-            <Field label="Platform" value={sw.platform} />
-          </div>
+          {/* Each label above its own value: side by side in five narrow
+              columns, a long value (the platform string) wrapped and the
+              pairs no longer lined up. */}
+          <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 xl:grid-cols-5">
+            {([
+              ["Mode", sw.acquisition_mode, "'mock' means the data was generated in test mode, not read from real boards."],
+              ["LUNADAQ", sw.webdaq],
+              ["CaenDAQ", sw.caendaq ?? undefined],
+              ["Python", sw.python],
+              ["Platform", sw.platform],
+            ] as [string, string | undefined, string?][]).map(([label, value, hint]) => (
+              <div key={label} className="min-w-0">
+                <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  {label}
+                  {hint && <InfoTooltip text={hint} />}
+                </dt>
+                <dd className={`mt-0.5 break-words font-mono text-xs ${value ? "" : "text-muted-foreground"}`}>
+                  {value || "—"}
+                </dd>
+              </div>
+            ))}
+          </dl>
         </CardContent>
       </Card>
     </div>
@@ -1268,8 +1335,7 @@ function RunDetailTabs({
     <>
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <h2 className="text-lg font-semibold">Run {detail.run_number}</h2>
-        <Badge variant={FLAG_VARIANT[detail.flag] ?? "secondary"}>{detail.flag}</Badge>
-        {detail.sync_mode && <Badge variant="outline">{detail.sync_mode}</Badge>}
+        <RunBadges detail={detail} />
         {!detail.complete && <StatusBadge state="running" label="In progress" />}
       </div>
 

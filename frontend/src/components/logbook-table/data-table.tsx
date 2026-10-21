@@ -339,7 +339,9 @@ export function DataTable<TData extends { [k: string]: any;[k: number]: any }, T
                                         return (
                                             <div key={cell.id} className="contents">
                                                 <dt className="text-muted-foreground">{label}</dt>
-                                                <dd className="min-w-0 break-words text-left [&>*]:!min-w-0 [&>*]:!w-auto [&_*]:!text-left [&_*]:!justify-start">
+                                                {/* Values wrap inside the card ("10/22/2026 12:15 AM" ran
+                                                    past its edge): the table's nowrap is undone here. */}
+                                                <dd className="min-w-0 break-words text-left [&>*]:!min-w-0 [&>*]:!w-auto [&_*]:!whitespace-normal [&_*]:!text-left [&_*]:!justify-start">
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </dd>
                                             </div>

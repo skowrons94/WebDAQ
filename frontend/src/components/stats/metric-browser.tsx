@@ -8,7 +8,8 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog"
 import { ChevronRight, Folder, Gauge, Loader2, RefreshCw, Search, X } from 'lucide-react'
-import { browseMetrics, getRecentMetrics, type MetricNode, type RecentMetric } from '@/lib/api'
+import Link from 'next/link'
+import { browseMetrics, getRecentMetrics, getStatsConnection, type MetricNode, type RecentMetric } from '@/lib/api'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Sparkline } from "@/components/stats/sparkline"
 import { formatReading } from "@/components/card-holder"
@@ -21,7 +22,11 @@ function age(iso: string): string {
 }
 
 /** What Graphite has had a value for in the last hour: the metrics worth adding. */
-function ActiveMetrics({ existing, onSelect }: { existing: string[]; onSelect: (path: string, leaf: string) => void }) {
+function ActiveMetrics({ existing, onSelect, onBrowseAll }: {
+  existing: string[]
+  onSelect: (path: string, leaf: string) => void
+  onBrowseAll: () => void
+}) {
   const [items, setItems] = useState<RecentMetric[] | null>(null)
   const [info, setInfo] = useState<{ scanned: number; truncated: boolean } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -32,12 +37,24 @@ function ActiveMetrics({ existing, onSelect }: { existing: string[]; onSelect: (
     setLoading(true)
     try {
       const r = await getRecentMetrics(refresh)
+      // An unreachable Graphite also comes back as an empty list (nothing
+      // scanned), which would read as "nothing updated lately". Ask whether
+      // it answers at all, so the two are told apart.
+      if (r.metrics.length === 0 && r.scanned === 0) {
+        const c = await getStatsConnection().catch(() => null)
+        if (c && !c.reachable) {
+          setItems(null)
+          setInfo(null)
+          setError(`Graphite at ${c.host}:${c.port}: ${c.error || 'no answer.'}`)
+          return
+        }
+      }
       setItems(r.metrics)
       setInfo({ scanned: r.scanned, truncated: r.truncated })
       setError(null)
     } catch (e) {
       const serverMessage = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setError(serverMessage ?? 'Could not reach the Graphite server. Check its address below.')
+      setError(serverMessage ?? 'Could not reach the Graphite server.')
     } finally {
       setLoading(false)
     }
@@ -60,11 +77,21 @@ function ActiveMetrics({ existing, onSelect }: { existing: string[]; onSelect: (
             <Loader2 className="h-5 w-5 animate-spin" />Looking for metrics updated in the last hour…
           </div>
         ) : error ? (
-          <p className="p-6 text-center text-sm text-destructive">{error}</p>
+          <div className="flex flex-col items-center gap-2 p-6 text-center text-sm">
+            <p className="text-destructive">{error}</p>
+            <Link href="/settings?view=graphite" className="text-primary underline underline-offset-2">
+              Check the address in Settings → Graphite
+            </Link>
+          </div>
         ) : shown.length === 0 ? (
-          <p className="p-6 text-center text-sm text-muted-foreground">
-            {items?.length ? 'Nothing matches that filter.' : 'No metric has been updated in the last hour. Browse all of them instead.'}
-          </p>
+          items?.length ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">Nothing matches that filter.</p>
+          ) : (
+            <div className="flex flex-col items-center gap-3 p-6 text-center text-sm text-muted-foreground">
+              <p>No metric has been updated in the last hour.</p>
+              <Button variant="outline" size="sm" onClick={onBrowseAll}>Browse all metrics</Button>
+            </div>
+          )
         ) : (
           <div className="divide-y">
             {shown.map((m) => {
@@ -122,6 +149,7 @@ export function MetricBrowser({ open, onOpenChange, onSelect, existing = [] }: P
   const [activeSearch, setActiveSearch] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [tab, setTab] = useState('active')
 
   const load = useCallback(async (branch: string, term: string) => {
     setLoading(true)
@@ -131,7 +159,7 @@ export function MetricBrowser({ open, onOpenChange, onSelect, existing = [] }: P
       setError(null)
     } catch (e) {
       const serverMessage = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setError(serverMessage ?? 'Could not reach the Graphite server. Check its address below.')
+      setError(serverMessage ?? 'Could not reach the Graphite server. Check its address in Settings → Graphite.')
       setNodes([])
     } finally {
       setLoading(false)
@@ -140,6 +168,7 @@ export function MetricBrowser({ open, onOpenChange, onSelect, existing = [] }: P
 
   useEffect(() => {
     if (!open) return
+    setTab('active')
     setPrefix('')
     setSearch('')
     setActiveSearch('')
@@ -173,13 +202,13 @@ export function MetricBrowser({ open, onOpenChange, onSelect, existing = [] }: P
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="active">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="active">Active in the last hour</TabsTrigger>
             <TabsTrigger value="all">Browse all</TabsTrigger>
           </TabsList>
           <TabsContent value="active">
-            {open && <ActiveMetrics existing={existing} onSelect={onSelect} />}
+            {open && <ActiveMetrics existing={existing} onSelect={onSelect} onBrowseAll={() => setTab('all')} />}
           </TabsContent>
           <TabsContent value="all" className="space-y-3">
 

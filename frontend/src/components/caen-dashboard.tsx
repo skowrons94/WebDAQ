@@ -31,6 +31,7 @@ import { ScrollFade } from "@/components/ui/scroll-fade"
 import Link from "next/link"
 import { Plus } from "lucide-react"
 import { Sis3316Dashboard } from "@/components/sis3316/sis3316-dashboard"
+import { useIsPhone } from "@/hooks/use-is-phone"
 
 // ============================================================
 // Bit-field definitions extracted from CAENRegisterBuilder*.cc
@@ -410,21 +411,19 @@ export default function Dashboard() {
   const selectedBoard = boards.find(board => String(board.id) === String(selectedBoardId))
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">DAQ Settings Dashboard</h1>
-        {/* Re-reading the board list is a secondary action, not the page's primary one. */}
-        <Button variant="outline" onClick={fetchBoardConfiguration}>Refresh</Button>
-      </div>
-
+    <div className="pt-2">
       {/* Board tuning and synchronisation are separate jobs: one is per-channel
           detail work, the other is a system-wide decision about whether the
           boards share a time origin. Keep them in their own sub-dashboards. */}
       <Tabs defaultValue="boards">
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-6">
-          <TabsTrigger value="boards">Board settings</TabsTrigger>
-          <TabsTrigger value="sync">Synchronization</TabsTrigger>
-        </TabsList>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
+          <TabsList className="grid w-full max-w-md grid-cols-2 sm:w-auto sm:min-w-[22rem]">
+            <TabsTrigger value="boards">Board settings</TabsTrigger>
+            <TabsTrigger value="sync">Synchronization</TabsTrigger>
+          </TabsList>
+          {/* Re-reading the board list is a secondary action, not the page's primary one. */}
+          <Button variant="outline" onClick={fetchBoardConfiguration}>Refresh</Button>
+        </div>
 
         <TabsContent value="boards" className="space-y-6">
           {/* No boards: say so, with the way to add one. One board: it is the
@@ -915,6 +914,10 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   const [advancedMode, setAdvancedMode] = useState(false)
   const [binaryMode, setBinaryMode] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState<string>("0")
+  // On a phone the trigger table (one column per channel) does not fit, so it
+  // shows one channel at a time, picked here.
+  const isPhone = useIsPhone()
+  const [triggerChannel, setTriggerChannel] = useState<number | null>(null)
   // Channel-to-channel copy (see handleCopyChannel).
   const [copySource, setCopySource] = useState<string>("0")
   const [copyTargets, setCopyTargets] = useState<Set<number>>(new Set())
@@ -1716,16 +1719,17 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
           {channels.length === 0 ? (
             <p className="text-sm text-muted-foreground">No channels found.</p>
           ) : (
-            <div className="flex flex-wrap gap-6">
+            // 8 per row (4 on a phone), so a 16-channel board is two even rows.
+            <div className="grid grid-cols-4 gap-x-2 gap-y-5 sm:grid-cols-8">
               {channels.map(ch => (
-                <div key={ch} className="flex flex-col items-center gap-2 min-w-12">
+                <div key={ch} className="flex flex-col items-center gap-2">
                   <span className="text-sm font-medium">Ch {ch}</span>
                   <Switch
                     aria-label={`Channel ${ch} enabled`}
                     checked={channelEnabled[ch] ?? false}
                     onCheckedChange={enabled => handleChannelToggle(ch, enabled)}
                   />
-                  <Badge variant={channelEnabled[ch] ? "default" : "secondary"} className={channelEnabled[ch] ? "border-transparent bg-info px-2 text-xs text-info-foreground hover:bg-info/90" : "px-2 text-xs"}>
+                  <Badge variant={channelEnabled[ch] ? "default" : "secondary"} className="px-2 text-xs">
                     {channelEnabled[ch] ? "ON" : "OFF"}
                   </Badge>
                 </div>
@@ -1746,6 +1750,47 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
               <p className="text-sm text-muted-foreground">
                 No channels enabled. Enable at least one channel above to configure trigger settings.
               </p>
+            ) : isPhone ? (
+              // Phone: one channel at a time, its settings stacked.
+              (() => {
+                const ch = triggerChannel !== null && enabledChannels.includes(triggerChannel)
+                  ? triggerChannel : enabledChannels[0]
+                return (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="trigger-channel">Channel</Label>
+                      <Select value={String(ch)} onValueChange={v => setTriggerChannel(Number(v))}>
+                        <SelectTrigger id="trigger-channel"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {enabledChannels.map(c => (
+                            <SelectItem key={c} value={String(c)}>Channel {c}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="divide-y">
+                      {uniqueTriggerNames.map(settingName => {
+                        const entry = findRegForChannelAndName(ch, settingName)
+                        return (
+                          <div key={settingName} className="space-y-1.5 py-3 first:pt-0 last:pb-0">
+                            <p className="text-sm font-medium">
+                              {settingName}
+                              {unitForName(settingName) && (
+                                <span className="text-xs font-normal text-muted-foreground ml-1">
+                                  ({unitForName(settingName)})
+                                </span>
+                              )}
+                            </p>
+                            {entry
+                              ? renderSettingInput(entry[0], entry[1], true)
+                              : <p className="text-sm text-muted-foreground">—</p>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()
             ) : (
               <ScrollFade tone="card" hint="More channels to the right →">
                 <table className="w-full text-sm">

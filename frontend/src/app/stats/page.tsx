@@ -7,6 +7,7 @@ import { AuthGate } from '@/components/auth-gate'
 import { Eye, EyeOff, Gauge, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PageHeader } from '@/components/page-header'
 import { Layout } from '@/components/dashboard-layout'
 import {
   Card,
@@ -238,12 +239,12 @@ function StatsPageContent() {
 
   return (
     <Layout>
-      <div className="space-y-6 p-6">
+      <div className="space-y-6">
         {/* Header — what the page is, and the two things you do here */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Stats</h1>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <PageHeader
+          title="Stats"
+          description={
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {/* The light: green while Graphite answers, red when it does not,
                   grey until the first check comes back. */}
               <span
@@ -274,9 +275,9 @@ function StatsPageContent() {
                   · {enabledCount} of {paths.length} metric{paths.length === 1 ? '' : 's'} shown
                 </span>
               )}
-            </div>
-          </div>
-          <div className="flex gap-2">
+            </span>
+          }
+          actions={<>
             <Button onClick={handleRefreshValues} disabled={isLoading} variant="outline" size="sm">
               <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
               Refresh
@@ -285,8 +286,8 @@ function StatsPageContent() {
               <Plus className="mr-2 h-4 w-4" />
               Add metric
             </Button>
-          </div>
-        </div>
+          </>}
+        />
 
         {error && (
           <ErrorState

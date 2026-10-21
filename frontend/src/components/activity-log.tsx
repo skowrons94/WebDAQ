@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
+import { PageHeader } from '@/components/page-header'
 import { Button } from '@/components/ui/button'
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -137,7 +138,7 @@ export default function ActivityLog() {
     <div className="space-y-4">
       {/* ── Recovery: what to press ───────────────────────────────────────── */}
       {/* The page is called what the nav calls it. */}
-      <h1 className="text-2xl font-bold">Troubleshoot</h1>
+      <PageHeader title="Troubleshoot" />
       <Card className={boardFailed ? 'border-destructive' : problemCount ? 'border-warning' : ''}>
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2">
@@ -181,19 +182,24 @@ export default function ActivityLog() {
                  className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${
                    !action.ok && action.enabled ? 'border-warning/60 bg-warning/5' : ''}`}>
               <div className="min-w-0">
-                <p className="flex items-center gap-2 text-sm font-medium">
+                {/* A div, not a <p>: the badge is a div, and a div inside a
+                    <p> is invalid HTML that breaks hydration. */}
+                <div className="flex items-center gap-2 text-sm font-medium">
                   {action.label}
                   {!action.ok && action.enabled && (
                     <Badge className="bg-warning/10 text-warning">
                       needs attention
                     </Badge>
                   )}
-                </p>
+                </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">{action.detail}</p>
                 <p className="mt-1 text-xs text-muted-foreground">{action.description}</p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
-                <Button size="sm" variant={action.ok ? 'outline' : 'default'}
+                {/* Disabled is grey, never the accent colour: a pink button
+                    that cannot be pressed looks like one that can. */}
+                <Button size="sm" variant={action.ok || !action.enabled ? 'outline' : 'default'}
+                        className={!action.enabled ? 'text-muted-foreground' : undefined}
                         disabled={!action.enabled || running !== null}
                         title={action.blocked_reason || action.description}
                         aria-label={action.label}
@@ -242,10 +248,10 @@ export default function ActivityLog() {
               </CardDescription>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="flex overflow-hidden rounded-lg border">
+              <div className="flex w-full overflow-hidden rounded-lg border sm:w-auto">
                 {KINDS.map((k) => (
                   <button key={k.value} onClick={() => setKind(k.value)}
-                          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          className={`min-w-0 flex-1 px-2 py-1.5 text-xs font-medium transition-colors sm:flex-none sm:px-3 ${
                             kind === k.value ? 'bg-primary text-primary-foreground'
                                              : 'text-muted-foreground hover:text-foreground'}`}>
                     {k.label}

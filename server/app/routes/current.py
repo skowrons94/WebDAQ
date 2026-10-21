@@ -204,15 +204,26 @@ def _on_run_state_changed(running: bool) -> None:
 
 
 def _persist_run_charge(run_number: int, charge: float) -> None:
-    """Store the run's accumulated charge in its metadata row, if it has one."""
+    """Store the run's accumulated charge in its metadata row, if it has one.
+
+    Time during which the current monitor gave no reading is not in the charge
+    (see MAX_GAP_S in the controllers); the run's notes say how much, so the
+    number is not mistaken for the full run."""
     app = daq_mgr.flask_app
     if not run_number or app is None:
         return
+    uncovered = float(getattr(controller, "uncovered_s", 0.0) or 0.0)
     try:
         with app.app_context():
             run_metadata = RunMetadata.query.filter_by(run_number=int(run_number)).first()
             if run_metadata:
                 run_metadata.accumulated_charge = charge
+                if uncovered >= 1.0:
+                    note = (f"[charge] The beam current monitor gave no reading for "
+                            f"{uncovered:.0f} s of this run: that time is not in the "
+                            f"accumulated charge.")
+                    logger.warning(f"Run {run_number}: {note}")
+                    run_metadata.notes = f"{run_metadata.notes}\n{note}" if run_metadata.notes else note
                 db.session.commit()
                 sync_run_metadata_file(run_metadata)
     except Exception as e:

@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { RunMetadata, createColumns } from "./columns"
 import { DataTable } from "./data-table"
 
@@ -45,40 +44,13 @@ export function Logbook() {
     }
 
     return (
-        <div className="mx-auto w-full max-w-[1600px] px-4 py-6">
-            <h1 className="text-3xl font-bold mb-4">Experiment logbook</h1>
-            <p className="mb-4 text-sm text-muted-foreground">
-                Select a run number to open its complete logbook entry, including saved data and acquisition provenance.
-            </p>
+        // The page heading is the route's PageHeader (app/logbook/page.tsx).
+        <div className="mx-auto w-full max-w-[1600px]">
             <DataTable
                 columns={columns}
                 data={data}
                 onDataChange={fetchData}
             />
-        </div>
-    )
-}
-
-export function LogbookOld() {
-    const [data, setData] = useState<RunMetadata[]>([])
-
-    useEffect(() => {
-        fetchData()
-    }, [])
-
-    const fetchData = async () => {
-        try {
-            const response = (await getRunMetadataAll()).data
-            setData(response)
-        } catch (error) {
-            console.error('Failed to fetch Data:', error)
-        }
-    }
-
-    return (
-        <div className="container mx-auto py-10">
-            <h1 className="text-3xl font-bold mb-5">Logbook</h1>
-            
         </div>
     )
 }

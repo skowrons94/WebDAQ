@@ -8,6 +8,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Pause, Play } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -452,6 +453,12 @@ export default function WaveformDashboard() {
           // trace says why) is kept.
           if (/^wave\d_b\d+_ch\d+$/.test(String(histogram.fTitle))) histogram.fTitle = ''
           histogram.fStats = 0
+          // The server sends one bin per sample and no axis titles. Fonts and
+          // offsets come from lib/jsroot-style.ts; only the words are set here.
+          if (histogram.fName !== 'no_data') {
+            if (histogram.fXaxis && !histogram.fXaxis.fTitle) histogram.fXaxis.fTitle = 'Time (samples)'
+            if (histogram.fYaxis && !histogram.fYaxis.fTitle) histogram.fYaxis.fTitle = 'ADC'
+          }
           // Build a fresh TCanvas every tick so probes never stack from previous frames.
           const canvas = window.JSROOT.create('TCanvas')
           canvas.fName = `wave_${histoId}`
@@ -722,7 +729,7 @@ export default function WaveformDashboard() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <div className="flex-1 container mx-auto px-0 py-4 sm:p-4">
+      <div className="flex-1 pb-4">
         {/* One row on a desktop; on a phone the summary sits above the
             controls, which wrap, rather than squeezing into a column. */}
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -790,26 +797,29 @@ export default function WaveformDashboard() {
               <CardHeader>
                 <CardTitle className="flex flex-wrap items-center justify-between gap-2">
                   <span>{board.name} (ID: {board.id})</span>
-                  <div className="flex items-center">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant={selectedWaveform[board.id] === 1 ? "default" : "outline"}
-                        onClick={() => handleWaveformSwitch(board.id, 1)}
-                      >
-                        Waveform 1
-                      </Button>
-                      {config && config.dualTrace && (
-                        <Button
-                          size="sm"
-                          variant={selectedWaveform[board.id] === 2 ? "default" : "outline"}
-                          onClick={() => handleWaveformSwitch(board.id, 2)}
-                        >
-                          Waveform 2
-                        </Button>
-                      )}
+                  {/* Which trace is drawn. With one trace there is nothing to
+                      choose, so it is only a label; with two, a neutral
+                      segmented switch (not a primary action button). */}
+                  {config && config.dualTrace ? (
+                    <div role="group" aria-label={`Trace shown, board ${board.id}`} className="inline-flex rounded-md border p-0.5 text-sm font-normal">
+                      {[1, 2].map(n => {
+                        const on = (selectedWaveform[board.id] || 1) === n
+                        return (
+                          <button
+                            key={n}
+                            type="button"
+                            aria-pressed={on}
+                            onClick={() => handleWaveformSwitch(board.id, n)}
+                            className={`rounded px-3 py-1 transition-colors pointer-coarse:min-h-11 ${on ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                          >
+                            Waveform {n}
+                          </button>
+                        )
+                      })}
                     </div>
-                  </div>
+                  ) : (
+                    <Badge variant="outline" className="font-normal text-muted-foreground">Waveform 1</Badge>
+                  )}
                 </CardTitle>
                 {board.vendor === 'sis3316' && (
                   <p className="text-sm text-muted-foreground">
@@ -827,7 +837,7 @@ export default function WaveformDashboard() {
                           onCheckedChange={(checked: boolean) => handleDualTraceToggle(board.id, checked)}
                         />
                         <Label className="text-sm cursor-pointer" onClick={() => handleDualTraceToggle(board.id, !config.dualTrace)}>
-                          Dual Trace
+                          Dual trace
                         </Label>
                       </div>
                     </div>
@@ -918,7 +928,7 @@ export default function WaveformDashboard() {
                           aria-pressed={shown}
                           onClick={() => handleChannelToggle(board.id, channelIndex, !shown)}
                           title={`${shown ? 'Hide' : 'Show'} channel ${channelIndex}`}
-                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors pointer-coarse:min-h-10 pointer-coarse:px-2.5 ${
                             shown ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
                           }`}
                         >
@@ -933,7 +943,7 @@ export default function WaveformDashboard() {
               </CardHeader>
               <CardContent>
                 {channelsToShow.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 min-[1800px]:grid-cols-3">
                     {channelsToShow.map((channelIndex: number) => {
                       const histoId = `board${board.id}_channel${channelIndex}`
                       const st = isRunning ? pickChannel(runStats, board.id, channelIndex) : null

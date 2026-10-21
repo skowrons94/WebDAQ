@@ -2,10 +2,11 @@ import { installPlotStyle } from './jsroot-style';
 
 let jsrootPromise: Promise<void> | null = null;
 
-// JSROOT is served by this web server (app/api/jsroot, from the version pinned
-// in package.json). root.cern is only a fallback: it once began redirecting to
-// the CERN single sign-on, and every plot stopped drawing.
-const SOURCES = ['/api/jsroot', 'https://root.cern/js/latest/build/jsroot.js'];
+// JSROOT is served by this web server only (app/api/jsroot, from the version
+// pinned in package.json). No outside site: root.cern once began redirecting
+// to the CERN single sign-on and every plot stopped drawing, and a DAQ page
+// must not run code fetched from elsewhere at run time.
+const SOURCES = ['/api/jsroot'];
 
 function loadScript(src: string): Promise<void> {
   return new Promise((resolve, reject) => {

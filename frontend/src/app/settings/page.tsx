@@ -4,6 +4,7 @@ import { AuthGate } from '@/components/auth-gate'
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Layout } from '@/components/dashboard-layout';
+import { PageHeader } from '@/components/page-header';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { VisualizationSettings } from '@/components/visualization-settings';
@@ -59,15 +60,11 @@ function SettingsPageContent() {
 
     return (
         <Layout>
-            <div className="mx-auto grid w-full max-w-6xl gap-6">
-                <div>
-                    <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-                    <p className="text-sm text-muted-foreground">
-                        How this DAQ reaches its instruments and services, who it tells when something goes
-                        wrong, and how it looks. The boards themselves are set up under Setup → Boards and
-                        DAQ settings.
-                    </p>
-                </div>
+            <PageHeader
+                title="Settings"
+                description="How this DAQ reaches its instruments and services, who it tells when something goes wrong, and how it looks. The boards themselves are set up under Setup → Boards and DAQ settings."
+            />
+            <div className="grid w-full gap-6">
                 <div className="grid items-start gap-6 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
                     {/* Phones: one select instead of a list that pushes the
                         section a screen down. */}

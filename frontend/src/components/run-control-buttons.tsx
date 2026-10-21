@@ -6,7 +6,6 @@ import {
   ChevronDown,
   PlayCircle,
   Plug,
-  RefreshCw,
   StopCircle,
   Wifi,
   Wrench,
@@ -41,7 +40,6 @@ import {
   addRunMetadata,
   reset,
   resetDeviceCurrent,
-  resetTotalAccumulatedCharge,
   setIpPortCurrent,
   connectCurrent,
   getCurrentModuleType,
@@ -49,7 +47,6 @@ import {
   getRunMetadataAll,
   refreshBoardConnections,
   startStatsRun,
-  getTotalAccumulatedCharge,
   getSaveData,
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
@@ -60,6 +57,7 @@ import { forceResetSequence, stopRunSequence } from '@/lib/run-actions'
 import { noteRunAction } from '@/hooks/use-run-status'
 import { StopRunBody } from '@/components/stop-run-body'
 import { runSideEffects } from '@/lib/side-effects'
+import { notifyRunsChanged } from '@/components/recent-runs'
 
 interface RunControlButtonsProps {
   /** Seconds since the run started, for the Stop confirmation. */
@@ -121,9 +119,6 @@ export function RunControlButtons({
   const stopFailed = useRunControlStore((st) => st.stopFailed)
   const setStopFailed = (v: boolean) => useRunControlStore.getState().update({ stopFailed: v })
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
-  // Shown in the Reset total charge confirmation, so the operator sees what
-  // is about to be zeroed.
-  const [totalChargeNow, setTotalChargeNow] = useState<number | null>(null)
 
   // Run metadata states
   const [targetName, setTargetName] = useState<string>('')
@@ -329,6 +324,9 @@ export function RunControlButtons({
           run: () => autoManageUids.forEach((uid) => unpauseAlertNonBlocking(uid)),
         },
       ]))
+      // Recent runs re-reads now that the name and type are recorded: read at
+      // the moment the run started, the row was still "Untitled run".
+      notifyRunsChanged()
 
       toast({
         title: sideEffects.length ? 'Run started (with warnings)' : 'Run started',
@@ -384,6 +382,7 @@ export function RunControlButtons({
       })
 
       setStopFailed(false)
+      notifyRunsChanged()
       // Update run number for next run
       const newRunNumber = await getCurrentRunNumber()
       onRunNumberChange(newRunNumber)
@@ -466,23 +465,6 @@ export function RunControlButtons({
       toast({
         title: 'Error',
         description: 'Failed to reset the acquisition. Please try again.',
-        variant: 'destructive',
-      })
-    }
-  }
-
-  const handleResetTotalAccumulatedCharge = async () => {
-    try {
-      await resetTotalAccumulatedCharge()
-      toast({
-        title: 'Total charge reset',
-        description: 'The lifetime accumulated charge has been reset.',
-      })
-    } catch (error) {
-      console.error('Failed to reset total accumulated charge:', error)
-      toast({
-        title: 'Error',
-        description: 'Failed to reset total accumulated charge.',
         variant: 'destructive',
       })
     }
@@ -659,7 +641,9 @@ export function RunControlButtons({
         )}
 
         <Collapsible open={maintenanceOpen} onOpenChange={setMaintenanceOpen}>
-          <div className="grid items-start gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          {/* Reset total charge is no longer here, next to Stop run: it lives
+              in the Beam control card's menu, with the total it zeroes. */}
+          <div className="grid items-start gap-2">
             <CollapsibleTrigger asChild>
               <Button type="button" variant="ghost" className="w-full justify-between px-2">
                 <span className="flex items-center">
@@ -671,7 +655,7 @@ export function RunControlButtons({
                 }`} />
               </Button>
             </CollapsibleTrigger>
-            <CollapsibleContent className="pt-2 sm:col-span-2">
+            <CollapsibleContent className="pt-2">
               <div className="grid gap-2 rounded-md border bg-muted/20 p-3 sm:grid-cols-2">
                 <Button
                   type="button"
@@ -723,45 +707,6 @@ export function RunControlButtons({
                 </div>
               </div>
             </CollapsibleContent>
-            {/* Stays on the dashboard (operators use it), behind a confirmation. */}
-            <ConfirmAction
-              trigger={
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full sm:col-start-2 sm:row-start-1 sm:w-auto"
-                >
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Reset total charge
-                </Button>
-              }
-              onOpenChange={(open) => {
-                if (open) {
-                  setTotalChargeNow(null)
-                  getTotalAccumulatedCharge()
-                    .then((v) => setTotalChargeNow(Number(v)))
-                    .catch(() => setTotalChargeNow(null))
-                }
-              }}
-              title="Reset the lifetime charge total?"
-              description={
-                <p>
-                  The lifetime accumulated charge is set to zero and cannot be recovered.
-                  The charge of the current run is not affected.
-                </p>
-              }
-              confirmLabel="Reset total charge"
-              onConfirm={handleResetTotalAccumulatedCharge}
-            >
-              <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
-                Total now:{' '}
-                <span className="font-semibold tabular-nums">
-                  {totalChargeNow === null || !Number.isFinite(totalChargeNow)
-                    ? '…'
-                    : formatMicroCoulomb(totalChargeNow)}
-                </span>
-              </p>
-            </ConfirmAction>
           </div>
         </Collapsible>
       </CardContent>
@@ -782,12 +727,4 @@ export function RunControlButtons({
       />
     </Card>
   )
-}
-
-/** µC → a readable charge (µC, mC or C). */
-function formatMicroCoulomb(microCoulombs: number): string {
-  const a = Math.abs(microCoulombs)
-  if (a >= 1_000_000) return `${(microCoulombs / 1_000_000).toFixed(2)} C`
-  if (a >= 1_000) return `${(microCoulombs / 1_000).toFixed(2)} mC`
-  return `${microCoulombs.toFixed(2)} µC`
 }

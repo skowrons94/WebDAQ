@@ -39,14 +39,28 @@ def _stamp() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
 
 
+LOCK_WAIT_S = 10.0     # how long a lock held by another program is waited for
+
+
 def _readable(path: str) -> bool:
+    """False only for a file that is damaged: not a database, or malformed.
+
+    A database another program holds locked (a SQLite browser, a backup, a
+    notebook) is busy, not broken: it must never be set aside for that.
+    """
     try:
-        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=LOCK_WAIT_S)
         try:
             rows = con.execute("PRAGMA quick_check").fetchall()
         finally:
             con.close()
         return rows == [("ok",)]
+    except sqlite3.OperationalError as e:
+        text = str(e).lower()
+        if "locked" in text or "busy" in text:
+            logger.warning(f"{path} is locked by another program; leaving it as it is")
+            return True
+        return False
     except sqlite3.DatabaseError:
         return False
 

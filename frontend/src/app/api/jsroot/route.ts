@@ -10,7 +10,7 @@ import path from "path"
  * sign-on, every histogram, waveform and PSD plot stopped drawing at once. The
  * version WebDAQ uses is pinned in package.json (npm package "jsroot") and
  * served from node_modules, so the plots work offline and do not change under
- * our feet. lib/load-jsroot.ts falls back to root.cern only if this fails.
+ * our feet. There is no outside fallback: if this fails, the plots say so.
  */
 
 const FILE = path.join(process.cwd(), "node_modules", "jsroot", "build", "jsroot.js")

@@ -713,11 +713,17 @@ class DAQManager:
                 # coincidence gates and time offsets the online spectra used.
                 # RUReader stores these files in the ROOT file too.
                 import shutil
+                from .caen_acquisition import ensure_recording_bits
+                from .sis3316_acquisition import is_sis3316
                 files = []
                 for board in self.daq_state['boards']:
+                    # Fixed before the copy, so the run keeps the settings it ran with.
+                    if not is_sis3316(board):
+                        ensure_recording_bits(board, self.logger)
                     files.append(f"conf/{board['name']}_{board['id']}.json")
                     files.append(f"calib/{board['name']}_{board['id']}.cal")
                 files.append("conf/coincidences.json")
+                files.append("conf/histograms.json")   # ROIs, ranges, rebinning
                 for path in files:
                     if os.path.exists(path):
                         try:
@@ -830,6 +836,7 @@ class DAQManager:
             from .caen_acquisition import get_caen_acquisition
             acquisition = get_caen_acquisition(self.test_flag)
             if acquisition.write_register(str(board_id), int(address), int(value)):
+                self._log_register_change(board, int(address), int(value))
                 return {'written': True, 'reason': '', 'via': 'run'}
             return {'written': False, 'via': 'run', 'reason': (
                 "The running acquisition did not accept the write. The configuration has "
@@ -840,6 +847,26 @@ class DAQManager:
         return {'written': False, 'via': 'probe', 'reason': (
             "The board did not accept the write — it may be disconnected. The configuration "
             "has been saved and applies at the next run.")}
+
+    REGISTER_HISTORY_FILE = "register_history.jsonl"
+
+    def _log_register_change(self, board: Dict[str, Any], address: int, value: int) -> None:
+        """A register written during a saved run is logged in the run directory,
+        with its time: the settings copied at the start no longer tell the whole
+        story of the data (as calib_history.jsonl does for calibrations)."""
+        if not self.daq_state.get('save'):
+            return
+        run_dir = f"data/run{self.daq_state.get('run')}"
+        if not os.path.isdir(run_dir):
+            return
+        entry = {"time": datetime.now().isoformat(timespec="seconds"),
+                 "board": str(board.get('id')), "board_name": str(board.get('name')),
+                 "address": f"0x{address:04X}", "value": f"0x{value:X}"}
+        try:
+            with open(os.path.join(run_dir, self.REGISTER_HISTORY_FILE), "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except OSError as e:
+            self.logger.warning(f"Could not log the register change in {run_dir}: {e}")
 
     def release_digitizers(self) -> None:
         """Close the persistent probe connections so caendaq can open the boards

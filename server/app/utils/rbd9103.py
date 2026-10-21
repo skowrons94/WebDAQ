@@ -68,6 +68,13 @@ def list_serial_ports() -> list:
         return []
 
 
+
+# The longest a beam-current reading is taken to hold for (s): beyond it the
+# monitor is considered silent and that time is not counted as charge. The
+# same limit applies to current.txt on the Data page (run_data.py) and in
+# RUReader, so the three charges agree.
+MAX_GAP_S = 10.0
+
 class RBD9103Controller:
     """
     Controller class for RBD 9103 picoammeter devices.
@@ -142,6 +149,7 @@ class RBD9103Controller:
         self.total_accumulated_charge = 0.0  # lifetime; always integrates
         self.previous_time = 0.0
         self.previous_value = None   # last reading integrated; None right after a reset
+        self.uncovered_s = 0.0       # run time with no reading within MAX_GAP_S
         self.accumulating = False            # True while a run is in progress
 
         # Device settings
@@ -896,17 +904,22 @@ class RBD9103Controller:
         current_data = current
         current_time = now if now is not None else datetime.now().timestamp()
 
-        # Handle very small currents as zero
-        if current_data < 1e-9:
-            current_data = 0
-
         # Initialize previous_time if this is the first call
         if self.previous_time == 0:
             self.previous_time = current_time
 
         time_diff = current_time - self.previous_time
         previous = current_data if self.previous_value is None else self.previous_value
-        charge_increment = 0.5 * (previous + current_data) * time_diff   # µA × s = µC
+        # A reading stands for at most MAX_GAP_S beyond itself. A longer silence
+        # (the monitor dropped out) is not filled with the last current: it is
+        # counted as time without a measurement instead. The current keeps its
+        # sign, as the Data page and RUReader integrate it.
+        if time_diff > MAX_GAP_S:
+            charge_increment = 0.0
+            if self.accumulating:
+                self.uncovered_s += time_diff
+        else:
+            charge_increment = 0.5 * (previous + current_data) * time_diff   # µA × s = µC
 
         # The lifetime total always integrates: it says how much charge the
         # target has taken, in or out of a run.
@@ -931,6 +944,7 @@ class RBD9103Controller:
             self.accumulated_charge = 0.0
             self.previous_time = datetime.now().timestamp()
             self.previous_value = None
+            self.uncovered_s = 0.0
 
     def get_accumulated_charge(self) -> float:
         """

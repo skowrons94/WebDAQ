@@ -29,13 +29,18 @@ logger = logging.getLogger(__name__)
 
 
 def calibrate_x_axis(histo: Any, offset: float, slope: float) -> None:
-    """Map a histogram's x axis through energy = offset + slope * x.
+    """Map a histogram's x axis through energy = offset + slope * value.
+
+    A bin from x to x + w holds the integer values x .. x + w - 1, so its
+    centre sits half a channel above their mean: the limits move by that half
+    channel too, and each bin lands at the energy its values have in the run
+    files (E = offset + slope * Energy, as the calibration was fitted).
 
     Works on the axis limits, so it holds for any binning: the 1-D spectra
     (0..nbins) and the PSD TH2 (0..QLONG_MAX in fewer bins) alike.
     """
     ax = histo.GetXaxis()
-    ax.SetLimits(offset + slope * ax.GetXmin(), offset + slope * ax.GetXmax())
+    ax.SetLimits(offset + slope * (ax.GetXmin() - 0.5), offset + slope * (ax.GetXmax() - 0.5))
 
 class SpyManager:
     """

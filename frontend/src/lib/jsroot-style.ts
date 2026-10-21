@@ -14,13 +14,18 @@
  * It is applied at draw time, by wrapping JSROOT.draw/redraw once JSROOT is
  * loaded, so every page gets it without each component styling its objects:
  * the histograms, waveforms, PSD, tuner, SIS3316, coincidence and calibration
- * plots alike. Colours are left as each page sets them.
+ * plots alike. Colours are left as each page sets them, except that every
+ * plot is drawn on the card's own background (no white or black box), and the
+ * series colour and 2D palette are compensated for JSROOT's dark mode — see
+ * seriesOption() and plotHex().
  */
 
 const FONT = 43              // Helvetica-like, size in pixels (precision 3)
 const LABEL_PX = 11
 const TITLE_PX = 12
-const MARGIN_PX = { left: 58, right: 14, top: 12, bottom: 40, rightWithPalette: 72 }
+// Right and top leave room for the "×10³" JSROOT writes past the end of an
+// axis whose numbers it shortens: at 14 and 12 px it was cut off.
+const MARGIN_PX = { left: 58, right: 30, top: 22, bottom: 40, rightWithPalette: 72 }
 
 type AnyObj = Record<string, any>
 
@@ -38,7 +43,9 @@ function styleAxis(axis: AnyObj | undefined, kind: 'x' | 'y' | 'z', frame: Frame
   axis.fTitleSize = TITLE_PX
   axis.fTickLength = kind === 'x' ? TICK_PX / frame.h : TICK_PX / frame.w
   axis.fLabelOffset = 0.008
-  axis.fTitleOffset = kind === 'x' ? 1.25 : kind === 'y' ? 1.6 : 1.2
+  // A y title at 0 is placed by JSROOT just outside the widest number, so a
+  // "12000" no longer runs into it; a fixed offset only fitted short numbers.
+  axis.fTitleOffset = kind === 'x' ? 1.25 : kind === 'y' ? 0 : 1.2
   // As many labels as fit: about one per 70 px across, one per 35 px up.
   // Too many and JSROOT shrinks them all until they no longer read.
   const length = kind === 'x' ? frame.w : frame.h
@@ -95,8 +102,15 @@ function setStyleFor(el: Element | null, palette = false) {
   // dark mode, so this light grey becomes a dark one there.
   g.fGridColor = 18
   // No background of its own: the card's colour shows through, in both themes.
-  g.fFrameFillStyle = 0
+  // Style 4000 is ROOT's fully transparent fill. A frame with no fill at all
+  // is painted white by JSROOT (black once dark mode inverts it); a colour
+  // index other than 0 makes it take the transparent one instead.
+  g.fFrameFillColor = 1
+  g.fFrameFillStyle = 4000
   g.fPadColor = 0
+  // The 2D palette, pre-inverted in dark mode so it shows as itself.
+  const J = (window as any).JSROOT
+  if (J?.settings) J.settings.Palette = J.settings.DarkMode ? invertedPalette(J) : PALETTE
 }
 
 function paletteIn(canvas: AnyObj): boolean {
@@ -112,11 +126,12 @@ function styleCanvas(canvas: AnyObj, el: Element | null) {
   canvas.fRightMargin = (palette ? MARGIN_PX.rightWithPalette : MARGIN_PX.right) / w
   canvas.fTopMargin = MARGIN_PX.top / h
   canvas.fBottomMargin = MARGIN_PX.bottom / h
-  // On a log axis the grid would follow every minor tick: horizontal lines only.
-  canvas.fGridx = canvas.fLogx ? 0 : 1
+  // On a log axis only the decades get a grid line (see drawGrids below).
+  canvas.fGridx = 1
   canvas.fGridy = 1
-  canvas.fFillStyle = 0
-  canvas.fFrameFillStyle = 0
+  canvas.fFillStyle = 4000
+  canvas.fFrameFillColor = 1
+  canvas.fFrameFillStyle = 4000
   canvas.fTickx = 0
   canvas.fTicky = 0
   canvas.fFrameLineWidth = 1
@@ -132,6 +147,140 @@ function styleForDraw(dom: any, obj: AnyObj) {
     setStyleFor(el)
     styleObject(obj, frameOf(el))
   }
+}
+
+// ───────────────────────────────────────────── colours under dark mode
+
+const PALETTE = 57                     // kBird
+const INVERTED_PALETTE = 1057          // our own id for kBird, inverted
+let invertedReady = false
+
+/** JSROOT's dark mode inverts the whole SVG: a colour inverted first shows as itself. */
+function invertHex(hex: string): string {
+  const v = parseInt(hex, 16)
+  return (0xffffff ^ v).toString(16).padStart(6, '0')
+}
+
+function invertCss(c: string): string {
+  const hex = /^#([0-9a-f]{6})$/i.exec(c)
+  if (hex) return `#${invertHex(hex[1])}`
+  const rgb = /^rgba?\((\d+),\s*(\d+),\s*(\d+)/i.exec(c)
+  if (rgb) return `rgb(${255 - Number(rgb[1])},${255 - Number(rgb[2])},${255 - Number(rgb[3])})`
+  return c
+}
+
+function invertedPalette(J: any): number {
+  if (!invertedReady) {
+    try {
+      const colors: string[] | undefined = J.getColorPalette?.(PALETTE)?.palette
+      if (colors?.length && J.setColorPalette?.(INVERTED_PALETTE, colors.map(invertCss))) invertedReady = true
+    } catch { /* keep the plain palette */ }
+  }
+  return invertedReady ? INVERTED_PALETTE : PALETTE
+}
+
+function darkMode(): boolean {
+  return typeof window !== 'undefined' && Boolean((window as any).JSROOT?.settings?.DarkMode)
+}
+
+/**
+ * A colour as JSROOT should be given it ("rrggbb", for draw options such as
+ * line_rrggbb) so that it shows as `hex` in both themes. Read DarkMode after
+ * it has been set for the drawing.
+ */
+export function plotHex(hex: string): string {
+  const h = hex.replace(/^#/, '').toLowerCase()
+  return darkMode() ? invertHex(h) : h
+}
+
+/** The theme's series colour (--chart-1) as "rrggbb", or null when unreadable. */
+function seriesHex(): string | null {
+  if (typeof window === 'undefined') return null
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--chart-1').trim()
+  const m = v.match(/^([\d.]+)\s+([\d.]+)%\s+([\d.]+)%$/)
+  if (!m) return null
+  const h = Number(m[1]) / 360, sat = Number(m[2]) / 100, l = Number(m[3]) / 100
+  const f = (n: number) => {
+    const k = (n + h * 12) % 12
+    const a = sat * Math.min(l, 1 - l)
+    return Math.round((l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255).toString(16).padStart(2, '0')
+  }
+  return `${f(0)}${f(8)}${f(4)}`
+}
+
+/**
+ * The draw option of a spectrum: `base` in the theme's series colour, a
+ * translucent fill under a solid line — the same blue on every page and in
+ * both themes. Call after JSROOT.settings.DarkMode is set for the drawing.
+ */
+export function seriesOption(base = 'hist nostat', fill = true): string {
+  const s = seriesHex()
+  if (!s) return base
+  const c = plotHex(s)
+  return fill ? `${base} fill_${c}55 line_${c}` : `${base} line_${c}`
+}
+
+// ───────────────────────────────────────────── after a drawing
+
+/**
+ * A plot JSROOT drew from a bare histogram (no TCanvas of ours) got a white
+ * canvas of its own: make it transparent too, now and for its redraws.
+ */
+function clearBackground(painter: any) {
+  const pp = painter?.getPadPainter?.() ?? painter
+  const pad = pp?.getRootPad?.(true)
+  if (!pad || pad.fFillStyle === 4000) return
+  pad.fFillStyle = 4000
+  pad.fFrameFillColor = 1
+  pad.fFrameFillStyle = 4000
+  try {
+    pp.getCanvSvg?.()?.selectAll?.('.canvas_fillrect')?.style?.('fill', 'none')
+    const fp = pp.getFramePainter?.()
+    fp?.fillatt?.setOpacity?.(0)
+    fp?.getFrameSvg?.()?.select?.('.main_layer')?.select?.('path')?.style?.('fill', 'none')
+  } catch { /* looks only */ }
+}
+
+/**
+ * The frame draws a grid line at each major tick, and on a log axis spanning
+ * few decades JSROOT makes every 2…9 × 10ⁿ a major tick: a fence of lines.
+ * Only the decades keep theirs. The frame painter's class is not exported, so
+ * its drawGrids is wrapped on the first frame seen.
+ */
+let gridsPatched = false
+function patchGrids(painter: any) {
+  if (gridsPatched) return
+  const fp = painter?.getFramePainter?.()
+  const proto = fp && Object.getPrototypeOf(fp)
+  if (!proto || typeof proto.drawGrids !== 'function') return
+  gridsPatched = true
+  const original = proto.drawGrids
+  proto.drawGrids = function (this: any, ...args: unknown[]) {
+    const saved: [any, number[]][] = []
+    for (const handle of [this.x_handle, this.y_handle]) {
+      if (!handle?.log || !Array.isArray(handle.ticks) || typeof handle.func?.invert !== 'function') continue
+      saved.push([handle, handle.ticks])
+      handle.ticks = handle.ticks.filter((pos: number) => {
+        const decade = Math.log10(Number(handle.func.invert(pos)))
+        return Number.isFinite(decade) && Math.abs(decade - Math.round(decade)) < 0.02
+      })
+    }
+    try {
+      return original.apply(this, args)
+    } finally {
+      for (const [handle, ticks] of saved) handle.ticks = ticks
+    }
+  }
+  // The frame just drawn still has the fence.
+  try { fp.drawGrids(true) } catch { /* next redraw */ }
+}
+
+function afterDraw(painter: any) {
+  try {
+    patchGrids(painter)
+    clearBackground(painter)
+  } catch { /* never stop a plot over its looks */ }
+  return painter
 }
 
 let installed = false
@@ -168,7 +317,8 @@ export function installPlotStyle(J: any) {
     if (typeof original !== 'function') continue
     J[name] = function (dom: any, obj: any, opt?: any) {
       try { styleForDraw(dom, obj) } catch { /* never stop a plot over its looks */ }
-      return original.call(this, dom, obj, opt)
+      const result = original.call(this, dom, obj, opt)
+      return result && typeof result.then === 'function' ? result.then(afterDraw) : result
     }
   }
 }

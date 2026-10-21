@@ -22,7 +22,7 @@ import {
 } from "@/lib/api"
 import { Sparkline } from "@/components/stats/sparkline"
 import {
-  rateUnit, byteRateUnit, maxMagnitude, formatTick, formatValue,
+  rateUnit, byteRateUnit, maxMagnitude, formatValue,
   CHART_MARGIN, yAxisLabel, xAxisLabel,
 } from "@/lib/chart-format"
 
@@ -125,6 +125,23 @@ function formatRate(value: number, noun = ""): string {
   if (value >= 10) return `${value.toFixed(0)} ${tail}`
   if (value >= 0.1) return `${value.toFixed(1)} ${tail}`
   return `${value === 0 ? "0" : value.toPrecision(2)} ${tail}`
+}
+
+/**
+ * Round y ticks from 0 to just above the largest value: a step of 1, 2, 2.5 or
+ * 5 times a power of ten, four or five ticks. Recharts' own choice gave steps
+ * like 0.55 (0.550, 1.10, 1.65 …), which nobody reads at a glance.
+ */
+function niceTicks(max: number): number[] {
+  if (!Number.isFinite(max) || max <= 0) return [0, 1]
+  const raw = max / 4
+  const power = 10 ** Math.floor(Math.log10(raw))
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * power).find((s) => s >= raw) ?? 10 * power
+  // Rounded to the step's precision so 3 × 0.1 does not print 0.30000000000000004.
+  const digits = Math.max(0, -Math.floor(Math.log10(step)) + 1)
+  const n = Math.max(1, Math.ceil(max / step - 1e-9))
+  const ticks = Array.from({ length: n + 1 }, (_, i) => Number((i * step).toFixed(digits)))
+  return ticks
 }
 
 /** A data rate, scaled to whatever it actually is — including 0 B/s. */
@@ -282,8 +299,12 @@ export default function RunStats() {
   // board's rates under another's name whenever the two lists disagreed (a board
   // added or removed while the page was open).
   const boardRows = useMemo(() => configured.map((board, index) => {
-    const byId = rates.find((r) => String((r as BoardRate & { board_id?: unknown })
-      .board_id ?? '') === String(board.id))
+    // webdaq_id is the board's id here; board_id is a CAEN board's VME
+    // register id (older servers send only that).
+    const byId = rates.find((r) => {
+      const ids = r as BoardRate & { board_id?: unknown; webdaq_id?: unknown }
+      return String(ids.webdaq_id ?? ids.board_id ?? '') === String(board.id)
+    })
     const byName = rates.filter((r) => r.name === board.name)
     // Older servers do not report board_id: fall back to position, but only when
     // the two lists line up in length, and only when the name agrees.
@@ -380,7 +401,7 @@ export default function RunStats() {
 
   // Rates span orders of magnitude between a quiet detector and a hot one, so
   // choose /s, k/s or M/s from the data rather than printing six-digit ticks.
-  const { scale, unit } = useMemo(() => {
+  const { scale, unit, axisUnit, yTicks } = useMemo(() => {
     const values: number[] = []
     for (const point of history) {
       for (const ch of selected) {
@@ -388,9 +409,18 @@ export default function RunStats() {
         if (typeof v === "number") values.push(v)
       }
     }
-    // The noun goes into the unit, so the axis reads "k events/s".
+    // The prefix is said once: the axis reads "Events (k/s)", the tooltip
+    // "1.23 k events/s".
     const noun = METRICS.find((m) => m.key === metric)?.noun ?? ""
-    return rateUnit(maxMagnitude(values), `${noun} `)
+    const max = maxMagnitude(values)
+    const choice = rateUnit(max)
+    const prefix = choice.unit.replace("/s", "")
+    return {
+      scale: choice.scale,
+      unit: `${prefix ? `${prefix} ` : ""}${noun}/s`,
+      axisUnit: choice.unit,
+      yTicks: niceTicks(max * choice.scale),
+    }
   }, [history, selected, metric])
 
   // One key per plotted channel ("ch3"), scaled, so the chart and its legend do
@@ -406,8 +436,8 @@ export default function RunStats() {
 
   const yLabel = useMemo(() => {
     const base = METRICS.find((m) => m.key === metric)?.axis ?? ""
-    return `${base} (${unit})`
-  }, [metric, unit])
+    return `${base} (${axisUnit})`
+  }, [metric, axisUnit])
 
   // Totals for the selected board, as headline numbers rather than a chart.
   const totals = useMemo(() => {
@@ -708,7 +738,9 @@ export default function RunStats() {
                 />
                 <YAxis
                   tick={{ fontSize: 11 }}
-                  tickFormatter={formatTick}
+                  tickFormatter={(v: number) => String(v)}
+                  ticks={yTicks}
+                  domain={[0, yTicks[yTicks.length - 1]]}
                   width={64}
                   label={yAxisLabel(yLabel)}
                 />

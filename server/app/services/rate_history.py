@@ -25,10 +25,10 @@ MAX_POINTS = 2000
 METRICS = ("event_rate", "pileup_rate", "lost_rate", "satu_rate")
 
 
-def _board_key(board: Dict[str, Any], channel: Dict[str, Any]) -> str:
-    # The channel names its board where it can (CAEN: register id; SIS3316:
-    # WebDAQ id), as the Histograms page matches them.
-    return str(channel.get("board", board.get("board_id", "")))
+def _board_key(board: Dict[str, Any]) -> str:
+    # The WebDAQ id: a CAEN board's own board_id is its VME register id, which
+    # can be the same number as an SIS3316's WebDAQ id.
+    return str(board.get("webdaq_id", board.get("board_id", "")))
 
 
 class RateHistory:
@@ -66,6 +66,12 @@ class RateHistory:
         if thread is not None and thread.is_alive() and thread is not threading.current_thread():
             thread.join(timeout=3)
         self._thread = None
+        with self._lock:
+            # The last samples, averaged while waiting for their pair, are
+            # part of the run too.
+            if self._pending is not None:
+                self.points.append(self._pending)
+                self._pending, self._pending_n = None, 0
 
     def _loop(self) -> None:
         while not self._stop.wait(self._interval()):
@@ -77,7 +83,7 @@ class RateHistory:
     def _interval(self) -> float:
         acq = self._acq
         try:
-            ms = acq.stats_interval() if acq is not None else None
+            ms = float(acq.stats_interval()) if acq is not None else None
         except Exception:
             ms = None
         return max(0.2, (ms or 1000) / 1000.0)
@@ -92,13 +98,13 @@ class RateHistory:
             return
         point: Dict[str, Any] = {"t": round(time.time() - self.run_start, 3), "b": {}}
         for board in boards:
+            entry = point["b"].setdefault(_board_key(board), {"w": 0.0, "ch": {}})
             for ch in board.get("channels", []):
-                key = _board_key(board, ch)
-                entry = point["b"].setdefault(key, {"w": 0.0, "ch": {}})
                 entry["ch"][str(ch.get("channel"))] = [float(ch.get(m) or 0.0) for m in METRICS]
-            key = str(board.get("board_id", ""))
-            point["b"].setdefault(key, {"w": 0.0, "ch": {}})["w"] = float(board.get("write_rate") or 0.0)
+            entry["w"] = float(board.get("write_rate") or 0.0)
         with self._lock:
+            # The statistics cadence can be changed during the run.
+            self.step_s = self._interval() * self._stride
             self._add(point)
 
     def _add(self, point: Dict[str, Any]) -> None:

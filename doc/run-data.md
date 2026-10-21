@@ -18,10 +18,12 @@ fills spectra and publishes rates, it just writes nothing.
 |---|---|---|
 | `run_<N>_0000.caendat` | during | The data. One unified binary stream for every board, with the same header layout the XDAQ-era files had, so the same converter reads old and new runs. |
 | `run_<N>_0001.caendat`, … | during | The next parts, when a size limit is set. The header is written once, in the first file. |
-| `<model>_<id>.json` | at start | The board's complete register dump, copied out of `conf/`. This is what makes the run reproducible: thresholds, gates, trapezoid parameters, start mode, as they were. |
+| `<model>_<id>.json` | at start | The board's complete register dump, copied out of `conf/` (with time stamp and energy recording switched on if a dump had them off). This is what makes the run reproducible: thresholds, gates, trapezoid parameters, start mode, as they were. |
 | `<model>_<id>.cal` | at start | The board's energy calibration (offset and slope per channel), copied out of `calib/`. |
 | `calib_history.jsonl` | on change | One line per calibration changed during the run: time, board, channel, new and previous coefficients, and the peaks it came from. |
 | `coincidences.json` | at start | The coincidence gates and per-channel time offsets the online spectra used. |
+| `histograms.json` | at start | The histogram ranges, rebinning and regions of interest in force. |
+| `register_history.jsonl` | on change | One line per register written to a board during the run (Tuner, online settings): time, board, address and value. |
 | `current.txt` | during | The beam current, one row per sample, with the time relative to the start of the log. The first two lines name the start time and the columns. |
 | `stats.csv` | during | The accelerator readings you selected on the Stats page, one row per sampling tick. |
 | `stats.csv.part1`, … | during | Earlier rows of the same run, kept aside when the statistics were restarted mid-run (see [Troubleshooting](troubleshooting.md)). |

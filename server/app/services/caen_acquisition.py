@@ -244,6 +244,32 @@ def ensure_recording_bits(board: Dict[str, Any], logger: logging.Logger) -> bool
         return False
 
 
+# DPP-PHA lost-trigger flag: raised once every N lost triggers, N chosen by
+# 0x1nA0 bits[17:16] (UM5678; see caendaq AggregateDecoder kPhaLostBit).
+_LOST_STEP = {0: 1024, 1: 128, 2: 8192}
+
+
+def _lost_trigger_steps(board: Dict[str, Any]) -> Dict[int, int]:
+    """Channel -> lost triggers per flag, from the board's register dump."""
+    out: Dict[int, int] = {}
+    try:
+        with open(f"conf/{board['name']}_{board['id']}.json") as f:
+            regs = json.load(f).get("registers", {})
+    except Exception:
+        return out
+    for reg in regs.values():
+        try:
+            address = int(str(reg.get("address")), 16)
+        except (TypeError, ValueError):
+            continue
+        if 0x1000 <= address < 0x2000 and address & 0xFF == 0xA0:
+            ch = (address - 0x1000) >> 8
+            step = _LOST_STEP.get((int(str(reg.get("value", "0")), 16) >> 16) & 0x3)
+            if step:
+                out[ch] = step
+    return out
+
+
 # A channel needs this many events before its energies are judged.
 ENERGY_CHECK_MIN_EVENTS = 100
 
@@ -565,17 +591,43 @@ class CaenAcquisition:
         try:
             if self.daq is not None:
                 boards = self.daq.stats()
+                caen = self._caen_boards
                 for index, board in enumerate(boards):
+                    # board_id is the VME register id (the 'bo_' of the metric
+                    # paths); webdaq_id is the board as the pages know it, and
+                    # cannot collide with an SIS3316's.
+                    if index < len(caen):
+                        board["webdaq_id"] = str(caen[index]["id"])
+                    self._scale_lost_rates(index, board)
                     self._add_energy_warnings(index, board)
                 out.extend(boards)
         except Exception as e:
             self.logger.debug(f"stats() failed: {e}")
         if self._sis_boards:
             try:
-                out.extend(self._sis().stats())
+                for board in self._sis().stats():
+                    board["webdaq_id"] = str(board.get("board_id", ""))
+                    out.append(board)
             except Exception as e:
                 self.logger.debug(f"SIS3316 stats() failed: {e}")
         return out
+
+    def _scale_lost_rates(self, index: int, board: Dict[str, Any]) -> None:
+        """The PHA "lost" flag is a scaler: the board raises it once every N lost
+        triggers, N set per channel by DPP Algorithm Control 2 (0x1nA0)
+        bits[17:16]. Rates of flags read as lost events would be N times low,
+        so they are scaled here; the flag rate itself stays as lost_flag_rate.
+        (Graphite receives caendaq's own, unscaled, figure.)"""
+        cfg = self._caen_boards[index] if index < len(self._caen_boards) else {}
+        if str(cfg.get("dpp", "")).upper() != "DPP-PHA":
+            return
+        per_channel = _lost_trigger_steps(cfg)
+        for ch in board.get("channels", []):
+            n = per_channel.get(int(ch.get("channel", -1)))
+            if n:
+                ch["lost_flag_rate"] = ch.get("lost_rate", 0.0)
+                ch["lost_rate"] = float(ch.get("lost_rate") or 0.0) * n
+                ch["lost_per_flag"] = n
 
     def _add_energy_warnings(self, index: int, board: Dict[str, Any]) -> None:
         """Flag channels whose energies are not usable, in their stats entry.

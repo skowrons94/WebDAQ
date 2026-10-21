@@ -41,6 +41,9 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { addRunMetadata, updateRunFlag, updateRunNotes, type AlertEvent } from "@/lib/api"
 import { alertCount } from "@/lib/run-alerts"
+import { formatCharge } from "@/lib/format-charge"
+import { useRunStatus } from "@/hooks/use-run-status"
+import { formatElapsed, useElapsed } from "@/components/run-status-indicator"
 import { useForm } from "react-hook-form"
 
 export type RunMetadata = {
@@ -193,6 +196,35 @@ const sortableHeader = (label: string) =>
         )
     }
 
+/** "1h 05m", "4m 09s", "12s". */
+function prettyDuration(seconds: number): string {
+    const h = Math.floor(seconds / 3600)
+    const m = Math.floor((seconds % 3600) / 60)
+    const s = seconds % 60
+    return h > 0
+        ? `${h}h ${m.toString().padStart(2, "0")}m`
+        : m > 0
+            ? `${m}m ${s.toString().padStart(2, "0")}s`
+            : `${s}s`
+}
+
+/** The run being taken has no end time yet: its duration is the live elapsed
+ *  time, the same clock as the header's. */
+function LiveDuration({ runNumber }: { runNumber: number }) {
+    const isRunning = useRunStatus((s) => s.isRunning)
+    const current = useRunStatus((s) => s.runNumber)
+    const startTime = useRunStatus((s) => s.startTime)
+    const live = isRunning && current === runNumber
+    const elapsed = useElapsed(live, startTime)
+    if (!live) return <div className="text-muted-foreground text-center">—</div>
+    return (
+        <div className="text-center text-sm tabular-nums" title="Still running">
+            <span className="font-mono">{formatElapsed(elapsed)}</span>
+            <span className="ml-1 text-xs text-muted-foreground">running</span>
+        </div>
+    )
+}
+
 /** Runs that started today, yesterday or in the last 7 days (local time). */
 export function startedWithin(start: string | null | undefined, range: string | undefined): boolean {
     if (!range || range === "all") return true
@@ -221,7 +253,7 @@ export const COLUMN_LABELS: Record<string, string> = {
     start_time: "Start time",
     end_time: "End time",
     duration: "Duration",
-    accumulated_charge: "Accumulated charge (µC)",
+    accumulated_charge: "Accumulated charge",
     target_name: "Run name",
     terminal_voltage: "Terminal voltage (kV)",
     probe_voltage: "Probe voltage (kV)",
@@ -312,29 +344,20 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
         cell: ({ row }) => {
             const start = row.original.start_time ? new Date(row.original.start_time) : null
             const end = row.original.end_time ? new Date(row.original.end_time) : null
+            if (start && !end) return <LiveDuration runNumber={row.original.run_number} />
             if (!start || !end) return <div className="text-muted-foreground text-center">—</div>
             const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000))
-            const h = Math.floor(seconds / 3600)
-            const m = Math.floor((seconds % 3600) / 60)
-            const s = seconds % 60
-            const pretty =
-                h > 0
-                    ? `${h}h ${m.toString().padStart(2, "0")}m`
-                    : m > 0
-                        ? `${m}m ${s.toString().padStart(2, "0")}s`
-                        : `${s}s`
-            return <div className="text-center text-sm tabular-nums">{pretty}</div>
+            return <div className="text-center text-sm tabular-nums">{prettyDuration(seconds)}</div>
         },
     },
     {
         accessorKey: "accumulated_charge",
         meta: { label: COLUMN_LABELS.accumulated_charge },
-        header: sortableHeader("Charge (µC)"),
+        header: sortableHeader("Charge"),
+        // The same µC / mC / C rule as the overview (lib/format-charge.ts).
         cell: ({ row }) => (
-            <div className="text-right tabular-nums text-sm">
-                {row.original.accumulated_charge != null
-                    ? Number(row.original.accumulated_charge).toFixed(2)
-                    : "—"}
+            <div className="whitespace-nowrap text-right tabular-nums text-sm">
+                {formatCharge(row.original.accumulated_charge)}
             </div>
         ),
     },
@@ -414,12 +437,15 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
 
             return (
                 <Select value={flag} onValueChange={handleFlagChange}>
-                    <SelectTrigger className={`h-8 w-auto min-w-[6.5rem] gap-2 ${flagClass}`} aria-label={`Quality flag of run ${row.original.run_number}`}>
+                    <SelectTrigger className={`h-8 w-auto min-w-[6.5rem] gap-2 ${flagClass}`}
+                                   aria-label={`Quality flag of run ${row.original.run_number}`}
+                                   title="Data quality, set by the shift: good, bad, or not judged yet">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="good" className="text-success">Good</SelectItem>
-                        <SelectItem value="unknown">Unknown</SelectItem>
+                        {/* Stored as "unknown": nobody has judged the run yet. */}
+                        <SelectItem value="unknown">Not flagged</SelectItem>
                         <SelectItem value="bad" className="text-destructive">Bad</SelectItem>
                     </SelectContent>
                 </Select>
@@ -434,18 +460,34 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
         cell: ({ row }) => {
             const [notes, setNotes] = useState(row.original.notes || "")
             const [isEditing, setIsEditing] = useState(false)
+            // What happened to the last edit, said next to the note: leaving
+            // the box saves it, and that used to happen without a word.
+            const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle")
 
             useEffect(() => {
                 setNotes(row.original.notes || "")
             }, [row.original.notes])
 
+            useEffect(() => {
+                if (saveState !== "saved") return
+                const id = setTimeout(() => setSaveState("idle"), 4000)
+                return () => clearTimeout(id)
+            }, [saveState])
+
             const handleNotesSubmit = async () => {
+                if (notes === (row.original.notes || "")) {
+                    setIsEditing(false)
+                    return
+                }
+                setSaveState("saving")
                 try {
                     await updateRunNotes(row.original.run_number, notes)
                     setIsEditing(false)
+                    setSaveState("saved")
                     onDataUpdate?.()
                 } catch (error) {
                     console.error("Failed to update notes:", error)
+                    setSaveState("failed")
                 }
             }
 
@@ -462,15 +504,37 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
             return (
                 <div className="min-w-[28rem] w-full">
                     {isEditing ? (
-                        <Textarea
-                            value={notes}
-                            onChange={(e) => setNotes(e.target.value)}
-                            onBlur={handleNotesSubmit}
-                            onKeyDown={handleKeyDown}
-                            className="min-h-32 text-sm w-full resize-y"
-                            placeholder="Add notes (Ctrl/⌘+Enter to save, Esc to cancel)"
-                            autoFocus
-                        />
+                        <div className="grid gap-2">
+                            <Textarea
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                onBlur={handleNotesSubmit}
+                                onKeyDown={handleKeyDown}
+                                // Clear of the phone's run bar and keyboard when it scrolls into view.
+                                className="min-h-32 scroll-mb-32 text-sm w-full resize-y"
+                                placeholder="Add notes"
+                                autoFocus
+                            />
+                            <div className="flex flex-wrap items-center gap-2">
+                                {/* onMouseDown keeps the focus in the box, so the
+                                    click is not first taken as "leave and save". */}
+                                <Button type="button" size="sm" onMouseDown={(e) => e.preventDefault()}
+                                        onClick={handleNotesSubmit} disabled={saveState === "saving"}>
+                                    {saveState === "saving" ? "Saving…" : "Save"}
+                                </Button>
+                                <Button type="button" size="sm" variant="ghost" onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => { setNotes(row.original.notes || ""); setIsEditing(false) }}>
+                                    Cancel
+                                </Button>
+                                {/* Only where there is a keyboard to press it on. */}
+                                <span className="hidden text-xs text-muted-foreground [@media(pointer:fine)]:inline">
+                                    Ctrl/⌘+Enter saves, Esc cancels
+                                </span>
+                                {saveState === "failed" && (
+                                    <span className="text-xs text-destructive" role="alert">Not saved: the server did not answer.</span>
+                                )}
+                            </div>
+                        </div>
                     ) : (
                         <div
                             className="cursor-pointer rounded p-2 min-h-12 text-sm hover:bg-muted/50 whitespace-pre-wrap break-words"
@@ -479,8 +543,11 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
                         >
                             {notes || (
                                 <span className="text-muted-foreground italic">
-                                    Click to add notes…
+                                    Tap to add notes…
                                 </span>
+                            )}
+                            {saveState === "saved" && (
+                                <span className="ml-2 text-xs not-italic text-success" role="status">Saved</span>
                             )}
                         </div>
                     )}

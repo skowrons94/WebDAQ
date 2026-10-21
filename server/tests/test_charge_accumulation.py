@@ -273,6 +273,50 @@ class LiveAndFileChargeAgreeTests(unittest.TestCase):
         self.assertAlmostEqual(r["channels"][0]["charge_uC"], 2.0 + 3.0)
         self.assertEqual(r["span"], "readings")
 
+    def test_a_silent_monitor_is_not_filled_in(self):
+        """10 s at 100 uA, then the monitor drops out and the run goes on for an
+        hour: the charge is the 1000 uC measured, not 360 000 uC, live and in
+        the file alike, and the silent time is reported."""
+        from unittest import mock
+        from app.services.run_data import integrate_current
+        from app.utils import rbd9103
+        ctrl = rbd9103.RBD9103Controller()
+        t0 = 2_000_000.0
+        readings = [(float(t), 100.0) for t in range(0, 11)]
+        clock = mock.Mock()
+        clock.now.return_value.timestamp.return_value = t0
+        with mock.patch.object(rbd9103, "datetime", clock):
+            ctrl.reset_accumulated_charge()
+            ctrl.set_accumulating(True)
+            for t, v in readings:
+                ctrl.update_accumulated_charge(now=t0 + t, current=v)
+            clock.now.return_value.timestamp.return_value = t0 + 3600
+            ctrl.set_accumulating(False)
+        self.assertAlmostEqual(ctrl.get_accumulated_charge(), 1000.0, places=6)
+        self.assertAlmostEqual(ctrl.uncovered_s, 3590.0, places=6)
+        r = integrate_current([t for t, _ in readings], [[v] for _, v in readings], ["I"],
+                              window=(0.0, 3600.0))
+        self.assertAlmostEqual(r["channels"][0]["charge_uC"], 1000.0, places=6)
+        self.assertAlmostEqual(r["uncovered_s"], 3590.0, places=6)
+
+    def test_negative_current_keeps_its_sign_live_and_offline(self):
+        from unittest import mock
+        from app.services.run_data import integrate_current
+        from app.utils import rbd9103
+        ctrl = rbd9103.RBD9103Controller()
+        clock = mock.Mock()
+        clock.now.return_value.timestamp.return_value = 100.0
+        with mock.patch.object(rbd9103, "datetime", clock):
+            ctrl.reset_accumulated_charge()
+            ctrl.set_accumulating(True)
+            for t in (0.5, 1.5, 2.5):
+                ctrl.update_accumulated_charge(now=100.0 + t, current=-2.0)
+            clock.now.return_value.timestamp.return_value = 103.0
+            ctrl.set_accumulating(False)
+        offline = integrate_current([0.5, 1.5, 2.5], [[-2.0]] * 3, ["I"], window=(0.0, 3.0))
+        self.assertAlmostEqual(ctrl.get_accumulated_charge(), -6.0, places=9)
+        self.assertAlmostEqual(offline["channels"][0]["charge_uC"], -6.0, places=9)
+
     def test_readings_outside_the_run_count_only_inside_it(self):
         from app.services.run_data import integrate_current
         # A line from 0 uA at t=0 to 10 uA at t=10, run from 5 to 10: 5*(5+10)/2.

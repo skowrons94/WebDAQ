@@ -9,24 +9,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import { loadJSROOT } from '@/lib/load-jsroot'
+import { seriesOption } from '@/lib/jsroot-style'
 
 const REFRESH_MS = 2500
-
-/** The theme's series colour, as JSROOT wants it (rrggbb). */
-function seriesHex(): string | null {
-  if (typeof window === 'undefined') return null
-  const v = getComputedStyle(document.documentElement).getPropertyValue('--chart-1').trim()
-  const m = v.match(/^([\d.]+)\s+([\d.]+)%\s+([\d.]+)%$/)
-  if (!m) return null
-  const h = Number(m[1]) / 360, sat = Number(m[2]) / 100, l = Number(m[3]) / 100
-  const f = (n: number) => {
-    const k = (n + h * 12) % 12
-    const a = sat * Math.min(l, 1 - l)
-    return Math.round((l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))) * 255).toString(16).padStart(2, '0')
-  }
-  return `${f(0)}${f(8)}${f(4)}`
-}
-
 
 /**
  * One live ROOT histogram. Redrawn in place on every refresh, so a zoom the
@@ -89,8 +74,8 @@ export function RootPlot({ fetch, deps, logx = false, logy = false, twoD = false
       const canvas = JSROOT.create('TCanvas')
       canvas.fLogx = logx ? 1 : 0
       canvas.fLogy = logy ? 1 : 0
-      const series = seriesHex()
-      const opt = twoD ? 'colz' : (series ? `hist nostat fill_${series}55 line_${series}` : 'hist nostat')
+      // The same series colour as the histogram cards, in both themes.
+      const opt = twoD ? 'colz' : seriesOption()
       canvas.fPrimitives.Add(obj, opt)
       canvasRef.current = canvas
       painterRef.current = await JSROOT.redraw(el, canvas)

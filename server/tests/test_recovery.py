@@ -127,6 +127,23 @@ class WhatIsOfferedTests(RecoveryTestCase):
         self.assertTrue(self.action('current')['enabled'])
         self.assertTrue(self.action('stats')['enabled'])
 
+    def test_restarting_statistics_is_offered_only_for_a_saving_run(self):
+        # Between runs, or in a run that saves nothing, there is no stats.csv to
+        # restart: the button is greyed out with the reason, not left to fail.
+        stats = self.action('stats')
+        self.assertTrue(stats['ok'])
+        self.assertFalse(stats['enabled'])
+        self.assertIn('saves data', stats['blocked_reason'])
+
+        self.daq.is_running.return_value = True
+        self.daq.get_save_data.return_value = False
+        stats = self.action('stats')
+        self.assertFalse(stats['enabled'])
+        self.assertIn('saves no data', stats['blocked_reason'])
+
+        self.daq.get_save_data.return_value = True
+        self.assertTrue(self.action('stats')['enabled'])
+
 
 class RunningThemTests(RecoveryTestCase):
     def test_reopening_the_boards_reports_how_many_came_back(self):

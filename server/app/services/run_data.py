@@ -270,6 +270,11 @@ def _parse_metric_header(body: str) -> Dict[str, str]:
     return fields
 
 
+# The longest a current reading is taken to hold for (s), as in the live
+# accumulators (utils/rbd9103.py, tetramm.py) and RUReader.
+MAX_GAP_S = 10.0
+
+
 def integrate_current(
     times: List[float], values: List[List[float]], channel_names: List[str],
     window: Optional[Tuple[float, float]] = None,
@@ -299,6 +304,9 @@ def integrate_current(
 
     n_channels = min(len(v) for v in values)
     charges = [0.0] * n_channels
+    # Time inside the window with no reading within MAX_GAP_S: the monitor was
+    # silent, and that time is left out of the charge rather than filled.
+    uncovered = 0.0
 
     for i in range(1, len(times)):
         t0, t1 = times[i - 1], times[i]
@@ -309,17 +317,26 @@ def integrate_current(
         s0, s1 = max(t0, lo), min(t1, hi)
         if s1 <= s0:
             continue
+        if dt > MAX_GAP_S:
+            uncovered += s1 - s0
+            continue
         for c in range(n_channels):
             v0, v1 = values[i - 1][c], values[i][c]
             slope = (v1 - v0) / dt
             charges[c] += 0.5 * ((v0 + slope * (s0 - t0)) + (v0 + slope * (s1 - t0))) * (s1 - s0)
 
-    # Held readings: from the start to the first, from the last to the stop.
-    for c in range(n_channels):
-        if lo < times[0]:
-            charges[c] += values[0][c] * (min(times[0], hi) - lo)
-        if hi > times[-1]:
-            charges[c] += values[-1][c] * (hi - max(times[-1], lo))
+    # Held readings: from the start to the first, from the last to the stop,
+    # each for at most MAX_GAP_S.
+    head = min(times[0], hi) - lo if lo < times[0] else 0.0
+    tail = hi - max(times[-1], lo) if hi > times[-1] else 0.0
+    for edge, gap in (("head", head), ("tail", tail)):
+        if gap <= 0:
+            continue
+        if gap > MAX_GAP_S:
+            uncovered += gap
+            continue
+        for c in range(n_channels):
+            charges[c] += (values[0][c] if edge == "head" else values[-1][c]) * gap
 
     duration = hi - lo
     channels = []
@@ -334,7 +351,8 @@ def integrate_current(
         })
 
     return {"channels": channels, "duration_s": duration, "method": "trapezoidal",
-            "span": "run" if window is not None else "readings"}
+            "span": "run" if window is not None else "readings",
+            "uncovered_s": uncovered}
 
 
 def run_window(run_number: int, file_start: Optional[str]) -> Optional[Tuple[float, float]]:

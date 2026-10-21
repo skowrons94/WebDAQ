@@ -106,6 +106,21 @@ class DatabaseRepairTests(unittest.TestCase):
         self._ensure()
         self._assert_current()
 
+    def test_a_locked_database_is_not_taken_for_a_broken_one(self):
+        """A SQLite browser or a backup holding the file must not get it set aside."""
+        from unittest import mock
+        from app.utils import db_repair
+        self._ensure()
+        holder = sqlite3.connect(self.db, timeout=0)
+        holder.execute("BEGIN EXCLUSIVE")
+        try:
+            with mock.patch.object(db_repair, "LOCK_WAIT_S", 0.2):
+                self.assertTrue(db_repair._readable(self.db))
+        finally:
+            holder.rollback()
+            holder.close()
+        self.assertEqual(sorted(os.listdir(self.tmp.name)), ["app.db"])
+
     def test_current_database_is_left_alone(self):
         self._ensure()
         out = self._ensure()

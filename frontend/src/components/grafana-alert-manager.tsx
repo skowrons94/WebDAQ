@@ -20,7 +20,7 @@ import {
   updateAlertThreshold,
   extractThreshold,
 } from '@/lib/grafana-api'
-import { getGrafanaSettings } from '@/lib/api'
+import { getGrafanaSettings, testGrafanaConnection } from '@/lib/api'
 import { useGrafanaAlertsStore } from '@/store/grafana-alerts-store'
 import { useRunBadge } from '@/hooks/use-run-badge'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -58,6 +58,14 @@ export default function GrafanaAlertManager() {
       if (isRefresh) setRefreshing(true)
       else setLoading(true)
       setError(null)
+      // Ask whether Grafana answers first: the test answers 200 either way,
+      // whereas listing an unreachable Grafana is a 502 that every browser
+      // logs as an error. The card below already says what is wrong.
+      const reach = await testGrafanaConnection()
+      if (!reach.success) {
+        setError(reach.message || 'Grafana did not answer.')
+        return
+      }
       const rules = await fetchAlertRules()
       setAlerts(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

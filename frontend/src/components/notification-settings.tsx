@@ -19,6 +19,7 @@ import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/components/ui/card'
 import { useToast } from '@/components/ui/use-toast'
+import { refreshAlertingHealth } from '@/hooks/use-alerting-health'
 import {
   addAlertRule, deleteAlertRule, getAlertRules, getNotificationTransports,
   setAlertWatcher, setNotificationSettings, setTelegramTransport, setZulipTransport,
@@ -101,6 +102,8 @@ export function NotificationSettings() {
       setBusy(key)
       await work()
       await refresh()
+      // The bell and the overview say when alerting is off: let them know now.
+      void refreshAlertingHealth()
       if (success) toast({ title: success })
     } catch (error: unknown) {
       const message = (error as { response?: { data?: { error?: string } } })

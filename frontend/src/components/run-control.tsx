@@ -33,6 +33,7 @@ const BeamControlPanel = dynamic(
   { ssr: false, loading: TabLoading },
 )
 import { RecentRuns } from '@/components/recent-runs'
+import { AlertingStatusStrip } from '@/components/alerting-status-strip'
 import { cn } from '@/lib/utils'
 
 /**
@@ -141,7 +142,8 @@ export function RunControl() {
     className?: string,
     style?: CSSProperties,
   ) => beamVisible && beamPlacement === placement ? (
-    <div style={style} className={cn('h-full min-h-0 min-w-0', className)}>
+    // Phones: right after the run controls, wherever it sits on a desktop.
+    <div style={style} className={cn('h-full min-h-0 min-w-0 max-md:order-2', className)}>
       <BeamControlPanel
         placement={beamPlacement}
         onPlacementChange={setBeamPlacement}
@@ -151,15 +153,21 @@ export function RunControl() {
 
   return (
     <div className="flex flex-col bg-background text-foreground">
+      {/* Phones (below md): the wrappers below are display: contents, so
+          their cards are ordered in this one column — what is needed to run
+          first (run controls, beam), the status summary next, history last.
+          From md up the desktop layout is unchanged. */}
       <div className="flex flex-1 flex-col gap-4 py-2 md:gap-6 md:p-2">
+          <AlertingStatusStrip />
+
           {beamSlot('top')}
 
           <div className={cn(
-            'grid items-start gap-4 md:gap-6',
+            'grid items-start gap-4 max-md:contents md:gap-6',
             beamPlacement === 'status' &&
               'xl:grid-cols-[minmax(0,3fr)_minmax(26rem,2fr)]',
           )}>
-            <div ref={statusPanelRef} className="min-w-0">
+            <div ref={statusPanelRef} className="min-w-0 max-md:order-3">
               <CardHolder
                 isRunning={isRunning}
                 timer={timer}
@@ -185,18 +193,17 @@ export function RunControl() {
           {beamSlot('below-status')}
 
           <div className={cn(
-            'grid items-stretch gap-4 md:gap-6',
+            'grid items-stretch gap-4 max-md:contents md:gap-6',
             beamPlacement === 'beside-controls' &&
               'xl:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]',
           )}>
             <div className={cn(
-              // Phones: run controls right after the status cards, before the
-              // beam chart. Tablet and desktop order unchanged.
-              'order-1 grid h-full gap-4 md:order-2 xl:order-1',
+              'grid h-full gap-4 max-md:contents md:order-2 xl:order-1',
               beamPlacement === 'beside-controls'
                 ? 'grid-rows-[auto_auto_1fr]'
                 : 'xl:grid-cols-[minmax(0,2fr)_minmax(22rem,1fr)] xl:items-start',
             )}>
+              <div className="min-w-0 max-md:order-1">
               <RunControlButtons
                 elapsed={timer}
                 saveData={saveData}
@@ -211,11 +218,15 @@ export function RunControl() {
                 onIsRunningChange={setIsRunning}
                 onRunNumberChange={setRunNumberState}
               />
+              </div>
 
               {/* Each recent run one click from its Logbook page, right under
                   the run controls (it was at the very bottom of the page). */}
-              <RecentRuns />
+              <div className="min-w-0 max-md:order-4">
+                <RecentRuns />
+              </div>
 
+              <div className="min-w-0 max-md:order-5">
               <DAQState
                 runNumber={runNumber}
                 saveData={saveData}
@@ -232,9 +243,10 @@ export function RunControl() {
                 onPortCurrentChange={setPortCurrent}
                 stretch={beamPlacement === 'beside-controls'}
               />
+              </div>
             </div>
 
-            {beamSlot('beside-controls', 'order-2 h-full md:order-1 xl:order-2')}
+            {beamSlot('beside-controls', 'h-full md:order-1 xl:order-2')}
           </div>
 
       </div>

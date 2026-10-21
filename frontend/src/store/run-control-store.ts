@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { tunerOwnsRun } from '@/lib/tuner-save';
 
 /**
  * The run state the whole app reads: header, run bar, dashboard, /alerts, the
@@ -23,10 +24,32 @@ export interface RunControlState {
   /** A Stop failed while the run still shows as going: Force reset is offered
    *  (dashboard Run control and the phone run bar). Cleared when it stops. */
   stopFailed: boolean;
+  /** The server's "Save to disk" flag; null until it has answered. */
+  saving: boolean | null;
+  /** A run that just stopped without saving. Its number was not used up and
+   *  the next run gets it again; the overview and the run bar say so. Known to
+   *  this browser only (it is seen stopping), cleared by a saving run. */
+  unsavedRun: number | null;
   setIsRunning: (isRunning: boolean) => void;
   setStartTime: (startTime: string | null) => void;
   setRunNumber: (runNumber: number | null) => void;
   update: (patch: Partial<Omit<RunControlState, 'setIsRunning' | 'setStartTime' | 'setRunNumber' | 'update'>>) => void;
+}
+
+type Patch = Partial<Omit<RunControlState, 'setIsRunning' | 'setStartTime' | 'setRunNumber' | 'update'>>;
+
+/** Notice a run ending unsaved, whichever path set the state (a Stop on this
+ *  page sets isRunning itself, before the poller sees anything). */
+function withUnsavedRun(s: RunControlState, patch: Patch): Patch {
+  const running = patch.isRunning ?? s.isRunning;
+  const saving = patch.saving ?? s.saving;
+  // A Tuner session never had a run number of its own: nothing to explain.
+  if (s.isRunning && !running && s.saving === false && s.runNumber !== null
+      && !tunerOwnsRun(s.startTime)) {
+    return { ...patch, unsavedRun: s.runNumber };
+  }
+  if (running && saving === true && s.unsavedRun !== null) return { ...patch, unsavedRun: null };
+  return patch;
 }
 
 const useRunControlStore = create<RunControlState>((set) => ({
@@ -38,10 +61,12 @@ const useRunControlStore = create<RunControlState>((set) => ({
   totalRate: null,
   unreachable: false,
   stopFailed: false,
-  setIsRunning: (isRunning) => set({ isRunning, known: true }),
+  saving: null,
+  unsavedRun: null,
+  setIsRunning: (isRunning) => set((s) => withUnsavedRun(s, { isRunning, known: true })),
   setStartTime: (startTime) => set({ startTime }),
   setRunNumber: (runNumber) => set({ runNumber }),
-  update: (patch) => set(patch),
+  update: (patch) => set((s) => withUnsavedRun(s, patch)),
 }));
 
 export default useRunControlStore;

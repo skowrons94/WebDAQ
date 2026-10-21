@@ -5,8 +5,9 @@ import {
   ArrowDownToLine,
   ArrowUpToLine,
   Columns2,
+  MoreHorizontal,
   PanelLeft,
-  PanelsTopLeft,
+  RefreshCw,
   Zap,
 } from 'lucide-react'
 
@@ -15,16 +16,22 @@ import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ConfirmAction } from '@/components/ui/confirm-action'
+import { useToast } from '@/components/ui/use-toast'
 import {
   getAccumulatedCharge,
   getDataCurrent,
   getTotalAccumulatedCharge,
+  resetTotalAccumulatedCharge,
 } from '@/lib/api'
+import { formatCharge } from '@/lib/format-charge'
 import { useRunStatus } from '@/hooks/use-run-status'
 import type { BeamPanelPlacement } from '@/store/visualization-settings-store'
 
@@ -34,13 +41,6 @@ const PLACEMENT_OPTIONS = [
   { value: 'status' as const, label: 'Next to system status', Icon: PanelLeft },
   { value: 'below-status' as const, label: 'Below system status', Icon: ArrowDownToLine },
 ]
-
-const formatCharge = (microCoulombs: number): string => {
-  const value = Number.isFinite(microCoulombs) ? microCoulombs : 0
-  if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)} C`
-  if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(2)} mC`
-  return `${value.toFixed(2)} µC`
-}
 
 interface BeamControlPanelProps {
   placement: BeamPanelPlacement
@@ -57,6 +57,21 @@ export function BeamControlPanel({
   const [runCharge, setRunCharge] = useState(0)
   const [totalCharge, setTotalCharge] = useState(0)
   const runStartCurrentRef = useRef<number | null>(null)
+  const { toast } = useToast()
+  // Reset total charge lives here, in this card's menu, beside the total it
+  // zeroes: it used to sit right under Stop run.
+  const [confirmReset, setConfirmReset] = useState(false)
+
+  const resetTotal = async () => {
+    try {
+      await resetTotalAccumulatedCharge()
+      setTotalCharge(0)
+      toast({ title: 'Total charge reset', description: 'The lifetime accumulated charge has been reset.' })
+    } catch (error) {
+      console.error('Failed to reset total accumulated charge:', error)
+      toast({ title: 'Error', description: 'Failed to reset total accumulated charge.', variant: 'destructive' })
+    }
+  }
 
   const updateBeamTelemetry = useCallback(async () => {
     try {
@@ -129,9 +144,8 @@ export function BeamControlPanel({
     <div className="flex items-center">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-2">
-            <PanelsTopLeft className="h-4 w-4" />
-            <span>Position</span>
+          <Button variant="outline" size="icon" aria-label="Beam control options" title="Options">
+            <MoreHorizontal className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
@@ -147,8 +161,31 @@ export function BeamControlPanel({
               </DropdownMenuRadioItem>
             ))}
           </DropdownMenuRadioGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Maintenance</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => setConfirmReset(true)} className="text-destructive focus:text-destructive">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Reset lifetime total…
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <ConfirmAction
+        open={confirmReset}
+        onOpenChange={setConfirmReset}
+        title="Reset the lifetime charge total?"
+        description={
+          <p>
+            The lifetime accumulated charge is set to zero and cannot be recovered.
+            The charge of the current run is not affected.
+          </p>
+        }
+        confirmLabel="Reset total charge"
+        onConfirm={resetTotal}
+      >
+        <p className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+          Total now: <span className="font-semibold tabular-nums">{formatCharge(totalCharge)}</span>
+        </p>
+      </ConfirmAction>
     </div>
   )
 

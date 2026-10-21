@@ -446,6 +446,10 @@ export interface CurrentData {
         duration_s: number
         method?: string
         note?: string
+        /** "run": from the run's start to its stop; "readings": first to last reading. */
+        span?: string
+        /** Time with no reading within 10 s: left out of the charge. */
+        uncovered_s?: number
     } | null
 }
 

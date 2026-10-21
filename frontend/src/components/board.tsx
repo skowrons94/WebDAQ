@@ -80,6 +80,16 @@ export function Board() {
     try {
       const response = await getBoardConfiguration()
       setBoards(response.data)
+      // The form starts on the next free ID rather than one already in use;
+      // an ID the operator typed (or a scan suggested) is left alone unless
+      // it is taken.
+      const list: ConfiguredBoard[] = Array.isArray(response.data) ? response.data : []
+      const taken = new Set(list.map((b) => String(b.id)))
+      if (taken.has(String(form.getValues('id')))) {
+        let next = 0
+        while (taken.has(String(next))) next++
+        form.setValue('id', String(next))
+      }
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
       toast({
@@ -93,9 +103,10 @@ export function Board() {
   async function onSubmit(values: BoardData) {
     try {
       await addBoard(values)
+      // Reset first, so the re-read below moves the ID on to the next free one.
+      form.reset()
       await fetchBoardConfiguration()
       fetchConnectivity()
-      form.reset()
       toast({
         title: "Success",
         description: "Board added successfully.",

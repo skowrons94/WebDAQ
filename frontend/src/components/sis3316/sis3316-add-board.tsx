@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -30,6 +30,10 @@ export function Sis3316AddBoard({ existingIds, disabled, onAdded }: Props) {
   const { toast } = useToast()
   const nextId = String(existingIds.length ? Math.max(...existingIds.map(Number)) + 1 : 0)
   const [id, setId] = useState(nextId)
+  // The board list arrives after the first render (and changes when a board
+  // is added): an ID that is now taken moves on to the next free one.
+  const taken = existingIds.includes(id)
+  useEffect(() => { if (taken) setId(nextId) }, [taken, nextId])
   const [host, setHost] = useState("192.168.1.100")
   const [probing, setProbing] = useState(false)
   const [adding, setAdding] = useState(false)

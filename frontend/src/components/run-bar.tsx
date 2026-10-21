@@ -46,12 +46,29 @@ export function RunBar() {
   const router = useRouter()
   const pathname = usePathname()
   const setDashboardTab = useDashboardTabStore((s) => s.setTab)
-  const { known, isRunning, startTime, runNumber, boardError, totalRate, unreachable, stopFailed } = useRunStatus()
+  const { known, isRunning, startTime, runNumber, boardError, totalRate, unreachable, stopFailed, saving, unsavedRun } = useRunStatus()
   const elapsed = useElapsed(isRunning, startTime)
   const currentEnabled = useVisualizationStore((s) => s.settings.currentEnabled !== false)
   const [beam, setBeam] = useState<number | null>(null)
   const [stopping, setStopping] = useState(false)
   const [savingNow, setSavingNow] = useState<boolean | null>(null)
+  // While a text field has the focus (a note, a run name) the on-screen
+  // keyboard is up and this bar would sit on top of what is being typed:
+  // step aside until the field is left.
+  const [typing, setTyping] = useState(false)
+  useEffect(() => {
+    const isField = (el: EventTarget | null) => el instanceof HTMLElement
+      && (el.tagName === 'TEXTAREA' || el.isContentEditable
+        || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'range'].includes((el as HTMLInputElement).type)))
+    const onIn = (e: FocusEvent) => { if (isField(e.target)) setTyping(true) }
+    const onOut = () => setTimeout(() => setTyping(isField(document.activeElement)), 0)
+    document.addEventListener('focusin', onIn)
+    document.addEventListener('focusout', onOut)
+    return () => {
+      document.removeEventListener('focusin', onIn)
+      document.removeEventListener('focusout', onOut)
+    }
+  }, [])
 
   useEffect(() => {
     if (!currentEnabled) { setBeam(null); return }
@@ -119,7 +136,8 @@ export function RunBar() {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-3 pt-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm pb-[max(0.5rem,env(safe-area-inset-bottom))]"
+      className={`fixed inset-x-0 bottom-0 z-40 transition-transform ${typing ? 'translate-y-full' : ''} border-t bg-background/95 px-3 pt-2 shadow-[0_-4px_12px_rgba(0,0,0,0.08)] backdrop-blur-sm pb-[max(0.5rem,env(safe-area-inset-bottom))]`}
+      aria-hidden={typing || undefined}
       role="region"
       aria-label="Run status"
     >
@@ -136,7 +154,9 @@ export function RunBar() {
                   Run {runNumber}
                 </Link>
               ) : (
-                <span className="truncate text-sm text-muted-foreground">Next: run {runNumber}</span>
+                <span className="truncate text-sm text-muted-foreground">
+                  Next: run {runNumber}{unsavedRun === runNumber ? ' (again: last one not saved)' : ''}
+                </span>
               )
             )}
             {isRunning && !unreachable && (
@@ -144,6 +164,10 @@ export function RunBar() {
             )}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {/* Unsaved, the number is not used up: the next run gets it again. */}
+            {isRunning && !unreachable && !badge.tuning && saving === false && (
+              <span className="font-semibold text-destructive">Not saved · </span>
+            )}
             {unreachable
               ? `No answer from the server${isRunning ? ' (last known: running)' : ''}`
               : badge.failed ? 'A board reported a failure · see Troubleshoot'

@@ -8,9 +8,7 @@ function TroubleshootPageContent() {
 
   return (
     <Layout>
-      <div className="mx-auto max-w-5xl py-4">
-        <ActivityLog />
-      </div>
+      <ActivityLog />
     </Layout>
   )
 }

@@ -5,6 +5,7 @@ import {
   getCurrentRunNumber,
   getExperimentStats,
   getRunStatus,
+  getSaveData,
   getStartTime,
 } from '@/lib/api'
 import useRunControlStore, { type RunControlState } from '@/store/run-control-store'
@@ -105,10 +106,13 @@ async function pollOnce(): Promise<void> {
     (v) => ({ ok: true as const, v }),
     (e) => ({ ok: false as const, e }),
   )
-  const [running, start, runNumber] = await Promise.all([
+  const [running, start, runNumber, saving] = await Promise.all([
     settle(getRunStatus()),
     settle(getStartTime()),
     settle(getCurrentRunNumber()),
+    // A run that saves nothing does not use up its number: the run bar and the
+    // overview say "not saved" so a reused number is no surprise.
+    settle(getSaveData()),
   ])
   if (stale()) return
   if (!running.ok) {
@@ -122,6 +126,7 @@ async function pollOnce(): Promise<void> {
   else if (start.ok && typeof start.v === 'string') patch.startTime = start.v
   // (a failed start-time read during a run keeps the previous value)
   if (runNumber.ok && typeof runNumber.v === 'number') patch.runNumber = runNumber.v
+  if (saving.ok && saving.v !== null && saving.v !== undefined) patch.saving = Boolean(saving.v)
 
   // Rates only while a run is on: /experiment/stats carries every channel of
   // every board, and the server answers [] when nothing is running.

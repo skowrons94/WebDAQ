@@ -22,6 +22,15 @@ interface RunRow {
 
 const SHOWN = 5
 
+// Start records the run's name and type a moment after the run itself; a list
+// read when isRunning flipped showed "Untitled run". Whoever writes run
+// metadata says so, and the list reads again.
+const RUNS_CHANGED = 'webdaq:runs-changed'
+
+export function notifyRunsChanged() {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(RUNS_CHANGED))
+}
+
 /**
  * The last few runs, each one click from its Logbook page (they used to be
  * reached only through the Logbook table). Re-read when a run starts or stops,
@@ -30,6 +39,9 @@ const SHOWN = 5
 export function RecentRuns() {
   const isRunning = useRunStatus((s) => s.isRunning)
   const runNumber = useRunStatus((s) => s.runNumber)
+  // An unsaved run has no Logbook row of its own: the row with its number is
+  // an earlier run, which must not be shown as the one running.
+  const saving = useRunStatus((s) => s.saving)
   // The live run is named by the header's rule: "Board failure" wins over
   // "Running", and a Tuner acquisition says "Tuning".
   const badge = useRunBadge()
@@ -38,7 +50,7 @@ export function RecentRuns() {
 
   useEffect(() => {
     let active = true
-    getRunMetadataAll()
+    const load = () => getRunMetadataAll()
       .then((res) => {
         if (!active) return
         const rows: RunRow[] = Array.isArray(res.data) ? res.data : []
@@ -46,7 +58,16 @@ export function RecentRuns() {
         setFailed(false)
       })
       .catch(() => { if (active) setFailed(true) })
-    return () => { active = false }
+    load()
+    window.addEventListener(RUNS_CHANGED, load)
+    // A run started elsewhere (another browser, the Tuner) has no event here:
+    // one more read a few seconds in picks up its name.
+    const later = isRunning ? setTimeout(load, 5000) : undefined
+    return () => {
+      active = false
+      window.removeEventListener(RUNS_CHANGED, load)
+      if (later) clearTimeout(later)
+    }
   }, [isRunning, runNumber])
 
   return (
@@ -70,7 +91,7 @@ export function RecentRuns() {
         ) : (
           <ul className="divide-y">
             {runs.map((run) => {
-              const live = !run.end_time && isRunning && run.run_number === runNumber
+              const live = !run.end_time && isRunning && saving !== false && run.run_number === runNumber
               const seconds = run.start_time && run.end_time
                 ? Math.max(0, (new Date(run.end_time).getTime() - new Date(run.start_time).getTime()) / 1000)
                 : null

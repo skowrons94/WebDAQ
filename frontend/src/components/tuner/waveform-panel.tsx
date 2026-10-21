@@ -20,6 +20,7 @@ import {
 import { getFieldOptions, type RegisterOption } from '@/lib/caen-registers'
 import { inputMetrics, median, trapezoidMetrics, traceSamples, type InputMetrics, type TrapezoidMetrics } from '@/lib/trace-metrics'
 import { formatNs } from '@/components/tuner/format'
+import { plotHex, seriesOption } from '@/lib/jsroot-style'
 import { getBits, setBits, type BoardTiming } from '@/components/tuner/units'
 
 /** Board Configuration (0x8000) fields that pick the traces, per firmware (UM5678/UM4380). */
@@ -190,16 +191,16 @@ export function WaveformPanel(p: Props) {
         }
         const canvas = window.JSROOT.create('TCanvas')
         canvas.fName = `tuner_wave_${p.boardId}_${p.channel}_${waveformNum}`
-        canvas.fPrimitives.Add(parsed, 'hist')
+        // Colours as hex, pre-inverted for JSROOT's dark mode: an index such
+        // as 2 (red) or 3 (green) would come out cyan or magenta there.
+        canvas.fPrimitives.Add(parsed, seriesOption('hist', false))
         if (p1Data) {
           const d1 = window.JSROOT.parse(p1Data)
-          d1.fLineColor = 3
-          canvas.fPrimitives.Add(d1, 'hist same')
+          canvas.fPrimitives.Add(d1, `hist same line_${plotHex('16a34a')}`)
         }
         if (p2Data) {
           const d2 = window.JSROOT.parse(p2Data)
-          d2.fLineColor = 2
-          canvas.fPrimitives.Add(d2, 'hist same')
+          canvas.fPrimitives.Add(d2, `hist same line_${plotHex('dc2626')}`)
         }
         if (alive) await window.JSROOT.redraw(el, canvas)
       } catch { /* the next tick tries again */ }

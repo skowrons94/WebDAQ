@@ -115,15 +115,22 @@ export function ServerStatus({ align = 'right', showLabel = false }: { align?: '
     }, [])
 
     // Load saved directories on mount
+    // A phone waking up or a page reload cancels this fetch now and then
+    // ("Failed to fetch"); the list is only a convenience, so try again a
+    // couple of times and keep quiet about it.
     const loadDirectories = useCallback(async () => {
-        try {
-            const res = await fetch('/api/cache?type=working-directories')
-            const data = await res.json()
-            if (data.success && Array.isArray(data.data?.directories)) {
-                setDirectories(data.data.directories)
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                const res = await fetch('/api/cache?type=working-directories')
+                const data = await res.json()
+                if (data.success && Array.isArray(data.data?.directories)) {
+                    setDirectories(data.data.directories)
+                }
+                return
+            } catch (e) {
+                if (attempt === 2) console.debug('Working directories not loaded:', e)
+                else await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)))
             }
-        } catch (e) {
-            console.error('Failed to load working directories:', e)
         }
     }, [])
 

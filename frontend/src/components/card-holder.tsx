@@ -25,6 +25,7 @@ import {
   Server,
   GripHorizontal,
   Pencil,
+  ChevronDown,
 } from "lucide-react"
 
 import Link from "next/link"
@@ -43,6 +44,9 @@ import { useVisualizationStore } from '@/store/visualization-settings-store'
 import { useMetricsStore } from '@/store/metrics-store'
 import { useStatsStore } from '@/store/stats-store'
 import { useRunBadge } from '@/hooks/use-run-badge'
+import { useRunStatus } from '@/hooks/use-run-status'
+import useRunControlStore from '@/store/run-control-store'
+import { formatElapsed } from '@/components/run-status-indicator'
 import {
   getFileBandwidth,
   getConnectedCurrent,
@@ -186,6 +190,9 @@ const STATUS_PANEL_HEIGHTS = [220, 428, 636] as const
 // further board, under the handle); the panel is never taller than its cards.
 const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[1]
 const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height-v3'
+// Phones: the status cards fold to a short summary (the run controls come
+// first there), and the choice is remembered on this device.
+const PHONE_CARDS_OPEN_KEY = 'overview-phone-status-open-v1'
 
 export function CardHolder({
   isRunning,
@@ -231,6 +238,10 @@ export function CardHolder({
   // under the run number on the status card.
   const [lastRun, setLastRun] = useState<{ number: number; duration: number } | null>(null)
   const [dataSavingEnabled, setDataSavingEnabled] = useState<boolean>(false)
+  // A run stopped unsaved keeps its number for the next run (by design): say
+  // so instead of "no previous run".
+  const unsavedRun = useRunStatus((s) => s.unsavedRun)
+  const [phoneCardsOpen, setPhoneCardsOpen] = useState(false)
   // Run number editor, opened by clicking the run number on the status card.
   const [runEditorOpen, setRunEditorOpen] = useState(false)
   const [runDraft, setRunDraft] = useState<number>(0)
@@ -270,6 +281,19 @@ export function CardHolder({
     startY: number
     startHeight: number
   } | null>(null)
+
+  useEffect(() => {
+    try {
+      setPhoneCardsOpen(window.localStorage.getItem(PHONE_CARDS_OPEN_KEY) === '1')
+    } catch { /* stays folded */ }
+  }, [])
+
+  const togglePhoneCards = () => {
+    setPhoneCardsOpen((open) => {
+      try { window.localStorage.setItem(PHONE_CARDS_OPEN_KEY, open ? '0' : '1') } catch { /* not remembered */ }
+      return !open
+    })
+  }
 
   useEffect(() => {
     const stored = Number(window.localStorage.getItem(STATUS_PANEL_STORAGE_KEY))
@@ -687,6 +711,7 @@ export function CardHolder({
     try {
       await setSaveData(checked)
       onSaveDataChange?.(checked)
+      useRunControlStore.getState().update({ saving: checked })
     } catch (error) {
       console.error('Failed to change data saving:', error)
       setDataSavingEnabled(previous)
@@ -768,10 +793,6 @@ export function CardHolder({
     } catch (error) {
       console.error('Failed to fetch last run duration:', error)
     }
-  }
-
-  const formatTime = (seconds: number) => {
-    return `${seconds} seconds`
   }
 
   const enabledStatsPaths = paths.filter((path: any) => path.enabled)
@@ -873,20 +894,78 @@ export function CardHolder({
             <div className="rounded-md border">
               <div className="flex items-center justify-between gap-2 p-4 pb-0">
                 <h2 className="text-sm font-semibold">System status</h2>
-                {/* Discovering and adding boards lives on /board; this is the
-                    way there from where the boards are shown. */}
-                <Button asChild variant="ghost" size="sm" className="-my-2 h-8 gap-1.5 px-2 text-xs">
-                  <Link href="/board">
-                    <Plus className="h-3.5 w-3.5" />
-                    Add / discover boards
-                  </Link>
-                </Button>
+                <div className="flex items-center gap-1">
+                  {/* Discovering and adding boards lives on /board; this is the
+                      way there from where the boards are shown. */}
+                  <Button asChild variant="ghost" size="sm" className="-my-2 h-8 gap-1.5 px-2 text-xs">
+                    <Link href="/board">
+                      <Plus className="h-3.5 w-3.5" />
+                      <span className="max-sm:sr-only">Add / discover boards</span>
+                      <span className="sm:hidden">Boards</span>
+                    </Link>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="-my-2 h-8 gap-1 px-2 text-xs md:hidden"
+                    onClick={togglePhoneCards}
+                    aria-expanded={phoneCardsOpen}
+                  >
+                    {phoneCardsOpen ? 'Fold' : 'All cards'}
+                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', phoneCardsOpen && 'rotate-180')} />
+                  </Button>
+                </div>
               </div>
+              {/* Phones, folded: one line per thing that matters, and any board
+                  that failed this run as its full card. */}
+              {!phoneCardsOpen && (
+                <div className="grid gap-3 p-4 pt-3 md:hidden">
+                  {failedBoards.map(renderBoardCard)}
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+                    <dt className="self-center text-muted-foreground">
+                      <Label htmlFor="save-data-switch-phone">Save to disk</Label>
+                    </dt>
+                    <dd className={cn('flex items-center justify-end gap-2 font-semibold', !dataSavingEnabled && 'text-destructive')}>
+                      {dataSavingEnabled ? 'On' : 'Off: nothing is written'}
+                      <Switch
+                        id="save-data-switch-phone"
+                        checked={dataSavingEnabled}
+                        onCheckedChange={toggleDataSaving}
+                        disabled={isRunning}
+                      />
+                    </dd>
+                    <dt className="text-muted-foreground">Boards</dt>
+                    <dd className="text-right font-semibold">
+                      {!boardsLoaded ? '…' : boards.length === 0 ? 'None configured' : (() => {
+                        const connected = boards.filter((b) => boardConnectivity[b.id]?.connected).length
+                        return connected === boards.length
+                          ? `${boards.length} connected`
+                          : <span className="text-destructive">{boards.length - connected} of {boards.length} disconnected</span>
+                      })()}
+                    </dd>
+                    {currentEnabled && currentModuleType !== null && PICOAMMETER_MODULES.has(currentModuleType) && (
+                      <>
+                        <dt className="text-muted-foreground">{currentModuleName}</dt>
+                        <dd className={cn('text-right font-semibold', !isConnectedCurrent && 'text-destructive')}>
+                          {isConnectedCurrent ? (currentSampling ? 'Reading' : 'Not sampling') : 'Disconnected'}
+                        </dd>
+                      </>
+                    )}
+                    <dt className="text-muted-foreground">File bandwidth</dt>
+                    <dd className="text-right font-semibold tabular-nums">
+                      {fileBandwidth < 0.1
+                        ? `${(fileBandwidth * 1024).toFixed(2)} kB/s`
+                        : `${fileBandwidth.toFixed(2)} MB/s`}
+                    </dd>
+                  </dl>
+                </div>
+              )}
               {/* Below 1280 px (phones and tablets): no inner scroller and no
                   fixed row height, so every card — and any board FAIL — is on
                   the page. From xl up: the resizable panel as before. */}
               <ScrollArea
-                className={cn('max-xl:!h-auto', isResizingStatusPanel
+                className={cn('max-xl:!h-auto', !phoneCardsOpen && 'max-md:hidden', isResizingStatusPanel
                   ? ''
                   : 'transition-[height] duration-150 ease-out')}
                 viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
@@ -963,9 +1042,28 @@ export function CardHolder({
                     over "Running", and a Tuner acquisition is not a production run. */}
                 <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} size="md" />
               </div>
-              <p className="truncate text-xs text-muted-foreground">
+              {/* Unsaved, a run keeps its number for the next one (by design):
+                  said here so a reused number is not a surprise. */}
+              <p
+                className="truncate text-xs text-muted-foreground"
+                title={isRunning && !runBadge.tuning && !dataSavingEnabled
+                  ? 'Save to disk is off: nothing of this run is written, and the next run gets the same number'
+                  : !isRunning && unsavedRun !== null && unsavedRun === runNumber
+                    ? `Run ${unsavedRun} was taken with Save to disk off: nothing was written, so the next run is run ${unsavedRun} again`
+                    : undefined}
+              >
                 {isRunning
-                  ? `started ${formatTime(timer)} ago`
+                  ? <>
+                      running {formatElapsed(timer)}
+                      {!runBadge.tuning && !dataSavingEnabled && (
+                        <span className="font-semibold text-destructive"> · not saved</span>
+                      )}
+                    </>
+                  : unsavedRun !== null && unsavedRun === runNumber
+                    ? <>
+                        <span className="font-semibold text-destructive">run {unsavedRun} not saved</span>
+                        {' · number reused'}
+                      </>
                   : lastRun !== null
                     ? <>
                         <Link href={`/logbook/${lastRun.number}`} className="underline underline-offset-2 hover:text-foreground">
@@ -973,7 +1071,7 @@ export function CardHolder({
                         </Link>
                         {`: ${lastRun.duration}s`}
                       </>
-                    : 'no previous run'}
+                    : 'no finished run yet'}
               </p>
 
               <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
@@ -1084,7 +1182,7 @@ export function CardHolder({
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-1.5 text-muted-foreground">
                       <Save className="h-3.5 w-3.5" />
-                      Data saving
+                      Save to disk
                     </span>
                     {/* Saving off is the one "off" that loses data: red, not neutral. */}
                     <span className={cn("flex items-center gap-1 font-semibold", !dataSavingEnabled && "text-destructive")}>
@@ -1098,27 +1196,32 @@ export function CardHolder({
                       Waveforms
                     </span>
                     <span className="flex items-center gap-1 font-semibold">
-                      {boards.length > 0 ? `${waveformBoardCount}/${boards.length}` : 'Off'}
+                      {boards.length > 0 && anyWaveforms ? `${waveformBoardCount} of ${boards.length} boards` : 'Off'}
                       {anyWaveforms ? okIcon : offIcon}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                  {/* These two are the per-run files (current log, stats.csv),
+                      not the devices: the picoammeter card next to this one
+                      can say "reading" while nothing is written. */}
+                  <div className="flex items-center justify-between"
+                       title="Whether the beam current is being written to this run's directory">
+                    <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                       <BatteryCharging className="h-3.5 w-3.5" />
-                      Current
+                      Current to file
                     </span>
                     <span className="flex items-center gap-1 font-semibold">
-                      {!currentEnabled ? 'Disabled' : currentAcquiring ? 'On' : 'Off'}
+                      {!currentEnabled ? 'Disabled' : currentAcquiring ? 'Writing' : 'Off'}
                       {currentEnabled && (currentAcquiring ? okIcon : offIcon)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <div className="flex items-center justify-between"
+                       title="Whether the monitored metrics are being written to this run's stats.csv">
+                    <span className="flex items-center gap-1.5 whitespace-nowrap text-muted-foreground">
                       <Activity className="h-3.5 w-3.5" />
-                      Stats
+                      Stats to file
                     </span>
                     <span className="flex items-center gap-1 font-semibold">
-                      {statsCollecting ? `${statsCount} acquiring` : 'Off'}
+                      {statsCollecting ? (statsCount > 0 ? `Writing (${statsCount})` : 'Writing') : 'Off'}
                       {statsCollecting ? okIcon : offIcon}
                     </span>
                   </div>
@@ -1179,11 +1282,14 @@ export function CardHolder({
                   )}
                 </div>
 
-                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 border-t pt-2 text-xs">
+                {/* The label takes only its own width, so host:port fits in
+                    full; on a card too narrow for it, it wraps rather than
+                    losing the port to an ellipsis. */}
+                <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-t pt-2 text-xs">
                   {rows.map(([label, value]) => (
                     <div key={label} className="contents">
                       <dt className="text-muted-foreground">{label}</dt>
-                      <dd className="truncate text-right font-medium" title={value}>{value}</dd>
+                      <dd className="break-all text-right font-medium" title={value}>{value}</dd>
                     </div>
                   ))}
                 </dl>

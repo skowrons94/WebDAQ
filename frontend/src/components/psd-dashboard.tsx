@@ -22,6 +22,7 @@ type BoardData = {
   link_num: string;
   dpp: string;
   chan: string;
+  vendor?: string;   // 'sis3316' for the Struck board, which has no PSD
 }
 
 export default function PSDDashboard() {
@@ -37,7 +38,7 @@ export default function PSDDashboard() {
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()
   const initialFetchDone = useRef(false)
-  const { settings, updateBoardChannelSelection, clearAllSelections, hydrateFromServer, hydrated } = useVisualizationStore()
+  const { settings, updateBoardChannelSelection, hydrateFromServer, hydrated } = useVisualizationStore()
   const storeReady = hydrated
 
   useEffect(() => {
@@ -85,10 +86,14 @@ export default function PSDDashboard() {
     try {
       const response = await getBoardConfiguration()
       // Ids arrive as numbers; everything downstream compares them as strings.
-      setBoards((response.data ?? []).map((board: BoardData) => ({
-        ...board,
-        id: String(board.id),
-      })))
+      // The SIS3316 readout makes no PSD histograms, so its boards are not
+      // listed here at all.
+      setBoards((response.data ?? [])
+        .filter((board: BoardData) => board.vendor !== 'sis3316')
+        .map((board: BoardData) => ({
+          ...board,
+          id: String(board.id),
+        })))
     } catch (error) {
       console.error('Failed to fetch board configuration:', error)
       toast({
@@ -203,45 +208,27 @@ export default function PSDDashboard() {
     }
   }, [jsrootLoaded, boards, updateTrigger])
 
-  const hasAnySelections = storeReady && settings?.selectedBoardsChannelsPSD && settings.selectedBoardsChannelsPSD.length > 0
-  const totalSelectedChannels = storeReady && settings?.selectedBoardsChannelsPSD ?
-    settings.selectedBoardsChannelsPSD.reduce((total, board) => total + board.channels.length, 0) : 0
+  // Counted over the boards on this page, so the line never disagrees with
+  // the cards below it.
+  const totalChannels = boards.reduce((total, board) => total + (parseInt(board.chan) || 0), 0)
+  const totalSelectedChannels = boards.reduce((total, board) => total + getSelectedChannels(board.id).length, 0)
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <div className="flex-1 container mx-auto px-0 py-4 sm:p-4">
-        <div className="mb-4 flex justify-between items-center">
+      <div className="flex-1 pb-4">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div className="text-sm text-muted-foreground">
-            {totalSelectedChannels > 0 ?
-              `${totalSelectedChannels} channel(s) selected across ${settings?.selectedBoardsChannelsPSD?.length || 0} board(s)` :
-              'No channels selected - only board names shown'
-            }
+            {boards.length === 0
+              ? 'No board with PSD (the SIS3316 records none).'
+              : `${totalSelectedChannels} of ${totalChannels} channels shown`}
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleShowAllChannels}
-            >
-              Show All Channels
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleShowAllChannels} disabled={boards.length === 0}>
+              Show all channels
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleHideAllChannels}
-            >
-              Hide All Channels
+            <Button variant="outline" size="sm" onClick={handleHideAllChannels} disabled={totalSelectedChannels === 0}>
+              Hide all channels
             </Button>
-            {hasAnySelections && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => clearAllSelections('PSD')}
-                className="text-destructive hover:text-destructive"
-              >
-                Clear All Selections
-              </Button>
-            )}
           </div>
         </div>
         {boards.map((board: BoardData) => {
@@ -253,15 +240,15 @@ export default function PSDDashboard() {
           return (
             <Card key={board.id} className="mb-6">
               <CardHeader>
-                <CardTitle className="flex justify-between items-center">
-                  <span>{board.name} (ID: {board.id}) - PSD Histograms</span>
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{board.name} (ID: {board.id})</span>
                   <div className="flex items-center gap-2 text-sm font-normal text-muted-foreground">
                     <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} />
                     {runNumber && <span>Run {runNumber}</span>}
                   </div>
                 </CardTitle>
                 <div className="flex flex-col space-y-4 mt-4">
-                  <div className="flex items-center space-x-4">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id={`select-all-${board.id}`}
@@ -273,33 +260,39 @@ export default function PSDDashboard() {
                       </Label>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {selectedChannels.length > 0 ? `${selectedChannels.length}/${board.chan} channels selected` : `All ${board.chan} channels shown`}
+                      {`${selectedChannels.length}/${board.chan} channels shown`}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {allChannels.map(channelIndex => (
-                      <div key={channelIndex} className="flex items-center space-x-1">
-                        <Checkbox
-                          id={`channel-${board.id}-${channelIndex}`}
-                          checked={isChannelSelected(board.id, channelIndex)}
-                          onCheckedChange={(checked: boolean) => handleChannelToggle(board.id, channelIndex, checked)}
-                        />
-                        <Label htmlFor={`channel-${board.id}-${channelIndex}`} className="text-xs">
+                  {/* The same channel chips as the Waveforms page. */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {allChannels.map(channelIndex => {
+                      const shown = isChannelSelected(board.id, channelIndex)
+                      return (
+                        <button
+                          key={channelIndex}
+                          type="button"
+                          aria-pressed={shown}
+                          onClick={() => handleChannelToggle(board.id, channelIndex, !shown)}
+                          title={`${shown ? 'Hide' : 'Show'} channel ${channelIndex}`}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors pointer-coarse:min-h-10 pointer-coarse:px-2.5 ${
+                            shown ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
+                          }`}
+                        >
                           Ch {channelIndex}
-                        </Label>
-                      </div>
-                    ))}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
                 {channelsToShow.length > 0 ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 min-[1800px]:grid-cols-3">
                     {channelsToShow.map((channelIndex: number) => {
                       const histoId = `board${board.id}_channel${channelIndex}`
                       return (
                         <div key={histoId} className="relative">
-                          <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
+                          <h3 className="text-base font-semibold mb-2">Channel {channelIndex}</h3>
                           <div
                             ref={(el: HTMLDivElement | null) => { histogramRefs.current[histoId] = el }}
                             className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-sm"
@@ -310,7 +303,7 @@ export default function PSDDashboard() {
                   </div>
                 ) : (
                   <div className="text-center text-muted-foreground py-8">
-                    No channels selected for this board. Use the checkboxes above to select channels to visualize.
+                    No channel shown for this board. Click the channels above to show their PSD plots.
                   </div>
                 )}
               </CardContent>

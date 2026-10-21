@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AlertTriangle, Crosshair, RotateCcw } from 'lucide-react'
 import { getCalib, getHistogram } from '@/lib/api'
+import { plotHex, seriesOption } from '@/lib/jsroot-style'
 import type { PeakCandidate, PeakFit } from '@/lib/peak-fit'
 
 /** Calibration (offset a, slope b) for a channel; null when uncalibrated (0, 1) or unknown. */
@@ -139,6 +140,8 @@ export function SpectrumPanel({
   const [roi, setRoiState] = useState<Roi | null>(null)
   const [candidates, setCandidates] = useState<PeakCandidate[]>([])
   const [fit, setFit] = useState<PeakFit | null>(null)
+  // Spectrum bins per bin of the zoomed plot (the fit's grouping).
+  const [grouped, setGrouped] = useState(1)
   const [reference, setReference] = useState<Reference | null>(null)
   const [since, setSince] = useState<{ at: number; label: string | null } | null>(null)
   const latest = useRef<SpectrumData | null>(null)
@@ -231,7 +234,8 @@ export function SpectrumPanel({
         h.fEntries = sum
         if (h.fXaxis) h.fXaxis.fTitle = spectrumAxisTitle(psd, calibrated)
         if (h.fYaxis) h.fYaxis.fTitle = 'Counts / bin'
-        await window.JSROOT.redraw(el, h, logY ? 'hist;logy' : 'hist')
+        // The site's series colour (lib/jsroot-style), as on the histogram cards.
+        await window.JSROOT.redraw(el, h, seriesOption('hist') + (logY ? ';logy' : ''))
 
         // Peaks and the fit: loaded on first use.
         if (sum <= 0) { setFit(null); return }
@@ -295,11 +299,13 @@ export function SpectrumPanel({
             hz.fXaxis.fXmin = cur.xmin + i0 * w
             hz.fXaxis.fXmax = cur.xmin + i1 * w
             hz.fXaxis.fTitle = spectrumAxisTitle(psd, calibrated)
-            hz.fYaxis.fTitle = k > 1 ? `Counts / bin (${k} bins grouped)` : 'Counts / bin'
+            // The grouping goes in the caption: in the title it ran into the numbers.
+            hz.fYaxis.fTitle = k > 1 ? `Counts / ${k} bins` : 'Counts / bin'
+            setGrouped(k)
             for (let i = i0; i < i1; i++) hz.fArray[Math.floor((i - i0) / k) + 1] += shown[i]
             const canvas = window.JSROOT.create('TCanvas')
             canvas.fName = `tuner_roi_c_${boardId}_${channel}`
-            canvas.fPrimitives.Add(hz, 'hist nostat')
+            canvas.fPrimitives.Add(hz, seriesOption())
             if (f) {
               const N = 200
               const hc = window.JSROOT.createHistogram('TH1D', N)
@@ -310,7 +316,8 @@ export function SpectrumPanel({
               for (let i = 0; i < N; i++) hc.fArray[i + 1] = f.model(hc.fXaxis.fXmin + (i + 0.5) * cw)
               hc.fLineColor = 2
               hc.fLineWidth = 2
-              canvas.fPrimitives.Add(hc, 'L same')
+              // Red in both themes (a colour index would be inverted to cyan in dark mode).
+              canvas.fPrimitives.Add(hc, `L same line_${plotHex('dc2626')}`)
             }
             await window.JSROOT.redraw(z, canvas)
           }
@@ -390,6 +397,9 @@ export function SpectrumPanel({
               )}
             </div>
             <div ref={zoomRef} className="h-48 w-full rounded-lg border" data-testid="tuner-roi" />
+            {grouped > 1 && (
+              <p className="-mt-2 text-xs text-muted-foreground">{grouped} bins of the spectrum per bin here, as fitted.</p>
+            )}
             {fit ? (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm" data-testid="tuner-fit">
                 {fewCounts ? (

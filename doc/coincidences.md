@@ -59,7 +59,10 @@ per channel and shared by every gate.
 
 Two hits can only be compared if they were timed by the same clock. That is
 the case for the channels of one board, and for the CAEN boards of a
-synchronised chain (see the CAEN settings). Boards that run on their own
+synchronised chain (see the CAEN settings) that also share one clock: every
+board but the first takes its clock from CLK-IN (Acquisition Control 0x8100,
+bit 6). Boards started together but each on its own oscillator are not on one
+clock. Boards that run on their own
 clocks — two independent CAEN boards, or a CAEN board and an SIS3316 — drift
 apart by microseconds within seconds, so no gate can mix them. The channel
 picker greys out the boards that do not share a clock with what is already

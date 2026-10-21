@@ -115,6 +115,11 @@ a change made during a run is logged there, with its time, in
 `calib_history.jsonl` — so the analysis knows which calibration applied when.
 **Back to channels** removes the calibration.
 
+The channel in E = offset + slope × channel is the integer **Energy** value
+written in the run files (and in the ROOT tree), so the same two numbers
+calibrate the offline analysis exactly. A line narrower than a channel (a
+pulser) is placed at the mean of its counts, to within a third of a channel.
+
 ---
 
 ## 4. Zoom, rebinning and display
