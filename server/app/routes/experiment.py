@@ -359,6 +359,20 @@ def _stop_run():
     # below takes a few seconds that are no part of the run.
     daq_mgr.set_running_state(False)
 
+    # The run's stats.csv and current log end with it, whoever stopped it:
+    # the browser closes them after its Stop, but a stop from a script, the
+    # API or another page used to leave them writing into this run's files
+    # through the next run. (Closing twice is harmless.)
+    from . import current as current_routes
+    from .stats import stats_manager
+    try:
+        if stats_manager.collecting:
+            stats_manager.stop_run()
+        if current_routes.is_recording_run():
+            current_routes.stop_run_recording()
+    except Exception as e:
+        logger.error(f"Closing the run's stats.csv / current log failed: {e}")
+
     # Retries inside: the boards were closed by caendaq a moment ago and a CAEN
     # link is not always ready to be reopened that fast. Say which ones stayed
     # shut — they are the boards that will read "Disconnected" on the dashboard,

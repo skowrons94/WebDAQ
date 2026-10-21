@@ -448,6 +448,14 @@ class StatsManager:
         Returns:
             True if start successful, False otherwise
         """
+        if self.collecting:
+            if self.current_run_number == run_number:
+                return True
+            # Left over from a run stopped without closing it: it would go on
+            # writing into that run's stats.csv for the whole new run.
+            self.logger.warning(f"stats.csv of run {self.current_run_number} was still open; "
+                                f"closing it to start run {run_number}")
+            self.stop_run()
         with self.collection_lock:
             try:
                 if self.collecting:

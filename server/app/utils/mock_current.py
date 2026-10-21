@@ -80,6 +80,12 @@ class MockCurrentController:
 
     # ─────────────────────────────────────────────────────── signal generation
 
+    @property
+    def acquisition_thread(self) -> Optional[threading.Thread]:
+        """The sampling thread, under the name the real drivers use (the
+        module status reports whether it is alive)."""
+        return self._thread
+
     def _sample(self, t: float) -> list:
         """One reading per channel at time t, in µA."""
         # Slow exponential decay of the source, a little drift, mains-ish ripple.

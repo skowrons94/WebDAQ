@@ -103,6 +103,11 @@ def _stats_state() -> Dict[str, Any]:
     if not daq.get_save_data():
         return {'ok': True, 'detail': 'This run saves no data, so no stats.csv is written.',
                 'blocked': 'This run saves no data.'}
+    if collecting and stats.current_run_number != daq.get_run_number():
+        return {'ok': False,
+                'detail': f'stats.csv is being written for run {stats.current_run_number}, '
+                          f'but run {daq.get_run_number()} is going: its rows go into the '
+                          'wrong run\'s file.'}
     if collecting:
         return {'ok': True, 'detail': f'Writing stats.csv for run {stats.current_run_number}.'}
     return {'ok': False, 'detail': 'This run is saving data but no stats.csv is being written.'}

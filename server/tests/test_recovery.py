@@ -99,6 +99,14 @@ class WhatIsOfferedTests(RecoveryTestCase):
         self.assertFalse(current['ok'])
         self.assertIn('no recent reading', current['detail'])
 
+    def test_stats_written_for_another_run_is_a_problem(self):
+        self.daq.is_running.return_value = True
+        self.stats.collecting = True
+        self.stats.current_run_number = 11
+        stats = self.action('stats')
+        self.assertFalse(stats['ok'])
+        self.assertIn('run 11', stats['detail'])
+
     def test_stats_missing_during_a_saving_run_is_a_problem(self):
         self.daq.is_running.return_value = True
         stats = self.action('stats')

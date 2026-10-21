@@ -261,8 +261,9 @@ def stop_stats_run():
     try:
         if stats_manager.stop_run():
             return jsonify({'message': 'Stats collection stopped'}), 200
-        else:
-            return jsonify({'error': 'Not currently collecting stats'}), 400
+        # Already stopped (the run's stop closes it on the server too): the
+        # caller wanted it stopped, and it is.
+        return jsonify({'message': 'Stats collection was not running'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
