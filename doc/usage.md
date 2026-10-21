@@ -267,13 +267,11 @@ draws the cable order and the start sequence. [CAEN
 digitizers](caen-settings.md#4-synchronising-several-boards) explains the
 mechanism.
 
-### 5.2 Calibration
+Energy calibration is no longer here: it is made where the spectrum is, from
+each histogram card (the ruler button, see [Spectra, ROIs and the histogram
+dashboard](histograms-and-rois.md)).
 
-Two numbers per channel, `A` and `B`, applied to the energy axis of the spectra.
-They are stored per board and channel in `calib/` and are read again whenever the
-file changes.
-
-### 5.3 Hardware Info
+### 5.2 Hardware Info
 
 What the boards report about themselves — model, serial number, firmware, DPP
 licence, connection, and the acquisition registers as actually programmed — plus

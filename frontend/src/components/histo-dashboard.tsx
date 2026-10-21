@@ -4,6 +4,7 @@ import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { getBoardConfiguration, getCalibStatus, getExperimentStats, getHistogram, setRebinFactor, type CalibStatus } from "@/lib/api"
 import { CalibrationDialog } from "@/components/calibration-dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { useRunStatus } from "@/hooks/use-run-status"
 import { pickChannel, type ChannelRates } from "@/components/tuner/use-channel-rates"
 // The dashboard's configuration lives on the DAQ server (conf/histograms.json).
@@ -24,7 +25,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTheme } from "next-themes"
-import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle, Ruler } from "lucide-react"
+import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle, Ruler, MoreHorizontal } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -121,7 +122,7 @@ function ROIMarker({ onMark, frame }: {
 // Sortable Histogram Card Component
 const SortableHistogramCard = ({
   config, roiIntegrals, stats, counts, running, expanded, calibrated, markingROIs, onMarkROI, frameRect,
-  onAddROI, onROIFromView, onCalibrate, onEditHistogram, onEditROI, onToggleExpand, onHide,
+  onAddROI, onROIFromView, onCalibrate, onResetZoom, onEditHistogram, onEditROI, onToggleExpand, onHide,
   onZoomToROI, onToggleROI, dashboardSettings, getHistogramSize, histogramRefs,
 }: {
   config: HistogramConfig
@@ -132,6 +133,7 @@ const SortableHistogramCard = ({
   onMarkROI: (id: string, fromPx: number, toPx: number, plot: HTMLDivElement) => void
   frameRect: (id: string) => DOMRect | null
   onCalibrate: (config: HistogramConfig) => void
+  onResetZoom: (id: string) => void
   roiIntegrals: { [key: string]: number }
   stats: ChannelStats | null
   counts: number | undefined
@@ -168,9 +170,11 @@ const SortableHistogramCard = ({
   return (
     <Card ref={setNodeRef} style={style}
           className={`relative ${isDragging ? 'z-50' : ''} ${expanded ? 'md:col-span-2 lg:col-span-full' : ''}`}>
-      <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 p-3 pb-2">
-        <div className="min-w-0 space-y-1">
-          <CardTitle className="text-base font-semibold leading-tight flex items-center gap-1.5">
+      {/* Title and actions share the top row; what the channel is doing goes
+          underneath at full width, so on a phone neither squeezes the other. */}
+      <CardHeader className="space-y-1 p-3 pb-2">
+        <div className="flex items-start justify-between gap-2">
+          <CardTitle className="flex min-w-0 items-center gap-1.5 text-base font-semibold leading-tight">
             {!expanded && (
               <span
                 {...attributes}
@@ -191,51 +195,73 @@ const SortableHistogramCard = ({
               </button>
             )}
           </CardTitle>
-          {/* What the channel is doing, so a quiet or saturated detector shows
-              without opening the run statistics. */}
-          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-            {running && stats ? (
-              <>
-                <Stat label="Rate" value={formatRate(stats.event)} />
-                {stats.trigger !== undefined && <Stat label="Triggers" value={formatRate(stats.trigger)} />}
-                <Stat label="Pile-up" value={formatRate(stats.pileup)} warn={pileupShare > 0.1} />
-                <Stat label="Lost" value={formatRate(stats.lost)} warn={stats.lost > 0 && stats.lost >= 0.1 * stats.event} />
-                {stats.satu > 0 && <Stat label="Saturated" value={formatRate(stats.satu)} warn />}
-              </>
-            ) : (
-              <span className="text-muted-foreground">{running ? "No rates for this channel" : "No run"}</span>
-            )}
-            <Stat label="Counts" value={counts === undefined ? "—" : Math.round(counts).toLocaleString()} />
+          <div className="hidden shrink-0 items-center sm:flex">
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onCalibrate(config)}
+                    title="Energy calibration" aria-label={`Calibrate ${config.label}`}>
+              <Ruler className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onROIFromView(config.id)}
+                    title="Add an ROI over the visible range (zoom on the peak first)" aria-label={`Add an ROI from the view of ${config.label}`}>
+              <Crosshair className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onToggleExpand(config.id)}
+                    title={expanded ? "Back to the grid" : "Enlarge, with the ROI table"} aria-label={expanded ? `Shrink ${config.label}` : `Enlarge ${config.label}`}>
+              {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditHistogram(config)}
+                    title="Edit histogram" aria-label={`Edit ${config.label}`}>
+              <Edit className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onHide(config.id)}
+                    title="Hide (show it again from the channel list)" aria-label={`Hide ${config.label}`}>
+              <EyeOff className="h-4 w-4" />
+            </Button>
           </div>
-          {running && stats?.energyWarning && (
-            <p className="flex items-start gap-1 text-xs text-warning" role="status">
-              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-              {stats.energyWarning}
-            </p>
+          {/* Phones: the one action used all the time, the rest in a menu, so
+              the title keeps its room. */}
+          <div className="flex shrink-0 items-center sm:hidden">
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => onToggleExpand(config.id)}
+                    aria-label={expanded ? `Shrink ${config.label}` : `Enlarge ${config.label}`}>
+              {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label={`More for ${config.label}`}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onCalibrate(config)}><Ruler className="mr-2 h-4 w-4" />Energy calibration</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onROIFromView(config.id)}><Crosshair className="mr-2 h-4 w-4" />ROI from the view</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onResetZoom(config.id)}><RotateCcw className="mr-2 h-4 w-4" />Reset zoom</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onEditHistogram(config)}><Edit className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onHide(config.id)}><EyeOff className="mr-2 h-4 w-4" />Hide</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        {/* What the channel is doing, so a quiet or saturated detector shows
+            without opening the run statistics. */}
+        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+          {running && stats ? (
+            <>
+              <Stat label="Rate" value={formatRate(stats.event)} />
+              {stats.trigger !== undefined && <Stat label="Triggers" value={formatRate(stats.trigger)} />}
+              <Stat label="Pile-up" value={formatRate(stats.pileup)} warn={pileupShare > 0.1} />
+              <Stat label="Lost" value={formatRate(stats.lost)} warn={stats.lost > 0 && stats.lost >= 0.1 * stats.event} />
+              {stats.satu > 0 && <Stat label="Saturated" value={formatRate(stats.satu)} warn />}
+            </>
+          ) : (
+            <span className="text-muted-foreground">{running ? "No rates for this channel" : "No run"}</span>
           )}
+          <Stat label="Counts" value={counts === undefined ? "—" : Math.round(counts).toLocaleString()} />
         </div>
-        <div className="flex shrink-0 items-center">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onCalibrate(config)}
-                  title="Energy calibration" aria-label={`Calibrate ${config.label}`}>
-            <Ruler className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onROIFromView(config.id)}
-                  title="Add an ROI over the visible range (zoom on the peak first)" aria-label={`Add an ROI from the view of ${config.label}`}>
-            <Crosshair className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onToggleExpand(config.id)}
-                  title={expanded ? "Back to the grid" : "Enlarge, with the ROI table"} aria-label={expanded ? `Shrink ${config.label}` : `Enlarge ${config.label}`}>
-            {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onEditHistogram(config)}
-                  title="Edit histogram" aria-label={`Edit ${config.label}`}>
-            <Edit className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onHide(config.id)}
-                  title="Hide (show it again from the channel list)" aria-label={`Hide ${config.label}`}>
-            <EyeOff className="h-4 w-4" />
-          </Button>
-        </div>
+        {running && stats?.energyWarning && (
+          <p className="flex items-start gap-1 text-xs text-warning" role="status">
+            <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+            {stats.energyWarning}
+          </p>
+        )}
       </CardHeader>
 
       <CardContent className="p-3 pt-0">
@@ -247,6 +273,12 @@ const SortableHistogramCard = ({
             }}
             className={`w-full ${expanded ? "h-[65vh]" : `${getHistogramSize(config.size)} max-md:h-auto max-md:aspect-[4/3]`} rounded-md border bg-background`}
           />
+          {/* One click back from a zoom that went wrong, where the eye already is. */}
+          <Button variant="outline" size="icon" onClick={() => onResetZoom(config.id)}
+                  className="absolute bottom-2 right-2 z-10 h-7 w-7 bg-background/80 backdrop-blur-sm"
+                  title="Reset the zoom of this histogram" aria-label={`Reset the zoom of ${config.label}`}>
+            <RotateCcw className="h-3.5 w-3.5" />
+          </Button>
           {markingROIs && (
             <ROIMarker frame={() => frameRect(config.id)} onMark={(from, to) => {
               const plot = histogramRefs.current[config.id]
@@ -1655,6 +1687,17 @@ export default function EnhancedHistogramDashboard() {
   }
 
   // Zoom management
+  const resetZoom = (histogramId: string) => {
+    const fp = histogramPainters.current[histogramId]?.getFramePainter?.()
+    if (fp?.originalZoom) {
+      clearTimeout(fp.saveZoomTimeout)
+      fp.originalZoom(0, 0, 0, 0)
+    } else if (fp?.unzoom) {
+      fp.unzoom()
+    }
+    void useHistogramStore.getState().setZoom(histogramId, null)
+  }
+
   const resetAllZoom = () => {
     Object.values(histogramPainters.current).forEach((painter) => {
       const fp = painter?.getFramePainter()
@@ -1873,6 +1916,7 @@ export default function EnhancedHistogramDashboard() {
                     onMarkROI={(id, from, to, plot) => void markROI(id, from, to, plot)}
                     frameRect={frameRect}
                     onCalibrate={setCalibrating}
+                    onResetZoom={resetZoom}
                     onToggleExpand={(id) => setExpandedId((cur) => (cur === id ? null : id))}
                     onHide={(id) => void hideHistogram(id)}
                     onZoomToROI={zoomToROI}

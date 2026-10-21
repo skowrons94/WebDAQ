@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
+import { useJsrootTheme } from '@/lib/jsroot-theme'
 
 type BoardData = {
   id: string;
@@ -99,6 +100,8 @@ export default function WaveformDashboard() {
   const isRunning = useRunStatus((s) => s.isRunning)
   const runNumber = useRunStatus((s) => s.runNumber)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
+  // Plots follow the light/dark theme like the rest of the page.
+  useJsrootTheme(jsrootLoaded)
   const [updateTrigger, setUpdateTrigger] = useState(0)
   const [selectedWaveform, setSelectedWaveform] = useState<{[boardId: string]: number}>({})
   const [boardSettings, setBoardSettings] = useState<{[boardId: string]: BoardSettings}>({})
@@ -720,7 +723,9 @@ export default function WaveformDashboard() {
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <div className="flex-1 container mx-auto px-0 py-4 sm:p-4">
-        <div className="mb-4 flex justify-between items-center">
+        {/* One row on a desktop; on a phone the summary sits above the
+            controls, which wrap, rather than squeezing into a column. */}
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="text-sm text-muted-foreground">
             {totalSelectedChannels > 0 ?
               `${totalSelectedChannels} channel(s) shown on ${liveSelections.length} board(s)` :
@@ -749,15 +754,17 @@ export default function WaveformDashboard() {
               variant="outline"
               size="sm"
               onClick={handleShowAllChannels}
+              title="Show every channel of every board"
             >
-              Show All Channels
+              Show all
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleHideAllChannels}
+              title="Hide every channel of every board"
             >
-              Hide All Channels
+              Hide all
             </Button>
             {hasAnySelections && (
               <Button
@@ -766,7 +773,7 @@ export default function WaveformDashboard() {
                 onClick={() => clearAllSelections('Waveform')}
                 className="text-destructive hover:text-destructive"
               >
-                Clear All Selections
+                Clear selection
               </Button>
             )}
           </div>
@@ -781,10 +788,10 @@ export default function WaveformDashboard() {
           return (
             <Card key={board.id} className="mb-6">
               <CardHeader>
-                <CardTitle className="flex justify-between items-center">
+                <CardTitle className="flex flex-wrap items-center justify-between gap-2">
                   <span>{board.name} (ID: {board.id})</span>
-                  <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
+                  <div className="flex items-center">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Button
                         size="sm"
                         variant={selectedWaveform[board.id] === 1 ? "default" : "outline"}
@@ -824,14 +831,14 @@ export default function WaveformDashboard() {
                         </Label>
                       </div>
                     </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="flex items-center space-x-2">
-                        <Label className="text-sm min-w-16">Trace 1:</Label>
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                      <div className="flex w-full items-center gap-2 sm:w-auto">
+                        <Label className="min-w-16 text-sm">Trace 1:</Label>
                         <Select
                           value={getCurrentTraceValue(board.id, 1).toString()}
                           onValueChange={(value: string) => handleTraceTypeChange(board.id, 1, parseInt(value))}
                         >
-                          <SelectTrigger className="w-48 h-8 text-xs" aria-label={`Trace 1, board ${board.id}`}>
+                          <SelectTrigger className="h-8 min-w-0 flex-1 text-xs sm:w-48 sm:flex-none" aria-label={`Trace 1, board ${board.id}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -844,13 +851,13 @@ export default function WaveformDashboard() {
                         </Select>
                       </div>
                       {config.dualTrace && (
-                        <div className="flex items-center space-x-2">
-                          <Label className="text-sm min-w-16">Trace 2:</Label>
+                        <div className="flex w-full items-center gap-2 sm:w-auto">
+                          <Label className="min-w-16 text-sm">Trace 2:</Label>
                           <Select
                             value={getCurrentTraceValue(board.id, 2).toString()}
                             onValueChange={(value: string) => handleTraceTypeChange(board.id, 2, parseInt(value))}
                           >
-                            <SelectTrigger className="w-48 h-8 text-xs" aria-label={`Trace 2, board ${board.id}`}>
+                            <SelectTrigger className="h-8 min-w-0 flex-1 text-xs sm:w-48 sm:flex-none" aria-label={`Trace 2, board ${board.id}`}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -863,13 +870,13 @@ export default function WaveformDashboard() {
                           </Select>
                         </div>
                       )}
-                      <div className="flex items-center space-x-2">
-                        <Label className="text-sm min-w-24">Digital probe:</Label>
+                      <div className="flex w-full items-center gap-2 sm:w-auto">
+                        <Label className="min-w-16 text-sm">Digital probe:</Label>
                         <Select
                           value={getCurrentDigitalProbeValue(board.id).toString()}
                           onValueChange={(value: string) => handleDigitalProbeChange(board.id, parseInt(value))}
                         >
-                          <SelectTrigger className="w-48 h-8 text-xs" aria-label={`Digital probe, board ${board.id}`}>
+                          <SelectTrigger className="h-8 min-w-0 flex-1 text-xs sm:w-48 sm:flex-none" aria-label={`Digital probe, board ${board.id}`}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -885,7 +892,7 @@ export default function WaveformDashboard() {
                   </div>
                 )}
                 <div className="flex flex-col space-y-4 mt-4">
-                  <div className="flex items-center space-x-4">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id={`select-all-wave-${board.id}`}

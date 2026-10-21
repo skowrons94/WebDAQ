@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
 import { loadJSROOT } from '@/lib/load-jsroot'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
+import { useJsrootTheme } from '@/lib/jsroot-theme'
 
 type BoardData = {
   id: string;
@@ -30,6 +31,8 @@ export default function PSDDashboard() {
   const runBadge = useRunBadge()
   const runNumber = useRunStatus((s) => s.runNumber)
   const [jsrootLoaded, setJsrootLoaded] = useState(false)
+  // Plots follow the light/dark theme like the rest of the page.
+  useJsrootTheme(jsrootLoaded)
   const [updateTrigger, setUpdateTrigger] = useState(0)
   const histogramRefs = useRef<{[key: string]: HTMLDivElement | null}>({})
   const { toast } = useToast()

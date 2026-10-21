@@ -51,6 +51,8 @@ function RootPlot({ fetcher, refreshKey, height = 320 }: {
         const data = await fetcher()
         if (cancelled || !ref.current) return
         const obj = window.JSROOT.parse(data)
+        // In the page's light or dark theme, like the other plots.
+        window.JSROOT.settings.DarkMode = document.documentElement.classList.contains("dark")
         await window.JSROOT.redraw(ref.current, obj, "hist")
         setError(null)
       } catch (e) {

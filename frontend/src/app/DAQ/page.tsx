@@ -1,7 +1,6 @@
 'use client';
 
 import { AuthGate } from '@/components/auth-gate'
-import CalibrationDashboard from '@/components/calib-dashboard';
 import CAENDashboard from '@/components/caen-dashboard';
 import BoardInfoPanel from '@/components/board-info';
 import { Layout } from '@/components/dashboard-layout'; import {
@@ -20,19 +19,17 @@ function DaqPageContent() {
   return (
     <>
       <Layout>
-        <Tabs defaultValue="caen" orientation='vertical'>        
+        {/* Energy calibration lives on the histogram cards (the ruler button). */}
+        <h1 className="mb-4 text-xl font-semibold tracking-tight">DAQ settings</h1>
+        <Tabs defaultValue="caen" orientation='vertical'>
             <div className="flex items-center">
             <TabsList>
                 <TabsTrigger value="caen">Configuration</TabsTrigger>
-                <TabsTrigger value="calibration">Calibration</TabsTrigger>
                 <TabsTrigger value="hardware">Hardware info</TabsTrigger>
               </TabsList>
             </div>
           <TabsContent value="caen">
             <CAENDashboard />
-          </TabsContent>
-          <TabsContent value="calibration">
-            <CalibrationDashboard />
           </TabsContent>
           <TabsContent value="hardware">
             <div className="container mx-auto p-4">

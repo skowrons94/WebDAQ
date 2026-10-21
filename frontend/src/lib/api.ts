@@ -623,9 +623,6 @@ export const reset = () =>
 export const getCalib = (boardName: string, boardId: string, channel: string) =>
     api.get(`/calib/get/${boardName}/${boardId}/${channel}`);
 
-export const setCalib = (boardName: string, boardId: string, channel: string, a: string, b: string) =>
-    api.post(`/calib/set/${boardName}/${boardId}/${channel}`, { board_name: boardName, board_id: boardId, channel, a, b });
-
 // Current reading APIs
 export const startAcquisitionCurrent = (runNumber: string) =>
     api.get(`/current/start/${runNumber}`);
