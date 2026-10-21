@@ -511,7 +511,9 @@ def get_sync_settings():
     The chain model and its checks live in services/sync_chain.py, next to the
     explanation of how caendaq starts a synchronised run.
     """
-    return jsonify(sync_chain.chain_status(daq_mgr.get_boards()))
+    # The CAEN daisy chain: an SIS3316 is not part of it (it starts on its own).
+    from ..services.sis3316_acquisition import is_sis3316
+    return jsonify(sync_chain.chain_status([b for b in daq_mgr.get_boards() if not is_sis3316(b)]))
 
 
 @bp.route("/experiment/board_info", methods=['GET'])

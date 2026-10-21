@@ -644,7 +644,8 @@ def get_all_boards_summary():
                 'channels': board.get('chan', 0),
                 'dpp_type': board.get('dpp'),
                 'link_type': board.get('link_type'),
-                'available_histograms': ['energy'] if board.get('dpp') == 'DPP-PHA' else ['qlong', 'qshort', 'psd'],
+                'available_histograms': (['energy'] if board.get('dpp') in ('DPP-PHA', 'SIS3316')
+                                         else ['qlong', 'qshort', 'psd']),
                 'waveforms_available': True
             }
             summary.append(board_summary)

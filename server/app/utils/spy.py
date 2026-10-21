@@ -148,7 +148,10 @@ class ReadoutUnitSpy:
                     empty_reason="No waveform — switch waveforms on for this board")
             getter = getattr(daq, htype, None)   # daq.energy / qshort / qlong
             arr = getter(board_index, channel) if getter else None
-            return self._build(name, arr, nbins=_BINS.get(htype),
+            # caendaq's arrays are _BINS long; an SIS3316 spectrum has its own
+            # configured length, so the array decides when it has one.
+            nbins = len(arr) if arr is not None and len(arr) else _BINS.get(htype)
+            return self._build(name, arr, nbins=nbins,
                                empty_reason=f"No counts yet on channel {channel}")
         except Exception as e:
             self.logger.warning(f"histogram({board_index},{channel},{htype}) failed: {e}")

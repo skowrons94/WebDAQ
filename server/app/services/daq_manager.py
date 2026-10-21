@@ -107,9 +107,12 @@ class DAQManager:
         # Telegram notification settings (loaded from persistent storage)
         self.telegram = TelegramNotifier()
         
-        # Initialize persistent connections for existing boards
+        # Initialize persistent connections for existing boards (CAEN only: an
+        # SIS3316 is reached over UDP by sis3316_acquisition, opened on demand)
         for board in self.daq_state.get('boards', []):
             board_id = str(board['id'])
+            if str(board.get('vendor', '')).lower() == 'sis3316':
+                continue
             if not self.digitizer_container.add_board(board):
                 self.logger.warning(f"Failed to create persistent connection for board {board_id}")
 
@@ -343,7 +346,16 @@ class DAQManager:
         reads as a broken page rather than as missing data. Rebuilding here
         means the server comes up consistent with what it advertises.
         """
+        from .sis3316_acquisition import get_sis3316_acquisition, is_sis3316
         for board in self.daq_state.get('boards', []):
+            if is_sis3316(board):
+                # Not a CAEN register dump: a missing settings file is simply
+                # recreated with the SIS3316 defaults.
+                try:
+                    get_sis3316_acquisition(self.test_flag).ensure_settings_file(board)
+                except Exception as e:
+                    self.logger.error(f"Could not create settings for SIS3316 {board.get('id')}: {e}")
+                continue
             config_file = self.board_config_path(board)
             if self._has_registers(config_file):
                 continue
@@ -475,6 +487,10 @@ class DAQManager:
         """
         self._validate_new_board(board_config)
 
+        from .sis3316_acquisition import is_sis3316
+        if is_sis3316(board_config):
+            return self._add_sis3316_board(board_config)
+
         try:
             # Test mode: no hardware. Register a mock board with sensible defaults
             # so the whole flow (add board -> start run -> mock data) works. The
@@ -574,6 +590,41 @@ class DAQManager:
                 self.digitizer_container.remove_board(board_id)
             return False
     
+    def _add_sis3316_board(self, board_config: Dict[str, Any]) -> bool:
+        """Add a Struck SIS3316 reached over Ethernet (UDP).
+
+        The board is identified over the network before it is added (the mock
+        stands in for it in test mode), so a wrong address is refused here
+        rather than at the first run. Its settings file is the sis3316daq
+        settings format, created with defaults on first add.
+        """
+        from .sis3316_acquisition import DEFAULT_HOST, VENDOR, get_sis3316_acquisition
+        sis = get_sis3316_acquisition(self.test_flag)
+        board_config.update({
+            "name": "SIS3316", "chan": 16, "dpp": "SIS3316", "vendor": VENDOR,
+            "link_type": "Ethernet", "vme": "0",
+            "link_num": str(board_config.get("link_num") or DEFAULT_HOST).strip(),
+        })
+        try:
+            info = sis.identify(board_config, self.daq_state['boards'])
+        except Exception as e:
+            sis.forget(board_config['id'])
+            self.logger.error(f"SIS3316 at {board_config['link_num']} did not answer: {e}")
+            return False
+        board_config["serial"] = info.get("serial")
+        os.makedirs("calib", exist_ok=True)
+        sis.ensure_settings_file(board_config)
+        calib_file = f"calib/{board_config['name']}_{board_config['id']}.cal"
+        if not os.path.exists(calib_file):
+            with open(calib_file, 'w') as f:
+                for _ in range(board_config['chan']):
+                    f.write("0.0 1.0\n")
+        self._insert_board_sorted(board_config)
+        self._update_project()
+        self.logger.info(f"Added SIS3316 serial {info.get('serial')} at {board_config['link_num']} "
+                         f"(ID {board_config['id']})")
+        return True
+
     def remove_board(self, board_id: str) -> bool:
         """
         Remove a CAEN board from the configuration.
@@ -598,7 +649,11 @@ class DAQManager:
                 board = self.daq_state['boards'][board_index]
                 
                 # Remove persistent digitizer connection
-                self.digitizer_container.remove_board(board_id)
+                from .sis3316_acquisition import get_sis3316_acquisition, is_sis3316
+                if is_sis3316(board):
+                    get_sis3316_acquisition(self.test_flag).forget(board_id)
+                else:
+                    self.digitizer_container.remove_board(board_id)
                 
                 # Remove calibration file
                 calib_file = f"calib/{board['name']}_{board['id']}.cal"
@@ -750,6 +805,11 @@ class DAQManager:
         board = self.find_board_with_id(board_id)
         if board is None:
             return {'written': False, 'reason': f"No board with id {board_id}.", 'via': ''}
+        from .sis3316_acquisition import is_sis3316
+        if is_sis3316(board):
+            return {'written': False, 'via': '', 'reason': (
+                "CAEN registers do not apply to the SIS3316; change its settings on "
+                "its own settings page.")}
 
         allowed, reason = is_online_safe(int(address), board.get('dpp', 'DPP-PSD'))
         if not allowed:
@@ -1289,6 +1349,10 @@ class DAQManager:
                 # In test mode, simulate connectivity
                 connectivity_status['connected'] = True
                 connectivity_status['ready'] = not self.is_running()
+            elif str(board.get('vendor', '')).lower() == 'sis3316':
+                connectivity_status['connected'] = self._sis3316_connected(board)
+                connectivity_status['ready'] = (connectivity_status['connected']
+                                                and not self.is_running())
             elif self.is_running():
                 # caendaq owns the boards for the duration of the run.
                 connectivity_status['connected'] = self._board_held_by_acquisition(board_id)
@@ -1302,6 +1366,21 @@ class DAQManager:
         
         return board_connectivity
     
+    def _sis3316_connected(self, board: Dict[str, Any]) -> bool:
+        """An SIS3316 is connected when it answers over UDP. During a run the
+        acquisition owns the link, so its failure flag is the answer instead."""
+        from .sis3316_acquisition import get_sis3316_acquisition
+        sis = get_sis3316_acquisition(self.test_flag)
+        if self.is_running():
+            return self._board_held_by_acquisition(str(board['id'])) and \
+                not sis.health().get(str(board['id']), {}).get('failed', False)
+        try:
+            sis.identify(board, self.daq_state['boards'])
+            return True
+        except Exception as e:
+            self.logger.debug(f"SIS3316 {board.get('id')} not reachable: {e}")
+            return False
+
     def refresh_board_connection(self, board_id: str) -> bool:
         """
         Refresh persistent connection for a specific board.
@@ -1322,7 +1401,9 @@ class DAQManager:
         if board_config is None:
             self.logger.error(f"Board configuration not found for board {board_id}")
             return False
-        
+
+        if str(board_config.get('vendor', '')).lower() == 'sis3316':
+            return self._sis3316_connected(board_config)
         return self.digitizer_container.refresh_board_connection(board_id, board_config)
     
     def cleanup(self) -> None:

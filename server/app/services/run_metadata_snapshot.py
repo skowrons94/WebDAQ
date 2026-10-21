@@ -25,7 +25,7 @@ def _isoformat(value: Optional[datetime]) -> Optional[str]:
 
 
 def _artifact_role(name: str) -> str:
-    if name.endswith(".caendat"):
+    if name.endswith(".caendat") or name.endswith(".h5"):   # .h5: SIS3316 run files
         return "raw-data"
     if name.endswith(".root"):
         return "root"

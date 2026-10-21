@@ -138,7 +138,7 @@ class SpyManager:
                     if str(board['id']) == str(board_id):
                         dpp = board.get('dpp', 'DPP-PHA')
                         break
-                histogram_type = "energy" if dpp == "DPP-PHA" else "qlong"
+                histogram_type = "energy" if dpp in ("DPP-PHA", "SIS3316") else "qlong"
 
             histo = self.ru_spy.histogram(board_index, int(channel), histogram_type)
 
@@ -294,10 +294,30 @@ class SpyManager:
         """Return the register configuration file path for a single board."""
         return f"conf/{board['name']}_{board['id']}.json"
 
+    # Waveform length an SIS3316 gets when waveforms are switched on and it
+    # had none: the SIS3316 records raw samples per event or not at all.
+    SIS3316_DEFAULT_RAW_SAMPLES = 1000
+
+    def _set_sis3316_waveforms(self, board: Dict[str, Any], enabled: bool) -> bool:
+        from .sis3316_acquisition import get_sis3316_acquisition
+        sis = get_sis3316_acquisition()
+        settings = sis.load_settings(board)
+        b = settings.setdefault("board", {})
+        if enabled:
+            if not int(b.get("raw_samples", 0)):
+                b["raw_samples"] = int(b.get("raw_samples_when_on", 0)) or self.SIS3316_DEFAULT_RAW_SAMPLES
+        else:
+            if int(b.get("raw_samples", 0)):
+                b["raw_samples_when_on"] = int(b["raw_samples"])
+            b["raw_samples"] = 0
+        sis.save_settings(board, settings)
+        return True
+
     def set_waveform_for_board(self, board: Dict[str, Any], enabled: bool) -> bool:
         """
         Enable or disable waveform recording for a single board by toggling
-        bit 16 of register 0x8000 in the board's configuration file.
+        bit 16 of register 0x8000 in the board's configuration file (for an
+        SIS3316: its raw sample length, remembered while off).
 
         Args:
             board: Board configuration dictionary
@@ -307,6 +327,9 @@ class SpyManager:
             True if successful, False otherwise
         """
         try:
+            if str(board.get('vendor', '')).lower() == 'sis3316':
+                return self._set_sis3316_waveforms(board, enabled)
+
             filename = self._waveform_config_file(board)
 
             if not os.path.exists(filename):
@@ -353,6 +376,11 @@ class SpyManager:
             True if waveforms are enabled for the board, False otherwise
         """
         try:
+            if str(board.get('vendor', '')).lower() == 'sis3316':
+                from .sis3316_acquisition import get_sis3316_acquisition
+                settings = get_sis3316_acquisition().load_settings(board)
+                return int(settings.get("board", {}).get("raw_samples", 0)) > 0
+
             filename = self._waveform_config_file(board)
 
             if not os.path.exists(filename):

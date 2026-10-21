@@ -9,6 +9,11 @@ Board configs come from the daq_manager state (the same list the UI edits): each
 board dict carries ``id``, ``name``, ``chan``, ``dpp``, ``link_type``,
 ``link_num`` and ``vme``. The per-board register configuration is the existing
 ``conf/<name>_<id>.json`` dump, which CaenDigitizer applies directly.
+
+Boards with ``"vendor": "sis3316"`` (Struck SIS3316, Ethernet) are not CAEN
+boards: configure() hands them to :mod:`app.services.sis3316_acquisition`, and
+every method here merges the two backends, so callers need not know which
+board is which. Board indices (board_index()) stay global over all boards.
 """
 
 import json
@@ -244,8 +249,36 @@ class CaenAcquisition:
     def is_running(self) -> bool:
         return self._running
 
+    @property
+    def _caen_boards(self) -> List[Dict[str, Any]]:
+        """The CAEN boards of the run, in caendaq index order."""
+        from .sis3316_acquisition import is_sis3316
+        return [b for b in self._boards if not is_sis3316(b)]
+
+    @property
+    def _sis_boards(self) -> List[Dict[str, Any]]:
+        """The SIS3316 boards of the run (handled by sis3316_acquisition)."""
+        from .sis3316_acquisition import is_sis3316
+        return [b for b in self._boards if is_sis3316(b)]
+
     def get_daq(self):
+        """The live-data source for the spy: caendaq's DAQ, or, when the run
+        includes SIS3316 boards, a view that routes each global board index to
+        the right backend."""
+        if self._sis_boards:
+            return _MixedDaq(self)
         return self.daq
+
+    def _sis(self):
+        from .sis3316_acquisition import get_sis3316_acquisition
+        return get_sis3316_acquisition(self.test_flag)
+
+    def caen_index(self, board_id: str) -> Optional[int]:
+        """caendaq's own index of a CAEN board in this run, or None."""
+        for i, b in enumerate(self._caen_boards):
+            if str(b["id"]) == str(board_id):
+                return i
+        return None
 
     def get_boards(self) -> List[Dict[str, Any]]:
         """Boards in add order — index i here is board index i in caendaq."""
@@ -267,6 +300,23 @@ class CaenAcquisition:
         "SW controlled" gets armed instead of started, and caendaq fires the
         software trigger on the master once every board is armed.
         """
+        from .sis3316_acquisition import is_sis3316
+        caen_boards = [b for b in boards if not is_sis3316(b)]
+        sis_boards = [b for b in boards if is_sis3316(b)]
+        self.daq = None
+        self._boards = []
+        if sis_boards:
+            graphite = _graphite_from_stats()
+            interval_ms, _ = _sampling_from_stats()
+            if not self._sis().configure(sis_boards, run=int(run), out_dir=out_dir,
+                                         max_file_bytes=int(max_file_bytes), write=bool(write),
+                                         graphite=graphite, stats_interval_ms=interval_ms,
+                                         software=_webdaq_version()):
+                return False
+        if not caen_boards:
+            self._boards = list(boards)
+            self.logger.info(f"Acquisition configured with {len(sis_boards)} SIS3316 board(s), run {run}")
+            return True
         if self._caendaq is None:
             self.logger.error(
                 "caendaq module not available — cannot configure acquisition. "
@@ -286,9 +336,8 @@ class CaenAcquisition:
                                       graphite_prefix=graphite_prefix,
                                       stats_interval_ms=stats_interval_ms,
                                       stats_first_interval_ms=stats_first_ms)
-            self._boards = []
             # daq_state keeps boards sorted by id, so add order == board index.
-            for board in boards:
+            for board in caen_boards:
                 conn = _CONN_TYPE.get(board.get("link_type", "USB"), 0)
                 config = f"conf/{board['name']}_{board['id']}.json"
                 idx = self.daq.add_board(
@@ -308,7 +357,7 @@ class CaenAcquisition:
                 if idx < 0:
                     self.logger.error(f"Failed to add board {board.get('id')} to caendaq")
                     return False
-                self._boards.append(board)
+            self._boards = list(boards)
             self.logger.info(f"Acquisition configured with {len(self._boards)} board(s), run {run}")
             return True
         except Exception as e:
@@ -317,12 +366,19 @@ class CaenAcquisition:
             return False
 
     def start(self) -> bool:
-        if self.daq is None:
+        if self.daq is None and not self._sis_boards:
             self.logger.error("start() called before configure()")
             return False
         try:
-            if not self.daq.start():
+            # SIS3316 boards first: they start sampling at once, while caendaq
+            # may still wait for a synchronised CAEN chain's start signal.
+            if self._sis_boards and not self._sis().start():
+                self.logger.error("SIS3316 acquisition failed to start")
+                return False
+            if self.daq is not None and not self.daq.start():
                 self.logger.error("caendaq DAQ failed to start")
+                if self._sis_boards:
+                    self._sis().stop()
                 return False
             self._running = True
             self.logger.info("Acquisition started")
@@ -336,6 +392,8 @@ class CaenAcquisition:
         try:
             if self.daq is not None:
                 self.daq.stop()
+            if self._sis_boards:
+                self._sis().stop()
             self.logger.info("Acquisition stopped")
             return True
         except Exception as e:
@@ -362,9 +420,9 @@ class CaenAcquisition:
         """
         if self.daq is None or not self._running:
             return False
-        index = self.board_index(board_id)
+        index = self.caen_index(board_id)
         if index is None:
-            self.logger.error(f"write_register: board {board_id} is not part of this run")
+            self.logger.error(f"write_register: CAEN board {board_id} is not part of this run")
             return False
         try:
             return bool(self.daq.write_register(index, int(address), int(value)))
@@ -382,7 +440,7 @@ class CaenAcquisition:
         """Read a register back from the running acquisition, or None."""
         if self.daq is None or not self._running:
             return None
-        index = self.board_index(board_id)
+        index = self.caen_index(board_id)
         if index is None:
             return None
         try:
@@ -395,13 +453,20 @@ class CaenAcquisition:
         """Latest per-board/per-channel rates (event/pileup/lost/satu per second
         + file write rate, plus 'failed'/'board_failures'). Empty when no run is
         active (so the UI shows nothing between runs)."""
-        if self.daq is None or not self._running:
+        if not self._running:
             return []
+        out: List[Dict[str, Any]] = []
         try:
-            return self.daq.stats()
+            if self.daq is not None:
+                out.extend(self.daq.stats())
         except Exception as e:
             self.logger.debug(f"stats() failed: {e}")
-            return []
+        if self._sis_boards:
+            try:
+                out.extend(self._sis().stats())
+            except Exception as e:
+                self.logger.debug(f"SIS3316 stats() failed: {e}")
+        return out
 
     def set_graphite(self, host: str = "", port: Optional[int] = None,
                      prefix: Optional[str] = None) -> None:
@@ -421,6 +486,8 @@ class CaenAcquisition:
                 self.daq.set_graphite(str(host), int(port), str(prefix))
             except Exception as e:
                 self.logger.warning(f"set_graphite failed: {e}")
+        if self._sis_boards and prefix:
+            self._sis().set_graphite(str(host), int(port), str(prefix))
 
     def set_stats_interval(self, interval_ms: Optional[int] = None) -> Optional[int]:
         """Change the rate sampling cadence of a live run, in ms.
@@ -435,6 +502,10 @@ class CaenAcquisition:
         """
         if interval_ms is None:
             interval_ms, _ = _sampling_from_stats()
+        if self._sis_boards:
+            self._sis().set_stats_interval(int(interval_ms))
+            if self.daq is None:
+                return int(interval_ms) if self._running else None
         if self.daq is None:
             return None
         if not hasattr(self.daq, "set_stats_interval"):
@@ -476,6 +547,9 @@ class CaenAcquisition:
             "caendaq_has_caen": None,
             "acquisition_mode": "mock" if self.test_flag else "hardware",
         }
+        sis_version = self._sis().software_version() if self._sis_boards else None
+        if sis_version:
+            info["sis3316daq"] = sis_version
         if self._caendaq is not None:
             info["caendaq"] = getattr(self._caendaq, "__version__", "unknown")
             # Older builds of the module predate this attribute.
@@ -490,7 +564,9 @@ class CaenAcquisition:
         Includes model/serial/firmware/licence and the acquisition registers as
         read back from the hardware after configuration. Only available while a
         run is configured (the digitizers are open); None otherwise."""
-        idx = self.board_index(board_id)
+        if any(str(b["id"]) == str(board_id) for b in self._sis_boards):
+            return self._sis().board_info(board_id)
+        idx = self.caen_index(board_id)
         if idx is None or self.daq is None:
             return None
         try:
@@ -505,7 +581,7 @@ class CaenAcquisition:
     def board_info_all(self) -> List[Dict[str, Any]]:
         """board_info() for every board, in acquisition (chain) order. Empty when
         no run is configured."""
-        if self.daq is None:
+        if self.daq is None and not self._sis_boards:
             return []
         out: List[Dict[str, Any]] = []
         for b in self._boards:
@@ -523,7 +599,9 @@ class CaenAcquisition:
         """'daisy-chain' when any board is configured to wait for an external
         start, else 'independent'. Derived from the boards' own registers, so it
         cannot drift out of step with what the hardware is actually doing."""
+        from .sis3316_acquisition import is_sis3316
         candidates = boards if boards is not None else self._boards
+        candidates = [b for b in candidates if not is_sis3316(b)]
         return "daisy-chain" if any(is_synchronised(b) for b in candidates) else "independent"
 
     # Per-board readout counters caendaq keeps for the run, in the order the
@@ -549,10 +627,14 @@ class CaenAcquisition:
         every start) and empty outside a run. A counter missing from the installed
         caendaq build reads None rather than failing the whole request.
         """
-        if self.daq is None or not self._running:
+        if not self._running:
             return {}
         out: Dict[str, Dict[str, Any]] = {}
-        for i, b in enumerate(self._boards):
+        if self._sis_boards:
+            out.update(self._sis().diagnostics())
+        if self.daq is None:
+            return out
+        for i, b in enumerate(self._caen_boards):
             counters: Dict[str, Any] = {}
             for name in self._DIAGNOSTIC_COUNTERS:
                 reader = getattr(self.daq, name, None)
@@ -580,16 +662,60 @@ class CaenAcquisition:
         """Per-board failure status during a run, keyed by WebDAQ board id:
         {board_id: {'failed': bool, 'failures': int}}. Empty if no run is active.
         The counters reset at the start of each run. See caendaq.board_fail_meaning()."""
-        if self.daq is None or not self._running:
+        if not self._running:
             return {}
         out: Dict[str, Dict[str, Any]] = {}
-        for i, b in enumerate(self._boards):
+        if self._sis_boards:
+            out.update(self._sis().health())
+        if self.daq is None:
+            return out
+        for i, b in enumerate(self._caen_boards):
             try:
                 n = int(self.daq.board_failures(i))
                 out[str(b["id"])] = {"failed": n > 0, "failures": n}
             except Exception as e:
                 self.logger.debug(f"board_health board {i}: {e}")
         return out
+
+
+class _MixedDaq:
+    """Spy view over a run that mixes caendaq and SIS3316 boards: the spy asks
+    by global board index, this answers from the backend that holds the board.
+    SIS3316 boards have energy spectra and waveforms only (no PSD)."""
+
+    def __init__(self, acq: "CaenAcquisition"):
+        self._acq = acq
+
+    def _route(self, board_index: int):
+        board = self._acq._boards[board_index]
+        sis = self._acq._sis()
+        idx = sis.local_index(board["id"])
+        if idx is not None and any(str(b["id"]) == str(board["id"]) for b in self._acq._sis_boards):
+            return "sis", sis, idx
+        return "caen", self._acq.daq, self._acq.caen_index(str(board["id"]))
+
+    def _get(self, kind: str, board_index: int, channel: int):
+        backend, obj, idx = self._route(board_index)
+        if obj is None or idx is None:
+            return None
+        if backend == "sis":
+            return obj.array(idx, "waveform" if kind == "waveform" else kind, channel)
+        return getattr(obj, kind)(idx, channel)
+
+    def energy(self, b, ch):
+        return self._get("energy", b, ch)
+
+    def waveform(self, b, ch):
+        return self._get("waveform", b, ch)
+
+    def qshort(self, b, ch):
+        return self._get("qshort", b, ch)
+
+    def qlong(self, b, ch):
+        return self._get("qlong", b, ch)
+
+    def psd(self, b, ch):
+        return self._get("psd", b, ch)
 
 
 # Global instance --------------------------------------------------------------

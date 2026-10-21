@@ -78,7 +78,7 @@ def list_files(run_number: int) -> Dict[str, Any]:
         size = _size(path)
         out["total_bytes"] += size
         entry = {"name": name, "bytes": size}
-        if name.endswith(".caendat"):
+        if name.endswith(".caendat") or name.endswith(".h5"):   # .h5: SIS3316 run files
             out["data"].append(entry)
         elif name.endswith(".root"):
             out["root"].append(entry)

@@ -59,7 +59,7 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     CORS(app)
 
-    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog, grafana, notifications
+    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog, grafana, notifications, sis3316
     app.register_blueprint(auth.bp)
     app.register_blueprint(experiment.bp)
     app.register_blueprint(stats.bp)
@@ -75,6 +75,8 @@ def create_app(config_class=Config):
     app.register_blueprint(grafana.bp)
     # Notification transports (Telegram, Zulip) and the alert rules.
     app.register_blueprint(notifications.bp)
+    # Struck SIS3316 boards: settings and on-board utilities.
+    app.register_blueprint(sis3316.bp)
 
     app.after_request(_compress_response)
 

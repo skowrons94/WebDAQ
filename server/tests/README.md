@@ -31,6 +31,7 @@ directory it is started from.
 | `test_graphite_client.py` | Both `/metrics/find` response shapes, and what counts as "reachable" |
 | `test_elog_client.py` | Settings persistence, password masking, attachment host guard |
 | `test_routes.py` | HTTP status codes and messages the frontend relies on |
+| `test_sis3316_routes.py` | An SIS3316 (simulated) end to end: add, settings and their refusals, a run with rates, spectra and an HDF5 file |
 
 ## Adding a test
 
