@@ -708,6 +708,16 @@ class _MixedDaq:
     def waveform(self, b, ch):
         return self._get("waveform", b, ch)
 
+    def waveform_of(self, b, ch, kind):
+        backend, obj, idx = self._route(b)
+        if obj is None or idx is None:
+            return None
+        if backend == "sis":
+            return obj.array(idx, "waveform", ch, kind)
+        if not hasattr(obj, "waveform_of"):
+            raise NotImplementedError("the installed caendaq has no waveform_of")
+        return obj.waveform_of(idx, ch, kind)
+
     def qshort(self, b, ch):
         return self._get("qshort", b, ch)
 

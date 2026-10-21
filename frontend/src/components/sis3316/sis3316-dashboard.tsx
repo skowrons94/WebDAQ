@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { ScrollFade } from "@/components/ui/scroll-fade"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -124,24 +126,28 @@ type ChannelColumn = {
   label: string
   title: string
   kind: "bool" | "num" | "polarity" | "range" | "cfd"
+  section: "Input" | "Trigger" | "Energy filter" | "Spectrum"
+  unit?: string
   width?: string
 }
 
+// One row per setting, in the order the signal goes through the board.
 const CHANNEL_COLUMNS: ChannelColumn[] = [
-  { key: "enabled", label: "On", title: "Channel records events", kind: "bool" },
-  { key: "invert", label: "Polarity", title: "Signal polarity (negative inverts the input)", kind: "polarity" },
-  { key: "input_range", label: "Range", title: "Input range", kind: "range" },
-  { key: "termination_50ohm", label: "50 Ω", title: "50 Ω termination (off = 1 kΩ)", kind: "bool" },
-  { key: "dac_offset", label: "Offset", title: "Offset DAC (32768 = centred range)", kind: "num", width: "w-24" },
-  { key: "trigger_threshold", label: "Threshold", title: "Trigger threshold, ADC counts of pulse height", kind: "num" },
-  { key: "trigger_peaking", label: "Trig P", title: "Trigger filter peaking time, samples", kind: "num" },
-  { key: "trigger_gap", label: "Trig G", title: "Trigger filter gap time, samples", kind: "num" },
-  { key: "cfd", label: "CFD", title: "Constant-fraction timing of the trigger", kind: "cfd" },
-  { key: "energy_peaking", label: "E P", title: "Energy filter peaking time, samples", kind: "num" },
-  { key: "energy_gap", label: "E G", title: "Energy filter gap (flat top), samples", kind: "num" },
-  { key: "tau_table", label: "τ table", title: "Decay-correction table (0-3)", kind: "num" },
-  { key: "tau_factor", label: "τ factor", title: "Decay-correction factor (0 = off); table 0: τ ≈ 2097 µs / factor at 250 MHz", kind: "num" },
-  { key: "histogram_divider", label: "Divider", title: "Spectrum bin = max energy / divider (also the on-board histogram)", kind: "num" },
+  { section: "Input", key: "invert", label: "Polarity", title: "Signal polarity (negative inverts the input)", kind: "polarity" },
+  { section: "Input", key: "input_range", label: "Input range", title: "Input range", kind: "range" },
+  { section: "Input", key: "termination_50ohm", label: "50 Ω termination", title: "50 Ω termination (off = 1 kΩ)", kind: "bool" },
+  { section: "Input", key: "dac_offset", label: "Offset DAC", title: "Offset DAC (32768 = centred range)", kind: "num", width: "w-24" },
+  { section: "Trigger", key: "internal_trigger", label: "Internal trigger", title: "Trigger on the channel's own signal", kind: "bool" },
+  { section: "Trigger", key: "external_trigger", label: "External trigger", title: "Record on an external trigger (NIM TI, when enabled below)", kind: "bool" },
+  { section: "Trigger", key: "trigger_threshold", label: "Threshold", unit: "ADC counts", title: "Trigger threshold, ADC counts of pulse height", kind: "num" },
+  { section: "Trigger", key: "trigger_peaking", label: "Peaking time", unit: "samples", title: "Trigger filter peaking time", kind: "num" },
+  { section: "Trigger", key: "trigger_gap", label: "Gap time", unit: "samples", title: "Trigger filter gap time", kind: "num" },
+  { section: "Trigger", key: "cfd", label: "CFD", title: "Constant-fraction timing of the trigger", kind: "cfd" },
+  { section: "Energy filter", key: "energy_peaking", label: "Peaking time", unit: "samples", title: "Energy filter peaking time", kind: "num" },
+  { section: "Energy filter", key: "energy_gap", label: "Flat top", unit: "samples", title: "Energy filter gap (flat top)", kind: "num" },
+  { section: "Energy filter", key: "tau_table", label: "τ table", title: "Decay-correction table (0-3)", kind: "num" },
+  { section: "Energy filter", key: "tau_factor", label: "τ factor", title: "Decay-correction factor (0 = off); table 0: τ ≈ 2097 µs / factor at 250 MHz", kind: "num" },
+  { section: "Spectrum", key: "histogram_divider", label: "Divider", title: "Spectrum bin = max energy / divider (also the on-board histogram). Divider = energy peaking gives the pulse height in ADC counts", kind: "num" },
 ]
 
 function ChannelCell({ col, value, onChange, ranges, disabled }: {
@@ -233,10 +239,14 @@ function SettingsTab({ boardId }: { boardId: string }) {
     setDraft({ ...draft, channels })
   }
 
-  const resetChannel = (ch: number) => {
-    const channels = { ...draft.channels }
-    delete channels[String(ch)]
-    setDraft({ ...draft, channels })
+  const setAllEnabled = (enabled: boolean) => {
+    const channels: Record<string, Partial<Sis3316ChannelSettings>> = {}
+    for (const [k, over] of Object.entries(draft.channels)) {
+      const rest = { ...over }
+      delete rest.enabled
+      if (Object.keys(rest).length) channels[k] = rest
+    }
+    setDraft({ ...draft, channel_defaults: { ...draft.channel_defaults, enabled }, channels })
   }
 
   async function save() {
@@ -261,7 +271,9 @@ function SettingsTab({ boardId }: { boardId: string }) {
   const b = draft.board
   // Channels start switched off, so a freshly added board records nothing
   // until at least one is turned on: say so rather than show empty spectra.
-  const anyEnabled = CHANNELS.some((ch) => effective(ch).enabled)
+  const enabledChannels = CHANNELS.filter((ch) => effective(ch).enabled)
+  const anyEnabled = enabledChannels.length > 0
+  const sections = Array.from(new Set(CHANNEL_COLUMNS.map((c) => c.section)))
   return (
     <div className="space-y-6">
       {!anyEnabled && (
@@ -269,7 +281,7 @@ function SettingsTab({ boardId }: { boardId: string }) {
           <AlertTitle>No channel is switched on</AlertTitle>
           <AlertDescription>
             This board records nothing, so its histograms stay empty. Switch on the channels in use
-            (the On column below, or the Defaults row for all of them) and save.
+            under Channel enable and save.
           </AlertDescription>
         </Alert>
       )}
@@ -287,6 +299,111 @@ function SettingsTab({ boardId }: { boardId: string }) {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+          <CardTitle>Channel enable</CardTitle>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setAllEnabled(true)}>All on</Button>
+            <Button variant="outline" size="sm" onClick={() => setAllEnabled(false)}>All off</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-6">
+            {CHANNELS.map((ch) => {
+              const on = !!effective(ch).enabled
+              return (
+                <div key={ch} className="flex flex-col items-center gap-2 min-w-12">
+                  <span className="text-sm font-medium">Ch {ch}</span>
+                  <Switch aria-label={`Channel ${ch} enabled`} checked={on}
+                          onCheckedChange={(v) => setChannel(ch, "enabled", v)} />
+                  <Badge variant={on ? "default" : "secondary"} className="px-2 text-xs">{on ? "ON" : "OFF"}</Badge>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Channel settings</CardTitle>
+          <CardDescription>
+            The Default column applies to every channel not changed itself; a value changed for one
+            channel is highlighted, and the arrow in its header puts it back on the defaults.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollFade tone="card" hint="More channels to the right →">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 pr-6 font-medium text-muted-foreground">Setting</th>
+                  <th className="text-center py-2 px-3 font-medium min-w-32 bg-muted/40">Default</th>
+                  {enabledChannels.map((ch) => {
+                    const changed = Object.keys(draft.channels[String(ch)] ?? {}).filter((k) => k !== "enabled").length
+                    return (
+                      <th key={ch} className="text-center py-2 px-3 font-medium min-w-32">
+                        <span className="inline-flex items-center gap-1">
+                          Ch {ch}
+                          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={!changed}
+                                  onClick={() => {
+                                    const over = { ...(draft.channels[String(ch)] ?? {}) }
+                                    const keep = "enabled" in over ? { enabled: over.enabled } : null
+                                    const channels = { ...draft.channels }
+                                    if (keep) channels[String(ch)] = keep
+                                    else delete channels[String(ch)]
+                                    setDraft({ ...draft, channels })
+                                  }}
+                                  title={`Put channel ${ch} back on the defaults`}
+                                  aria-label={`Put channel ${ch} back on the defaults`}>
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                        </span>
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {sections.map((section) => [
+                  <tr key={`h-${section}`}>
+                    <td colSpan={2 + enabledChannels.length}
+                        className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {section}
+                    </td>
+                  </tr>,
+                  ...CHANNEL_COLUMNS.filter((c) => c.section === section).map((c) => (
+                    <tr key={String(c.key)} className="border-b last:border-0">
+                      <td className="py-2 pr-6 font-medium whitespace-nowrap" title={c.title}>
+                        {c.label}
+                        {c.unit && <span className="text-xs font-normal text-muted-foreground ml-1">({c.unit})</span>}
+                      </td>
+                      <td className="py-2 px-3 bg-muted/40">
+                        <div className="flex justify-center">
+                          <ChannelCell col={c} value={draft.channel_defaults[c.key]} ranges={ranges}
+                                       onChange={(v) => setDefault(c.key, v)} />
+                        </div>
+                      </td>
+                      {enabledChannels.map((ch) => {
+                        const over = draft.channels[String(ch)] ?? {}
+                        return (
+                          <td key={ch} className={`py-2 px-3 ${c.key in over ? "bg-amber-500/10" : ""}`}>
+                            <div className="flex justify-center">
+                              <ChannelCell col={c} value={effective(ch)[c.key]} ranges={ranges}
+                                           onChange={(v) => setChannel(ch, c.key, v)} />
+                            </div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )),
+                ])}
+              </tbody>
+            </table>
+          </ScrollFade>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -335,60 +452,6 @@ function SettingsTab({ boardId }: { boardId: string }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Channels</CardTitle>
-          <CardDescription>
-            Every channel follows the Defaults row unless it is changed itself (changed values are
-            highlighted). Thresholds are in ADC counts of pulse height; times in samples.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Ch</TableHead>
-                {CHANNEL_COLUMNS.map((c) => <TableHead key={String(c.key)} title={c.title}>{c.label}</TableHead>)}
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow className="bg-muted/40">
-                <TableCell className="font-medium">Defaults</TableCell>
-                {CHANNEL_COLUMNS.map((c) => (
-                  <TableCell key={String(c.key)}>
-                    <ChannelCell col={c} value={draft.channel_defaults[c.key]} ranges={ranges}
-                                 onChange={(v) => setDefault(c.key, v)} />
-                  </TableCell>
-                ))}
-                <TableCell />
-              </TableRow>
-              {CHANNELS.map((ch) => {
-                const eff = effective(ch)
-                const over = draft.channels[String(ch)] ?? {}
-                return (
-                  <TableRow key={ch}>
-                    <TableCell className="font-medium">{ch}</TableCell>
-                    {CHANNEL_COLUMNS.map((c) => (
-                      <TableCell key={String(c.key)}
-                                 className={c.key in over ? "bg-amber-500/10" : undefined}>
-                        <ChannelCell col={c} value={eff[c.key]} ranges={ranges}
-                                     onChange={(v) => setChannel(ch, c.key, v)} />
-                      </TableCell>
-                    ))}
-                    <TableCell>
-                      <Button variant="ghost" size="sm" onClick={() => resetChannel(ch)}
-                              disabled={!Object.keys(over).length} title="Back to the defaults">
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   )
 }

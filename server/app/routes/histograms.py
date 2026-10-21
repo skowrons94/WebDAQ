@@ -334,7 +334,11 @@ def get_waveform1(board_id, channel):
     """
     try:
         boards = daq_mgr.get_boards()
-        waveform = spy_mgr.get_waveform(board_id, channel, boards, "wave1")
+        # ?kind=good|pileup|saturated: the latest trace of that kind of event
+        kind = request.args.get('kind', 'any')
+        if kind not in ('any', 'good', 'pileup', 'saturated'):
+            return jsonify({'error': "kind must be any, good, pileup or saturated"}), 400
+        waveform = spy_mgr.get_waveform(board_id, channel, boards, "wave1", kind)
         json_data = spy_mgr.convert_histogram_to_json(waveform)
         return json_data if json_data else ""
     except Exception as e:

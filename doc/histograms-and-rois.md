@@ -35,9 +35,21 @@ files are left untouched.
 
 ---
 
-## 2. Adding a spectrum
+## 2. Choosing the spectra
 
-**Add Histogram** → pick a board and a channel.
+**Channels** opens the channel list: every board with all its channels. Click a
+channel to show or hide its spectrum; **All** and **None** do a whole board.
+During a run each channel carries its event rate, and a green dot marks the
+channels that are counting, so a dead input is visible before it is opened.
+
+Each card shows, above its spectrum, what the channel is doing during a run:
+**Rate** (events recorded per second), **Pile-up** and **Lost** (per second,
+amber when they become a large share), **Saturated** when the board reports it,
+**Triggers** for an SIS3316 (all its internal triggers, recorded or not), and
+the spectrum's total **Counts**.
+
+**Custom** adds a spectrum with your own label and size, the dialog the edit
+button on a card also opens:
 
 | Field | Meaning |
 |---|---|
@@ -47,14 +59,20 @@ files are left untouched.
 | Visible | Hide a card without losing its ROIs. Hidden spectra are not fetched, so hiding is also how you make a crowded dashboard lighter. |
 
 Cards can be dragged into whatever order you want; the order is stored with
-everything else.
+everything else. The eye on a card hides it (its ROIs are kept). The arrows
+**enlarge** a card to the full width, with the table of its ROIs underneath;
+press them again to return to the grid.
 
 ---
 
 ## 3. Regions of interest
 
-An ROI is a named energy window on one spectrum. Add one with the **+** on a
-card, or click an existing one in the card's legend to edit it.
+An ROI is a named energy window on one spectrum. The quickest way: zoom on the
+peak (drag along the x axis) and click the target button on the card — the ROI
+covers exactly the visible range, with the next free colour. Rename or adjust it
+by clicking it in the card's legend. An enlarged card also lists its ROIs, where
+each can be zoomed to, switched off or edited, and new ones added by typing the
+range (**By range**).
 
 | Field | Meaning |
 |---|---|
@@ -79,9 +97,11 @@ after a calibration change.
 
 **Zoom** is per histogram and is remembered. Zoom into a peak, go to the logbook,
 come back, and the spectrum is still zoomed the way you left it — including after
-a server restart. It is deliberately *not* pushed to other people's screens: a
-colleague zooming during your measurement will not move your view. **Reset Zoom**
-clears them all.
+a server restart, and an enlarged card keeps it too. It is deliberately *not*
+pushed to other people's screens: a colleague zooming during your measurement
+will not move your view. **Fit to data** zooms every shown spectrum onto the bins
+that have counts — the first thing to press when a peak is a sliver at the edge
+of a 16K-channel axis. **Reset zoom** clears them all.
 
 **Rebinning** applies to every spectrum on the page and is done on the server
 before the spectrum is sent. It affects the ROI integrals too, which is the
@@ -155,6 +175,15 @@ Two further tabs on the Dashboard, with the same idea and separate controls:
   otherwise go to data.
 - **PSD** shows the two-dimensional charge-comparison plot for pulse-shape
   discrimination, used to separate neutrons from gammas in organic scintillators.
+
+On the Waveforms tab, **Show** picks which event's trace is drawn: the
+**Latest** one, or the latest **Clean** one (no pile-up, not saturated),
+**Pile-up** one or **Saturated** one — to look at what pile-up really looks
+like, or at a clean pulse while the rate is high. **Freeze** keeps the traces on
+screen to study them. Channels are picked with the same chips, showing their
+rates, and each plot carries the channel's rate and pile-up. (The pile-up and
+saturation filter needs the caendaq build that keeps a trace per kind; an older
+build says so on the plot.)
 
 Both select boards and channels independently of the histogram dashboard. The
 Waveforms tab also carries the board-configuration controls that decide what the

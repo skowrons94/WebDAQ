@@ -549,8 +549,11 @@ export const setRebinFactor = (factor: number) =>
 // Get the histograms for a given board_id and channel
 export const getHistogram = (boardId: string, channel: string) =>
     api.get(`/histograms/${boardId}/${channel}`).then(res => res.data);
-export const getWaveform1 = (boardId: string, channel: string) =>
-    api.get(`/waveforms/1/${boardId}/${channel}`).then(res => res.data);
+// kind: the latest trace of 'any' event, or only of a 'good' (no pile-up, not
+// saturated), 'pileup' or 'saturated' one.
+export type WaveformKind = 'any' | 'good' | 'pileup' | 'saturated';
+export const getWaveform1 = (boardId: string, channel: string, kind: WaveformKind = 'any') =>
+    api.get(`/waveforms/1/${boardId}/${channel}`, { params: kind === 'any' ? {} : { kind } }).then(res => res.data);
 export const getWaveform2 = (boardId: string, channel: string) =>
     api.get(`/waveforms/2/${boardId}/${channel}`).then(res => res.data);
 export const getProbe1 = (boardId: string, channel: string) =>

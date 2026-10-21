@@ -193,7 +193,7 @@ class SpyManager:
         return (0.0, 1.0)
     
     def get_waveform(self, board_id: str, channel: int, boards: List[Dict[str, Any]], 
-                    waveform_type: str = "wave1") -> Any:
+                    waveform_type: str = "wave1", kind: str = "any") -> Any:
         """
         Get waveform data for a specific board and channel.
         
@@ -209,7 +209,7 @@ class SpyManager:
         try:
             from ..services.caen_acquisition import get_caen_acquisition
             board_index = get_caen_acquisition().board_index(board_id)
-            return self.ru_spy.histogram(board_index, int(channel), waveform_type)
+            return self.ru_spy.histogram(board_index, int(channel), waveform_type, kind)
 
         except Exception as e:
             self.logger.error(f"Error getting waveform {waveform_type} for board {board_id}, channel {channel}: {e}")

@@ -57,6 +57,7 @@ class _Board:
         self.events = np.zeros(R.N_CHANNELS, np.int64)       # cumulative per channel
         self.pileups = np.zeros(R.N_CHANNELS, np.int64)
         self.deadtime = np.zeros(R.N_CHANNELS, np.int64)
+        self.triggers = np.zeros(R.N_CHANNELS, np.int64)     # internal triggers (board counter)
         self.last_stat = None
         # Statistic counters at the run start: V3316-2004 does not clear them
         # with the Timestamp-Clear, so counts are reported relative to this.
@@ -75,6 +76,10 @@ class _Board:
         bins = int(self.settings["board"]["spectrum_bins"])
         self.spectra = np.zeros((R.N_CHANNELS, bins), np.uint32)
         self.waveforms: List[Optional[np.ndarray]] = [None] * R.N_CHANNELS
+        # Latest waveform of a clean event and of a pile-up event, for viewers
+        # that want one kind rather than whichever came last.
+        self.waveforms_good: List[Optional[np.ndarray]] = [None] * R.N_CHANNELS
+        self.waveforms_pileup: List[Optional[np.ndarray]] = [None] * R.N_CHANNELS
         self.maws: List[Optional[np.ndarray]] = [None] * R.N_CHANNELS
 
     def enabled_channels(self) -> List[int]:
@@ -156,6 +161,7 @@ class DAQ:
             b.events[:] = 0
             b.pileups[:] = 0
             b.deadtime[:] = 0
+            b.triggers[:] = 0
             b.last_stat = None
             b.dev.clear_timestamp()
             b.stat_baseline = b.dev.statistic_counters()
@@ -248,6 +254,9 @@ class DAQ:
                     pass
                 b.info = b.dev.open()
                 b.dev.initialize(b.settings)
+                # Re-initialising may restart the board's counters: start the
+                # deltas afresh rather than read a wrap-around as 4e9 triggers.
+                b.last_stat = None
                 b.dev.arm(bank2=False)
                 b.failed = False
                 b.consecutive_errors = 0
@@ -271,8 +280,9 @@ class DAQ:
             if b.pending_settings is not None and not final:
                 self._apply_pending(b)
         if b.last_stat is not None:
-            b.deadtime += ((stat[:, 2].astype(np.int64) - b.last_stat[:, 2].astype(np.int64))
-                           % (1 << 32))
+            delta = (stat.astype(np.int64) - b.last_stat.astype(np.int64)) % (1 << 32)
+            b.triggers += delta[:, 0]
+            b.deadtime += delta[:, 2]
         b.last_stat = stat
         maw_len = b.settings["board"]["maw_test_buffer_length"]
         for ch, words in banks.items():
@@ -291,6 +301,12 @@ class DAQ:
             b.spectra[ch] += np.bincount(idx, minlength=b.spectra.shape[1]).astype(np.uint32)
             if waves is not None:
                 b.waveforms[ch] = waves[-1].copy()
+                pile = np.flatnonzero(fields["pileup"])
+                clean = np.flatnonzero(~fields["pileup"])
+                if pile.size:
+                    b.waveforms_pileup[ch] = waves[pile[-1]].copy()
+                if clean.size:
+                    b.waveforms_good[ch] = waves[clean[-1]].copy()
             if maws is not None:
                 b.maws[ch] = maws[-1].copy()
             if self.writer is not None:
@@ -308,6 +324,7 @@ class DAQ:
         b.dev.disarm()
         b.dev.configure(s)
         b.settings = s
+        b.last_stat = None
         b.dev.arm(bank2=b.dev.bank2_armed)
         if int(s["board"]["spectrum_bins"]) != old_bins:
             b.reset_spectra()
@@ -332,7 +349,8 @@ class DAQ:
 
     # ── statistics ─────────────────────────────────────────────────────────
     def _stats_loop(self) -> None:
-        prev = {b.board_id: (b.events.copy(), b.pileups.copy(), b.deadtime.copy()) for b in self.boards}
+        prev = {b.board_id: (b.events.copy(), b.pileups.copy(), b.deadtime.copy(), b.triggers.copy())
+                for b in self.boards}
         prev_t = time.monotonic()
         while self._running.is_set():
             time.sleep(self.stats_interval_ms / 1000.0)
@@ -343,8 +361,8 @@ class DAQ:
             write_rate = (written - self._last_bytes_written) / dt
             self._last_bytes_written = written
             for b in self.boards:
-                pe, pp, pd = prev[b.board_id]
-                ev, pu, dead = b.events.copy(), b.pileups.copy(), b.deadtime.copy()
+                pe, pp, pd, pt = prev[b.board_id]
+                ev, pu, dead, trig = b.events.copy(), b.pileups.copy(), b.deadtime.copy(), b.triggers.copy()
                 chans = []
                 for ch in range(R.N_CHANNELS):
                     chans.append({
@@ -353,8 +371,11 @@ class DAQ:
                         "pileup_rate": float(pu[ch] - pp[ch]) / dt,
                         "lost_rate": float(dead[ch] - pd[ch]) / dt,
                         "satu_rate": 0.0,
+                        # The board's own count of every internal trigger
+                        # (recorded or not); SIS3316 only.
+                        "trigger_rate": float(trig[ch] - pt[ch]) / dt,
                     })
-                prev[b.board_id] = (ev, pu, dead)
+                prev[b.board_id] = (ev, pu, dead, trig)
                 rates.append({
                     "name": b.name, "board_id": b.board_id,
                     "write_rate": write_rate / max(1, len(self.boards)),
@@ -381,6 +402,7 @@ class DAQ:
                 lines.append(f"{base}pileRate {c['pileup_rate']:.3f} {epoch}")
                 lines.append(f"{base}lostRate {c['lost_rate']:.3f} {epoch}")
                 lines.append(f"{base}satuRate {c['satu_rate']:.3f} {epoch}")
+                lines.append(f"{base}triggerRate {c.get('trigger_rate', 0.0):.3f} {epoch}")
         try:
             with socket.create_connection((host, port), timeout=0.5) as s:
                 s.sendall(("\n".join(lines) + "\n").encode())
@@ -417,8 +439,13 @@ class DAQ:
     def energy(self, idx: int, ch: int) -> np.ndarray:
         return self.boards[idx].spectra[ch].copy()
 
-    def waveform(self, idx: int, ch: int) -> np.ndarray:
-        w = self.boards[idx].waveforms[ch]
+    def waveform(self, idx: int, ch: int, kind: str = "any") -> np.ndarray:
+        """Latest waveform of a channel: of any event, or only of a 'good'
+        (no pile-up) or 'pileup' event. The SIS3316 has no saturation flag in
+        its event header, so 'saturated' is always empty."""
+        b = self.boards[idx]
+        w = {"good": b.waveforms_good, "pileup": b.waveforms_pileup,
+             "saturated": [None] * R.N_CHANNELS}.get(kind, b.waveforms)[ch]
         return np.zeros(0, np.uint16) if w is None else w.copy()
 
     def maw(self, idx: int, ch: int) -> np.ndarray:

@@ -107,11 +107,14 @@ class ReadoutUnitSpy:
         hist.SetStats(0)
         return hist
 
-    def histogram(self, board_index: Optional[int], channel: int, htype: str):
+    def histogram(self, board_index: Optional[int], channel: int, htype: str,
+                  wave_kind: str = "any"):
         """Return a histogram for (board_index, channel) of the given type.
 
         htype: 'energy' | 'qshort' | 'qlong' | 'wave1' | 'wave2' (TH1F),
                or 'psd' (TH2F).
+        wave_kind (waveforms only): 'any' (the latest), or the latest of a
+        'good' (no pile-up, not saturated), 'pileup' or 'saturated' event.
         """
         if not ROOT_AVAILABLE:
             return None
@@ -139,13 +142,27 @@ class ReadoutUnitSpy:
                 # Only one trace is exposed today; wave2 has no source yet.
                 if htype == "wave2":
                     return self._empty("Trace 2 is not available")
-                arr = daq.waveform(board_index, channel)
+                if wave_kind and wave_kind != "any":
+                    if not hasattr(daq, "waveform_of"):
+                        return self._empty("This caendaq build cannot pick waveforms by kind "
+                                           "— reinstall it (install.sh)")
+                    try:
+                        arr = daq.waveform_of(board_index, channel, wave_kind)
+                    except NotImplementedError:
+                        return self._empty("This caendaq build cannot pick waveforms by kind "
+                                           "— reinstall it (install.sh)")
+                    kind_text = {"good": "clean", "pileup": "pile-up",
+                                 "saturated": "saturated"}.get(wave_kind, wave_kind)
+                    reason = f"No {kind_text} event with a waveform yet"
+                else:
+                    arr = daq.waveform(board_index, channel)
+                    # The usual cause by far: waveform recording is a per-board
+                    # switch, and it is off unless somebody turned it on.
+                    reason = "No waveform — switch waveforms on for this board"
                 return self._build(
                     name, arr,
                     nbins=(len(arr) if arr is not None and len(arr) else 1),
-                    # The usual cause by far: waveform recording is a per-board
-                    # switch, and it is off unless somebody turned it on.
-                    empty_reason="No waveform — switch waveforms on for this board")
+                    empty_reason=reason)
             getter = getattr(daq, htype, None)   # daq.energy / qshort / qlong
             arr = getter(board_index, channel) if getter else None
             # caendaq's arrays are _BINS long; an SIS3316 spectrum has its own

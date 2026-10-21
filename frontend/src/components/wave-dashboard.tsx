@@ -2,7 +2,10 @@
 
 import { useRunStatus } from '@/hooks/use-run-status'
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { getBoardConfiguration, getWaveform1, getWaveform2, getProbe1, getProbe2, getBoardSettings, setSetting } from '@/lib/api'
+import { getBoardConfiguration, getExperimentStats, getWaveform1, getWaveform2, getProbe1, getProbe2, getBoardSettings, setSetting, type WaveformKind } from '@/lib/api'
+import { pickChannel } from '@/components/tuner/use-channel-rates'
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Pause, Play } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,6 +23,17 @@ type BoardData = {
   link_num: string;
   dpp: string;
   chan: string;
+  vendor?: string;   // 'sis3316': raw ADC samples, no CAEN probes or trace registers
+}
+
+const KIND_LABELS: Record<WaveformKind, string> = {
+  any: "Latest", good: "Clean", pileup: "Pile-up", saturated: "Saturated",
+}
+const KIND_STORAGE_KEY = 'waveform-event-kind'
+
+function rateText(v: number): string {
+  if (v >= 1e3) return `${(v / 1e3).toFixed(1)} kHz`
+  return `${v.toFixed(v < 10 ? 1 : 0)} Hz`
 }
 
 interface RegisterData {
@@ -96,6 +110,31 @@ export default function WaveformDashboard() {
   const storeReady = hydrated
   const waveConfigSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const waveConfigLoadedRef = useRef(false)
+  // Which event's trace to show, remembered in this browser only.
+  const [eventKind, setEventKind] = useState<WaveformKind>(() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.localStorage.getItem(KIND_STORAGE_KEY) : null
+      return (v && v in KIND_LABELS ? v : 'any') as WaveformKind
+    } catch { return 'any' }
+  })
+  useEffect(() => {
+    try { window.localStorage.setItem(KIND_STORAGE_KEY, eventKind) } catch { /* private mode */ }
+  }, [eventKind])
+  // Frozen: keep the traces on screen to look at them.
+  const [frozen, setFrozen] = useState(false)
+  const frozenRef = useRef(false)
+  useEffect(() => { frozenRef.current = frozen }, [frozen])
+  // Per-plot problems, shown on the plot rather than as a toast per channel per tick.
+  const [plotErrors, setPlotErrors] = useState<{ [histoId: string]: string }>({})
+  const [runStats, setRunStats] = useState<unknown>(null)
+  useEffect(() => {
+    if (!isRunning) { setRunStats(null); return }
+    let alive = true
+    const poll = () => getExperimentStats().then((s) => { if (alive) setRunStats(s) }).catch(() => {})
+    poll()
+    const id = setInterval(poll, 2000)
+    return () => { alive = false; clearInterval(id) }
+  }, [isRunning])
 
   useEffect(() => {
     hydrateFromServer()
@@ -170,7 +209,7 @@ export default function WaveformDashboard() {
   useEffect(() => {
     if (jsrootLoaded) {
       const updateInterval = setInterval(() => {
-        setUpdateTrigger(prev => prev + 1)
+        if (!frozenRef.current) setUpdateTrigger(prev => prev + 1)
       }, 2000)
       return () => clearInterval(updateInterval)
     }
@@ -203,7 +242,9 @@ export default function WaveformDashboard() {
   }
 
   const fetchAllBoardSettings = async (boardList: BoardData[]) => {
+    // CAEN register settings drive the trace/probe controls; an SIS3316 has none.
     const settingsPromises = boardList.map(async (board) => {
+      if (board.vendor === 'sis3316') return { boardId: board.id, settings: {} }
       try {
         const settings = await getBoardSettings(board.id)
         return { boardId: board.id, settings }
@@ -372,7 +413,13 @@ export default function WaveformDashboard() {
     })
   }, [boards, updateBoardChannelSelection])
 
+  // Each refresh pass gets a number; a pass that is no longer the latest (the
+  // event kind changed, or the page was frozen) stops drawing, so a trace of
+  // the old kind never lands under the new label.
+  const passRef = useRef(0)
   const updateHistograms = useCallback(async () => {
+    const pass = ++passRef.current
+    const stale = () => pass !== passRef.current || frozenRef.current
     for (const board of boards) {
       const selectedChannels = getSelectedChannels(board.id)
       if (selectedChannels.length === 0) continue
@@ -380,19 +427,28 @@ export default function WaveformDashboard() {
       for (const channelIndex of selectedChannels) {
         const histoId = `board${board.id}_channel${channelIndex}`
         const histoElement = histogramRefs.current[histoId]
+        if (stale()) return
         if (!histoElement || !window.JSROOT) continue
 
         try {
           const waveformNum = selectedWaveform[board.id] || 1
+          // An SIS3316 records raw samples only: no CAEN probes to overlay.
+          const sis = board.vendor === 'sis3316'
           const [waveData, p1Data, p2Data] = await Promise.all([
             waveformNum === 1
-              ? getWaveform1(board.id, channelIndex.toString())
+              ? getWaveform1(board.id, channelIndex.toString(), eventKind)
               : getWaveform2(board.id, channelIndex.toString()),
-            getProbe1(board.id, channelIndex.toString()).catch(() => null),
-            getProbe2(board.id, channelIndex.toString()).catch(() => null),
+            sis ? null : getProbe1(board.id, channelIndex.toString()).catch(() => null),
+            sis ? null : getProbe2(board.id, channelIndex.toString()).catch(() => null),
           ])
 
+          if (stale()) return
           const histogram = window.JSROOT.parse(waveData)
+          // The plot's own header names the channel; an internal name on the
+          // canvas ("wave1_b0_ch0") only takes room. An explanation (an empty
+          // trace says why) is kept.
+          if (/^wave\d_b\d+_ch\d+$/.test(String(histogram.fTitle))) histogram.fTitle = ''
+          histogram.fStats = 0
           // Build a fresh TCanvas every tick so probes never stack from previous frames.
           const canvas = window.JSROOT.create('TCanvas')
           canvas.fName = `wave_${histoId}`
@@ -410,23 +466,25 @@ export default function WaveformDashboard() {
           }
 
           await window.JSROOT.redraw(histoElement, canvas)
+          setPlotErrors((prev) => {
+            if (!(histoId in prev)) return prev
+            const next = { ...prev }
+            delete next[histoId]
+            return next
+          })
         } catch (error) {
           console.error(`Failed to fetch histogram for ${histoId}:`, error)
-          toast({
-            title: 'Error',
-            description: `Failed to update histogram for ${board.name} - Channel ${channelIndex}`,
-            variant: 'destructive',
-          })
+          setPlotErrors((prev) => ({ ...prev, [histoId]: "Could not read this waveform — is the server up?" }))
         }
       }
     }
-  }, [boards, selectedWaveform, getSelectedChannels, toast])
+  }, [boards, selectedWaveform, getSelectedChannels, eventKind])
 
   useEffect(() => {
-    if (jsrootLoaded && boards.length > 0) {
+    if (jsrootLoaded && boards.length > 0 && !frozenRef.current) {
       updateHistograms()
     }
-  }, [jsrootLoaded, boards, updateTrigger, selectedWaveform])
+  }, [jsrootLoaded, boards, updateTrigger, selectedWaveform, eventKind])
 
   const handleWaveformSwitch = (boardId: string, waveformNum: number) => {
     setSelectedWaveform(prev => ({
@@ -649,9 +707,15 @@ export default function WaveformDashboard() {
     }
   }
 
-  const hasAnySelections = storeReady && settings?.selectedBoardsChannelsWaveform && settings.selectedBoardsChannelsWaveform.length > 0
-  const totalSelectedChannels = storeReady && settings?.selectedBoardsChannelsWaveform ?
-    settings.selectedBoardsChannelsWaveform.reduce((total: number, board: { boardId: string; channels: number[] }) => total + board.channels.length, 0) : 0
+  // Only boards that still exist: a selection kept for a removed board would
+  // otherwise be counted ("across 4 boards" with two configured).
+  const liveSelections = (storeReady && settings?.selectedBoardsChannelsWaveform
+    ? settings.selectedBoardsChannelsWaveform : [])
+    .filter((sel: { boardId: string; channels: number[] }) =>
+      sel.channels.length > 0 && boards.some((b: BoardData) => b.id === sel.boardId))
+  const hasAnySelections = liveSelections.length > 0
+  const totalSelectedChannels = liveSelections.reduce(
+    (total: number, board: { boardId: string; channels: number[] }) => total + board.channels.length, 0)
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
@@ -659,11 +723,28 @@ export default function WaveformDashboard() {
         <div className="mb-4 flex justify-between items-center">
           <div className="text-sm text-muted-foreground">
             {totalSelectedChannels > 0 ?
-              `${totalSelectedChannels} channel(s) selected across ${settings?.selectedBoardsChannelsWaveform?.length || 0} board(s)` :
+              `${totalSelectedChannels} channel(s) shown on ${liveSelections.length} board(s)` :
               'No channels selected - only board names shown'
             }
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Show</span>
+            <ToggleGroup type="single" value={eventKind} size="sm"
+                         onValueChange={(v) => v && setEventKind(v as WaveformKind)}
+                         aria-label="Which events to show the waveform of">
+              {(Object.keys(KIND_LABELS) as WaveformKind[]).map((k) => (
+                <ToggleGroupItem key={k} value={k} className="px-3 text-xs"
+                                 title={k === 'any' ? 'The latest event, whatever it was'
+                                       : `The latest ${KIND_LABELS[k].toLowerCase()} event`}>
+                  {KIND_LABELS[k]}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <Button variant={frozen ? "default" : "outline"} size="sm" onClick={() => setFrozen((f) => !f)}
+                    title={frozen ? "Resume refreshing" : "Keep the current traces on screen"}>
+              {frozen ? <Play className="h-4 w-4 mr-1.5" /> : <Pause className="h-4 w-4 mr-1.5" />}
+              {frozen ? "Resume" : "Freeze"}
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -723,7 +804,13 @@ export default function WaveformDashboard() {
                     </div>
                   </div>
                 </CardTitle>
-                {config && (
+                {board.vendor === 'sis3316' && (
+                  <p className="text-sm text-muted-foreground">
+                    Raw ADC samples, as recorded with each event. Their length is set in the SIS3316
+                    settings (DAQ page). The SIS3316 has no saturation flag, so “Saturated” stays empty.
+                  </p>
+                )}
+                {config && board.vendor !== 'sis3316' && (
                   <div className="text-sm text-muted-foreground space-y-2">
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-2">
@@ -810,22 +897,30 @@ export default function WaveformDashboard() {
                       </Label>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {selectedChannels.length > 0 ? `${selectedChannels.length}/${board.chan} channels selected` : `All ${board.chan} channels shown`}
+                      {`${selectedChannels.length}/${board.chan} channels shown`}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {allChannels.map(channelIndex => (
-                      <div key={channelIndex} className="flex items-center space-x-1">
-                        <Checkbox
-                          id={`wave-channel-${board.id}-${channelIndex}`}
-                          checked={isChannelSelected(board.id, channelIndex)}
-                          onCheckedChange={(checked: boolean) => handleChannelToggle(board.id, channelIndex, checked)}
-                        />
-                        <Label htmlFor={`wave-channel-${board.id}-${channelIndex}`} className="text-xs">
+                  <div className="flex flex-wrap gap-1.5">
+                    {allChannels.map(channelIndex => {
+                      const shown = isChannelSelected(board.id, channelIndex)
+                      const st = isRunning ? pickChannel(runStats, board.id, channelIndex) : null
+                      return (
+                        <button
+                          key={channelIndex}
+                          type="button"
+                          aria-pressed={shown}
+                          onClick={() => handleChannelToggle(board.id, channelIndex, !shown)}
+                          title={`${shown ? 'Hide' : 'Show'} channel ${channelIndex}`}
+                          className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+                            shown ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full ${st && st.event > 0 ? 'bg-green-500' : 'bg-muted-foreground/40'}`} />
                           Ch {channelIndex}
-                        </Label>
-                      </div>
-                    ))}
+                          {st && <span className="font-mono tabular-nums opacity-80">{rateText(st.event)}</span>}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
               </CardHeader>
@@ -834,20 +929,33 @@ export default function WaveformDashboard() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {channelsToShow.map((channelIndex: number) => {
                       const histoId = `board${board.id}_channel${channelIndex}`
+                      const st = isRunning ? pickChannel(runStats, board.id, channelIndex) : null
                       return (
                         <div key={histoId} className="relative">
-                          <h3 className="text-lg font-semibold mb-2">Channel {channelIndex}</h3>
+                          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3">
+                            <h3 className="text-base font-semibold">Channel {channelIndex}</h3>
+                            <div className="flex gap-3 text-xs text-muted-foreground">
+                              {(selectedWaveform[board.id] || 1) === 1 && eventKind !== 'any' && (
+                                <span className="rounded bg-muted px-1.5 py-0.5 text-foreground">{KIND_LABELS[eventKind]}</span>
+                              )}
+                              {st && <span>Rate <span className="font-mono text-foreground">{rateText(st.event)}</span></span>}
+                              {st && <span>Pile-up <span className="font-mono text-foreground">{rateText(st.pileup)}</span></span>}
+                            </div>
+                          </div>
                           <div
                             ref={(el: HTMLDivElement | null) => { histogramRefs.current[histoId] = el }}
-                            className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-lg shadow-sm"
+                            className="w-full h-80 max-md:h-auto max-md:aspect-[4/3] border rounded-md bg-background"
                           ></div>
+                          {plotErrors[histoId] && (
+                            <p className="mt-1 text-xs text-destructive">{plotErrors[histoId]}</p>
+                          )}
                         </div>
                       )
                     })}
                   </div>
                 ) : (
                   <div className="text-center text-muted-foreground py-8">
-                    No channels selected for this board. Use the checkboxes above to select channels to visualize.
+                    No channel shown for this board. Click the channels above to show their waveforms.
                   </div>
                 )}
               </CardContent>

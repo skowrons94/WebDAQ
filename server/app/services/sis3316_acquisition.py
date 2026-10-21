@@ -267,13 +267,13 @@ class Sis3316Acquisition:
         return getattr(self._mod, "__version__", None) if self._mod is not None else None
 
     # Live arrays for the spy, by local index
-    def array(self, idx: int, kind: str, channel: int):
+    def array(self, idx: int, kind: str, channel: int, wave_kind: str = "any"):
         if self._daq is None:
             return None
         if kind == "energy":
             return self._daq.energy(idx, channel)
         if kind == "waveform":
-            return self._daq.waveform(idx, channel)
+            return self._daq.waveform(idx, channel, wave_kind)
         if kind == "maw":
             return self._daq.maw(idx, channel)
         return None
