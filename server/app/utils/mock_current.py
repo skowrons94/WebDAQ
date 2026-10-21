@@ -52,6 +52,9 @@ class MockCurrentController:
         self._accumulated_charge = 0.0     # µC, since the last reset (this run)
         self._total_accumulated = 0.0      # µC, lifetime
         self._accumulating = False         # True while a run is in progress
+        self._run_from = 0.0               # when the run's charge starts counting
+        self._last_time: Optional[float] = None    # last reading integrated
+        self._last_value: Optional[float] = None
 
         self._buffers = [[0.0] * BUFFER_SAMPLES for _ in range(self.channels)]
         self._latest = [0.0] * self.channels
@@ -105,14 +108,11 @@ class MockCurrentController:
     def _loop(self) -> None:
         """Produce samples, accumulate charge and log to file, like the real thing."""
         next_tick = time.time()
-        last_time = time.time()
 
         while not self._stop.is_set():
             now = time.time()
             elapsed = now - self._t0
             values = self._sample(elapsed)
-            dt = now - last_time
-            last_time = now
 
             with self._lock:
                 self._latest = values
@@ -127,10 +127,7 @@ class MockCurrentController:
                 # total always integrates; the run figure only during a run,
                 # exactly as the real controllers do.
                 channel = min(self._charge_channel, self.channels - 1)
-                delta = values[channel] * dt
-                self._total_accumulated += delta
-                if self._accumulating:
-                    self._accumulated_charge += delta
+                self._integrate(now, values[channel])
 
                 should_save = self.save_data and self.run_start_time is not None
                 folder, start = self.save_folder, self.run_start_time
@@ -225,12 +222,39 @@ class MockCurrentController:
         with self._lock:
             return self._accumulated_charge
 
+    def _integrate(self, now: float, value: float) -> None:
+        """Charge up to `now` (lock held), on the rule of the real controllers:
+        readings joined by straight lines, the first reading of a run held back
+        to its start, the last held up to its stop."""
+        if self._last_time is not None and now > self._last_time:
+            previous = self._last_value if self._last_value is not None else value
+            self._total_accumulated += 0.5 * (previous + value) * (now - self._last_time)
+        if self._accumulating:
+            start = self._run_from if self._last_time is None else max(self._last_time, self._run_from)
+            if now > start:
+                previous = self._last_value if (self._last_value is not None
+                                                and self._last_time is not None
+                                                and self._last_time >= self._run_from) else value
+                if self._last_time is not None and self._last_time < self._run_from < now \
+                        and self._last_value is not None:
+                    # A reading straddles the start: the line at the start.
+                    f = (self._run_from - self._last_time) / (now - self._last_time)
+                    previous = self._last_value + f * (value - self._last_value)
+                self._accumulated_charge += 0.5 * (previous + value) * (now - start)
+        self._last_time, self._last_value = now, value
+
     def reset_accumulated_charge(self) -> None:
         with self._lock:
             self._accumulated_charge = 0.0
+            self._run_from = time.time()
 
     def set_accumulating(self, accumulating: bool) -> None:
         with self._lock:
+            if self._accumulating and not accumulating and self._last_value is not None:
+                # The run ends now, not at its last reading.
+                self._integrate(time.time(), self._last_value)
+            elif accumulating and not self._accumulating:
+                self._run_from = time.time()        # the run starts now
             self._accumulating = bool(accumulating)
 
     def is_accumulating(self) -> bool:

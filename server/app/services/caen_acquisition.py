@@ -244,6 +244,37 @@ def ensure_recording_bits(board: Dict[str, Any], logger: logging.Logger) -> bool
         return False
 
 
+# A channel needs this many events before its energies are judged.
+ENERGY_CHECK_MIN_EVENTS = 100
+
+
+def energy_warning(events: int, spectrum, psd: bool = False) -> Optional[str]:
+    """Why a channel's energies are unusable, or None.
+
+    The online spectrum has no bin for energy 0 (a 0 is not filled), so the
+    events missing from it are the ones the board gave energy 0; the last bin
+    is the top of the 15-bit (PHA) or 16-bit (PSD charge) scale.
+    """
+    if events < ENERGY_CHECK_MIN_EVENTS:
+        return None
+    # A channel that never had a non-zero energy has no spectrum at all.
+    empty = spectrum is None or len(spectrum) == 0
+    filled = 0 if empty else int(spectrum.sum())
+    zero = max(0, events - filled) / events
+    top = 0.0 if empty else int(spectrum[-1]) / events
+    what = "charge" if psd else "energy"
+    if zero >= 0.5:
+        fix = ("check the gates and the charge sensitivity" if psd else
+               "the trapezoid output is out of range: check Trapezoid Rescaling "
+               "(DPP Algorithm Control bits 5:0) and Fine Gain, and the decay time")
+        return f"{zero:.0%} of the events have {what} 0 — {fix}."
+    if top >= 0.5:
+        fix = ("lower the charge sensitivity" if psd else
+               "raise Trapezoid Rescaling or lower Fine Gain")
+        return f"{top:.0%} of the events are at the top of the {what} scale — {fix}."
+    return None
+
+
 def _waveforms_enabled(board: Dict[str, Any]) -> bool:
     """Whether waveform recording is on for a board (bit 16 of register 0x8000 in
     its conf/<name>_<id>.json), matching spy_manager.get_waveform_status_for_board."""
@@ -520,7 +551,10 @@ class CaenAcquisition:
         out: List[Dict[str, Any]] = []
         try:
             if self.daq is not None:
-                out.extend(self.daq.stats())
+                boards = self.daq.stats()
+                for index, board in enumerate(boards):
+                    self._add_energy_warnings(index, board)
+                out.extend(boards)
         except Exception as e:
             self.logger.debug(f"stats() failed: {e}")
         if self._sis_boards:
@@ -529,6 +563,26 @@ class CaenAcquisition:
             except Exception as e:
                 self.logger.debug(f"SIS3316 stats() failed: {e}")
         return out
+
+    def _add_energy_warnings(self, index: int, board: Dict[str, Any]) -> None:
+        """Flag channels whose energies are not usable, in their stats entry.
+
+        Judged on the data, not on the registers: whatever combination of
+        trapezoid rescaling, fine gain or gates causes it, a channel whose
+        events come out with energy 0, or pinned at the top of the scale, has
+        a spectrum that means nothing. The counts are over the whole run.
+        """
+        cfg = self._caen_boards[index] if index < len(self._caen_boards) else {}
+        psd = str(cfg.get("dpp", "")).upper().endswith("PSD")
+        for ch in board.get("channels", []):
+            try:
+                n = int(self.daq.channel_events(index, int(ch["channel"])))
+                spectrum = (self.daq.qlong if psd else self.daq.energy)(index, int(ch["channel"]))
+            except Exception:
+                continue
+            warning = energy_warning(n, spectrum, psd)
+            if warning:
+                ch["energy_warning"] = warning
 
     def set_graphite(self, host: str = "", port: Optional[int] = None,
                      prefix: Optional[str] = None) -> None:
@@ -793,6 +847,12 @@ class _MixedDaq:
 
     def interval(self, b, ch):
         return self._get("interval", b, ch)
+
+    def channel_events(self, b, ch):
+        backend, obj, idx = self._route(b)
+        if backend == "sis" or obj is None or idx is None:
+            return 0          # the SIS3316 spectra keep no zero-energy events apart
+        return obj.channel_events(idx, ch)
 
 
 # Global instance --------------------------------------------------------------

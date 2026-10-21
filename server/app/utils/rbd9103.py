@@ -141,6 +141,7 @@ class RBD9103Controller:
         self.accumulated_charge = 0.0        # this run only; reset when a run starts
         self.total_accumulated_charge = 0.0  # lifetime; always integrates
         self.previous_time = 0.0
+        self.previous_value = None   # last reading integrated; None right after a reset
         self.accumulating = False            # True while a run is in progress
 
         # Device settings
@@ -697,7 +698,7 @@ class RBD9103Controller:
                     self._log_measurement_to_file(timestamp, current_ua)
 
                 # Update accumulated charge
-                self.update_accumulated_charge()
+                self.update_accumulated_charge(timestamp)
 
             # Outside the lock on purpose: this is the only step that talks to
             # another machine, and everything that reads the current waits on
@@ -875,15 +876,25 @@ class RBD9103Controller:
             return self.acquisition_thread.is_alive()
         return False
 
-    def update_accumulated_charge(self) -> float:
+    def update_accumulated_charge(self, now: Optional[float] = None,
+                                  current: Optional[float] = None) -> float:
         """
-        Update accumulated charge based on current measurement and time.
+        Integrate the charge up to `now` (default: the present moment).
+
+        The readings are joined by straight lines (a ramping beam counts as a
+        ramp, not a staircase); from the start of a run to its first reading the
+        first one is held, and at the end of a run the last one is held up to
+        the stop (see set_accumulating). The run's charge therefore covers the
+        run from start to stop — the same rule the Data page and RUReader apply
+        to current.txt, so the three agree.
 
         Returns:
             float: Current accumulated charge for this run
         """
-        current_data = float(self.current_value)
-        current_time = datetime.now().timestamp()
+        if current is None:
+            current = float(self.current_value)
+        current_data = current
+        current_time = now if now is not None else datetime.now().timestamp()
 
         # Handle very small currents as zero
         if current_data < 1e-9:
@@ -893,9 +904,9 @@ class RBD9103Controller:
         if self.previous_time == 0:
             self.previous_time = current_time
 
-        # Calculate charge increment (current * time in microamp-seconds)
         time_diff = current_time - self.previous_time
-        charge_increment = current_data * time_diff
+        previous = current_data if self.previous_value is None else self.previous_value
+        charge_increment = 0.5 * (previous + current_data) * time_diff   # µA × s = µC
 
         # The lifetime total always integrates: it says how much charge the
         # target has taken, in or out of a run.
@@ -909,6 +920,7 @@ class RBD9103Controller:
             self.accumulated_charge += charge_increment
 
         self.previous_time = current_time
+        self.previous_value = current_data
         return self.accumulated_charge
 
     def reset_accumulated_charge(self) -> None:
@@ -918,6 +930,7 @@ class RBD9103Controller:
         with self.buffer_lock:
             self.accumulated_charge = 0.0
             self.previous_time = datetime.now().timestamp()
+            self.previous_value = None
 
     def get_accumulated_charge(self) -> float:
         """
@@ -936,6 +949,10 @@ class RBD9103Controller:
         a run ends (or fail to grow during one).
         """
         with self.buffer_lock:
+            if self.accumulating and not accumulating and self.previous_value is not None:
+                # The run ends now, not at its last reading: hold that reading
+                # up to the stop.
+                self.update_accumulated_charge(current=self.previous_value)
             self.accumulating = bool(accumulating)
 
     def is_accumulating(self) -> bool:

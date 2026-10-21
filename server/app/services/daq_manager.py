@@ -708,11 +708,22 @@ class DAQManager:
                 if not os.path.exists(run_dir):
                     os.makedirs(run_dir)
                 
-                # Copy JSON configuration files to run directory
+                # Everything the data cannot be interpreted without goes with
+                # it: each board's settings, its energy calibration, and the
+                # coincidence gates and time offsets the online spectra used.
+                # RUReader stores these files in the ROOT file too.
+                import shutil
+                files = []
                 for board in self.daq_state['boards']:
-                    conf_file = f"conf/{board['name']}_{board['id']}.json"
-                    if os.path.exists(conf_file):
-                        os.system(f"cp {conf_file} {run_dir}")
+                    files.append(f"conf/{board['name']}_{board['id']}.json")
+                    files.append(f"calib/{board['name']}_{board['id']}.cal")
+                files.append("conf/coincidences.json")
+                for path in files:
+                    if os.path.exists(path):
+                        try:
+                            shutil.copy2(path, run_dir)
+                        except OSError as e:
+                            self.logger.warning(f"Could not copy {path} into {run_dir}: {e}")
             
             return True
             

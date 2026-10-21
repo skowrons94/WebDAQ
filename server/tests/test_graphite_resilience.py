@@ -247,6 +247,7 @@ class PushOutsideTheLockTests(unittest.TestCase):
         controller._carbon = CarbonPusher('test')
         controller.charge_channel = 0
         controller.previous_time = 0.0
+        controller.previous_value = None
         controller.accumulating = False
         controller.accumulated_charge = 0.0
         controller.total_accumulated_charge = 0.0
@@ -282,6 +283,7 @@ class PushOutsideTheLockTests(unittest.TestCase):
         controller._carbon = CarbonPusher('test')
         controller.charge_channel = 0
         controller.previous_time = 0.0
+        controller.previous_value = None
         controller.accumulating = False
         controller.accumulated_charge = 0.0
         controller.total_accumulated_charge = 0.0

@@ -161,7 +161,8 @@ def read_current(run_number: int, max_points: int = 2000) -> Dict[str, Any]:
     result["available"] = True
     result["columns"] = columns
     result["n_samples"] = len(times)
-    result["integration"] = integrate_current(times, values, columns[1:])
+    result["integration"] = integrate_current(
+        times, values, columns[1:], window=run_window(run_number, result["start_time"]))
 
     step = max(1, len(times) // max_points)
     result["downsampled"] = step > 1
@@ -271,29 +272,56 @@ def _parse_metric_header(body: str) -> Dict[str, str]:
 
 def integrate_current(
     times: List[float], values: List[List[float]], channel_names: List[str],
+    window: Optional[Tuple[float, float]] = None,
 ) -> Dict[str, Any]:
     """
-    Integrated charge per channel, by the trapezoidal rule.
+    Integrated charge per channel over the run.
+
+    The readings are joined by straight lines (the trapezoidal rule). The
+    charge belongs to the run from its start to its stop, ``window`` in the
+    file's own time: before the first reading the first one is held, after the
+    last the last one is, and readings outside the window count only inside
+    it. This is the rule the current modules apply live and RUReader applies
+    to the ROOT file, so the Data page, the run record and the ROOT file agree.
+    Without a window (a run still going, or one with no metadata) the charge
+    spans the first to the last reading.
 
     Current is logged in µA against time in seconds, so the integral is in µC;
     nC and mC are offered too so the number is readable at any beam intensity.
     Also reports mean current and the elapsed time actually covered.
     """
-    if len(times) < 2:
+    if not times or (window is None and len(times) < 2):
         return {"channels": [], "duration_s": 0.0, "note": "not enough samples to integrate"}
+
+    lo, hi = (times[0], times[-1]) if window is None else window
+    if hi <= lo:
+        return {"channels": [], "duration_s": 0.0, "note": "the run has no duration"}
 
     n_channels = min(len(v) for v in values)
     charges = [0.0] * n_channels
 
     for i in range(1, len(times)):
-        dt = times[i] - times[i - 1]
+        t0, t1 = times[i - 1], times[i]
+        dt = t1 - t0
         # Guard against a clock jump or a duplicated timestamp.
         if dt <= 0:
             continue
+        s0, s1 = max(t0, lo), min(t1, hi)
+        if s1 <= s0:
+            continue
         for c in range(n_channels):
-            charges[c] += 0.5 * (values[i][c] + values[i - 1][c]) * dt
+            v0, v1 = values[i - 1][c], values[i][c]
+            slope = (v1 - v0) / dt
+            charges[c] += 0.5 * ((v0 + slope * (s0 - t0)) + (v0 + slope * (s1 - t0))) * (s1 - s0)
 
-    duration = times[-1] - times[0]
+    # Held readings: from the start to the first, from the last to the stop.
+    for c in range(n_channels):
+        if lo < times[0]:
+            charges[c] += values[0][c] * (min(times[0], hi) - lo)
+        if hi > times[-1]:
+            charges[c] += values[-1][c] * (hi - max(times[-1], lo))
+
+    duration = hi - lo
     channels = []
     for c in range(n_channels):
         name = channel_names[c] if c < len(channel_names) else f"Ch{c}(uA)"
@@ -305,7 +333,29 @@ def integrate_current(
             "mean_current_uA": (charges[c] / duration) if duration > 0 else 0.0,
         })
 
-    return {"channels": channels, "duration_s": duration, "method": "trapezoidal"}
+    return {"channels": channels, "duration_s": duration, "method": "trapezoidal",
+            "span": "run" if window is not None else "readings"}
+
+
+def run_window(run_number: int, file_start: Optional[str]) -> Optional[Tuple[float, float]]:
+    """The run's start and stop in the time of its current.txt (seconds from
+    the file's 'Start time'), from metadata.json; None while the run has no
+    stop time or either time is unreadable."""
+    from datetime import datetime
+    import json
+    try:
+        with open(os.path.join(run_dir(run_number), METADATA_FILE)) as f:
+            meta = json.load(f)
+        # All three are local wall-clock times; one may carry its UTC offset
+        # and another not, so the offsets are dropped rather than compared.
+        start = datetime.fromisoformat(str(meta["Start Time"])).replace(tzinfo=None)
+        stop = datetime.fromisoformat(str(meta["Stop Time"])).replace(tzinfo=None)
+        origin = datetime.fromisoformat(str(file_start).strip()).replace(tzinfo=None)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    lo = (start - origin).total_seconds()
+    hi = (stop - origin).total_seconds()
+    return (lo, hi) if hi > lo else None
 
 
 # ─────────────────────────────────────────────────────── RUReader conversion

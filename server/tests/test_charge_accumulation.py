@@ -226,3 +226,55 @@ class RunOwnershipTests(unittest.TestCase):
         self.assertFalse(self.controller.saving)
         self.assertFalse(self.mod.running)
         self.assertEqual(status, 200)
+
+
+class LiveAndFileChargeAgreeTests(unittest.TestCase):
+    """The run record, the Data page and the ROOT file give one charge.
+
+    Run 0 of 2026-10-21 recorded 2.765e-5 uC while its current.txt integrated
+    to 2.687e-5: the live figure counted from the start of the run to the last
+    reading, the file from the first reading to the last. Both now cover the
+    run from start to stop, the readings joined by straight lines and the
+    first and last ones held to the edges.
+    """
+
+    def test_rbd9103_live_charge_equals_the_file_integral(self):
+        from unittest import mock
+        from app.services.run_data import integrate_current
+        from app.utils import rbd9103
+
+        ctrl = rbd9103.RBD9103Controller()      # not opened: no serial port is touched
+        t0 = 1_000_000.0
+        readings = [(0.195, 4.5), (1.187, 4.4), (2.194, 4.4), (3.186, 4.5), (4.193, 6.0),
+                    (5.185, 4.6), (6.177, 4.6)]
+        start, stop = 0.045, 6.728
+
+        clock = mock.Mock()
+        clock.now.return_value.timestamp.return_value = t0 + start
+        with mock.patch.object(rbd9103, "datetime", clock):
+            ctrl.reset_accumulated_charge()
+            ctrl.set_accumulating(True)
+            for t, v in readings:
+                ctrl.update_accumulated_charge(now=t0 + t, current=v)
+            clock.now.return_value.timestamp.return_value = t0 + stop
+            ctrl.set_accumulating(False)
+
+        file_charge = integrate_current([t for t, _ in readings], [[v] for _, v in readings],
+                                        ["Current(uA)"], window=(start, stop))["channels"][0]["charge_uC"]
+        self.assertAlmostEqual(ctrl.get_accumulated_charge(), file_charge, places=9)
+        # And it covers the whole run: the readings alone would miss the edges.
+        readings_only = integrate_current([t for t, _ in readings], [[v] for _, v in readings],
+                                          ["Current(uA)"])["channels"][0]["charge_uC"]
+        self.assertGreater(file_charge, readings_only)
+
+    def test_file_integral_without_a_window_is_unchanged(self):
+        from app.services.run_data import integrate_current
+        r = integrate_current([0.0, 1.0, 2.0], [[1.0], [3.0], [3.0]], ["I"])
+        self.assertAlmostEqual(r["channels"][0]["charge_uC"], 2.0 + 3.0)
+        self.assertEqual(r["span"], "readings")
+
+    def test_readings_outside_the_run_count_only_inside_it(self):
+        from app.services.run_data import integrate_current
+        # A line from 0 uA at t=0 to 10 uA at t=10, run from 5 to 10: 5*(5+10)/2.
+        r = integrate_current([0.0, 10.0], [[0.0], [10.0]], ["I"], window=(5.0, 10.0))
+        self.assertAlmostEqual(r["channels"][0]["charge_uC"], 37.5)

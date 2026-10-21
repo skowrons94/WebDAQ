@@ -19,12 +19,14 @@ fills spectra and publishes rates, it just writes nothing.
 | `run_<N>_0000.caendat` | during | The data. One unified binary stream for every board, with the same header layout the XDAQ-era files had, so the same converter reads old and new runs. |
 | `run_<N>_0001.caendat`, … | during | The next parts, when a size limit is set. The header is written once, in the first file. |
 | `<model>_<id>.json` | at start | The board's complete register dump, copied out of `conf/`. This is what makes the run reproducible: thresholds, gates, trapezoid parameters, start mode, as they were. |
+| `<model>_<id>.cal` | at start | The board's energy calibration (offset and slope per channel), copied out of `calib/`. |
+| `coincidences.json` | at start | The coincidence gates and per-channel time offsets the online spectra used. |
 | `current.txt` | during | The beam current, one row per sample, with the time relative to the start of the log. The first two lines name the start time and the columns. |
 | `stats.csv` | during | The accelerator readings you selected on the Stats page, one row per sampling tick. |
 | `stats.csv.part1`, … | during | Earlier rows of the same run, kept aside when the statistics were restarted mid-run (see [Troubleshooting](troubleshooting.md)). |
 | `metadata.json` | at every change | The run's record — times, target, voltages, charge, flag, notes, the boards and the software versions — written again whenever anything changes. |
 | `roi.json` | at stop | Every region of interest defined at the time, with its counts. |
-| `run<N>.root` | on request | The converted file, produced by RUReader from every `.caendat` in the directory. |
+| `run<N>.root` | on request | The converted file, produced by RUReader from every `.caendat` in the directory. Besides the data it holds the run record (`RunMetadata`, and each field under `Run/`), every configuration file above verbatim (`RunFiles/`), the beam current and the charge (`Current/`) and the monitored metrics (`Stats/`): the file alone says how its data was taken. |
 
 **The database is the live record; `metadata.json` is the copy that travels.**
 SQLite (`app.db`) is what the Logbook reads and writes. After every change the
@@ -94,7 +96,8 @@ than only the database:
   the flag, and the file inventory with sizes.
 * **Notes** — the free-text record, editable after the fact.
 * **Beam Current** — `current.txt` plotted, with the charge integrated over the
-  whole series rather than over the drawn points.
+  whole run (start to stop, see [current and charge](current-and-charge.md)),
+  from every sample rather than the drawn points.
 * **Stats** — one plot per metric from `stats.csv`, each labelled with the alias
   and unit you gave it on the Stats page. A final row still being written is
   dropped rather than plotted, because half a number drawn as a value looks like

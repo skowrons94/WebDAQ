@@ -191,8 +191,17 @@ class ReadoutUnitSpy:
             # caendaq's arrays are _BINS long; an SIS3316 spectrum has its own
             # configured length, so the array decides when it has one.
             nbins = len(arr) if arr is not None and len(arr) else _BINS.get(htype)
-            return self._build(name, arr, nbins=nbins,
-                               empty_reason=f"No counts yet on channel {channel}")
+            reason = f"No counts yet on channel {channel}"
+            if htype in ("energy", "qlong") and (arr is None or not arr.sum()):
+                # Events but an empty spectrum: every energy came out as 0.
+                try:
+                    events = int(daq.channel_events(board_index, channel))
+                except Exception:
+                    events = 0
+                if events:
+                    reason = (f"{events} events, all with energy 0 — check the trapezoid "
+                              f"settings (rescaling, fine gain)")
+            return self._build(name, arr, nbins=nbins, empty_reason=reason)
         except Exception as e:
             self.logger.warning(f"histogram({board_index},{channel},{htype}) failed: {e}")
             return self._empty("Could not read this histogram — see the server log")

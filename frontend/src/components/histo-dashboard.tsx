@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTheme } from "next-themes"
-import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan } from "lucide-react"
+import { Settings, Grid2X2, Rows2, Plus, RotateCcw, Edit, Trash2, Save, Eye, EyeOff, Crosshair, Maximize2, Minimize2, GripVertical, ZoomIn, ListChecks, Scan, AlertTriangle } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -48,7 +48,7 @@ import {
 } from '@dnd-kit/sortable'
 import {CSS} from '@dnd-kit/utilities'
 
-type ChannelStats = ChannelRates & { trigger?: number }
+type ChannelStats = ChannelRates & { trigger?: number; energyWarning?: string }
 
 function formatRate(v: number | undefined): string {
   if (v === undefined || !Number.isFinite(v)) return "—"
@@ -141,6 +141,12 @@ const SortableHistogramCard = ({
             )}
             <Stat label="Counts" value={counts === undefined ? "—" : Math.round(counts).toLocaleString()} />
           </div>
+          {running && stats?.energyWarning && (
+            <p className="flex items-start gap-1 text-xs text-warning" role="status">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+              {stats.energyWarning}
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 items-center">
           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onROIFromView(config.id)}
@@ -872,10 +878,15 @@ export default function EnhancedHistogramDashboard() {
     const base = pickChannel(runStats, boardId, channel)
     if (!base) return null
     // An SIS3316 also reports its own internal trigger count.
-    const boardsArr = Array.isArray(runStats) ? (runStats as { board_id?: unknown; channels?: { channel: number; board?: unknown; trigger_rate?: number }[] }[]) : []
+    const boardsArr = Array.isArray(runStats) ? (runStats as { board_id?: unknown; channels?: { channel: number; board?: unknown; trigger_rate?: number; energy_warning?: string }[] }[]) : []
     const ch = boardsArr.flatMap((b) => (b.channels ?? []).map((c) => ({ b, c })))
       .find(({ b, c }) => c.channel === channel && String(c.board ?? b.board_id) === String(boardId))?.c
-    return { ...base, trigger: typeof ch?.trigger_rate === "number" ? ch.trigger_rate : undefined }
+    return {
+      ...base,
+      trigger: typeof ch?.trigger_rate === "number" ? ch.trigger_rate : undefined,
+      // The server judges whether the channel's energies are usable at all.
+      energyWarning: typeof ch?.energy_warning === "string" ? ch.energy_warning : undefined,
+    }
   }, [runStats])
 
   // An enlarged (or shrunk) card changes its canvas size: tell JSROOT, which

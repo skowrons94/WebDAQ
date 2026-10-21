@@ -27,6 +27,16 @@ the tab, if the run is stopped by the auto-restart, or if the run saves no data,
 the charge is still integrated for exactly the length of the run. It is written
 into the run's metadata when the run ends.
 
+**How it is integrated.** The readings are joined by straight lines (a ramping
+beam counts as a ramp, not a staircase). From the start of the run to its first
+reading the first one is held, and from its last reading to the stop the last
+one is: the charge covers the run from start to stop, not just the stretch
+between two readings. The Data page integrates `current.txt` over the same span
+(the run's start and stop are in its `metadata.json`), and so does RUReader for
+the ROOT file, so the three numbers agree. Runs recorded before v5.0 counted
+the live figure only up to the last reading, which made it a little lower than
+it should be — in a short run, by a few percent.
+
 A small dot next to *This run* on the dashboard card shows whether it is
 integrating: green during a run, grey between runs. A number that is not moving
 between runs is correct behaviour, not a stalled readout.
