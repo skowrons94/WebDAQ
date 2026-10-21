@@ -1,11 +1,30 @@
 import axios from 'axios';
 import useAuthStore, { currentToken } from '@/store/auth-store';
 
-const api = axios.create({
-    baseURL: process.env.NEXT_PUBLIC_API_URL,
-});
+// The address of the DAQ server, as built in (NEXT_PUBLIC_API_URL). Built as
+// localhost, it only means "the machine this page comes from": a phone or a
+// laptop opening the page by the PC's name or IP must not look for the server
+// on itself, so there the page's own host is used, on the configured port.
+function apiBase(): string | undefined {
+    const configured = process.env.NEXT_PUBLIC_API_URL;
+    if (!configured || typeof window === 'undefined') return configured;
+    try {
+        const url = new URL(configured);
+        const loopback = ['localhost', '127.0.0.1', '::1', '[::1]'];
+        const page = window.location.hostname;
+        if (loopback.includes(url.hostname) && !loopback.includes(page)) {
+            url.hostname = page;
+            return url.toString().replace(/\/$/, '');
+        }
+    } catch {
+        /* not a URL: use it as it is */
+    }
+    return configured;
+}
 
-console.log('API base URL:', process.env.NEXT_PUBLIC_API_URL);
+const api = axios.create({
+    baseURL: apiBase(),
+});
 
 api.interceptors.request.use((config) => {
     const token = currentToken();
