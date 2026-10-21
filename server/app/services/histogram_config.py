@@ -357,12 +357,14 @@ class HistogramConfigStore:
             for entry in self._config["histograms"]:
                 if entry["boardId"] != str(board_id) or entry["channel"] != int(channel):
                     continue
+                # Rounded to 0.01 of an axis unit, as ROIs are made: the
+                # conversion would otherwise leave 1553.8229580000002 behind.
                 for roi in entry["rois"]:
-                    low, high = convert(roi["low"]), convert(roi["high"])
+                    low, high = round(convert(roi["low"]), 2), round(convert(roi["high"]), 2)
                     roi["low"], roi["high"] = min(low, high), max(low, high)
                 zoom = entry.get("zoom")
                 if zoom:
-                    lo, hi = convert(zoom["xmin"]), convert(zoom["xmax"])
+                    lo, hi = round(convert(zoom["xmin"]), 2), round(convert(zoom["xmax"]), 2)
                     zoom["xmin"], zoom["xmax"] = min(lo, hi), max(lo, hi)
                 touched += 1
             if touched:

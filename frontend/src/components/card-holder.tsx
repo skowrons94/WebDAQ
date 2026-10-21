@@ -1243,7 +1243,7 @@ export function CardHolder({
               <CardContent>
                 <div className="text-2xl font-bold">{cardData.roi.integral.toFixed(0)}</div>
                 <p className="text-xs text-muted-foreground">
-                  Range: {cardData.roi.low} – {cardData.roi.high}
+                  Range: {Number(cardData.roi.low).toLocaleString(undefined, { maximumFractionDigits: 2 })} – {Number(cardData.roi.high).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </p>
               </CardContent>
             </Card>
