@@ -22,7 +22,7 @@ from any version convert with the same
 
 | | |
 |---|---|
-| **Boards** | Scan the links for connected digitizers (USB, optical/CONET, A4818, VME), add them, and keep their full register configuration in one file per board. |
+| **Boards** | Scan the links for connected digitizers (USB, optical/CONET, A4818, VME), add them, and keep their full register configuration in one file per board. Struck SIS3316 digitizers join over Ethernet ([doc/sis3316.md](doc/sis3316.md)). |
 | **Acquisition** | One unified `.caendat` file per run across all boards, with multi-board synchronisation driven by the boards' own start mode. |
 | **Online tuning** | Change thresholds, gates and trapezoid parameters **while the run is going**, and watch the trace and the spectrum react. Only the parameters that are safe to move mid-run are sent to the board. |
 | **Monitoring** | Per-channel spectra, waveforms and PSD plots; event, pile-up, lost and saturation rates per channel; beam current and accumulated charge. |
