@@ -249,14 +249,27 @@ def ensure_recording_bits(board: Dict[str, Any], logger: logging.Logger) -> bool
 _LOST_STEP = {0: 1024, 1: 128, 2: 8192}
 
 
+_lost_steps_cache: Dict[str, Tuple[float, Dict[int, int]]] = {}
+
+
 def _lost_trigger_steps(board: Dict[str, Any]) -> Dict[int, int]:
-    """Channel -> lost triggers per flag, from the board's register dump."""
+    """Channel -> lost triggers per flag, from the board's register dump (read
+    again only when the file changes: the statistics ask every second)."""
+    path = f"conf/{board['name']}_{board['id']}.json"
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        return {}
+    cached = _lost_steps_cache.get(path)
+    if cached and cached[0] == mtime:
+        return cached[1]
     out: Dict[int, int] = {}
     try:
-        with open(f"conf/{board['name']}_{board['id']}.json") as f:
+        with open(path) as f:
             regs = json.load(f).get("registers", {})
     except Exception:
         return out
+    _lost_steps_cache[path] = (mtime, out)
     for reg in regs.values():
         try:
             address = int(str(reg.get("address")), 16)
@@ -623,7 +636,8 @@ class CaenAcquisition:
             return
         per_channel = _lost_trigger_steps(cfg)
         for ch in board.get("channels", []):
-            n = per_channel.get(int(ch.get("channel", -1)))
+            # A channel missing from the dump runs with the power-on step.
+            n = per_channel.get(int(ch.get("channel", -1)), _LOST_STEP[0])
             if n:
                 ch["lost_flag_rate"] = ch.get("lost_rate", 0.0)
                 ch["lost_rate"] = float(ch.get("lost_rate") or 0.0) * n

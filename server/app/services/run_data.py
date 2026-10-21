@@ -347,7 +347,8 @@ def integrate_current(
             "charge_uC": charges[c],
             "charge_nC": charges[c] * 1e3,
             "charge_mC": charges[c] * 1e-3,
-            "mean_current_uA": (charges[c] / duration) if duration > 0 else 0.0,
+            # Over the time with readings: the silent stretches carry no charge.
+            "mean_current_uA": (charges[c] / (duration - uncovered)) if duration > uncovered else 0.0,
         })
 
     return {"channels": channels, "duration_s": duration, "method": "trapezoidal",

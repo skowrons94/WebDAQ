@@ -141,6 +141,10 @@ def sync_run_metadata_file(run_metadata) -> bool:
             output.write("\n")
             output.flush()
             os.fsync(output.fileno())
+        # mkstemp makes the file 0600: give it the mode any new file gets, so
+        # other accounts (analysis, RUReader run by someone else) can read it.
+        from ..utils.board_files import _umask
+        os.chmod(temp_path, 0o666 & ~_umask())
         os.replace(temp_path, os.path.join(directory, METADATA_FILENAME))
         return True
     except Exception:

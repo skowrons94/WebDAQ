@@ -46,8 +46,14 @@ def _readable(path: str) -> bool:
     """False only for a file that is damaged: not a database, or malformed.
 
     A database another program holds locked (a SQLite browser, a backup, a
-    notebook) is busy, not broken: it must never be set aside for that.
+    notebook) is busy, not broken: it must never be set aside for that. Nor is
+    one the server may not open (left owned by root after a run with sudo):
+    that raises, so the cause is reported and the run records stay where
+    they are.
     """
+    if not os.access(path, os.R_OK | os.W_OK):
+        raise RuntimeError(f"{path} cannot be read or written by this user (check its owner "
+                           f"and permissions); it was left as it is")
     try:
         con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=LOCK_WAIT_S)
         try:
@@ -60,7 +66,9 @@ def _readable(path: str) -> bool:
         if "locked" in text or "busy" in text:
             logger.warning(f"{path} is locked by another program; leaving it as it is")
             return True
-        return False
+        if "malformed" in text or "not a database" in text:
+            return False
+        raise RuntimeError(f"{path} could not be opened ({e}); it was left as it is")
     except sqlite3.DatabaseError:
         return False
 

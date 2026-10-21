@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import threading
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.board_files import BOARD_FILE_LOCK, write_json_atomic
@@ -176,7 +177,27 @@ class Sis3316Acquisition:
             idx = self._index_for(board, boards)
             self._daq.update_settings(idx, clean)
         self.save_settings(board, clean)
+        if self._running:
+            self._log_settings_change(board, clean)
         return clean
+
+    SETTINGS_HISTORY_FILE = "settings_history.jsonl"
+
+    def _log_settings_change(self, board: Dict[str, Any], settings: Dict[str, Any]) -> None:
+        """Settings changed during a saved run go into its directory, with
+        their time: the copy taken at the start no longer describes all of
+        the data (register_history.jsonl does the same for CAEN boards)."""
+        out_dir, write = getattr(self._daq, "out_dir", ""), getattr(self._daq, "write", False)
+        if not write or not out_dir or not os.path.isdir(out_dir):
+            return
+        entry = {"time": datetime.now().isoformat(timespec="seconds"),
+                 "board": str(board.get("id")), "board_name": str(board.get("name")),
+                 "settings": settings}
+        try:
+            with open(os.path.join(out_dir, self.SETTINGS_HISTORY_FILE), "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except OSError as e:
+            logger.warning(f"Could not log the SIS3316 settings change in {out_dir}: {e}")
 
     # ── run control (called by CaenAcquisition) ────────────────────────────
     def configure(self, boards: List[Dict[str, Any]], run: int, out_dir: str,

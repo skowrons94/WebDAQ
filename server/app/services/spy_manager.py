@@ -119,7 +119,7 @@ class SpyManager:
     
     def get_histogram(self, board_id: str, channel: int, boards: List[Dict[str, Any]], 
                      histogram_type: Optional[str] = None, rebin: int = 16,
-                     calibrate: bool = True) -> Any:
+                     calibrate: bool = True, display_rebin: bool = True) -> Any:
         """
         Get histogram for a specific board and channel.
         
@@ -166,7 +166,9 @@ class SpyManager:
                         calibrate_x_axis(histo, offset, slope)
 
                 # Rebin only applies to 1D spectra (TH2 PSD is rebinned by the route).
-                if self.rebin_factor > 1 and histo.GetDimension() == 1:
+                # Not for counting (ROI integrals): their edges would snap to
+                # the display's wide bins.
+                if display_rebin and self.rebin_factor > 1 and histo.GetDimension() == 1:
                     histo.Rebin(self.rebin_factor)
 
             return histo

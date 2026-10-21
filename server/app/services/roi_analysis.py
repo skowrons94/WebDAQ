@@ -45,10 +45,18 @@ _run_number_at_start: Optional[int] = None
 
 
 def _integrate(histogram: Any, low: float, high: float) -> float:
-    """Counts between two axis values, in whatever units the axis is calibrated in."""
+    """Counts between two axis values, in whatever units the axis is calibrated
+    in: the channels whose centre lies inside [low, high]."""
     try:
-        return float(histogram.Integral(
-            histogram.FindBin(low), histogram.FindBin(high)))
+        axis = histogram.GetXaxis()
+        first, last = histogram.FindBin(low), histogram.FindBin(high)
+        if axis.GetBinCenter(first) < low:
+            first += 1
+        if axis.GetBinCenter(last) > high:
+            last -= 1
+        if last < first:
+            return 0.0
+        return float(histogram.Integral(first, last))
     except Exception as e:
         logger.debug(f"ROI integration failed over [{low}, {high}]: {e}")
         return 0.0
@@ -80,8 +88,9 @@ def compute_integrals(visible_only: bool = True,
     for target in targets:
         histogram = None
         try:
+            # Unrebinned: the counts must not depend on how the page shows them.
             histogram = spy_mgr.get_histogram(
-                target["boardId"], int(target["channel"]), boards)
+                target["boardId"], int(target["channel"]), boards, display_rebin=False)
         except Exception as e:
             logger.error(f"Could not read board {target['boardId']} "
                          f"channel {target['channel']}: {e}")

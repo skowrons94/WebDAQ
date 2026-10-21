@@ -128,6 +128,14 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
 
     # We need to create an app context since this runs in a background thread
     with _run_lock, app.app_context():
+        # The operator may have stopped the run while this waited for the
+        # lock: restarting it then would start a run nobody asked for (and
+        # skip a run number).
+        info = daq_mgr.get_last_restart_info() or {}
+        if not daq_mgr.is_running() or info.get('run_number', daq_mgr.get_run_number()) != daq_mgr.get_run_number():
+            logger.info("Auto-restart dropped: the run was stopped in the meantime")
+            daq_mgr.restart_pending = False
+            return
         try:
             current_run_number = daq_mgr.get_run_number()
             save_data = daq_mgr.get_save_data()

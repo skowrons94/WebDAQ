@@ -445,6 +445,11 @@ class DAQManager:
 
         if board_id < 0:
             raise BoardConfigError(f"Board ID must not be negative (got {board_id}).")
+        from .sis3316_acquisition import is_sis3316
+        if board_id > 31 and not is_sis3316(board_config):
+            # The CAEN board id (0xEF08) is 5 bits in every data aggregate header:
+            # a larger one would be cut and collide with another board's data.
+            raise BoardConfigError(f"A CAEN Board ID must be between 0 and 31 (got {board_id}).")
 
         existing = self.find_board_with_id(board_id)
         if existing is not None:
@@ -564,7 +569,7 @@ class DAQManager:
                 with open(config_file, 'r') as f:
                     config_data = json.load(f)
                 if "reg_EF08" in config_data["registers"]:
-                    config_data["registers"]["reg_EF08"]["value"] = "0x" + str(int(board_config["id"]))
+                    config_data["registers"]["reg_EF08"]["value"] = f"0x{int(board_config['id']):X}"
                 write_json_atomic(config_file, config_data)
             
             # Create calibration file

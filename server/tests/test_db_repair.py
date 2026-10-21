@@ -121,6 +121,20 @@ class DatabaseRepairTests(unittest.TestCase):
             holder.close()
         self.assertEqual(sorted(os.listdir(self.tmp.name)), ["app.db"])
 
+    def test_a_database_without_permission_is_reported_not_replaced(self):
+        """Left root-owned by a run with sudo: the run records must stay."""
+        from app.utils import db_repair
+        self._ensure()
+        os.chmod(self.db, 0)
+        try:
+            if os.access(self.db, os.R_OK):
+                self.skipTest("running as root: permissions are not enforced")
+            with self.assertRaisesRegex(RuntimeError, "permissions"):
+                db_repair._readable(self.db)
+        finally:
+            os.chmod(self.db, 0o644)
+        self.assertEqual(sorted(os.listdir(self.tmp.name)), ["app.db"])
+
     def test_current_database_is_left_alone(self):
         self._ensure()
         out = self._ensure()

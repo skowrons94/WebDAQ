@@ -55,6 +55,13 @@ class FitTests(unittest.TestCase):
         self.assertLess(r["centroid_error"], 1.0)
         self.assertAlmostEqual(r["area"], 10000, delta=500)
 
+    def test_pulser_in_a_wide_zoom_is_not_pulled_to_the_middle(self):
+        rng = np.random.default_rng(5)
+        values = np.floor(rng.normal(1000.3, 0.2, 5000)).astype(int)
+        h = (np.bincount(values, minlength=4096) + rng.poisson(10, 4096)).astype(np.uint32)
+        r = C.fit_peak(h, 900, 1300)
+        self.assertAlmostEqual(r["centroid"], values.mean(), delta=0.1)
+
     def test_nothing_to_fit_says_why(self):
         with self.assertRaisesRegex(ValueError, "Zoom on a peak"):
             C.fit_peak(spectrum([]), 100, 102)
@@ -116,6 +123,24 @@ class SaveTests(unittest.TestCase):
         # there is at E(100) = 26.5 keV now, and back again.
         self.assertEqual((board_id, channel), ("0", 5))
         self.assertAlmostEqual(convert(100.5), 26.5)
+
+    def test_old_bin_centre_calibrations_are_migrated_once(self):
+        os.makedirs("calib", exist_ok=True)
+        with open("calib/V1725S_0.cal", "w") as f:
+            f.write("".join("1.0 0.5\n" if ch == 3 else ("2.0 0.25\n" if ch == 4 else "0.0 1.0\n")
+                            for ch in range(16)))
+        with open("calib/V1725S_0.points.json", "w") as f:
+            json.dump({"3": {"points": [{"channel": 100.5, "energy": 51.25}], "offset": 1.0, "slope": 0.5},
+                       "4": {"points": [{"channel": 10.5, "energy": 5.0}], "offset": 9.0, "slope": 9.0}}, f)
+        self.assertEqual(len(C.migrate_bin_centre_calibrations()), 1)
+        table = C.read_table("V1725S", "0", 16)
+        self.assertEqual(table[3], (1.25, 0.5))           # solved from its points: moved
+        self.assertEqual(table[4], (2.0, 0.25))           # typed in since: left alone
+        pts = C.read_points("V1725S", "0")
+        self.assertEqual(pts["3"]["points"][0]["channel"], 100.0)
+        self.assertEqual(pts["4"]["points"][0]["channel"], 10.0)
+        self.assertEqual(C.migrate_bin_centre_calibrations(), [])   # once only
+        self.assertEqual(C.read_table("V1725S", "0", 16)[3], (1.25, 0.5))
 
     def test_a_change_during_a_run_is_logged_there(self):
         os.makedirs("data/run7")

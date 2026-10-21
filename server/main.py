@@ -250,6 +250,11 @@ def _launcher_watchdog():
 if __name__ == '__main__':
     # Only when we are the ones serving: see the note next to the definition.
     ensure_schema_current(app)
+    try:
+        from app.services.calibration import migrate_bin_centre_calibrations
+        migrate_bin_centre_calibrations()
+    except Exception as e:
+        logger.error(f"Calibrations made before WebDAQ 5.0 could not be checked: {e}")
 
     # Register signal handlers for clean shutdown
     signal.signal(signal.SIGINT, cleanup_on_shutdown)   # CTRL+C

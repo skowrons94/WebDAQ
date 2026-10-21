@@ -117,7 +117,8 @@ a change made during a run is logged there, with its time, in
 
 The channel in E = offset + slope × channel is the integer **Energy** value
 written in the run files (and in the ROOT tree), so the same two numbers
-calibrate the offline analysis exactly. A line narrower than a channel (a
+calibrate the offline analysis exactly. For an SIS3316 it is the spectrum
+channel, `energy_max // histogram_divider` (integer division) of the `.h5` file. A line narrower than a channel (a
 pulser) is placed at the mean of its counts, to within a third of a channel.
 
 ---

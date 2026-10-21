@@ -63,6 +63,8 @@ class AutoRestartTests(unittest.TestCase):
         self.saved_app = self.daq_mgr.flask_app
         self.daq_mgr.flask_app = self.app
         self.daq_mgr.daq_state.update({'run': OLD_RUN, 'save': True, 'running': True})
+        self.saved_restart_info = self.daq_mgr.last_restart_info
+        self.daq_mgr.last_restart_info = {'run_number': OLD_RUN}
 
         with self.app.app_context():
             RunMetadata.query.delete()
@@ -108,6 +110,7 @@ class AutoRestartTests(unittest.TestCase):
         self.daq_mgr.daq_state.update(self.saved_state)
         self.daq_mgr._update_project()
         self.daq_mgr.flask_app = self.saved_app
+        self.daq_mgr.last_restart_info = self.saved_restart_info
 
     def run_meta(self, run_number):
         with self.app.app_context():
@@ -123,6 +126,14 @@ class AutoRestartTests(unittest.TestCase):
         self.assertEqual(self.daq_mgr.get_run_number(), NEW_RUN)
         self.caen.configure.assert_called_once()
         self.assertEqual(self.caen.configure.call_args[0][1], NEW_RUN)
+
+    def test_no_restart_after_the_operator_stopped_the_run(self):
+        # Stopped (and the number moved on) while the restart waited for the lock.
+        self.daq_mgr.daq_state.update({'running': False, 'run': OLD_RUN + 1})
+        experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
+        self.assertFalse(self.daq_mgr.is_running())
+        self.assertEqual(self.daq_mgr.get_run_number(), OLD_RUN + 1)
+        self.caen.configure.assert_not_called()
 
     def test_current_recording_moves_to_the_new_run(self):
         experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')

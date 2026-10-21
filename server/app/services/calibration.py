@@ -96,6 +96,57 @@ def read_points(board_name: str, board_id: str) -> Dict[str, Any]:
         return {}
 
 
+# Peak channels are the integer energy values (bin k holds value k). Until
+# WebDAQ 5.0 the fit worked on bin centres, k + 0.5, so its points and the
+# calibrations solved from them sit half a channel off this convention.
+CONVENTION = "value"
+
+
+def migrate_bin_centre_calibrations() -> List[str]:
+    """Bring calibrations made by the old fit (points without a convention) to
+    the integer-value convention, once: each point's channel moves down by half
+    a channel and, where the .cal line is still the one solved from those
+    points, its offset moves up by slope / 2, so every spectrum and ROI stays
+    where it was shown. Calibrations typed in by hand are left alone."""
+    done: List[str] = []
+    if not os.path.isdir(CALIB_DIR):
+        return done
+    with _lock:
+        for fname in sorted(os.listdir(CALIB_DIR)):
+            if not fname.endswith(".points.json"):
+                continue
+            base = fname[:-len(".points.json")]
+            name, _, bid = base.rpartition("_")
+            stored = read_points(name, bid)
+            old = {ch: e for ch, e in stored.items()
+                   if isinstance(e, dict) and e.get("convention") != CONVENTION}
+            if not old:
+                continue
+            cal_path, points_path = _paths(name, bid)
+            try:
+                with open(cal_path) as f:
+                    rows = sum(1 for line in f if line.strip())
+            except OSError:
+                rows = 0
+            table = read_table(name, bid, max(rows, max(int(c) for c in old) + 1))
+            for ch, entry in old.items():
+                for pt in entry.get("points") or []:
+                    if isinstance(pt.get("channel"), (int, float)):
+                        pt["channel"] = float(pt["channel"]) - 0.5
+                o, sl = table[int(ch)]
+                if np.isclose(o, entry.get("offset", np.nan)) and np.isclose(sl, entry.get("slope", np.nan)):
+                    table[int(ch)] = (o + sl / 2, sl)
+                    entry["offset"] = o + sl / 2
+                    done.append(f"{base} channel {ch}: offset {o:g} -> {o + sl / 2:g}")
+                entry["convention"] = CONVENTION
+            if os.path.exists(cal_path):
+                _atomic_write(cal_path, "".join(f"{o!r} {s!r}\n" for o, s in table))
+            _atomic_write(points_path, json.dumps(stored, indent=2))
+    for line in done:
+        logger.warning(f"Calibration moved to the integer-value convention: {line}")
+    return done
+
+
 def is_calibrated(offset: float, slope: float) -> bool:
     return (offset, slope) != (0.0, 1.0)
 
@@ -157,7 +208,10 @@ def fit_peak(spectrum: np.ndarray, xmin: float, xmax: float) -> Dict[str, Any]:
         # Narrower than a channel: the shape no longer tells where in the
         # channel the line sits. Its counts do: their mean, known to within
         # the channel's own width (1/sqrt(12)) at best.
-        w = np.clip(y - (p[3] + p[4] * x), 0, None)
+        # Only the channels next to the line: over a wide zoom the noise of
+        # the background, clipped at zero, would pull the mean to the middle.
+        near = np.abs(x - mu) <= 2
+        w = np.where(near, np.clip(y - (p[3] + p[4] * x), 0, None), 0.0)
         if w.sum() > 0:
             mu = float((w * x).sum() / w.sum())
             spread = float(np.sqrt((w * (x - mu) ** 2).sum() / w.sum()))
@@ -221,6 +275,7 @@ def save(board: Dict[str, Any], channel: int, offset: float, slope: float,
         stored = read_points(name, bid)
         if points is not None:
             stored[str(channel)] = {"points": points, "offset": offset, "slope": slope,
+                                    "convention": CONVENTION,
                                     "updated": datetime.now().isoformat(timespec="seconds")}
             _atomic_write(points_path, json.dumps(stored, indent=2))
 
