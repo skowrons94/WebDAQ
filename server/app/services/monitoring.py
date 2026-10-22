@@ -316,6 +316,7 @@ def detect(hosts: Iterable[str],
 # Longer than a detection probe: this is the server the operator chose, and a
 # slow answer from it is still an answer.
 STATUS_TIMEOUT_S = 2.0
+STATUS_DEADLINE_S = 4.0   # the whole status check, name lookups included
 
 
 def status(graphite_host: str, web_port: Optional[int], carbon_port: Optional[int],
@@ -349,9 +350,21 @@ def status(graphite_host: str, web_port: Optional[int], carbon_port: Optional[in
             return None
         return {"version": str(body.get("version") or "")}
 
-    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="monitoring-status") as pool:
-        g, c, f = pool.submit(graphite_ok), pool.submit(carbon_ok), pool.submit(grafana_health)
-        graphite_up, carbon_up, grafana = g.result(), c.result(), f.result()
+    # A name lookup has no timeout of its own: a broken DNS must not hold the
+    # page, so whatever has not answered by the deadline counts as down.
+    pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix="monitoring-status")
+    futures = (pool.submit(graphite_ok), pool.submit(carbon_ok), pool.submit(grafana_health))
+    deadline = time.monotonic() + STATUS_DEADLINE_S
+
+    def outcome(future, failed):
+        try:
+            return future.result(timeout=max(0.0, deadline - time.monotonic()))
+        except Exception:
+            return failed
+
+    graphite_up, carbon_up, grafana = (outcome(futures[0], False), outcome(futures[1], False),
+                                       outcome(futures[2], None))
+    pool.shutdown(wait=False, cancel_futures=True)
 
     return {
         "graphite": {"reachable": graphite_up, "host": graphite_host, "port": web_port},
@@ -359,6 +372,7 @@ def status(graphite_host: str, web_port: Optional[int], carbon_port: Optional[in
         "grafana": {"reachable": grafana is not None, "url": grafana_url,
                     "version": (grafana or {}).get("version", "")},
     }
+
 
 
 def _probe_graphite_at(host: str, port: int) -> bool:

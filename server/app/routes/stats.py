@@ -56,6 +56,25 @@ def set_graphite_config():
         if graphite_prefix is None and (not graphite_host or not graphite_port):
             return jsonify({'error': 'Missing graphite_host or graphite_port'}), 400
 
+        # Everything is checked before anything is saved: a bad field must not
+        # leave half of the change applied.
+        if graphite_host:
+            graphite_host = str(graphite_host).strip()
+            for scheme in ('http://', 'https://'):
+                if graphite_host.lower().startswith(scheme):
+                    graphite_host = graphite_host[len(scheme):]
+            graphite_host = graphite_host.rstrip('/')
+            if not graphite_host or any(c in graphite_host for c in ' /:'):
+                return jsonify({'error': 'The Graphite host is a name or an address, without http:// or a port'}), 400
+        for name, value in (('graphite_port', graphite_port), ('carbon_port', data.get('carbon_port'))):
+            if value is None:
+                continue
+            try:
+                if not 1 <= int(value) <= 65535:
+                    raise ValueError
+            except (TypeError, ValueError):
+                return jsonify({'error': f'{name} must be a port number'}), 400
+
         if graphite_host and graphite_port:
             # Update the stats_manager's graphite client
             stats_manager.graphite_client.host = graphite_host

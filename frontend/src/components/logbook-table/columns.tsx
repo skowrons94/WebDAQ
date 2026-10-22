@@ -454,7 +454,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
                 }
                 setSaveState("saving")
                 try {
-                    await updateRunNotes(row.original.run_number, notes)
+                    await updateRunNotes(row.original.run_number, notes, row.original.notes || "")
                     setIsEditing(false)
                     setSaveState("saved")
                     onDataUpdate?.()

@@ -135,6 +135,18 @@ class AutoRestartTests(unittest.TestCase):
         self.assertEqual(self.daq_mgr.get_run_number(), OLD_RUN + 1)
         self.caen.configure.assert_not_called()
 
+    def test_a_reset_mid_run_ends_the_run_like_a_stop(self):
+        from app.services import caen_acquisition as caen_module
+        with mock.patch.object(caen_module, 'get_caen_acquisition', return_value=self.caen), \
+             self.app.app_context():
+            self.daq_mgr.reset_acquisition()
+        self.assertFalse(self.daq_mgr.is_running())
+        self.assertFalse(self.stats.collecting)
+        self.assertEqual(self.stats.stops, 1)
+        self.assertFalse(current_routes.is_recording_run())
+        self.assertEqual(self.daq_mgr.get_run_number(), OLD_RUN + 1)
+        self.assertIsNotNone(self.run_meta(OLD_RUN).end_time)
+
     def test_current_recording_moves_to_the_new_run(self):
         experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 

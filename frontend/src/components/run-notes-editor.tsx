@@ -181,17 +181,23 @@ export function RunNotesEditor({ runNumber, notes, onSaved }: RunNotesEditorProp
   const save = async () => {
     setSaving(true)
     try {
-      await updateRunNotes(runNumber, draft)
-      setSavedValue(draft)
-      onSaved(draft)
+      const saved = await updateRunNotes(runNumber, draft, savedValue)
+      setDraft(saved.notes)
+      setSavedValue(saved.notes)
+      onSaved(saved.notes)
       toast({
         title: "Notes saved",
-        description: `The Markdown notes for run ${runNumber} were updated.`,
+        description: saved.merged
+          ? `Notes added to run ${runNumber} while you were editing were kept, below yours.`
+          : `The Markdown notes for run ${runNumber} were updated.`,
       })
-    } catch {
+    } catch (error: any) {
+      const conflict = error?.response?.status === 409
       toast({
         title: "Could not save notes",
-        description: "The logbook entry was not updated. Your draft is still here.",
+        description: conflict
+          ? "Someone else changed these notes meanwhile. Your draft is still here: copy it, reload the entry, and add it again."
+          : "The logbook entry was not updated. Your draft is still here.",
         variant: "destructive",
       })
     } finally {

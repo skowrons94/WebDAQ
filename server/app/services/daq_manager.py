@@ -961,6 +961,7 @@ class DAQManager:
         return the boards to the probe layer, and clear the running flag. Used by
         the 'Reset acquisition' button to recover from a stuck state.
         """
+        was_running = self.is_running()
         try:
             self.stop_board_monitoring()
         except Exception as e:
@@ -970,12 +971,47 @@ class DAQManager:
             get_caen_acquisition(self.test_flag).stop()
         except Exception as e:
             self.logger.warning(f"reset: error stopping acquisition: {e}")
+        if was_running:
+            self._end_run_after_reset()
         try:
             self.reacquire_digitizers()
         except Exception as e:
             self.logger.debug(f"reset: reacquire: {e}")
         self.set_running_state(False)
         return True
+
+    def _end_run_after_reset(self) -> None:
+        """A reset in the middle of a run ends that run as a Stop would: its end
+        time, its stats.csv and current log closed, and (when it was saved)
+        the next run number, so the next Start does not write into it."""
+        run_number, saved = self.daq_state.get('run'), self.daq_state.get('save')
+        try:
+            from ..routes.stats import stats_manager
+            if stats_manager.collecting:
+                stats_manager.stop_run()
+        except Exception as e:
+            self.logger.error(f"reset: closing stats.csv failed: {e}")
+        try:
+            from ..routes import current as current_routes
+            if current_routes.is_recording_run():
+                current_routes.stop_run_recording()
+        except Exception as e:
+            self.logger.error(f"reset: closing the current log failed: {e}")
+        if not saved:
+            return
+        try:
+            from app import db
+            from ..models.run_metadata import RunMetadata
+            from .run_metadata_snapshot import sync_run_metadata_file
+            row = RunMetadata.query.filter_by(run_number=run_number).first()
+            if row is not None and row.end_time is None:
+                row.end_time = datetime.now()
+                db.session.commit()
+                sync_run_metadata_file(row)
+        except Exception as e:
+            self.logger.error(f"reset: run {run_number} end time not recorded: {e}")
+        self.increment_run_number()
+        self.logger.warning(f"Run {run_number} ended by a reset of the acquisition")
     
     def get_board_info(self, board_id: str) -> Optional[Dict[str, Any]]:
         """

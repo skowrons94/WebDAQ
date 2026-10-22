@@ -11,6 +11,9 @@
 #   lunadaq run       start the frontend in this terminal instead (tmux, debugging)
 #   lunadaq backend   start the backend in this terminal
 #   lunadaq stop      stop both, escalating from SIGTERM to SIGKILL
+#
+# stop and restart refuse while a run is going (stopping the server ends it):
+# stop the run first, or add --force. start leaves a running interface alone.
 #   lunadaq restart   stop both, start the frontend, and start the backend
 #                     again in the folder it was using
 #   lunadaq status    show what is holding each port
@@ -162,6 +165,30 @@ activate_env() {
     set -u
 }
 
+# Is a run going? Asked of the backend itself; no answer counts as no run.
+run_going() {
+    local answer
+    answer="$(curl -s -m 3 "http://127.0.0.1:${BACKEND_PORT}/experiment/run_active" 2>/dev/null)" || return 1
+    [[ "$answer" == *'"running":true'* ]]
+}
+
+refuse_during_run() {
+    [ "$FORCE" = 1 ] && return 0
+    if run_going; then
+        err "A run is going: stopping the server would end it. Stop the run first, or add --force."
+        exit 1
+    fi
+}
+
+# Is our frontend already up on its port?
+frontend_running() {
+    local pid
+    for pid in $(port_pids "$FRONTEND_PORT"); do
+        is_ours frontend "$(cmdline "$pid")" && return 0
+    done
+    return 1
+}
+
 cmd_status() {
     local role port label pids pid cmd
     for entry in "frontend:$FRONTEND_PORT:Frontend" "backend:$BACKEND_PORT:Backend"; do
@@ -183,6 +210,7 @@ cmd_status() {
 }
 
 cmd_stop() {
+    refuse_during_run
     local rc=0
     stop_port frontend "$FRONTEND_PORT" "Frontend" || rc=1
     stop_port backend "$BACKEND_PORT" "Backend" || rc=1
@@ -191,6 +219,8 @@ cmd_stop() {
 
 prepare_frontend() {
     require_dir "$FRONTEND_DIR"
+    # Replacing a running interface takes its DAQ server down too.
+    frontend_running && refuse_during_run
     # A leftover instance would only make `npm run start` fail on a bound port.
     stop_port frontend "$FRONTEND_PORT" "Frontend" || {
         err "Port $FRONTEND_PORT is not free — not starting."
@@ -211,6 +241,13 @@ cmd_run() {
 # connection that started it no longer takes the web interface (and the DAQ
 # server it launched) down with it.
 cmd_start() {
+    # Typed again "to be sure": killing the interface would take the DAQ
+    # server, and a run in progress, down with it.
+    if [ "${1:-}" != "--replace" ] && frontend_running; then
+        ok "The frontend is already running on http://localhost:${FRONTEND_PORT} — left as it is."
+        echo "  'lunadaq restart' replaces it (refused while a run is going)."
+        return 0
+    fi
     prepare_frontend
     mkdir -p "$LOG_DIR"
     info "Starting the frontend on port ${FRONTEND_PORT} in the background…"
@@ -250,7 +287,7 @@ backend_session() {
     local dir test=false
     dir="$(readlink "/proc/$pid/cwd" 2>/dev/null || lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
     [ -n "$dir" ] || return 1
-    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qx 'TEST_FLAG=True' && test=true
+    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -q '^TEST_FLAG=.' && test=true   # any value, as the server reads it
     echo "$dir|$test"
 }
 
@@ -277,9 +314,10 @@ start_backend_in() {
 
 cmd_restart() {
     local session=""
+    refuse_during_run
     session="$(backend_session)" || session=""
     cmd_stop || true
-    cmd_start || return 1
+    cmd_start --replace || return 1
     if [ -n "$session" ]; then
         start_backend_in "${session%|*}" "${session#*|}"
     else
@@ -309,6 +347,9 @@ cmd_backend() {
     info "Starting the backend on port ${BACKEND_PORT} ($(python -c 'import sys; print(sys.prefix)'))…"
     cd "$SERVER_DIR" && exec python main.py
 }
+
+FORCE=0
+for arg in "$@"; do [ "$arg" = "--force" ] && FORCE=1; done
 
 case "${1:-start}" in
     start)   cmd_start ;;

@@ -95,9 +95,10 @@ LunaDAQ backend    # run the DAQ server in this terminal, for debugging
 
 `LunaDAQ` (or `LunaDAQ start`) returns once the interface answers, and the
 interface keeps running after the terminal or the SSH connection is closed. Its
-output goes to `~/.local/state/lunadaq/frontend.log`. Stopping the interface also
-stops the DAQ server it started, and with it a run in progress: stop the run
-first.
+output goes to `~/.local/state/lunadaq/frontend.log`. Typed again while the
+interface runs, it leaves it alone. Stopping the interface also stops the DAQ
+server it started, and with it a run in progress, so `stop` and `restart`
+refuse while a run is going: stop the run first, or add `--force`.
 
 Then open <http://localhost:3000> and log in. The **DAQ Server** badge at the top
 right starts the server itself: pick the working directory for the campaign and

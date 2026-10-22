@@ -99,8 +99,12 @@ export const updateRunFlag = (runNumber: number, flag: string) =>
 export const appendRunNoteApi = (runNumber: number, text: string, author: string) =>
     api.post('/experiment/append_run_note', { run_number: runNumber, text, author }).then(res => res.data);
 
-export const updateRunNotes = (runNumber: number, notes: string) =>
-    api.post('/experiment/update_run_notes', { run_number: runNumber, notes });
+/** Save edited notes. `baseNotes` is the text the editor started from: notes
+ *  added meanwhile are kept (appended below), or the save is refused with 409
+ *  when the text was changed some other way. Resolves to the notes saved. */
+export const updateRunNotes = (runNumber: number, notes: string, baseNotes?: string) =>
+    api.post('/experiment/update_run_notes', { run_number: runNumber, notes, base_notes: baseNotes })
+        .then(res => res.data as { notes: string; merged: boolean });
 
 // Functions for board management
 export const getBoardConfiguration = () =>

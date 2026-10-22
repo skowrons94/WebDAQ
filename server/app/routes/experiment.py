@@ -368,10 +368,13 @@ def _stop_run():
     try:
         if stats_manager.collecting:
             stats_manager.stop_run()
+    except Exception as e:
+        logger.error(f"Closing the run's stats.csv failed: {e}")
+    try:
         if current_routes.is_recording_run():
             current_routes.stop_run_recording()
     except Exception as e:
-        logger.error(f"Closing the run's stats.csv / current log failed: {e}")
+        logger.error(f"Closing the run's current log failed: {e}")
 
     # Retries inside: the boards were closed by caendaq a moment ago and a CAEN
     # link is not always ready to be reopened that fast. Say which ones stayed
@@ -420,19 +423,22 @@ def _username(user_id):
 @bp.route("/experiment/append_run_note", methods=['POST'])
 @jwt_required_custom
 def append_run_note():
-    """Add one line to a run's notes, stamped "[HH:MM author]" with the
+    """Add one line to a run's notes, stamped "[22 Oct 02:10 author]" with the
     server's time; the author is the name typed by the shifter, else the
     account. Returns the notes as they now are."""
-    data = request.get_json(silent=True) or {}
-    text = str(data.get('text') or '').strip()
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'message': 'Expected a JSON object'}), 400
+    text = str(data.get('text') or '').strip()[:5000]
     if not text:
         return jsonify({'message': 'The note is empty'}), 400
     try:
         run_number = int(data['run_number'])
     except (KeyError, TypeError, ValueError):
         return jsonify({'message': 'run_number must be a number'}), 400
-    author = str(data.get('author') or '').strip() or _username(get_current_user()) or ''
-    line = f"[{datetime.now():%H:%M}{' ' + author if author else ''}] {text}"
+    author = str(data.get('author') or '').strip()[:40] or _username(get_current_user()) or ''
+    # The date too: a night run's notes straddle midnight.
+    line = f"[{datetime.now():%d %b %H:%M}{' ' + author if author else ''}] {text}"
     with _note_lock:
         run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
         if run_metadata is None:
@@ -655,6 +661,14 @@ def set_run_number():
 def check_run_directory():
     return jsonify(daq_mgr.check_run_directory())
 
+# Whether a run is going, without a login: the launcher script asks before it
+# stops the server (stopping it ends the run). Says nothing more than the run
+# bar any visitor of the login page sees.
+@bp.route("/experiment/run_active", methods=['GET'])
+def run_active():
+    return jsonify({'running': bool(daq_mgr.is_running()), 'run': daq_mgr.get_run_number()})
+
+
 # Get run status
 @bp.route("/experiment/get_run_status", methods=['GET'])
 @jwt_required_custom
@@ -745,22 +759,40 @@ def update_run_flag():
 @bp.route("/experiment/update_run_notes", methods=['POST'])
 @jwt_required_custom
 def update_run_notes():
-    data = request.get_json()
+    """Replace a run's notes with the edited text. With `base_notes` (the text
+    the editor started from), notes added meanwhile (a quick note, an
+    auto-restart note) are kept: appended below the edit when they came after
+    it, refused with 409 when the text was changed some other way."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'message': 'Expected a JSON object'}), 400
     run_number = data.get('run_number')
-    notes = data.get('notes', '')
-    
+    notes = str(data.get('notes') or '')
+    base = data.get('base_notes')
+
     if not run_number:
         return jsonify({'message': 'Missing run_number'}), 400
-    
-    run = RunMetadata.query.filter_by(run_number=run_number).first()
-    if not run:
-        return jsonify({'message': 'Run not found'}), 404
-    
-    run.notes = notes
-    db.session.commit()
-    sync_run_metadata_file(run)
-    
-    return jsonify({'message': 'Notes updated successfully', 'notes': notes}), 200
+
+    with _note_lock:
+        run = RunMetadata.query.filter_by(run_number=run_number).first()
+        if not run:
+            return jsonify({'message': 'Run not found'}), 404
+        current = run.notes or ''
+        merged = False
+        if base is not None and current != base:
+            start = str(base).rstrip()
+            if not current.startswith(start):
+                return jsonify({'message': 'These notes were changed by someone else meanwhile; '
+                                           'the latest version is attached.', 'notes': current}), 409
+            extra = current[len(start):].strip()
+            if extra:
+                notes = f"{notes.rstrip()}\n\n{extra}\n"
+                merged = True
+        run.notes = notes
+        db.session.commit()
+        sync_run_metadata_file(run)
+
+    return jsonify({'message': 'Notes updated successfully', 'notes': notes, 'merged': merged}), 200
 
 # Route to get board status information
 @bp.route("/experiment/get_board_status", methods=['GET'])
