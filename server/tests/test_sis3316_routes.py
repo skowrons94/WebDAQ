@@ -110,6 +110,57 @@ class Sis3316RouteTests(unittest.TestCase):
         if listed.status_code == 200:
             self.assertIn('.h5', json.dumps(listed.get_json()))
 
+    def test_scalers_live_time_counter_input_and_integrity_note(self):
+        self.enable_channel(2)
+        s = self.get(f'/sis3316/{BOARD_ID}/settings').get_json()['settings']
+        s['channels']['14'] = {'enabled': True, 'counter_input': True,
+                               'counter_name': 'Beam charge', 'counter_scale': 10,
+                               'counter_unit': 'pC'}
+        self.assertEqual(self.post(f'/sis3316/{BOARD_ID}/settings', {'settings': s}).status_code, 200)
+        self.post('/experiment/set_save_data', {'value': True})
+        run = self.get('/experiment/get_run_number').get_json()
+        self.assertEqual(self.post('/experiment/start_run').status_code, 200)
+        try:
+            deadline = time.time() + 6
+            live = None
+            while time.time() < deadline:
+                time.sleep(0.3)
+                live = self.get(f'/sis3316/{BOARD_ID}/counters').get_json()
+                if live.get('run') and live['run']['channels'][2]['internal'] > 0 \
+                        and live['run']['temperature_c'] is not None:
+                    break
+            self.assertEqual(live['source'], 'run')
+            self.assertEqual(len(live['channels']), 16)
+            ch2 = live['run']['channels'][2]
+            self.assertTrue(ch2['enabled'])
+            self.assertIsNotNone(ch2['live_fraction'])
+            counters = live['run']['counters']
+            self.assertEqual([(c['name'], c['unit'], c['channel']) for c in counters],
+                             [('Beam charge', 'pC', 14)])
+            self.assertAlmostEqual(counters[0]['total'], 10 * counters[0]['counts'])
+            # The board loses hits: the run's notes must say so at the stop.
+            from app.services.sis3316_acquisition import get_sis3316_acquisition
+            acq = get_sis3316_acquisition()
+            dev = acq._daq.boards[acq.local_index(BOARD_ID)].dev
+            dev._stats[2, 0] += 400
+            dev._stats[2, 1] += 400
+            time.sleep(0.3)
+        finally:
+            self.assertEqual(self.post('/experiment/stop_run').status_code, 200)
+        files = os.listdir(f'data/run{run}')
+        self.assertIn('sis3316_scalers.csv', files)
+        with open(f'data/run{run}/sis3316_summary.json') as f:
+            summary = json.load(f)
+        board = next(b for b in summary['boards'] if b['board_id'] == BOARD_ID)
+        self.assertFalse(board['integrity']['ok'])
+        self.assertEqual(board['counter_inputs'][0]['name'], 'Beam charge')
+        meta = self.get(f'/experiment/get_run_metadata/{run}').get_json()
+        self.assertIn('[sis3316]', json.dumps(meta))
+        # After the stop the page still shows the run's totals and summary.
+        after = self.get(f'/sis3316/{BOARD_ID}/counters').get_json()
+        self.assertFalse(after['run']['running'])
+        self.assertEqual(after['run']['summary']['board_id'], BOARD_ID)
+
     def test_waveform_switch_toggles_the_raw_length(self):
         r = self.post(f'/waveforms/activate/{BOARD_ID}')
         if r.status_code == 404:

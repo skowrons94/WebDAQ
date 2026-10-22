@@ -16,8 +16,9 @@ import { useToast } from "@/components/ui/use-toast"
 import { RefreshCw, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { useRunStatus } from '@/hooks/use-run-status'
 import { loadJSROOT } from '@/lib/load-jsroot'
+import { CounterInputsCard, LiveTimePanel, useCounters } from './sis3316-scalers'
 import {
-  clearSis3316OnboardHistograms, getSis3316Counters, getSis3316Info, getSis3316Maw,
+  clearSis3316OnboardHistograms, getSis3316Info, getSis3316Maw,
   getSis3316OnboardHistogram, getSis3316Settings, setSis3316Settings,
   type Sis3316BoardSettings, type Sis3316ChannelSettings, type Sis3316Info, type Sis3316Settings,
 } from '@/lib/api'
@@ -407,6 +408,8 @@ function SettingsTab({ boardId }: { boardId: string }) {
         </CardContent>
       </Card>
 
+      <CounterInputsCard draft={draft} setDraft={setDraft} />
+
       <Card>
         <CardHeader>
           <CardTitle>Acquisition</CardTitle>
@@ -514,18 +517,14 @@ function OnboardHistogramTab({ boardId }: { boardId: string }) {
 }
 
 function CountersTab({ boardId }: { boardId: string }) {
-  const [data, setData] = useState<{ names: string[]; channels: Record<string, number>[] } | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const tick = useTicker(true, 2000)
-  useEffect(() => {
-    getSis3316Counters(boardId).then((d) => { setData(d); setError(null) })
-      .catch((e) => setError(errorText(e, "Could not read the counters.")))
-  }, [boardId, tick])
+  const { data, error } = useCounters(boardId)
   const labels: Record<string, string> = {
     internal: "Internal triggers", hit: "Hits recorded", deadtime: "Lost (dead time)",
     pileup: "Pileup", veto: "Vetoed", high_energy: "High-energy suppressed",
   }
   return (
+    <div className="space-y-4">
+    {data && <LiveTimePanel run={data.run} />}
     <Card>
       <CardHeader>
         <CardTitle>Trigger statistic counters</CardTitle>
@@ -553,6 +552,7 @@ function CountersTab({ boardId }: { boardId: string }) {
         )}
       </CardContent>
     </Card>
+    </div>
   )
 }
 

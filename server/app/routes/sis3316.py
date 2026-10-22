@@ -162,15 +162,25 @@ def clear_onboard_histograms(board_id):
 @bp.route('/sis3316/<board_id>/counters', methods=['GET'])
 @jwt_required_custom
 def counters(board_id):
-    """Trigger statistic counters of the 16 channels (since the run start)."""
+    """Trigger statistic counters of the 16 channels since the run start.
+
+    Once a run has started they come from the readout, which reads them at
+    every bank swap anyway ('source': 'run'), together with dead and live
+    fraction, the temperature and the counter inputs ('run'); the board is
+    asked directly only before the first run."""
     board, err = _board(board_id)
     if err:
         return err
     try:
+        run = sis.scalers(board, daq_mgr.get_boards())
+        if run is not None:
+            rows = [{n: int(c[n]) for n in STATISTIC_NAMES} for c in run['channels']]
+            return jsonify({'names': list(STATISTIC_NAMES), 'channels': rows,
+                            'source': 'run', 'run': run})
         data = sis.statistic_counters(board, daq_mgr.get_boards())
     except Exception as e:
         return jsonify({'error': f'Could not read the counters: {e}'}), 503
-    return jsonify({'names': list(STATISTIC_NAMES),
+    return jsonify({'names': list(STATISTIC_NAMES), 'source': 'board', 'run': None,
                     'channels': [dict(zip(STATISTIC_NAMES, map(int, row))) for row in data]})
 
 

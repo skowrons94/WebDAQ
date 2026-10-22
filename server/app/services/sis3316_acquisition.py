@@ -245,7 +245,31 @@ class Sis3316Acquisition:
                 except Exception as e:
                     logger.error(f"SIS3316 stop failed: {e}")
                     return False
+        self._note_integrity()
         return True
+
+    def _note_integrity(self) -> None:
+        """When a board counted more (or fewer) hits than events were read,
+        the saved run's notes say so: the files may be missing events, and the
+        operator reading the run later will not look in the server log."""
+        summary = getattr(self._daq, "run_summary", None) if self._daq is not None else None
+        if not summary or not summary.get("write") or self._mod is None:
+            return
+        try:
+            from sis3316daq.scalers import integrity_note
+            note = integrity_note(summary)
+        except Exception as e:
+            logger.error(f"SIS3316 integrity check failed: {e}")
+            return
+        if note:
+            append_run_note(int(summary.get("run", 0)), note)
+
+    def scalers(self, board, boards=None) -> Optional[Dict[str, Any]]:
+        """Live time, run totals, temperature and counter inputs of the run
+        going on (or the last one), or None before any run since the start."""
+        idx = self._index_for(board, boards)
+        data = self._daq.scalers(idx) if hasattr(self._daq, "scalers") else None
+        return data if data and data.get("started") else None
 
     def set_graphite(self, host: str, port: int, prefix: str) -> None:
         if self._daq is not None:
@@ -300,6 +324,33 @@ class Sis3316Acquisition:
         if kind == "interval" and hasattr(self._daq, "interval"):
             return self._daq.interval(idx, channel)
         return None
+
+
+def append_run_note(run_number: int, note: str) -> bool:
+    """Append one line to a saved run's notes, as the charge note of
+    routes/current.py does: under the DAQ manager's notes lock, since every
+    notes write is a read-modify-write of one text field."""
+    from .daq_manager import get_daq_manager
+    daq_mgr = get_daq_manager()
+    app = getattr(daq_mgr, "flask_app", None)
+    logger.warning(f"Run {run_number}: {note}")
+    if not run_number or app is None:
+        return False
+    try:
+        from app import db
+        from ..models.run_metadata import RunMetadata
+        from .run_metadata_snapshot import sync_run_metadata_file
+        with app.app_context(), daq_mgr.notes_lock:
+            row = RunMetadata.query.filter_by(run_number=int(run_number)).first()
+            if row is None:
+                return False
+            row.notes = f"{row.notes}\n{note}" if row.notes else note
+            db.session.commit()
+            sync_run_metadata_file(row)
+        return True
+    except Exception as e:
+        logger.error(f"Could not add the SIS3316 note to run {run_number}: {e}")
+        return False
 
 
 _instance: Optional[Sis3316Acquisition] = None
