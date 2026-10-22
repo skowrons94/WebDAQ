@@ -196,9 +196,9 @@ const STATUS_PANEL_HEIGHTS = [220, 428, 636] as const
 // further board, under the handle); the panel is never taller than its cards.
 const DEFAULT_STATUS_PANEL_HEIGHT = STATUS_PANEL_HEIGHTS[1]
 const STATUS_PANEL_STORAGE_KEY = 'overview-status-panel-height-v3'
-// Phones: the status cards fold to a short summary (the run controls come
-// first there), and the choice is remembered on this device.
-const PHONE_CARDS_OPEN_KEY = 'overview-phone-status-open-v1'
+// Phones: the status cards can fold to a short summary; they show in full
+// unless folded on this device (the choice is remembered there).
+const PHONE_CARDS_OPEN_KEY = 'overview-phone-status-open-v2'
 
 export function CardHolder({
   isRunning,
@@ -266,7 +266,7 @@ export function CardHolder({
   // A run stopped unsaved keeps its number for the next run (by design): say
   // so instead of "no previous run".
   const unsavedRun = useRunStatus((s) => s.unsavedRun)
-  const [phoneCardsOpen, setPhoneCardsOpen] = useState(false)
+  const [phoneCardsOpen, setPhoneCardsOpen] = useState(true)
   // Run number editor, opened by clicking the run number on the status card.
   const [runEditorOpen, setRunEditorOpen] = useState(false)
   const [runDraft, setRunDraft] = useState<number>(0)
@@ -309,8 +309,8 @@ export function CardHolder({
 
   useEffect(() => {
     try {
-      setPhoneCardsOpen(window.localStorage.getItem(PHONE_CARDS_OPEN_KEY) === '1')
-    } catch { /* stays folded */ }
+      setPhoneCardsOpen(window.localStorage.getItem(PHONE_CARDS_OPEN_KEY) !== '0')
+    } catch { /* stays open */ }
   }, [])
 
   const togglePhoneCards = () => {
@@ -942,7 +942,7 @@ export function CardHolder({
                     onClick={togglePhoneCards}
                     aria-expanded={phoneCardsOpen}
                   >
-                    {phoneCardsOpen ? 'Fold' : 'All cards'}
+                    {phoneCardsOpen ? 'Compact' : 'All cards'}
                     <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', phoneCardsOpen && 'rotate-180')} />
                   </Button>
                 </div>
