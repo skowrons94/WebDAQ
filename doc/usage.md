@@ -345,7 +345,7 @@ and pure noise while you are setting up. The marks are stored per browser, so se
 them on the control-room screen.
 
 This page talks to Grafana through the DAQ server; the address and token are in
-Settings → Grafana.
+Settings → Monitoring.
 
 ---
 
@@ -358,9 +358,8 @@ therefore the same for everyone. The boards are set up under Setup → **Boards*
 
 | Group | Section | What it holds |
 |---|---|---|
-| Hardware | **Current module** | Which source the beam current comes from — TetrAMM, RBD 9103 or a monitored Graphite value — and its settings. Also the Carbon address the measured current is *pushed* to. |
-| Services | **Statistics (Graphite)** | The Graphite server: host, web port (where the Stats page reads metrics) and Carbon port (where the DAQ writes its rates), and the metric prefix of the experiment. |
-| Services | **Grafana** | The Grafana address and a service-account token. The DAQ server makes those requests, so the address has to be reachable from the server machine. |
+| Hardware | **Current module** | Which source the beam current comes from — TetrAMM, RBD 9103 or a monitored Graphite value — and its settings. The measured current is pushed to the Graphite server of **Monitoring**. |
+| Services | **Monitoring (Graphite, Grafana)** | The Graphite server — host, web port (where the Stats page reads metrics), Carbon port (where the DAQ rates and the beam current are written) and the metric prefix of the experiment — and the Grafana address with a service-account token. **Detect** finds both on this PC and lunaserver. The DAQ server makes the requests, so the addresses have to be reachable from the server machine. |
 | Services | **Logbook (ELOG)** | The logbook URL, the shared account, default attributes, and whether WebDAQ may post at all. |
 | Alerts | **Notifications** | Telegram and Zulip credentials, and the alert rules. See [Monitoring and alerts](monitoring-and-alerts.md). |
 | Interface | **Appearance** | Theme, which dashboard views and cards are shown, and whether current acquisition is enabled at all. Browser-local. |

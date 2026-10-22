@@ -27,7 +27,7 @@ import json
 import os
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, Callable, Tuple
 import socket
 
 import numpy as np
@@ -117,6 +117,11 @@ class RBD9103Controller:
         # Breaker-guarded, so a dead collector costs one connect a minute
         # instead of one per sample.
         self._carbon = CarbonPusher('rbd9103')
+        # Where to push, asked on every sample when set. routes/current.py points
+        # it at the one Graphite server of Settings → Monitoring, so moving that
+        # server moves the beam current with it; graphite_host/graphite_port
+        # above are only the fallback for a controller used on its own.
+        self.carbon_target: Optional[Callable[[], Tuple[str, int]]] = None
 
         # Data acquisition threading
         self.acquisition_thread = None
@@ -725,7 +730,12 @@ class RBD9103Controller:
         endpoint and run start/stop all wait on that lock. Never raises, and
         stops trying until the cooldown expires (see CarbonPusher).
         """
-        self._carbon.send(self.graphite_host, self.graphite_port, metrics, timestamp)
+        target = getattr(self, 'carbon_target', None)
+        if target is not None:
+            host, port = target()
+        else:
+            host, port = self.graphite_host, self.graphite_port
+        self._carbon.send(host, port, metrics, timestamp)
 
     def get_graphite_state(self) -> dict:
         """Push status, so 'no data in Graphite' is answerable from the UI."""

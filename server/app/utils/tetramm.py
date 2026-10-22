@@ -26,7 +26,7 @@ import json
 import os
 import logging
 from datetime import datetime
-from typing import Dict, Any, Union, Optional
+from typing import Dict, Any, Union, Optional, Callable, Tuple
 
 import numpy as np
 
@@ -75,6 +75,11 @@ class TetrAMMController:
         # Batched and breaker-guarded, so a dead collector costs one connect a
         # minute instead of one per channel per sample.
         self._carbon = CarbonPusher('tetramm')
+        # Where to push, asked on every sample when set. routes/current.py points
+        # it at the one Graphite server of Settings → Monitoring, so moving that
+        # server moves the beam current with it; graphite_host/graphite_port
+        # above are only the fallback for a controller used on its own.
+        self.carbon_target: Optional[Callable[[], Tuple[str, int]]] = None
         
         # Connection management
         self.socket = None
@@ -606,7 +611,12 @@ class TetrAMMController:
         Never raises, and gives up on an unreachable collector until its
         cooldown expires (see CarbonPusher).
         """
-        self._carbon.send(self.graphite_host, self.graphite_port, metrics, timestamp)
+        target = getattr(self, 'carbon_target', None)
+        if target is not None:
+            host, port = target()
+        else:
+            host, port = self.graphite_host, self.graphite_port
+        self._carbon.send(host, port, metrics, timestamp)
 
     def get_graphite_state(self) -> dict:
         """Push status, so 'no data in Graphite' is answerable from the UI."""

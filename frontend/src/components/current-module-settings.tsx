@@ -19,7 +19,7 @@ import {
   getCurrentStatus,
   getSerialPorts,
   getCurrentGraphiteConfig,
-  setCurrentGraphiteConfig,
+  type CurrentGraphiteTarget,
   browseMetrics,
   type MetricNode
 } from '@/lib/api'
@@ -105,8 +105,9 @@ export function CurrentModuleSettings() {
   const [searching, setSearching] = useState(false)
 
   // Graphite configuration
-  const [graphiteHost, setGraphiteHost] = useState('172.18.9.54')
-  const [graphitePort, setGraphitePort] = useState('2003')
+  // Where the beam current is pushed. Read-only here: it is the Carbon port
+  // of the one Graphite server, set in Settings → Monitoring.
+  const [carbonTarget, setCarbonTarget] = useState<CurrentGraphiteTarget | null>(null)
 
   useEffect(() => {
     loadSettings()
@@ -129,9 +130,7 @@ export function CurrentModuleSettings() {
 
   const loadGraphiteConfig = async () => {
     try {
-      const config = await getCurrentGraphiteConfig()
-      setGraphiteHost(config.graphite_host || '172.18.9.54')
-      setGraphitePort(String(config.graphite_port || 2003))
+      setCarbonTarget(await getCurrentGraphiteConfig())
     } catch (error) {
       console.error('Error loading graphite config:', error)
     }
@@ -337,7 +336,7 @@ export function CurrentModuleSettings() {
       console.error('Error searching metrics:', error)
       toast({
         title: 'Error',
-        description: 'Could not reach Graphite to list metrics. Check the server in Settings → Statistics (Graphite).',
+        description: 'Could not reach Graphite to list metrics. Check the server in Settings → Monitoring.',
         variant: 'destructive'
       })
     } finally {
@@ -365,27 +364,6 @@ export function CurrentModuleSettings() {
       toast({
         title: 'Error',
         description: error.response?.data?.error || 'Failed to save monitored value settings',
-        variant: 'destructive'
-      })
-    }
-  }
-
-  const handleSaveGraphiteConfig = async () => {
-    try {
-      await setCurrentGraphiteConfig(graphiteHost, parseInt(graphitePort))
-
-      toast({
-        title: 'Success',
-        description: 'Graphite server configuration updated'
-      })
-
-      await loadGraphiteConfig()
-
-    } catch (error: any) {
-      console.error('Error saving Graphite config:', error)
-      toast({
-        title: 'Error',
-        description: error.response?.data?.error || 'Failed to save Graphite configuration',
         variant: 'destructive'
       })
     }
@@ -767,7 +745,7 @@ export function CurrentModuleSettings() {
                 />
                 <p className="text-xs text-muted-foreground">
                   The Graphite path of the value to use, read from the server set in
-                  Settings → Statistics (Graphite).
+                  Settings → Monitoring.
                 </p>
               </div>
 
@@ -917,44 +895,19 @@ export function CurrentModuleSettings() {
         </Card>
       )}
 
-      {/* Graphite Server Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Beam current to Graphite</CardTitle>
-          <CardDescription>
-            Where the measured beam current is <strong>sent</strong> (Carbon port, usually 2003).
-            The server WebDAQ <strong>reads</strong> from (its web port, e.g. 80 or 8080), and where
-            the DAQ rates go, are set in{' '}
-            <Link href="/settings?view=graphite" className="underline underline-offset-2">Settings → Statistics (Graphite)</Link>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="graphite-host">Graphite host</Label>
-              <Input
-                id="graphite-host"
-                value={graphiteHost}
-                onChange={(e) => setGraphiteHost(e.target.value)}
-                placeholder="172.18.9.54"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="graphite-port">Graphite port</Label>
-              <Input
-                id="graphite-port"
-                value={graphitePort}
-                onChange={(e) => setGraphitePort(e.target.value)}
-                placeholder="2003"
-              />
-            </div>
-          </div>
-          <RunGoingNote />
-          <Button onClick={handleSaveGraphiteConfig} className="w-full">
-            Save Graphite configuration
-          </Button>
-        </CardContent>
-      </Card>
+      {/* The destination is the one Graphite server; saying where it is here
+          saves a trip to find out why the current is not in Graphite. */}
+      <p className="text-sm text-muted-foreground">
+        The measured beam current is sent to Graphite at{' '}
+        <span className="font-mono">
+          {carbonTarget?.graphite_host ? `${carbonTarget.graphite_host}:${carbonTarget.graphite_port}` : 'the server not yet set'}
+        </span>
+        , the same server as the DAQ rates; change it in{' '}
+        <Link href="/settings?view=monitoring" className="underline underline-offset-2">Settings → Monitoring</Link>.
+        {carbonTarget?.legacy && (
+          <> It used to go to <span className="font-mono">{carbonTarget.legacy.host}:{carbonTarget.legacy.port}</span>.</>
+        )}
+      </p>
     </div>
   )
 }

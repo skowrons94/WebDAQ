@@ -12,6 +12,7 @@ from ..utils.graphite_current import GraphiteCurrentController
 from ..services.daq_manager import get_daq_manager
 from ..services.run_metadata_snapshot import sync_run_metadata_file
 from ..services import graphite_reader
+from ..services import monitoring
 from ..services import run_data
 
 from app import db
@@ -67,14 +68,25 @@ else:
         "graphite_metric_scale": 1.0,
         "graphite_poll_interval_s": 1.0,
         "total_accumulated": 0,
-        # Carbon plaintext ingest, i.e. where samples are PUSHED. Reading
-        # history back uses the render API configured in conf/stats.json.
-        "graphite_host": "172.18.9.54",
-        "graphite_port": 2003
+        # No Graphite address here: the samples are pushed to the Carbon port
+        # of the one server in conf/stats.json (Settings → Monitoring).
     }
     os.makedirs("conf", exist_ok=True)
     with open("conf/current.json", "w") as f:
         json.dump(settings, f, indent=2)
+
+# An older conf/current.json carries the beam current's own Graphite address.
+# The one in conf/stats.json wins; the old one stays in the file and is logged,
+# so a beam current that used to go elsewhere does not move without a trace.
+monitoring.warn_legacy_current_target(settings)
+
+
+def _push_to_monitoring(ctrl):
+    """Point a picoammeter's Carbon push at the one Graphite server."""
+    if ctrl is not None and hasattr(ctrl, 'carbon_target'):
+        ctrl.carbon_target = monitoring.carbon_target
+    return ctrl
+
 
 # Initialize controllers
 tetramm_ctrl = None
@@ -124,12 +136,10 @@ elif TEST_FLAG:
     controller.initialize()
     tetramm_ctrl = rbd9103_ctrl = controller   # module_type switching reuses these
 elif module_type == "tetramm":
-    tetramm_ctrl = tetram_controller(
+    tetramm_ctrl = _push_to_monitoring(tetram_controller(
         ip=settings["tetramm_ip"],
         port=settings["tetramm_port"],
-        graphite_host=settings.get("graphite_host", "172.18.9.54"),
-        graphite_port=settings.get("graphite_port", 2003)
-    )
+    ))
     tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
     tetramm_ctrl.set_charge_channel(settings.get("tetramm_charge_channel", 0))
     # Initialize at startup
@@ -139,7 +149,7 @@ elif module_type == "tetramm":
         print(f"Warning: Could not initialize TetrAMM at startup: {e}")
     controller = tetramm_ctrl
 elif module_type == "rbd9103":
-    rbd9103_ctrl = rbd9103_controller
+    rbd9103_ctrl = _push_to_monitoring(rbd9103_controller)
     rbd9103_ctrl.set_port(settings.get("rbd9103_port", "/dev/tty.usbserial-A50285BI"))
     rbd9103_ctrl.set_baudrate(settings.get("rbd9103_baudrate", 57600))
     rbd9103_ctrl.set_high_speed(settings.get("rbd9103_high_speed", False))
@@ -814,21 +824,21 @@ def set_module_type():
 
         if new_module_type == "tetramm":
             if not tetramm_ctrl:
-                tetramm_ctrl = TetrAMMController(
+                tetramm_ctrl = _push_to_monitoring(TetrAMMController(
                     ip=settings.get("tetramm_ip", "169.254.145.10"),
                     port=settings.get("tetramm_port", 10001)
-                )
+                ))
             tetramm_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
             tetramm_ctrl.set_charge_channel(settings.get("tetramm_charge_channel", 0))
             tetramm_ctrl.initialize()
             controller = tetramm_ctrl
         else:  # rbd9103
             if not rbd9103_ctrl:
-                rbd9103_ctrl = RBD9103Controller(
+                rbd9103_ctrl = _push_to_monitoring(RBD9103Controller(
                     port=settings.get("rbd9103_port", "/dev/tty.usbserial-A50285BI"),
                     baudrate=settings.get("rbd9103_baudrate", 57600),
                     high_speed=settings.get("rbd9103_high_speed", False)
-                )
+                ))
             rbd9103_ctrl.set_total_accumulated_charge(settings.get("total_accumulated", 0))
             rbd9103_ctrl.initialize()
             controller = rbd9103_ctrl
@@ -1038,47 +1048,29 @@ def update_module_settings():
     except Exception as e:
         return jsonify({"error": f"Failed to update settings: {str(e)}"}), 500
 
-# Get graphite server configuration
 @bp.route('/current/graphite_config', methods=['GET'])
 @jwt_required_custom
 def get_graphite_config():
-    global settings
+    """
+    Where the beam current is pushed: the Carbon port of the one Graphite
+    server (Settings → Monitoring). 'legacy' is the address conf/current.json
+    used to have for it, when that names a different server, so the page can
+    say once where the current used to go.
+    """
+    host, port = monitoring.carbon_target()
     return jsonify({
-        "graphite_host": settings.get("graphite_host", "172.18.9.54"),
-        "graphite_port": settings.get("graphite_port", 2003)
+        "graphite_host": host,
+        "graphite_port": port,
+        "legacy": monitoring.legacy_current_target(settings),
     })
 
-# Set graphite server configuration
+
 @bp.route('/current/graphite_config', methods=['POST'])
 @jwt_required_custom
 def set_graphite_config():
-    global settings, controller
-
-    data = request.get_json()
-    graphite_host = data.get('graphite_host')
-    graphite_port = data.get('graphite_port')
-
-    if not graphite_host or not graphite_port:
-        return jsonify({"error": "Missing graphite_host or graphite_port"}), 400
-
-    try:
-        # Update settings
-        settings["graphite_host"] = graphite_host
-        settings["graphite_port"] = int(graphite_port)
-
-        # Save to file
-        with open("conf/current.json", "w") as f:
-            json.dump(settings, f, indent=2)
-
-        # Update controller if it's tetramm
-        if controller and hasattr(controller, 'graphite_host'):
-            controller.graphite_host = graphite_host
-            controller.graphite_port = int(graphite_port)
-
-        return jsonify({"message": "Graphite configuration updated"}), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    """Gone: the beam current follows the Graphite server in Settings → Monitoring."""
+    return jsonify({"error": "The beam current goes to the Graphite server set in "
+                             "Settings → Monitoring; set it there."}), 410
 
 # Get comprehensive status including module type
 @bp.route('/current/serial_ports', methods=['GET'])

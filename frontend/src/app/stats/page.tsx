@@ -312,7 +312,7 @@ function StatsPageContent() {
             title="Graphite is unreachable"
             action={
               <Button asChild size="sm" variant="outline">
-                <Link href="/settings?view=graphite">Settings → Graphite</Link>
+                <Link href="/settings?view=monitoring">Settings → Monitoring</Link>
               </Button>
             }
           >
@@ -408,10 +408,10 @@ function StatsPageContent() {
           </div>
         )}
 
-        {/* The server itself is set up in Settings → Statistics (Graphite). */}
+        {/* The server itself is set up in Settings → Monitoring. */}
         <p className="text-xs text-muted-foreground">
           Graphite server <span className="font-mono">{graphiteHost}:{graphitePort}</span> —{' '}
-          <Link href="/settings?view=graphite" className="underline underline-offset-2 hover:text-foreground">change it in Settings</Link>.
+          <Link href="/settings?view=monitoring" className="underline underline-offset-2 hover:text-foreground">change it in Settings</Link>.
         </p>
 
         <MetricBrowser

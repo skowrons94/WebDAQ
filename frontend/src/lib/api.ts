@@ -903,12 +903,41 @@ export const stopStatsRun = () =>
 export const getStatsRunStatus = () =>
     api.get('/stats/run/status').then(res => res.data);
 
-// Graphite server configuration APIs
-export const getCurrentGraphiteConfig = () =>
-    api.get('/current/graphite_config').then(res => res.data);
+// Where the beam current is pushed: the Carbon port of the one Graphite server
+// (Settings → Monitoring). `legacy` is the address conf/current.json used to
+// have for it, when that names another server, so the page can say so once.
+export type CurrentGraphiteTarget = {
+    graphite_host: string;
+    graphite_port: number;
+    legacy: { host: string; port: number } | null;
+};
 
-export const setCurrentGraphiteConfig = (graphite_host: string, graphite_port: number) =>
-    api.post('/current/graphite_config', { graphite_host, graphite_port }).then(res => res.data);
+export const getCurrentGraphiteConfig = () =>
+    api.get('/current/graphite_config').then(res => res.data as CurrentGraphiteTarget);
+
+// ─── Monitoring servers (Graphite and Grafana) ──────────────────────────────
+export type DetectedGraphite = { host: string; web_port: number | null; carbon_port: number | null };
+export type DetectedGrafana = { url: string; version: string; database: string };
+export type MonitoringDetection = {
+    graphite: DetectedGraphite[];
+    grafana: DetectedGrafana[];
+    hosts: string[];
+    unresolved: string[];
+    elapsed_s: number;
+};
+
+/** Probe the known hosts for Graphite and Grafana; takes a few seconds at most. */
+export const detectMonitoringServers = () =>
+    api.get('/monitoring/detect', { timeout: 15000 }).then(res => res.data as MonitoringDetection);
+
+export type MonitoringStatus = {
+    graphite: { reachable: boolean; host: string; port: number | null };
+    carbon: { reachable: boolean; host: string; port: number };
+    grafana: { reachable: boolean; url: string; version: string };
+};
+
+export const getMonitoringStatus = () =>
+    api.get('/monitoring/status').then(res => res.data as MonitoringStatus);
 
 export const getStatsGraphiteConfig = () =>
     api.get('/stats/graphite_config').then(res => res.data);

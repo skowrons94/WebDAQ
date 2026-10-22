@@ -79,8 +79,8 @@ function ActiveMetrics({ existing, onSelect, onBrowseAll }: {
         ) : error ? (
           <div className="flex flex-col items-center gap-2 p-6 text-center text-sm">
             <p className="text-destructive">{error}</p>
-            <Link href="/settings?view=graphite" className="text-primary underline underline-offset-2">
-              Check the address in Settings → Graphite
+            <Link href="/settings?view=monitoring" className="text-primary underline underline-offset-2">
+              Check the address in Settings → Monitoring
             </Link>
           </div>
         ) : shown.length === 0 ? (
@@ -159,7 +159,7 @@ export function MetricBrowser({ open, onOpenChange, onSelect, existing = [] }: P
       setError(null)
     } catch (e) {
       const serverMessage = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
-      setError(serverMessage ?? 'Could not reach the Graphite server. Check its address in Settings → Graphite.')
+      setError(serverMessage ?? 'Could not reach the Graphite server. Check its address in Settings → Monitoring.')
       setNodes([])
     } finally {
       setLoading(false)

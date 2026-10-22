@@ -47,8 +47,42 @@ accelerator.terminal_voltage    12c12c.tetram…
   a run — once a second unless it was changed on the Data rates page.
 * **Beam current** — every sample from the TetrAMM or the RBD 9103.
 
-Both go to Carbon (port 2003 by default) of the host set in Settings → Statistics (Graphite); the Stats page
-and Grafana read them back over HTTP (port 80 or 8080, depending on the install).
+Both go to Carbon (port 2003 by default) of the one Graphite server set in
+**Settings → Monitoring**; the Stats page and Grafana read them back over HTTP
+(port 80 or 8080, depending on the install). The beam current has no address of
+its own any more: it follows that setting, under its usual names
+(`tetramm.*`, `rbd9103.current`).
+
+### Settings → Monitoring
+
+One section holds both servers: Graphite (host, web port, Carbon port, metric
+prefix) and Grafana (URL, service-account token), each with a light saying
+whether it answers. One **Save** stores both.
+
+**Detect** looks for the servers so nobody has to guess a port. Within a few
+seconds it tries the configured Graphite host, the Grafana host, the beam
+current's old Graphite host (see below), `localhost` and `lunaserver`:
+
+* Graphite's web API on ports 80, 8080, 8000, 8081 and 2080 (and the configured
+  one) — it counts only if `/metrics/find?query=*&format=json` answers with a
+  JSON list;
+* Carbon on 2003 (and the configured Carbon port) — an open port is all
+  plaintext Carbon shows;
+* Grafana on 3000, 3001, 3002 and 3030 (and the configured one) — it counts only
+  if `/api/health` answers with Grafana's JSON, so WebDAQ's own frontend on port
+  3000 is never mistaken for it.
+
+Each find has a **Use** button that fills the fields; nothing is saved until you
+press Save. When nothing answers, start the local stack with
+`scripts/monitoring.sh start` (below) and detect again.
+
+```{note}
+Before this, `conf/current.json` had its own `graphite_host`/`graphite_port` for
+the beam current. If they name a different server from the Monitoring setting,
+the server logs a warning once at startup and leaves them in the file, but the
+Monitoring setting is what is used. The Monitoring section and the Current
+module section say where the current used to go.
+```
 
 ### Graphite time syntax
 
@@ -69,9 +103,9 @@ scripts/monitoring.sh start --graphite-port 8081 --carbon-port 2013 --grafana-po
 scripts/monitoring.sh status | stop | remove    # remove keeps the data
 ```
 
-Then set Settings → Statistics (Graphite) to `localhost`, the web and Carbon
-ports above, and Settings → Grafana to `http://localhost:3001` (first login
-admin/admin).
+Then press **Detect** in Settings → Monitoring and **Use** both finds (or type
+`localhost`, the web and Carbon ports above, and `http://localhost:3001`), and
+Save. Grafana's first login is admin/admin.
 
 ## 2. The Stats page
 
@@ -177,11 +211,11 @@ during a run and pure noise while you are setting up. Mark the rules that only
 make sense during data taking; leave the rest under Grafana's own control.
 
 The WebDAQ server talks to Grafana on the page's behalf, so the address must be
-reachable from the server machine. Set it in **Settings → Grafana** (default
+reachable from the server machine. Set it in **Settings → Monitoring** (default
 `http://lunaserver:3000`), together with a service-account token if your Grafana
 requires authentication; the token needs permission to read and edit alert rules.
 Both are stored in `conf/grafana_settings.json` and the token is never sent to the
-browser. **Test connection** reports how many alert rules the server can see.
+browser. **Test alert-rule access** reports how many alert rules the server can see.
 
 ---
 

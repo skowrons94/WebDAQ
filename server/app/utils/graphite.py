@@ -55,6 +55,23 @@ class GraphiteUnavailable(TimeoutError):
     """
 
 
+def answers_like_graphite(response) -> bool:
+    """
+    Whether an answer to GET /metrics/find?query=*&format=json came from Graphite.
+
+    Shared by the connection check and the server detection, so both mean the
+    same thing by "this is Graphite": a JSON list of metric nodes. Any other web
+    service on that port (a proxy, Grafana, WebDAQ's own frontend) answers with
+    HTML or a JSON object instead.
+    """
+    if response.status_code >= 400:
+        return False
+    try:
+        return isinstance(response.json(), list)
+    except ValueError:
+        return False
+
+
 class GraphiteClient:
     """
     Client for interacting with Graphite time-series database.
@@ -414,10 +431,7 @@ class GraphiteClient:
                 self.logger.warning(f"Graphite server returned status {response.status_code}")
                 return False
 
-            try:
-                is_connected = isinstance(response.json(), list)
-            except ValueError:
-                is_connected = False
+            is_connected = answers_like_graphite(response)
 
             if is_connected:
                 self.logger.debug("Graphite server connection test successful")

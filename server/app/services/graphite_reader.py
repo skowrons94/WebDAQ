@@ -1,18 +1,16 @@
 """
 Read-side access to Graphite, shared by everything that plots history.
 
-Two different Graphite endpoints are in play here and they are easy to confuse:
+There is one Graphite server, set in ``conf/stats.json`` (Settings →
+Monitoring), and it has two ports that are easy to confuse:
 
-  * ``conf/current.json``'s ``graphite_host``/``graphite_port`` is the *Carbon*
-    plaintext ingest (port 2003) that the picoammeter controllers PUSH their
-    samples to. Nothing can be read back from it.
-  * ``conf/stats.json``'s ``graphite_host``/``graphite_port`` is the *render API*
-    (HTTP) that the Stats page READS from.
+  * ``carbon_port`` (2003) is the plaintext ingest that the DAQ rates and the
+    picoammeter samples are PUSHED to. Nothing can be read back from it.
+  * ``graphite_port`` is the *render API* (HTTP) that the Stats page READS from.
 
-History queries are reads, so they belong to the second one. Taking the server
-from the same file the Stats page configures means an operator sets it once and
-both pages follow, rather than the current plot silently querying port 2003 and
-reporting "no data".
+History queries are reads, so they use the second one. Taking it from the same
+file as everything else means an operator sets the server once and every page
+follows, rather than a plot silently querying port 2003 and reporting "no data".
 
 The client is rebuilt whenever that file changes, so editing the Graphite server
 in the UI takes effect without restarting the server.

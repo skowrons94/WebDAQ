@@ -59,7 +59,7 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     CORS(app)
 
-    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog, grafana, notifications, sis3316, coincidences
+    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog, grafana, notifications, sis3316, coincidences, monitoring
     app.register_blueprint(auth.bp)
     app.register_blueprint(experiment.bp)
     app.register_blueprint(stats.bp)
@@ -73,6 +73,8 @@ def create_app(config_class=Config):
     app.register_blueprint(elog.bp)
     # Grafana alert rules (the Alerts page and run-linked alerts).
     app.register_blueprint(grafana.bp)
+    # Finding the Graphite and Grafana servers (Settings → Monitoring).
+    app.register_blueprint(monitoring.bp)
     # Notification transports (Telegram, Zulip) and the alert rules.
     app.register_blueprint(notifications.bp)
     # Struck SIS3316 boards: settings and on-board utilities.

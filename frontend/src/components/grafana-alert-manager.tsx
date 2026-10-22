@@ -321,7 +321,7 @@ export default function GrafanaAlertManager() {
                 Retry
               </Button>
               <Button variant="outline" size="sm" asChild>
-                <Link href="/settings?view=grafana">Grafana settings</Link>
+                <Link href="/settings?view=monitoring">Grafana settings</Link>
               </Button>
             </>
           }

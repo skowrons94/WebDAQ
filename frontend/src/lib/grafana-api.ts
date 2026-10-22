@@ -2,7 +2,7 @@ import axios from 'axios'
 import api from '@/lib/api'
 
 // Grafana is reached through the WebDAQ server (/grafana/...), which holds the
-// Grafana address and service-account token — see Settings → Grafana.
+// Grafana address and service-account token — see Settings → Monitoring.
 const grafanaFetch = async (path: string, options: { method?: 'GET' | 'PUT'; body?: unknown } = {}) => {
   try {
     const res = await api.request({

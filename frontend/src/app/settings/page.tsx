@@ -10,8 +10,7 @@ import { VisualizationSettings } from '@/components/visualization-settings';
 import { CurrentModuleSettings } from '@/components/current-module-settings';
 import { NotificationSettings } from '@/components/notification-settings';
 import { ElogSettings } from '@/components/elog/elog-settings';
-import { GrafanaSettings } from '@/components/grafana-settings';
-import { GraphiteSettings } from '@/components/graphite-settings';
+import { MonitoringSettings } from '@/components/monitoring-settings';
 
 
 // The sections, grouped by what they are about. Each says in one line what
@@ -19,10 +18,8 @@ import { GraphiteSettings } from '@/components/graphite-settings';
 const SECTIONS: { id: string; group: string; label: string; description: string; Component: React.ComponentType }[] = [
     { id: 'current', group: 'Hardware', label: 'Current module',
       description: 'The picoammeter that measures the beam current and charge', Component: CurrentModuleSettings },
-    { id: 'graphite', group: 'Services', label: 'Statistics (Graphite)',
-      description: 'Where rates are written and accelerator metrics read', Component: GraphiteSettings },
-    { id: 'grafana', group: 'Services', label: 'Grafana',
-      description: 'Dashboards and the alert rules they evaluate', Component: GrafanaSettings },
+    { id: 'monitoring', group: 'Services', label: 'Monitoring (Graphite, Grafana)',
+      description: 'Where rates and beam current are written, metrics read, and alerts evaluated', Component: MonitoringSettings },
     { id: 'elog', group: 'Services', label: 'Logbook (ELOG)',
       description: 'Where run entries are posted', Component: ElogSettings },
     { id: 'notifications', group: 'Alerts', label: 'Notifications',
@@ -31,6 +28,8 @@ const SECTIONS: { id: string; group: string; label: string; description: string;
       description: 'Theme, and which views the dashboard offers', Component: VisualizationSettings },
 ]
 const GROUPS = Array.from(new Set(SECTIONS.map((s) => s.group)))
+// Sections that were merged into another; old links and bookmarks land there.
+const RENAMED: Record<string, string> = { graphite: 'monitoring', grafana: 'monitoring' }
 
 function SettingsPageContent() {
     const router = useRouter();
@@ -40,13 +39,14 @@ function SettingsPageContent() {
     const [picked, setPicked] = useState(false);
 
     // Deep links to a section, e.g. /settings?view=current from the command
-    // palette, and links between sections (the two Graphite cards point at
-    // each other): followed whenever the query changes, not only on load.
+    // palette, and links between sections (the current module points at
+    // Monitoring): followed whenever the query changes, not only on load.
     const viewParam = useSearchParams().get('view');
     useEffect(() => {
         // The boards are set up under Setup → Boards; old links still land there.
         if (viewParam === 'boards') { router.replace('/board'); return; }
-        if (viewParam && SECTIONS.some((s) => s.id === viewParam)) { setActiveView(viewParam); setPicked(true); }
+        const view = viewParam ? (RENAMED[viewParam] ?? viewParam) : null;
+        if (view && SECTIONS.some((s) => s.id === view)) { setActiveView(view); setPicked(true); }
     }, [router, viewParam]);
 
     // The section is in the URL too, so a reload or a shared link opens it.

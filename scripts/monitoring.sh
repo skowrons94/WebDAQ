@@ -18,8 +18,9 @@
 #   --data-dir DIR      where both keep their data   (default ~/webdaq-monitoring)
 #   --bind ADDR         host address to listen on    (default 0.0.0.0, all)
 #
-# Then, in WebDAQ: Stats → Graphite server "localhost", port <graphite-port>,
-# Carbon port <carbon-port>; Settings → Grafana "http://localhost:<grafana-port>".
+# Then, in WebDAQ: Settings → Monitoring → Detect finds both; press Use on each
+# and Save (or type Graphite "localhost", web port <graphite-port>, Carbon port
+# <carbon-port>, Grafana "http://localhost:<grafana-port>").
 # Grafana's first login is admin / admin, and it asks for a new password.
 
 set -euo pipefail

@@ -245,9 +245,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     <Cpu className="mr-2 h-4 w-4" />
                                     <span>Boards</span>
                                 </CommandItem>
-                                <CommandItem onSelect={() => go('/settings?view=graphite')}>
+                                <CommandItem onSelect={() => go('/settings?view=monitoring')}>
                                     <LineChart className="mr-2 h-4 w-4" />
-                                    <span>Statistics server (Graphite)</span>
+                                    <span>Monitoring servers (Graphite, Grafana)</span>
                                 </CommandItem>
                                 <CommandItem onSelect={() => go('/settings?view=current')}>
                                     <Gauge className="mr-2 h-4 w-4" />

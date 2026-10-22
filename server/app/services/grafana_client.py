@@ -108,7 +108,7 @@ class GrafanaClient:
 
     def _request(self, method: str, path: str, body: Any = None) -> Any:
         if not self.url:
-            raise GrafanaError('No Grafana URL configured. Set it in Settings → Grafana.', 503)
+            raise GrafanaError('No Grafana URL configured. Set it in Settings → Monitoring.', 503)
 
         headers = {'Content-Type': 'application/json', 'Accept': 'application/json'}
         if self.api_key:

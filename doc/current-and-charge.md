@@ -139,12 +139,12 @@ reads as disconnected, which is the honest answer — otherwise a run could star
 against a dead number.
 
 ```{note}
-Two different Graphite endpoints are involved and they are easy to confuse. The
-**Carbon** ingest (port 2003, Settings → Current Module) is where WebDAQ *sends*
-measured current. The **render API** (Settings → Statistics (Graphite)) is where it *reads*
-values back — including this module and the long-run history behind the current
-plot. A monitored value that never arrives is usually the render API pointing at
-port 2003.
+One Graphite server, set in Settings → Monitoring, has two ports that are easy
+to confuse. Its **Carbon** port (2003) is where WebDAQ *sends* the measured
+current, together with the DAQ rates. Its **web (render) API** port is where it
+*reads* values back — including this module and the long-run history behind the
+current plot. A monitored value that never arrives is usually the web port set to
+2003.
 ```
 
 ---
