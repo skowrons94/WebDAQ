@@ -147,6 +147,17 @@ class AutoRestartTests(unittest.TestCase):
         self.assertEqual(self.daq_mgr.get_run_number(), OLD_RUN + 1)
         self.assertIsNotNone(self.run_meta(OLD_RUN).end_time)
 
+    def test_an_overwritten_run_starts_with_a_clean_record(self):
+        with self.app.app_context():
+            row = RunMetadata.query.filter_by(run_number=OLD_RUN).first()
+            row.notes, row.flag, row.accumulated_charge = 'old notes', 'bad', 12.5
+            db.session.commit()
+            experiment.record_run_start(OLD_RUN, [])
+        row = self.run_meta(OLD_RUN)
+        self.assertIsNone(row.notes)
+        self.assertEqual(row.flag, 'unknown')
+        self.assertIsNone(row.accumulated_charge)
+
     def test_current_recording_moves_to_the_new_run(self):
         experiment.perform_auto_restart('0', 'Board FAIL flag (2 data blocks)')
 

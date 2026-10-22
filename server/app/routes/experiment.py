@@ -16,6 +16,7 @@ from ..services.run_metadata_snapshot import sync_run_metadata_file
 # Module-level helpers that read synchronisation straight from the board configs.
 from ..services import caen_acquisition
 from ..services import sync_chain
+from ..services import run_data
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +82,17 @@ def record_run_start(run_number, boards, user_id=None, notes=None, carry_over=No
             )
             db.session.add(run_metadata)
         else:
+            # The run is overwritten: what was written about the old one (its
+            # notes, flag, charge) must not end up on the new data. The old
+            # notes stay in the server log, in case they were wanted.
+            if run_metadata.notes:
+                logger.warning(f"Run {run_number} overwritten; its notes were: {run_metadata.notes!r}")
             run_metadata.start_time = datetime.now()
             run_metadata.end_time = None
+            run_metadata.notes = None
+            run_metadata.flag = 'unknown'
+            run_metadata.accumulated_charge = None
+            run_metadata.user_id = user_id
         for field, value in (carry_over or {}).items():
             setattr(run_metadata, field, value)
         if notes:
@@ -484,6 +494,7 @@ def get_run_metadata(run_number):
             # UTC offset. ISO without a zone is parsed as local time client-side.
             'start_time': run_metadata.start_time.isoformat() if run_metadata.start_time else None,
             'end_time': run_metadata.end_time.isoformat() if run_metadata.end_time else None,
+            'has_data': run_data.run_exists(run_metadata.run_number),
             'notes': run_metadata.notes,
             'target_name': run_metadata.target_name,
             'terminal_voltage': run_metadata.terminal_voltage,
@@ -516,6 +527,11 @@ def get_all_run_metadata():
             # time (see get_run_metadata above for the rationale).
             'start_time': run.start_time.isoformat() if run.start_time else None,
             'end_time': run.end_time.isoformat() if run.end_time else None,
+            # Whether data/run<N>/ exists. A row with no end time and no data
+            # is a run whose number was never used up (it saved nothing, or the
+            # server stopped before it ended); the pages say so instead of
+            # showing it as a finished run with no duration.
+            'has_data': run_data.run_exists(run.run_number),
             'notes': run.notes,
             'target_name': run.target_name,
             'terminal_voltage': run.terminal_voltage,
@@ -654,6 +670,29 @@ def set_run_number():
     run_number = request.get_json()["value"]
     daq_mgr.set_run_number(run_number)
     return jsonify(daq_mgr.get_run_number())
+
+@bp.route("/experiment/next_free_run", methods=['GET'])
+@jwt_required_custom
+def next_free_run():
+    """
+    The first run number above every recorded run and every data/run<N>/
+    directory: what Start offers instead of overwriting an earlier run.
+    """
+    highest = int(daq_mgr.get_run_number()) - 1
+    try:
+        for row in RunMetadata.query.with_entities(RunMetadata.run_number).all():
+            if row[0] is not None:
+                highest = max(highest, int(row[0]))
+    except Exception as e:
+        logger.error(f"Could not read the recorded run numbers: {e}")
+    try:
+        for name in os.listdir(run_data.DATA_DIR):
+            if name.startswith("run") and name[3:].isdigit() and os.path.isdir(os.path.join(run_data.DATA_DIR, name)):
+                highest = max(highest, int(name[3:]))
+    except OSError:
+        pass
+    return jsonify({'run': highest + 1})
+
 
 # Check run directory
 @bp.route("/experiment/check_run_directory", methods=['GET'])

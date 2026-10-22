@@ -345,7 +345,9 @@ def run_action(name: str) -> Dict[str, Any]:
             # A failed recovery is a problem, and belongs where problems are read.
             'recovery' if result.get('success') else 'alert',
             f"{spec['label']}: {'done' if result.get('success') else 'failed'}",
-            [result.get('message', '')], subject=name)
+            [result.get('message', '')], subject=name,
+            # Pressed by the person looking at the page: news only if it failed.
+            seen=bool(result.get('success')))
     except Exception as e:
         logger.debug(f"recovery: could not log {name}: {e}")
     return result

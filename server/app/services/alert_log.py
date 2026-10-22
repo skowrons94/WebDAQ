@@ -68,8 +68,10 @@ class AlertLog:
                rule_id: str = '', rule_type: str = '', subject: str = '',
                run_number: Optional[int] = None,
                deliveries: Optional[Dict[str, bool]] = None,
-               at: Optional[float] = None) -> Dict[str, Any]:
-        """Append one event. `kind` is 'alert', 'recovery' or 'info'."""
+               at: Optional[float] = None, seen: bool = False) -> Dict[str, Any]:
+        """Append one event. `kind` is 'alert', 'recovery' or 'info'. `seen` for
+        what someone did themselves (a recovery pressed on Troubleshoot): it
+        goes in the history, but is no news to be flagged on the bell."""
         event = {
             'id': uuid.uuid4().hex[:12],
             'at': float(at if at is not None else time.time()),
@@ -83,7 +85,7 @@ class AlertLog:
             'deliveries': dict(deliveries or {}),
             # Whether anybody has seen it in the browser. Delivery to Telegram or
             # Zulip is a separate question, kept per transport above.
-            'seen': False,
+            'seen': bool(seen),
         }
         try:
             with self._lock:
@@ -122,8 +124,10 @@ class AlertLog:
             'latest': dict(latest) if latest else None,
             # Something that has not been delivered anywhere is worth showing
             # differently from something that reached the shift's phones.
-            'undelivered': sum(1 for e in unseen
-                               if not any((e.get('deliveries') or {}).values())),
+            # Only alerts are meant to reach anyone: a recovery or an action
+            # that was never sent is not "undelivered".
+            'undelivered': sum(1 for e in unseen if e.get('kind') == 'alert'
+                               and not any((e.get('deliveries') or {}).values())),
         }
 
     # ------------------------------------------------------------------- writes

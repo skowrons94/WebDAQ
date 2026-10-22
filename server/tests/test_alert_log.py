@@ -104,6 +104,15 @@ class AlertLogTests(unittest.TestCase):
         self.assertEqual(summary['undelivered'], 1)
         self.assertEqual(summary['latest']['title'], 'reached nobody')
 
+    def test_actions_are_history_not_news(self):
+        # A recovery the shifter pressed is recorded seen, and only alerts can
+        # be "undelivered": nothing was ever meant to send the others.
+        self.log.record('recovery', 'Restart the statistics: done', seen=True)
+        self.log.record('info', 'something noted')
+        summary = self.log.summary()
+        self.assertEqual(summary['unseen'], 1)
+        self.assertEqual(summary['undelivered'], 0)
+
     def test_events_can_be_filtered_by_kind_and_to_the_unseen(self):
         alert = self.log.record('alert', 'a problem')
         self.log.record('recovery', 'back to normal')
