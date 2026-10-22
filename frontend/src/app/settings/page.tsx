@@ -1,8 +1,8 @@
 'use client'
 
 import { AuthGate } from '@/components/auth-gate'
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/dashboard-layout';
 import { PageHeader } from '@/components/page-header';
 import { Label } from '@/components/ui/label';
@@ -37,15 +37,15 @@ function SettingsPageContent() {
     const router = useRouter();
     const [activeView, setActiveView] = useState('current');
 
-    // Allow deep-linking to a section, e.g. /settings?view=current from the
-    // command palette. Read from the URL on the client to avoid needing a
-    // Suspense boundary around useSearchParams.
+    // Deep links to a section, e.g. /settings?view=current from the command
+    // palette, and links between sections (the two Graphite cards point at
+    // each other): followed whenever the query changes, not only on load.
+    const viewParam = useSearchParams().get('view');
     useEffect(() => {
-        const view = new URLSearchParams(window.location.search).get('view');
         // The boards are set up under Setup → Boards; old links still land there.
-        if (view === 'boards') { router.replace('/board'); return; }
-        if (view && SECTIONS.some((s) => s.id === view)) setActiveView(view);
-    }, [router]);
+        if (viewParam === 'boards') { router.replace('/board'); return; }
+        if (viewParam && SECTIONS.some((s) => s.id === viewParam)) setActiveView(viewParam);
+    }, [router, viewParam]);
 
     // The section is in the URL too, so a reload or a shared link opens it.
     const selectView = (view: string) => {
@@ -121,7 +121,9 @@ function SettingsPageContent() {
 export default function SettingsPage() {
     return (
         <AuthGate>
-            <SettingsPageContent />
+            <Suspense fallback={null}>
+                <SettingsPageContent />
+            </Suspense>
         </AuthGate>
     )
 }

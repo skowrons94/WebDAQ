@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useRunStatus } from '@/hooks/use-run-status'
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -919,11 +920,12 @@ export function CurrentModuleSettings() {
       {/* Graphite Server Configuration */}
       <Card>
         <CardHeader>
-          <CardTitle>Graphite server configuration</CardTitle>
+          <CardTitle>Beam current to Graphite</CardTitle>
           <CardDescription>
-            Where measured current is <strong>sent</strong> (Carbon plaintext ingest,
-            usually port 2003). Reading values back — the monitored-value module and the
-            history behind long-run plots — uses the server set in Settings → Statistics (Graphite).
+            Where the measured beam current is <strong>sent</strong> (Carbon port, usually 2003).
+            The server WebDAQ <strong>reads</strong> from (its web port, e.g. 80 or 8080), and where
+            the DAQ rates go, are set in{' '}
+            <Link href="/settings?view=graphite" className="underline underline-offset-2">Settings → Statistics (Graphite)</Link>.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

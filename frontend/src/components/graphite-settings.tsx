@@ -5,6 +5,7 @@
  * where the Stats page reads the accelerator's metrics from (the web API).
  */
 
+import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { getStatsConnection, getStatsGraphiteConfig, setStatsGraphiteConfig } from '@/lib/api'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -60,8 +61,9 @@ export function GraphiteSettings() {
           <div>
             <CardTitle>Graphite server</CardTitle>
             <CardDescription>
-              The DAQ writes its counting rates there, and the Stats page reads the accelerator's
-              metrics from it.
+              WebDAQ reads metrics from its web port (Stats page, monitored values) and sends the
+              DAQ counting rates to its Carbon port. The beam current has its own destination, in{' '}
+              <Link href="/settings?view=current" className="underline underline-offset-2">Settings → Current module</Link>.
             </CardDescription>
           </div>
           {connection && (
