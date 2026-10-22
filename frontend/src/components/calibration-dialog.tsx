@@ -285,17 +285,22 @@ export function CalibrationDialog({ open, onOpenChange, boardId, channel, label,
           </TabsContent>
 
           <TabsContent value="numbers" className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span>E =</span>
-              <NumericInput value={offset} step={0.1} className="h-8 w-36" aria-label="Offset in keV"
-                            onValueChange={setOffset} />
-              <span>keV +</span>
-              <NumericInput value={slope} step={0.001} className="h-8 w-36" aria-label="Slope in keV per channel"
-                            onValueChange={setSlope} />
-              <span>keV/channel × channel</span>
+            {/* Labels above full-width fields: a fitted slope has up to 17
+                digits, which an inline 9 rem field cut off. */}
+            <div className="grid gap-3 text-sm sm:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-muted-foreground">Offset (keV)</span>
+                <NumericInput value={offset} step={0.1} className="h-8 w-full" aria-label="Offset in keV"
+                              onValueChange={setOffset} />
+              </label>
+              <label className="space-y-1">
+                <span className="text-muted-foreground">Slope (keV per channel)</span>
+                <NumericInput value={slope} step={0.001} className="h-8 w-full" aria-label="Slope in keV per channel"
+                              onValueChange={setSlope} />
+              </label>
             </div>
             <p className="text-xs text-muted-foreground">
-              Offset 0 and slope 1 leave the axis in channels.
+              E = offset + slope × channel. Offset 0 and slope 1 leave the axis in channels.
             </p>
           </TabsContent>
         </Tabs>

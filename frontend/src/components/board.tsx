@@ -198,7 +198,9 @@ export function Board() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-[repeat(auto-fill,minmax(17rem,1fr))]">
+                {/* Columns as wide as a card needs, not a count per breakpoint:
+                    the sidebar takes 208 px, so at 1024 px three were too narrow. */}
                 {boards.map((board) => {
                   const conn = connectivity[String(board.id)]
                   const status = conn?.failed
@@ -211,13 +213,13 @@ export function Board() {
                       key={board.id}
                       className="relative rounded-lg border bg-card p-4 shadow-sm transition-colors hover:bg-muted/30"
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/10">
                             <Cpu className="h-5 w-5 text-primary" />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-semibold leading-tight">{boardLabel(board)}</p>
+                            <p className="break-words font-semibold leading-tight">{boardLabel(board)}</p>
                             <p className="text-xs text-muted-foreground">{board.dpp}</p>
                           </div>
                         </div>
@@ -231,18 +233,18 @@ export function Board() {
                           <dt className="text-muted-foreground">Link type</dt>
                           <dd className="text-right">Ethernet</dd>
                           <dt className="text-muted-foreground">IP address</dt>
-                          <dd className="text-right font-mono">{board.link_num}</dd>
+                          <dd className="break-all text-right font-mono">{board.link_num}</dd>
                         </dl>
                       ) : (
                         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs border-t pt-3">
                           <dt className="text-muted-foreground">VME address</dt>
-                          <dd className="text-right font-mono">{board.vme}</dd>
+                          <dd className="break-all text-right font-mono">{board.vme}</dd>
                           <dt className="text-muted-foreground">Link type</dt>
                           <dd className="text-right">{board.link_type}</dd>
                           <dt className="text-muted-foreground">
                             {board.link_type === "A4818" ? "PID" : "Link number"}
                           </dt>
-                          <dd className="text-right font-mono">{board.link_num}</dd>
+                          <dd className="break-all text-right font-mono">{board.link_num}</dd>
                         </dl>
                       )}
 

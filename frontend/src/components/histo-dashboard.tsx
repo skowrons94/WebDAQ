@@ -193,7 +193,7 @@ const SortableHistogramCard = ({
                 <GripVertical className="h-4 w-4" />
               </span>
             )}
-            <span className="truncate" title={title}>{title}</span>
+            <span className="line-clamp-2 min-w-0 break-words" title={title}>{title}</span>
             {calibrated !== undefined && (
               // The badge is small to look at but its hit area is not: the
               // ::before reaches 32 px high (and some width) around it, so a
@@ -203,7 +203,7 @@ const SortableHistogramCard = ({
                         ? "bg-success/10 text-success" : "bg-muted text-muted-foreground"}`}
                       title={calibrated ? "Energy calibrated: the axis is in keV. Click to change" : "Not calibrated: the axis is in ADC channels. Click to calibrate"}
                       aria-label={calibrated ? `Energy calibration of ${title} (keV)` : `Calibrate ${title} (axis in ADC channels)`}>
-                {calibrated ? "keV" : "uncalibrated"}
+                {calibrated ? "keV" : "ADC"}
               </button>
             )}
           </CardTitle>
@@ -1838,8 +1838,10 @@ export default function EnhancedHistogramDashboard() {
   const LG_GRID_COLS: Record<number, string> = {
     1: "lg:grid-cols-1",
     2: "lg:grid-cols-2",
-    3: "lg:grid-cols-3",
-    4: "lg:grid-cols-4",
+    // Three or four only from xl: at lg the 208 px sidebar leaves ~740 px,
+    // too narrow for more than two plots.
+    3: "lg:grid-cols-2 xl:grid-cols-3",
+    4: "lg:grid-cols-2 xl:grid-cols-4",
   }
   const getGridClass = () => {
     if (dashboardSettings.layout === "rows") return "grid-cols-1"

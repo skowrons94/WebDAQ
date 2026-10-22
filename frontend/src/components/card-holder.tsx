@@ -73,6 +73,7 @@ import {
   getStatsRunStatus,
   getExperimentStats,
   setRunNumber,
+  runGoingRefusal,
   setSaveData,
 } from '@/lib/api'
 import {
@@ -724,9 +725,10 @@ export function CardHolder({
       })
     } catch (error) {
       console.error('Failed to set the run number:', error)
+      const refusal = runGoingRefusal(error)
       toast({
-        title: 'Error',
-        description: 'Could not set the run number.',
+        title: refusal ? 'A run is going' : 'Error',
+        description: refusal ?? 'Could not set the run number.',
         variant: 'destructive',
       })
     } finally {
@@ -918,6 +920,7 @@ export function CardHolder({
   const failedBoards = settings.showStatus ? boards.filter(boardFailedNow) : []
   const healthyBoards = boards.filter((b) => !boardFailedNow(b))
   const runBadge = useRunBadge({ boardFailed: failedBoards.length > 0 })
+  const longRunNumber = !runBadge.tuning && runNumber !== null && String(runNumber).length >= 4
   const leftoverHere = runNumber !== null && leftoverRun?.run_number === runNumber
   const reusedUnsaved = runNumber !== null
     && (unsavedRun === runNumber || (leftoverHere && leftoverRun?.has_data === false))
@@ -1030,7 +1033,7 @@ export function CardHolder({
                 viewportClassName="snap-y snap-mandatory scroll-py-4 scroll-smooth"
                 style={{ height: shownStatusPanelHeight }}
               >
-                <div ref={statusGridRef} className="relative grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 lg:grid-cols-3 xl:auto-rows-[11.5rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
+                <div ref={statusGridRef} className="relative grid grid-cols-1 gap-3 p-4 pb-5 sm:grid-cols-2 xl:auto-rows-[13rem] xl:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] xl:gap-6 xl:[&>*]:h-full xl:[&>*]:overflow-hidden xl:[&>*]:snap-start">
         {failedBoards.map(renderBoardCard)}
 
         {/* Run Status Card */}
@@ -1072,7 +1075,10 @@ export function CardHolder({
               {/* While a run is live the number is the run being taken and is
                   read only. Stopped, the same number is the run that WILL be
                   taken next, so it says so and can be clicked to change it. */}
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xl font-bold">
+              {/* A run number of four digits or more takes the smaller size: in
+                  a 16 rem card the badge then wraps onto a line that still fits
+                  the fixed card height. */}
+              <div className={cn('flex flex-wrap items-center gap-x-2 gap-y-1 font-bold', longRunNumber ? 'text-xl' : 'text-2xl')}>
                 {runBadge.tuning ? (
                   // A Tuner acquisition has no run number and no Logbook entry.
                   <span>Tuner session</span>
@@ -1102,11 +1108,11 @@ export function CardHolder({
                 )}
                 {/* The header's rule (hooks/use-run-badge.ts): a board FAIL wins
                     over "Running", and a Tuner acquisition is not a production run. */}
-                <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} size="md" />
+                <StatusBadge state={runBadge.state} label={runBadge.label} title={runBadge.title} size={longRunNumber ? 'sm' : 'md'} />
               </div>
               {/* Unsaved, a run keeps its number for the next one (by design):
                   said here so a reused number is not a surprise. */}
-              <div className="flex items-center justify-between gap-2">
+              <div className="mt-1.5 flex items-center justify-between gap-2">
               <p
                 className="min-w-0 truncate text-xs text-muted-foreground"
                 title={isRunning && !runBadge.tuning && !dataSavingEnabled
@@ -1148,11 +1154,11 @@ export function CardHolder({
                   watched (a Tuner session or an unsaved run has no entry). On
                   this line: beside the run number it wrapped in a narrow card. */}
               {isRunning && !runBadge.tuning && dataSavingEnabled && (
-                <QuickNoteButton runNumber={runNumber} className="-my-1 h-7 shrink-0 px-2 text-xs" />
+                <QuickNoteButton runNumber={runNumber} className="h-7 shrink-0 px-2 text-xs" />
               )}
               </div>
 
-              <div className="mt-3 flex items-center justify-between border-t pt-2 text-sm">
+              <div className="mt-2 flex items-center justify-between border-t pt-2 text-sm">
                 <span className="flex items-center gap-1.5 text-muted-foreground">
                   <HardDrive className="h-3.5 w-3.5" />
                   File bandwidth

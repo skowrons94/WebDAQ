@@ -1276,7 +1276,9 @@ function BoardComponent({ boardData, openScaleFor, onScaleLinkUsed }: {
         const byCh = groupChannelSettings(res.registers as BoardSettings)
         const regs: Record<number, ChannelEnergyRegs | null> = {}
         for (const ch of Object.keys(byCh).map(Number)) regs[ch] = energyRegsOf(byCh[ch])
-        setScaleRef({ source: res.source, run: res.run ?? null, regs })
+        const scaleChanged: Record<number, string[]> = {}
+        for (const [ch, fields] of Object.entries(res.scale_changed ?? {})) scaleChanged[Number(ch)] = fields
+        setScaleRef({ source: res.source, run: res.run ?? null, regs, scaleChanged })
       })
       .catch(() => { /* the page's own values stand in */ })
   }
@@ -1567,9 +1569,13 @@ function BoardComponent({ boardData, openScaleFor, onScaleLinkUsed }: {
             const selected = options?.find(o => o.value === fieldValue)
 
             return (
+              // A dropdown goes under its label on a phone: beside it, a
+              // 224 px trigger left the label ~100 px and one word a line.
               <div
                 key={field.name}
-                className="flex items-center justify-between gap-3 py-1"
+                className={options
+                  ? "flex flex-col items-stretch gap-1.5 py-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+                  : "flex items-center justify-between gap-3 py-1"}
               >
                 <div className="flex-1 min-w-0">
                   <span className="text-sm">{field.name}</span>
@@ -1587,7 +1593,7 @@ function BoardComponent({ boardData, openScaleFor, onScaleLinkUsed }: {
                       handleBitFieldChange(regName, field.startBit, field.endBit, parseInt(v))
                     }
                   >
-                    <SelectTrigger className="h-7 w-56 text-sm shrink-0" aria-label={field.name}>
+                    <SelectTrigger className="h-7 w-full text-sm shrink-0 sm:w-56" aria-label={field.name}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

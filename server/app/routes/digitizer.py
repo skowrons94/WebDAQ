@@ -430,20 +430,26 @@ def get_all_registers(id):
 def get_run_registers(id):
     """
     The registers that produced the live spectra: during a run, the ones the
-    run started with (plus what was written to the board since); between
-    runs, the saved configuration, which the next run will use.
+    run started with; between runs, the saved configuration, which the next
+    run will use.
 
-    {'source': 'run' | 'saved', 'run': <run number>, 'registers': {...}}
+    During a run, 'scale_changed' lists per channel the energy-scale fields
+    (fine gain, rescaling, decimation, rise and decay time) written to the
+    board since the start: that channel's spectrum then mixes two scales.
+
+    {'source': 'run' | 'saved', 'run': <run number>, 'registers': {...},
+     'scale_changed': {<channel>: [<field>, ...]}}
     """
     running = daq_mgr.run_registers(id)
     if running is not None:
         return jsonify({'source': 'run', 'run': daq_mgr.get_run_number(),
-                        'registers': _registers_view(running)})
+                        'registers': _registers_view(running),
+                        'scale_changed': {str(ch): f for ch, f in daq_mgr.run_scale_changes(id).items()}})
     config = load_board_config(id)
     if not config or 'registers' not in config:
         return jsonify({'message': 'Registers not found'}), 404
     return jsonify({'source': 'saved', 'run': daq_mgr.get_run_number(),
-                    'registers': _registers_view(config['registers'])})
+                    'registers': _registers_view(config['registers']), 'scale_changed': {}})
 
 
 def _registers_view(raw_registers: dict) -> dict:

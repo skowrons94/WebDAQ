@@ -149,7 +149,7 @@ export function RunBar() {
               <span className="truncate text-sm text-muted-foreground">Tuner session</span>
             ) : runNumber !== null && (
               isRunning ? (
-                <Link href={`/logbook/${runNumber}`} className="truncate text-sm font-semibold underline-offset-2 hover:underline">
+                <Link href={`/logbook/${runNumber}`} className="shrink-0 text-sm font-semibold underline-offset-2 hover:underline">
                   Run {runNumber}
                 </Link>
               ) : (
@@ -161,11 +161,14 @@ export function RunBar() {
                 </span>
               )
             )}
-            {isRunning && !unreachable && (
-              <span className="font-mono text-sm tabular-nums">{formatElapsed(elapsed)}</span>
-            )}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {/* The elapsed time is on this line, not beside the run number:
+                with the note button the first line has no room for both, and
+                the run number must never be cut. */}
+            {isRunning && !unreachable && (
+              <span className="font-mono tabular-nums text-foreground">{formatElapsed(elapsed)} · </span>
+            )}
             {/* Unsaved, the number is not used up: the next run gets it again. */}
             {isRunning && !unreachable && !badge.tuning && saving === false && (
               <span className="font-semibold text-destructive">Not saved · </span>

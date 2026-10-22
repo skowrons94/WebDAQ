@@ -990,7 +990,7 @@ function SummaryMetric({
         {label}
       </div>
       <div className="mt-1.5 truncate text-lg font-semibold tabular-nums">{value}</div>
-      {detail && <div className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</div>}
+      {detail && <div className="mt-0.5 line-clamp-2 break-words text-xs text-muted-foreground" title={detail}>{detail}</div>}
     </div>
   )
 }

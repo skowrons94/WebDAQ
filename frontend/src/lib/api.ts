@@ -543,6 +543,14 @@ export const setDataSizeLimit = (value: number) =>
 export const getCurrentRunNumber = () => 
     api.get('/experiment/get_run_number').then(res => res.data);
 
+/** The server's words when it refused a change because a run is going (409
+ *  from set_run_number, set_data_size_limit, set_limit_data_size...), else null. */
+export function runGoingRefusal(error: unknown): string | null {
+    const res = (error as { response?: { status?: number; data?: { message?: string } } })?.response
+    if (res?.status !== 409) return null
+    return res.data?.message ?? 'A run is going: this can be changed once it has stopped.'
+}
+
 export const setRunNumber = (value: number) =>
     api.post('/experiment/set_run_number', { value: value });
 
@@ -1451,4 +1459,6 @@ export const getRunRegisters = (id: string) =>
         source: 'run' | 'saved'
         run: number | null
         registers: Record<string, { value_hex: string; value_dec: number; name: string; channel: number; address: string }>
+        /** During a run, per channel, the energy-scale fields written to the board since it started. */
+        scale_changed?: Record<string, string[]>
     });

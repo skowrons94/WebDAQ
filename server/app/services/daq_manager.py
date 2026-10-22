@@ -70,9 +70,14 @@ class DAQManager:
         # Each CAEN board's registers as the running run started with them
         # (board id -> register dump), whether or not the run saves: the
         # energy-scale calculator compares a live peak with the settings that
-        # produced it, not with the configuration edited since. Registers
-        # written to the board during the run are folded in (note_run_register).
+        # produced it, not with the configuration edited since, nor with what
+        # was written to the board mid-run (_note_run_register records that).
         self._run_start_registers: Dict[str, Dict[str, Any]] = {}
+        # Energy-scale fields written to a board during the run, per board and
+        # channel (see _note_run_register), and the value each such register
+        # holds on the board now.
+        self._run_scale_changes: Dict[str, Dict[int, set]] = {}
+        self._run_live_values: Dict[str, Dict[int, int]] = {}
 
         # Acquisition runs inside this process, so a fresh manager means nothing is
         # acquiring — whatever the file says. A 'running' left behind by a crash or
@@ -880,24 +885,69 @@ class DAQManager:
             except (OSError, ValueError, KeyError) as e:
                 self.logger.warning(f"No register snapshot for board {board.get('id')}: {e}")
         self._run_start_registers = snapshot
+        self._run_scale_changes = {}
+        self._run_live_values = {}
 
     def run_registers(self, board_id: str) -> Optional[Dict[str, Any]]:
-        """The registers the running run uses on this board, or None between runs."""
+        """The registers this run started with on this board, or None between runs."""
         if not self.is_running():
             return None
         return self._run_start_registers.get(str(board_id))
 
+    def run_scale_changes(self, board_id: str) -> Dict[int, list]:
+        """Per channel, the energy-scale fields written to the board since the run started."""
+        changes = self._run_scale_changes.get(str(board_id), {})
+        return {ch: sorted(fields) for ch, fields in changes.items() if fields}
+
+    # The DPP-PHA registers that set where a line lands on the energy axis,
+    # by offset in a channel's 0x1n00 block, with the bits that matter.
+    _ENERGY_SCALE_FIELDS = {
+        0xC4: [('Fine Gain', 0xFFFF)],
+        0x80: [('Trapezoid Rescaling', 0x3F), ('Decimation', 0x300), ('Decimation Gain', 0xC00)],
+        0x5C: [('Trapezoid Rise Time', 0xFFF)],
+        0x68: [('Decay Time', 0xFFFF)],
+    }
+
     def _note_run_register(self, board_id: str, address: int, value: int) -> None:
-        """A register written to the board during the run: the run uses it from now on."""
-        registers = self._run_start_registers.get(str(board_id))
+        """
+        A register written to the board during the run. The run's reference
+        keeps the values it started with: the live spectrum holds the counts
+        taken before the write too, so a peak in it is not at the new scale.
+        A write that moves the energy scale is recorded for its channel
+        instead, so the calculator can say the spectrum mixes two scales.
+        """
+        board_id, address, value = str(board_id), int(address), int(value)
+        registers = self._run_start_registers.get(board_id)
         if not registers:
             return
-        for reg in registers.values():
-            try:
-                if int(str(reg.get('address', '')), 16) == int(address):
-                    reg['value'] = hex(int(value))
-            except ValueError:
-                continue
+        fields = self._ENERGY_SCALE_FIELDS.get(address & 0xFF)
+        block = address & 0xF000
+        if not fields or block not in (0x1000, 0x8000):
+            return
+        # 0x8nXX writes every channel at once (broadcast), 0x1nXX channel n.
+        if block == 0x8000:
+            offsets = {int(str(r.get('address', '')), 16) for r in registers.values()
+                       if str(r.get('address', '')).lower().startswith('0x1')}
+            channels = sorted({(a >> 8) & 0xF for a in offsets if a & 0xFF == address & 0xFF})
+        else:
+            channels = [(address >> 8) & 0xF]
+        live = self._run_live_values.setdefault(board_id, {})
+        for ch in channels:
+            ch_addr = 0x1000 | (ch << 8) | (address & 0xFF)
+            before = live.get(ch_addr)
+            if before is None:
+                for reg in registers.values():
+                    try:
+                        if int(str(reg.get('address', '')), 16) == ch_addr:
+                            before = int(str(reg.get('value')), 16)
+                            break
+                    except (TypeError, ValueError):
+                        continue
+            live[ch_addr] = value
+            for name, mask in fields:
+                # Unknown start value: assume the write changed it.
+                if before is None or (before & mask) != (value & mask):
+                    self._run_scale_changes.setdefault(board_id, {}).setdefault(ch, set()).add(name)
 
     def write_board_register(self, board_id: str, address: int, value: int) -> Dict[str, Any]:
         """

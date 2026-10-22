@@ -56,6 +56,12 @@ export interface ScaleReference {
   source: 'run' | 'saved'
   run: number | null
   regs: Record<number, ChannelEnergyRegs | null>
+  /**
+   * 'run' only: per channel, the energy-scale fields written to the board
+   * during the run. That channel's live spectrum holds counts at two scales,
+   * so a peak in it cannot be compared with either.
+   */
+  scaleChanged?: Record<number, string[]>
 }
 
 const shfOf = (algo: number) => algo & 0x3f
@@ -175,6 +181,10 @@ export function TrapezoidScaleDialog({
   const [confirm, setConfirm] = useState<number[] | null>(null)
 
   const refRegsOf = (ch: number): ChannelEnergyRegs | null => reference?.regs[ch] ?? pageRegs[ch] ?? null
+  /** The energy-scale fields written to channel ch during the run, if any. */
+  const mixedOf = (ch: number): string[] => reference?.source === 'run' ? reference.scaleChanged?.[ch] ?? [] : []
+  const mixedHere = mixedOf(channel)
+  const mixedOthers = allTargets.filter(ch => ch !== channel && mixedOf(ch).length > 0)
 
   // Start from the channel's own values whenever the dialog opens, the
   // channel changes or the reference arrives; edits after that are the
@@ -211,7 +221,10 @@ export function TrapezoidScaleDialog({
   const pageShaping = current ? shapingFrom(current) : null
   const shaping = current ? shapingFrom(current, riseNs, decayNs) : null
 
-  const refShaping = ref && current ? shapingFrom(current, ref.riseNs, ref.decayNs) : null
+  // The reference's own decimation, not the page's: a decimation changed
+  // since the peak was measured moves the line too.
+  const refRegs = refRegsOf(channel) ?? current
+  const refShaping = ref && refRegs ? shapingFrom(refRegs, ref.riseNs, ref.decayNs) : null
   const peakShapingChanged = !!(refShaping && pageShaping && shapingChanged(refShaping, pageShaping))
   // The factor every channel's energy is multiplied by, from this channel's line.
   const lineRatio = eNow > 0 && eWant > 0 ? eWant / eNow : null
@@ -227,6 +240,8 @@ export function TrapezoidScaleDialog({
       return scaleFromShaping(a, sh, target)
     }
     if (lineRatio === null) return null
+    // A spectrum that mixes two energy scales has no one scale to correct.
+    if (mixedOf(ch).length > 0) return null
     if (ch === channel) {
       if (!ref || !(ref.fg > 0) || !refShaping || !pageShaping) return null
       return scaleTimes({ shf: ref.shf, fg: ref.fg },
@@ -350,7 +365,7 @@ export function TrapezoidScaleDialog({
         <div className="flex flex-wrap items-center gap-2">
           <Label htmlFor="ts-channel" className="text-sm">Channel</Label>
           <Select value={String(channel)} onValueChange={v => onChannelChange(Number(v))}>
-            <SelectTrigger id="ts-channel" className="h-9 w-36" aria-label="Channel">
+            <SelectTrigger id="ts-channel" className="h-9 w-44" aria-label="Channel">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -557,8 +572,8 @@ export function TrapezoidScaleDialog({
                   lineLands !== null && <p>The line then lands at about {fmtEnergy(lineLands)}.</p>
                 ) : peakShapingChanged ? (
                   <p className="text-warning">
-                    Approximate: the rise or decay time on the page differs from the one the peak was
-                    measured with, so the line moves by the estimated rise × decay ratio as well.
+                    Approximate: the rise time, decay time or decimation on the page differs from the one
+                    the peak was measured with, so the line moves by the estimated filter-gain ratio as well.
                   </p>
                 ) : (
                   <p className="text-muted-foreground">
@@ -567,9 +582,21 @@ export function TrapezoidScaleDialog({
                   </p>
                 )}
               </>
+            ) : mode === 'peak' && mixedHere.length > 0 ? (
+              <p className="text-destructive">
+                The {mixedHere.join(', ').toLowerCase()} of channel {channel} was written to the board during
+                this run, so its spectrum mixes two energy scales and no peak in it gives the scale.
+                Restart the run, or use From the shaping times.
+              </p>
             ) : (
               <p className="text-muted-foreground">
                 {mode === 'shaping' ? 'Enter the times and the largest pulse.' : 'Enter where a line sits now and where it should go.'}
+              </p>
+            )}
+            {mode === 'peak' && mixedHere.length === 0 && mixedOthers.length > 0 && (
+              <p className="text-xs text-warning">
+                Not for all channels: the energy scale of channel{mixedOthers.length === 1 ? '' : 's'}{' '}
+                {mixedOthers.join(', ')} changed during this run (restart the run first).
               </p>
             )}
             {mode === 'shaping' && !measuredOn(boardName) && (

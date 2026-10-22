@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ENERGY_FULL_SCALE, predictEnergy, scaleFactor, scaleForDivisor, scaleFromPeak,
   scaleFromShaping, verdict, mvToLsb, caenFamily, nsPerUnitFor, samplesPerUnitFor, measuredOn,
-  adcBitsFor, scaleTimes, type Shaping,
+  adcBitsFor, scaleTimes, shapingChanged, type Shaping,
 } from '@/lib/trapezoid-scale'
 
 // The measurement on the V1725S (pulser on channel 0, A = 1932 ADC LSB).
@@ -122,5 +122,14 @@ describe('trapezoid energy scale: board names', () => {
     expect(adcBitsFor('DT5720')).toBe(12)
     expect(nsPerUnitFor('SIS3316')).toBeNull()
     expect(caenFamily('V17250')).toBeNull()
+  })
+})
+
+describe('trapezoid energy scale: what counts as a shaping change (round 4, D)', () => {
+  it('a decimation change alone is a change: the peak was measured at another filter gain', () => {
+    const before = { ...shaping(200, 5000), decimation: 0 }
+    const after = { ...shaping(200, 5000), decimation: 1 }
+    expect(shapingChanged(before, after)).toBe(true)
+    expect(shapingChanged(before, { ...before })).toBe(false)
   })
 })

@@ -31,6 +31,7 @@ import {
   getDataSizeLimit,
   setDataSizeLimit,
   setRunNumber,
+  runGoingRefusal,
   setIpPortCurrent,
   getIpCurrent,
   getPortCurrent,
@@ -144,7 +145,18 @@ export function DAQState({
     }
     if (value === runNumber) return
     onRunNumberChange(value)
-    setRunNumber(value)
+    setRunNumber(value).catch(refused)
+  }
+
+  // These settings are sent as they change; the server refuses them (409)
+  // while a run is going, which a page out of date does not know.
+  const refused = (error: unknown) => {
+    console.error('Setting refused:', error)
+    toast({
+      title: runGoingRefusal(error) ? 'A run is going' : 'Not saved',
+      description: runGoingRefusal(error) ?? 'The server did not take the change.',
+      variant: 'destructive',
+    })
   }
 
   /**
@@ -152,7 +164,7 @@ export function DAQState({
    */
   const handleSaveDataChange = (checked: boolean) => {
     onSaveDataChange(checked)
-    setSaveData(checked)
+    setSaveData(checked).catch(refused)
   }
 
   /**
@@ -160,7 +172,7 @@ export function DAQState({
    */
   const handleLimitFileSizeChange = (checked: boolean) => {
     onLimitFileSizeChange(checked)
-    setLimitDataSize(checked)
+    setLimitDataSize(checked).catch(refused)
   }
 
   /**
@@ -171,7 +183,7 @@ export function DAQState({
     onFileSizeLimitChange(value)
     const numValue = parseInt(value)
     if (!isNaN(numValue)) {
-      setDataSizeLimit(numValue)
+      setDataSizeLimit(numValue).catch(refused)
     }
   }
 

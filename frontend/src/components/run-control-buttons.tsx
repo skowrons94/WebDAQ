@@ -55,6 +55,10 @@ import {
   getNextFreeRun,
   refreshBoardConnections,
   startStatsRun,
+  stopStatsRun,
+  stopAcquisitionCurrent,
+  getRunStatus,
+  runGoingRefusal,
   getSaveData,
 } from '@/lib/api'
 import useRunControlStore from '@/store/run-control-store'
@@ -66,6 +70,23 @@ import { noteRunAction } from '@/hooks/use-run-status'
 import { StopRunBody } from '@/components/stop-run-body'
 import { runSideEffects } from '@/lib/side-effects'
 import { notifyRunsChanged } from '@/components/recent-runs'
+
+/** The toast for a start that failed. A 409 is the server refusing because a
+ *  run is going (started from another page): said as such, not as a fault. */
+function startFailedToast(error: unknown) {
+  const refusal = runGoingRefusal(error)
+  if (refusal) {
+    return { title: 'A run is going', description: `${refusal} Nothing was started.`, variant: 'destructive' as const }
+  }
+  const serverMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message
+  return {
+    title: 'Error',
+    description: serverMessage
+      ? `Failed to start the run: ${serverMessage}`
+      : 'Failed to start the run. Please check all parameters and try again.',
+    variant: 'destructive' as const,
+  }
+}
 
 interface RunControlButtonsProps {
   /** Seconds since the run started, for the Stop confirmation. */
@@ -256,7 +277,9 @@ export function RunControlButtons({
       await startRunProcess(next)
     } catch (error) {
       console.error('Failed to start under the next free number:', error)
-      toast({ title: 'Error', description: `Could not set the run number to ${next}.`, variant: 'destructive' })
+      toast(runGoingRefusal(error)
+        ? startFailedToast(error)
+        : { title: 'Error', description: `Could not set the run number to ${next}.`, variant: 'destructive' })
     } finally {
       setStartBusy(false)
     }
@@ -267,6 +290,19 @@ export function RunControlButtons({
     pendingSave.current = save
     setStartBusy(true)
     try {
+      // A page left open while a run was started elsewhere (another browser,
+      // the Tuner) still offers Start: ask the server before touching the run
+      // number, the saving switch or the limits of the run that is going.
+      if (await getRunStatus() === true) {
+        onIsRunningChange(true)
+        setIsRunningStore(true)
+        toast({
+          title: 'A run is going',
+          description: 'A run was started from somewhere else: this page was out of date and has changed nothing. Stop that run first.',
+          variant: 'destructive',
+        })
+        return
+      }
       await setRunNumber(runNumber!)
       const directoryExists = await checkRunDirectoryExists()
       await setSaveData(save)
@@ -294,15 +330,7 @@ export function RunControlButtons({
       await startRunProcess()
     } catch (error) {
       console.error('Failed to start run:', (error as Error)?.message ?? error)
-      const serverMessage =
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast({
-        title: 'Error',
-        description: serverMessage
-          ? `Failed to start the run: ${serverMessage}`
-          : 'Failed to start the run. Please check all parameters and try again.',
-        variant: 'destructive',
-      })
+      toast(startFailedToast(error))
     } finally {
       setStartBusy(false)
     }
@@ -322,6 +350,11 @@ export function RunControlButtons({
     }
 
     const saveData = pendingSave.current
+    // What this start opened before the DAQ itself, to close again if the
+    // DAQ does not start: left on, they kept writing into data/run<N>.
+    let currentStarted = false
+    let statsStarted = false
+    let daqStarted = false
     try {
       toast({
         title: 'Starting run…',
@@ -351,6 +384,7 @@ export function RunControlButtons({
         if (currentEnabled) {
           try {
             await startAcquisitionCurrent(String(n))
+            currentStarted = true
           } catch (error) {
             console.error('Current recording did not start:', error)
             sideEffects.push('beam current is not being recorded')
@@ -358,6 +392,7 @@ export function RunControlButtons({
         }
         try {
           await startStatsRun(n)
+          statsStarted = true
         } catch (error) {
           console.error('stats.csv did not start:', error)
           sideEffects.push('stats.csv is not being written')
@@ -371,6 +406,7 @@ export function RunControlButtons({
 
       // Start the actual DAQ run
       await startRun()
+      daqStarted = true
 
       // The run is on: say so now, and make the shared poller ignore any
       // answer to a poll sent before the start (it would show Stopped again).
@@ -416,15 +452,13 @@ export function RunControlButtons({
       })
     } catch (error) {
       console.error('Failed to start run:', error)
-      const serverMessage =
-        (error as { response?: { data?: { message?: string } } })?.response?.data?.message
-      toast({
-        title: 'Error',
-        description: serverMessage
-          ? `Failed to start the run: ${serverMessage}`
-          : 'Failed to start the run. Please check all parameters and try again.',
-        variant: 'destructive',
-      })
+      if (!daqStarted) {
+        // Best effort: a failure here is only logged, the toast below says
+        // what matters (the run did not start).
+        if (currentStarted) await stopAcquisitionCurrent().catch((e) => console.error('Current recording did not stop:', e))
+        if (statsStarted) await stopStatsRun().catch((e) => console.error('stats.csv did not stop:', e))
+      }
+      toast(startFailedToast(error))
     }
   }
 
