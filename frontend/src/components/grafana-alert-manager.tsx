@@ -226,7 +226,7 @@ export default function GrafanaAlertManager() {
       <Card>
         <CardContent className="flex items-center justify-between pt-5 pb-5">
           <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-muted-foreground">
+            <p className="text-xs font-medium text-muted-foreground">
               DAQ run status
             </p>
             {/* The same shared state as the header (hooks/use-run-status.ts):
@@ -339,22 +339,22 @@ export default function GrafanaAlertManager() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50">
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Alert Name
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">
+                      Alert name
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">
                       Group
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">
                       Threshold
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">
                       Auto
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-muted-foreground">
                       Action
                     </th>
                   </tr>

@@ -652,7 +652,7 @@ export default function RunStats() {
           {/* Filters in one row above the plot, each saying what it changes. */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1">
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              <Label className="text-xs text-muted-foreground">
                 Plot
               </Label>
             <Select
@@ -682,7 +682,7 @@ export default function RunStats() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              <Label className="text-xs text-muted-foreground">
                 Show
               </Label>
               <Select value={String(windowS)} onValueChange={(v) => setWindowS(Number(v))}>
@@ -694,7 +694,7 @@ export default function RunStats() {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+              <Label className="text-xs text-muted-foreground">
                 Rate shown
               </Label>
               <Select value={metric} onValueChange={(v) => setMetric(v as MetricKey)}>

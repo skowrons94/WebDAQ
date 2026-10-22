@@ -333,7 +333,7 @@ export default function BoardHealth() {
 function Counter({ label, value, rate }: { label: string; value: string; rate?: string }) {
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-mono text-base">{value}</p>
       {rate && <p className="font-mono text-xs text-muted-foreground">{rate}</p>}
     </div>
@@ -344,7 +344,7 @@ function Problem({ label, value }: { label: string; value: number | null }) {
   const bad = (value ?? 0) > 0
   return (
     <div>
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`font-mono text-base ${bad ? 'text-destructive font-semibold' : ''}`}>
         {formatCount(value)}
       </p>

@@ -584,7 +584,7 @@ function RuleCard({ rule, alerting, notReady, unmeasured, unmeasuredFor, busy,
 
       <div className="mt-4 flex flex-wrap items-center gap-6 border-t pt-3">
         <div className="flex items-center gap-4">
-          <span className="text-xs uppercase tracking-wide text-muted-foreground">Send to</span>
+          <span className="text-xs text-muted-foreground">Send to</span>
           {(['telegram', 'zulip'] as const).map((name) => (
             <label key={name} className="flex items-center gap-2 text-sm capitalize">
               <Switch aria-label={`Send to ${name}`} checked={transports.includes(name)} disabled={busy}

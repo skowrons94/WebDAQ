@@ -305,7 +305,7 @@ export function RunNotesEditor({ runNumber, notes, onSaved }: RunNotesEditorProp
           )}
           {mode !== "write" && (
             <div className="bg-muted/10 p-4">
-              <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <div className="mb-2 text-xs font-semibold text-muted-foreground">
                 Preview
               </div>
               <MarkdownPreview value={draft} />

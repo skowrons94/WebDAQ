@@ -104,7 +104,7 @@ function BoardCard({ board }: { board: CaenBoardInfo }) {
       </CardHeader>
       <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-x-8">
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+          <h4 className="text-xs font-semibold text-muted-foreground mb-2">
             Identity
           </h4>
           <Field label="Model" value={`${board.model_name} (${board.model})`} />
@@ -120,7 +120,7 @@ function BoardCard({ board }: { board: CaenBoardInfo }) {
         </div>
 
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 lg:mt-0 mt-4">
+          <h4 className="text-xs font-semibold text-muted-foreground mb-2 lg:mt-0 mt-4">
             Firmware &amp; connection
           </h4>
           <Field label="ROC firmware" value={board.roc_firmware} mono />
@@ -130,7 +130,7 @@ function BoardCard({ board }: { board: CaenBoardInfo }) {
           <Field label="Link" value={board.link_num} />
           {board.vme_base > 0 && <Field label="VME base" value={hex(board.vme_base)} mono />}
 
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 mt-4">
+          <h4 className="text-xs font-semibold text-muted-foreground mb-2 mt-4">
             Acquisition registers
           </h4>
           <Field label="Start mode (0x8100[1:0])" value={board.start_mode_name} />

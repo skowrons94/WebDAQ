@@ -6,11 +6,15 @@
 # fails with "address already in use" — usually in the middle of a shift, to
 # someone who did not start it in the first place.
 #
-#   lunadaq start     start the frontend (freeing its port first)
+#   lunadaq start     start the frontend in the background (freeing its port
+#                     first); it keeps running when the terminal is closed
+#   lunadaq run       start the frontend in this terminal instead (tmux, debugging)
 #   lunadaq backend   start the backend in this terminal
 #   lunadaq stop      stop both, escalating from SIGTERM to SIGKILL
-#   lunadaq restart   stop both, then start the frontend
+#   lunadaq restart   stop both, start the frontend, and start the backend
+#                     again in the folder it was using
 #   lunadaq status    show what is holding each port
+#   lunadaq logs      follow the frontend's log (Ctrl-C to leave)
 #
 # Only processes that look like ours are ever killed: an unrelated program on
 # port 3000 is reported and left alone.
@@ -20,6 +24,10 @@ set -uo pipefail
 FRONTEND_PORT="${LUNADAQ_FRONTEND_PORT:-3000}"
 BACKEND_PORT="${LUNADAQ_BACKEND_PORT:-5001}"
 KILL_TIMEOUT="${LUNADAQ_KILL_TIMEOUT:-10}"   # seconds to wait for a clean exit
+
+LOG_DIR="${LUNADAQ_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/lunadaq}"
+FRONTEND_LOG="$LOG_DIR/frontend.log"
+START_TIMEOUT="${LUNADAQ_START_TIMEOUT:-60}"   # seconds to wait for the frontend to listen
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -181,7 +189,7 @@ cmd_stop() {
     return $rc
 }
 
-cmd_start() {
+prepare_frontend() {
     require_dir "$FRONTEND_DIR"
     # A leftover instance would only make `npm run start` fail on a bound port.
     stop_port frontend "$FRONTEND_PORT" "Frontend" || {
@@ -189,9 +197,94 @@ cmd_start() {
         exit 1
     }
     activate_env
+}
+
+# In this terminal: it stops when the terminal does (inside tmux, or to watch it).
+cmd_run() {
+    prepare_frontend
     # Braced: bash 3.2 swallows the following multibyte character into the name.
     info "Starting the frontend on port ${FRONTEND_PORT}…"
     cd "$FRONTEND_DIR" && exec npm run start
+}
+
+# In the background, in a session of its own: closing the terminal or the SSH
+# connection that started it no longer takes the web interface (and the DAQ
+# server it launched) down with it.
+cmd_start() {
+    prepare_frontend
+    mkdir -p "$LOG_DIR"
+    info "Starting the frontend on port ${FRONTEND_PORT} in the background…"
+    (
+        cd "$FRONTEND_DIR" || exit 1
+        { echo; echo "── $(date '+%Y-%m-%d %H:%M:%S') lunadaq start ──"; } >> "$FRONTEND_LOG"
+        if command -v setsid >/dev/null 2>&1; then
+            setsid nohup npm run start >> "$FRONTEND_LOG" 2>&1 < /dev/null &
+        else
+            nohup npm run start >> "$FRONTEND_LOG" 2>&1 < /dev/null &
+        fi
+    )
+    local waited=0
+    until [ -n "$(port_pids "$FRONTEND_PORT")" ]; do
+        if [ "$waited" -ge "$START_TIMEOUT" ]; then
+            err "The frontend did not come up within ${START_TIMEOUT}s. Its log: $FRONTEND_LOG"
+            tail -n 15 "$FRONTEND_LOG" >&2
+            return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    ok "Frontend running on http://localhost:${FRONTEND_PORT} (log: $FRONTEND_LOG)"
+    echo "  It keeps running after this terminal is closed; 'lunadaq stop' stops it."
+}
+
+cmd_logs() {
+    [ -f "$FRONTEND_LOG" ] || { err "No log yet: $FRONTEND_LOG"; exit 1; }
+    exec tail -n 50 -F "$FRONTEND_LOG"
+}
+
+# The folder (and test mode) of the running backend, to start it again there.
+backend_session() {
+    local pid
+    pid="$(port_pids "$BACKEND_PORT" | head -1)"
+    [ -n "$pid" ] && is_ours backend "$(cmdline "$pid")" || return 1
+    local dir test=false
+    dir="$(readlink "/proc/$pid/cwd" 2>/dev/null || lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
+    [ -n "$dir" ] || return 1
+    tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -qx 'TEST_FLAG=True' && test=true
+    echo "$dir|$test"
+}
+
+# Through the web interface's launcher, as the DAQ Server badge does: same
+# environment, log and database handling as a start from the page.
+start_backend_in() {
+    local dir="$1" test="$2" waited=0 answer
+    local mode=""
+    [ "$test" = true ] && mode=" (test mode)"
+    info "Starting the DAQ server again in ${dir}${mode}…"
+    until answer="$(curl -s -m 30 -X POST "http://127.0.0.1:${FRONTEND_PORT}/api/server-control" \
+            -H 'Content-Type: application/json' \
+            -d "{\"action\":\"start\",\"directory\":\"$dir\",\"testMode\":$test}")" \
+          && [[ "$answer" == *'"success":true'* ]]; do
+        if [ "$waited" -ge 20 ]; then
+            err "The DAQ server did not start: ${answer:-no answer}. Start it from the page."
+            return 1
+        fi
+        sleep 2
+        waited=$((waited + 2))
+    done
+    ok "DAQ server started in $dir"
+}
+
+cmd_restart() {
+    local session=""
+    session="$(backend_session)" || session=""
+    cmd_stop || true
+    cmd_start || return 1
+    if [ -n "$session" ]; then
+        start_backend_in "${session%|*}" "${session#*|}"
+    else
+        echo "  The DAQ server was not running: start it from the page (DAQ Server badge)."
+    fi
 }
 
 cmd_backend() {
@@ -219,17 +312,19 @@ cmd_backend() {
 
 case "${1:-start}" in
     start)   cmd_start ;;
+    run)     cmd_run ;;
     backend) cmd_backend ;;
     stop)    cmd_stop ;;
-    restart) cmd_stop; cmd_start ;;
+    restart) cmd_restart ;;
     status)  cmd_status ;;
+    logs)    cmd_logs ;;
     -h|--help|help)
         # The header comment is the help text; print it up to the first line of code.
         awk 'NR>1 && /^#/ { sub(/^# ?/, ""); print; next } NR>1 { exit }' "${BASH_SOURCE[0]}"
         ;;
     *)
         err "Unknown command '${1}'"
-        echo "Usage: lunadaq [start|backend|stop|restart|status]" >&2
+        echo "Usage: lunadaq [start|run|backend|stop|restart|status|logs]" >&2
         exit 2
         ;;
 esac

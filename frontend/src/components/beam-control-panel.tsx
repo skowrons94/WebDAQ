@@ -114,7 +114,7 @@ export function BeamControlPanel({
   const summary = (
     <div className="grid gap-3 rounded-lg bg-muted/35 p-3 sm:grid-cols-4">
       <div className="sm:col-span-2">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <p className="text-xs font-medium text-muted-foreground">
           Beam current
         </p>
         <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">

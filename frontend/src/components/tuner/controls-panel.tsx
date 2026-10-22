@@ -114,7 +114,7 @@ export function ControlsPanel({
     <div className="space-y-5">
       {groups.map((g) => (
         <section key={g} aria-labelledby={`tuner-group-${g}`}>
-          <h4 id={`tuner-group-${g}`} className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <h4 id={`tuner-group-${g}`} className="mb-2 text-xs font-semibold text-muted-foreground">
             {GROUP_TITLES[g]}
           </h4>
           <div className="space-y-2.5">

@@ -658,7 +658,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
       <CardContent className="space-y-5">
         {/* Per-board start mode + clock source */}
         <div className="space-y-2">
-          <div className="hidden md:flex items-center gap-4 px-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          <div className="hidden md:flex items-center gap-4 px-3 text-xs font-semibold text-muted-foreground">
             <span className="flex-1">Board</span>
             <span className="w-60">Start mode</span>
             <span className="w-56">Clock source</span>
@@ -818,7 +818,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
 
         {/* Why the clock matters, next to where it is set. */}
         <div className="rounded-md bg-muted/50 p-3 text-sm">
-          <div className="font-medium text-xs uppercase tracking-wide text-muted-foreground mb-1.5">
+          <div className="font-medium text-xs text-muted-foreground mb-1.5">
             Clock source
           </div>
           <p className="text-muted-foreground">
@@ -850,7 +850,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
           <>
             {/* Required cabling */}
             <div>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              <h4 className="text-xs font-semibold text-muted-foreground mb-3">
                 Cable the chain in this order
               </h4>
               <div className="flex items-center gap-2 flex-wrap">
@@ -878,7 +878,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
 
             {/* What actually happens, in order */}
             <div className="rounded-md bg-muted/50 p-3 text-sm space-y-1.5">
-              <div className="font-medium text-xs uppercase tracking-wide text-muted-foreground">
+              <div className="font-medium text-xs text-muted-foreground">
                 Start sequence
               </div>
               <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
@@ -2089,7 +2089,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                   entries: [string, RegisterData][],
                 ) => (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground mb-4">
                       {title}
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 items-start">

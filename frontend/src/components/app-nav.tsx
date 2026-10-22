@@ -116,7 +116,7 @@ export function NavList({ collapsed = false, onNavigate, wrap }: {
         <div key={group.title} className="grid gap-0.5">
           {collapsed
             ? <div className="mx-2 my-1 border-t first:hidden" aria-hidden="true" />
-            : <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{group.title}</p>}
+            : <p className="px-2 pb-1 text-xs font-semibold text-muted-foreground">{group.title}</p>}
           {group.items.map((item) => {
             const on = active === item
             const Icon = item.icon

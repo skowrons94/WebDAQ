@@ -84,12 +84,20 @@ empty directory is a valid starting point for a new campaign.
 ### 4.1 With the launcher
 
 ```bash
-LunaDAQ            # start the web interface (freeing its port first)
+LunaDAQ            # start the web interface in the background (freeing its port first)
 LunaDAQ status     # what is holding each port
 LunaDAQ stop       # stop both parts, politely then firmly
-LunaDAQ restart    # stop, then start the interface
+LunaDAQ restart    # stop both, start the interface, and the DAQ server again in its folder
+LunaDAQ logs       # follow the interface's log (Ctrl-C to leave)
+LunaDAQ run        # start the interface in this terminal instead
 LunaDAQ backend    # run the DAQ server in this terminal, for debugging
 ```
+
+`LunaDAQ` (or `LunaDAQ start`) returns once the interface answers, and the
+interface keeps running after the terminal or the SSH connection is closed. Its
+output goes to `~/.local/state/lunadaq/frontend.log`. Stopping the interface also
+stops the DAQ server it started, and with it a run in progress: stop the run
+first.
 
 Then open <http://localhost:3000> and log in. The **DAQ Server** badge at the top
 right starts the server itself: pick the working directory for the campaign and
@@ -102,13 +110,13 @@ answer to a busy port than killing whatever holds it.
 
 ### 4.2 Running it inside tmux
 
-The web interface is a long-lived process. Started from a plain SSH session it
-dies when the connection drops, so start it inside **tmux**: a session that keeps
-running on the machine whether or not anyone is attached to it.
+`LunaDAQ` already runs in the background. To watch its output live instead, run
+it in the foreground inside **tmux**, a session that keeps running on the
+machine whether or not anyone is attached to it:
 
 ```bash
 tmux new -s daq        # create a session called "daq" and attach to it
-LunaDAQ                # start the interface inside it
+LunaDAQ run            # start the interface inside it, in the foreground
 ```
 
 Now detach and leave it running: press **Ctrl-b**, release both keys, then press

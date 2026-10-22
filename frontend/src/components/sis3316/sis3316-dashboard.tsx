@@ -371,7 +371,7 @@ function SettingsTab({ boardId }: { boardId: string }) {
                 {sections.map((section) => [
                   <tr key={`h-${section}`}>
                     <td colSpan={2 + enabledChannels.length}
-                        className="pt-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        className="pt-4 pb-1 text-xs font-semibold text-muted-foreground">
                       {section}
                     </td>
                   </tr>,

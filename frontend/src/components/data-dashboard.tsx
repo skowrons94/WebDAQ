@@ -763,7 +763,7 @@ function ConvertTab({ detail, onConverted }: { detail: RunDetail; onConverted: (
           <button
             type="button"
             onClick={() => setShowAdvanced(v => !v)}
-            className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+            className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
           >
             More options
             <span className="text-sm">{showAdvanced ? "−" : "+"}</span>
@@ -872,7 +872,7 @@ function ConvertTab({ detail, onConverted }: { detail: RunDetail; onConverted: (
 
       {status?.outputs && status.outputs.length > 0 && (
         <div>
-          <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+          <h5 className="text-xs font-semibold text-muted-foreground mb-2">
             ROOT output
           </h5>
           {status.outputs.map(name => (
@@ -885,7 +885,7 @@ function ConvertTab({ detail, onConverted }: { detail: RunDetail; onConverted: (
 
       {status?.log && status.log.length > 0 && (
         <div>
-          <h5 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+          <h5 className="text-xs font-semibold text-muted-foreground mb-2">
             Converter output
             {status.returncode !== null && status.returncode !== undefined && (
               <span className="font-normal normal-case ml-2">exit code {status.returncode}</span>
@@ -1031,7 +1031,7 @@ function LogbookRunHeader({
       <div className="p-5 sm:p-6">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div className="min-w-0">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <div className="mb-2 text-xs font-semibold tracking-[0.18em] text-muted-foreground">
               Logbook entry
             </div>
             <div className="flex flex-wrap items-center gap-2">
