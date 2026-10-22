@@ -38,9 +38,15 @@ warn() { echo "${YELLOW}!${RESET} $*"; }
 err()  { echo "${RED}✗${RESET} $*" >&2; }
 
 # PIDs LISTENing on a port. Empty (and silent) when the port is free or when
-# neither lsof nor fuser is installed.
+# none of ss, lsof and fuser is installed. ss comes first: on this DAQ PC lsof
+# does not list the Next.js server's socket at all, so a running frontend was
+# reported as "not running" and never stopped.
 port_pids() {
-    local port="$1"
+    local port="$1" pids=""
+    if command -v ss >/dev/null 2>&1; then
+        pids=$(ss -ltnpH "sport = :${port}" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+        if [ -n "$pids" ]; then echo "$pids"; return; fi
+    fi
     if command -v lsof >/dev/null 2>&1; then
         lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null
     elif command -v fuser >/dev/null 2>&1; then
