@@ -29,10 +29,12 @@ import {
 import { InfoTooltip } from "@/components/ui/info-tooltip"
 import { ScrollFade } from "@/components/ui/scroll-fade"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { Calculator, Plus } from "lucide-react"
 import { Sis3316Dashboard } from "@/components/sis3316/sis3316-dashboard"
 import { useIsPhone } from "@/hooks/use-is-phone"
 import { boardLabel } from "@/lib/board-label"
+import { TrapezoidScaleDialog, type ChannelEnergyRegs } from "@/components/trapezoid-scale-dialog"
+import type { Scale } from "@/lib/trapezoid-scale"
 
 // ============================================================
 // Bit-field definitions extracted from CAENRegisterBuilder*.cc
@@ -369,11 +371,26 @@ function registerControlName(reg: { name: string; address?: string }): string {
   return reg.name
 }
 
+/** A channel's energy-scale registers (DPP-PHA), or null when one is missing. */
+function energyRegsOf(regs: { [regName: string]: RegisterData } | undefined): ChannelEnergyRegs | null {
+  if (!regs) return null
+  const find = (name: string) => Object.values(regs).find(r => r.name === name)?.value_dec
+  const riseUnits = find("Trapezoid Rise Time")
+  const decayUnits = find("Decay Time")
+  const algoCtrl = find("DPP Algorithm Control")
+  const fineGain = find("Fine Gain")
+  if (riseUnits === undefined || decayUnits === undefined || algoCtrl === undefined || fineGain === undefined) return null
+  return { riseUnits, decayUnits, algoCtrl, fineGain, dynamicRange: find("Input Dynamic Range") }
+}
+
 export default function Dashboard() {
   const [boards, setBoards] = useState<BoardData[]>([])
   const [selectedBoardId, setSelectedBoardId] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  // /DAQ?trapezoid=<board>:<channel> (the "Fix it" of a histogram card's
+  // energy warning) opens the energy-scale calculator on that channel.
+  const [scaleLink, setScaleLink] = useState<{ board: string; channel: number } | null>(null)
   const { toast } = useToast()
 
   const fetchBoardConfiguration = async () => {
@@ -389,8 +406,13 @@ export default function Dashboard() {
         id: String(board.id),
       }))
       setBoards(boardList)
-      // Keep the selection on a board that exists; with one board, that one.
-      if (boardList.length > 0
+      const link = new URLSearchParams(window.location.search).get("trapezoid")?.match(/^(.+):(\d+)$/)
+      if (link && boardList.some((b: BoardData) => b.id === link[1])) {
+        setSelectedBoardId(link[1])
+        setScaleLink({ board: link[1], channel: Number(link[2]) })
+        // Once: a reload or Refresh should not open it again.
+        window.history.replaceState(null, "", window.location.pathname)
+      } else if (boardList.length > 0
           && (selectedBoardId === "" || !boardList.some((b: BoardData) => b.id === selectedBoardId))) {
         setSelectedBoardId(boardList[0].id)
       }
@@ -479,7 +501,8 @@ export default function Dashboard() {
 
           {selectedBoard && (selectedBoard.vendor === "sis3316"
             ? <Sis3316Dashboard key={selectedBoard.id} board={selectedBoard} />
-            : <BoardComponent key={selectedBoard.id} boardData={selectedBoard} />)}
+            : <BoardComponent key={selectedBoard.id} boardData={selectedBoard}
+                              openScaleFor={scaleLink?.board === selectedBoard.id ? scaleLink.channel : undefined} />)}
         </TabsContent>
 
         <TabsContent value="sync">
@@ -915,7 +938,7 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
 // Per-board settings component
 // ============================================================
 
-function BoardComponent({ boardData }: { boardData: BoardData }) {
+function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; openScaleFor?: number }) {
   const [settings, setSettings] = useState<BoardSettings>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -940,6 +963,13 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
   const [copySource, setCopySource] = useState<string>("0")
   const [copyTargets, setCopyTargets] = useState<Set<number>>(new Set())
   const [copying, setCopying] = useState(false)
+  // The energy-scale calculator (DPP-PHA only): which channel, and the saved
+  // configuration it compares a measured peak against.
+  const isPHA = !boardData.dpp.toUpperCase().includes("PSD")
+  const [scaleOpen, setScaleOpen] = useState(false)
+  const [scaleChannel, setScaleChannel] = useState(0)
+  const [savedSettings, setSavedSettings] = useState<BoardSettings | null>(null)
+  const [tab, setTab] = useState(openScaleFor !== undefined ? "channels" : "general")
   const { toast } = useToast()
 
   // ── Unit conversion (board-specific) ─────────────────────
@@ -1219,6 +1249,109 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
       })
     }
     setCopying(false)
+  }
+
+  /** Open the energy-scale calculator on a channel, with the saved values beside the page's. */
+  const openScale = (channel: number) => {
+    setScaleChannel(channel)
+    setSavedSettings(null)
+    setScaleOpen(true)
+    getBoardSettings(boardData.id)
+      .then(fresh => setSavedSettings(fresh as BoardSettings))
+      .catch(() => { /* the page's own values stand in */ })
+  }
+
+  // Arriving from a histogram card's "Fix it": straight to that channel.
+  useEffect(() => {
+    if (loading || openScaleFor === undefined || !isPHA) return
+    setSelectedChannel(String(openScaleFor))
+    openScale(openScaleFor)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, openScaleFor])
+
+  /**
+   * Save a Trapezoid Rescaling and Fine Gain to channels, the same way Save
+   * and Copy channel do: one register at a time to the board's configuration,
+   * for the next run. The rescaling shares DPP Algorithm Control with other
+   * fields, so it is put into the saved value of that register, not the one
+   * on screen, which may carry other unsaved edits; those stay pending.
+   */
+  const handleApplyScale = async (scale: Scale, targets: number[]): Promise<boolean> => {
+    if (busy) return false
+    setCopying(true)
+    let fresh: BoardSettings
+    try {
+      fresh = await getBoardSettings(boardData.id) as BoardSettings
+    } catch {
+      setCopying(false)
+      toast({ title: "Not saved", description: "Could not read the board's configuration.", variant: "destructive" })
+      return false
+    }
+    const byChannel = groupChannelSettings(fresh)
+    const writes: { regName: string; value: number; algo: boolean }[] = []
+    for (const ch of targets) {
+      const regs = byChannel[ch]
+      const algo = regs && Object.entries(regs).find(([, r]) => r.name === "DPP Algorithm Control")
+      const fg = regs && Object.entries(regs).find(([, r]) => r.name === "Fine Gain")
+      if (!algo || !fg) continue
+      writes.push({ regName: algo[0], value: setFieldInRegister(algo[1].value_dec, 0, 5, scale.shf), algo: true })
+      writes.push({ regName: fg[0], value: scale.fg, algo: false })
+    }
+    const done: typeof writes = []
+    try {
+      for (const w of writes) {
+        const res = await setSetting(boardData.id, w.regName, w.value.toString())
+        if (res?.data === -1 || Number(res?.data) === -1) break
+        done.push(w)
+      }
+    } catch { /* reported below */ }
+    try {
+      const after = await getBoardSettings(boardData.id) as BoardSettings
+      const confirmed = done.filter(w => after?.[w.regName]?.value_dec === w.value)
+      const cleared: string[] = []
+      setSettings(prev => {
+        const next = { ...prev }
+        for (const w of confirmed) {
+          const onScreen = prev[w.regName]
+          if (w.algo && onScreen && modifiedSettings.has(w.regName)) {
+            // Other fields of this register have unsaved edits: keep them, with the new rescaling.
+            const v = setFieldInRegister(onScreen.value_dec, 0, 5, scale.shf)
+            next[w.regName] = { ...onScreen, value_dec: v, value_hex: `0x${v.toString(16).toUpperCase()}` }
+            if (v === w.value) cleared.push(w.regName)
+          } else {
+            next[w.regName] = after[w.regName]
+            cleared.push(w.regName)
+          }
+        }
+        return next
+      })
+      clearModified(cleared)
+      setModifiedFields(prev => {
+        const next = new Set(prev)
+        confirmed.filter(w => w.algo).forEach(w => next.delete(fieldKey(w.regName, 0, 5)))
+        return next
+      })
+      const ok = writes.length > 0 && confirmed.length === writes.length
+      const where = targets.length === 1 ? `channel ${targets[0]}` : `${targets.length} channels`
+      if (ok) {
+        toast({
+          title: "Energy scale saved",
+          description: `Trapezoid rescaling ${scale.shf} and fine gain 0x${scale.fg.toString(16).toUpperCase()} on ${where}, for the next run. Peaks move: re-check the energy calibration of ${targets.length === 1 ? "this channel" : "these channels"}.`,
+        })
+      } else {
+        toast({
+          title: "Energy scale not fully saved",
+          description: `${confirmed.length / 2 | 0} of ${writes.length / 2} channels saved. The values shown are read back from the configuration.`,
+          variant: "destructive",
+        })
+      }
+      return ok
+    } catch {
+      toast({ title: "Not confirmed", description: "Could not read the configuration back.", variant: "destructive" })
+      return false
+    } finally {
+      setCopying(false)
+    }
   }
 
   const handleBitToggle = (regName: string, bitIndex: number) => {
@@ -1505,6 +1638,16 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
             {isModified && <span className="text-warning ml-1">*</span>}
           </Label>
           <InfoTooltip text={tip} />
+          {/* The hardest setting on the page: worked out from the shaping
+              times or a measured peak rather than guessed. */}
+          {isPHA && field.name === "Trapezoid Rescaling" && (
+            <Button type="button" variant="link" size="sm"
+                    className="ml-auto h-9 px-1 text-sm sm:h-5"
+                    onClick={() => openScale(reg.channel)}>
+              <Calculator className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
+              Calculate…
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {options ? (
@@ -1849,7 +1992,7 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
 
       {/* ── General / Channel tabs ── (no edits while a save or copy runs) */}
       <fieldset disabled={busy} className="min-w-0 disabled:opacity-80">
-      <Tabs defaultValue="general">
+      <Tabs value={tab} onValueChange={setTab}>
         {/* The same tab style as the two rows above: full width on a phone,
             as wide as the labels on a wider screen. */}
         <TabsList className="grid w-full grid-cols-2 sm:inline-flex sm:w-auto">
@@ -2089,9 +2232,18 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
                   entries: [string, RegisterData][],
                 ) => (
                   <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground mb-4">
-                      {title}
-                    </h4>
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-xs font-semibold text-muted-foreground">
+                        {title}
+                      </h4>
+                      {isPHA && title === CATEGORY_LABELS.energy && (
+                        <Button type="button" variant="outline" size="sm" className="h-9"
+                                onClick={() => openScale(parseInt(selectedChannel))}>
+                          <Calculator className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                          Calculate rescaling and fine gain…
+                        </Button>
+                      )}
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6 items-start">
                       {entries.map(([regName, reg]) => {
                         const hasDecomp = !binaryMode && getDecomposition(reg.name, boardData.dpp, boardData.name)
@@ -2165,6 +2317,21 @@ function BoardComponent({ boardData }: { boardData: BoardData }) {
         </TabsContent>
       </Tabs>
       </fieldset>
+
+      {isPHA && (
+        <TrapezoidScaleDialog
+          open={scaleOpen}
+          onOpenChange={setScaleOpen}
+          boardId={boardData.id}
+          boardName={boardData.name}
+          channel={scaleChannel}
+          channels={channels.filter(ch => energyRegsOf(channelSettingsMap[ch]))}
+          onChannelChange={ch => { setScaleChannel(ch); setSelectedChannel(String(ch)) }}
+          current={energyRegsOf(channelSettingsMap[scaleChannel])}
+          saved={savedSettings ? energyRegsOf(groupChannelSettings(savedSettings)[scaleChannel]) : null}
+          onApply={handleApplyScale}
+        />
+      )}
 
       {/* One save for every edit, instead of a Save button in each cell (about
           70 of them). Sticky, so it is in view wherever the edit was made; on a

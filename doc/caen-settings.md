@@ -131,16 +131,73 @@ signal    /            ‾‾‾--.__                 /  k   m   \
 | Peaking Time | `0x1n64` | Where inside the flat top the height is sampled. | ~80 % of the flat top. It must be shorter than the flat top. |
 | Decay Time | `0x1n68` | Compensates the preamp decay (pole-zero cancellation). | **Set it to your preamplifier's decay constant.** Too short and the flat top droops downwards; too long and it slopes up. Tune it by watching the trapezoid trace until the top is flat. |
 | Peak Hold-Off | `0x1n78` | Pile-up rejection window around the peak. | Roughly rise + flat top. |
-| Fine Gain | `0x1nC4` | Digital gain on the trapezoid height. | Use it to move the spectrum into the histogram range without touching the analogue chain. |
+| Trapezoid Rescaling | `0x1n80` bits 5:0 | Divides the trapezoid by 2^SHF before the 15-bit energy is taken. | Together with Fine Gain it sets the energy scale; work both out with the calculator (below). |
+| Fine Gain | `0x1nC4` | Digital gain on the trapezoid height, FG / 65536. | Use it to move the spectrum into the histogram range without touching the analogue chain. |
 
 The order that works: polarity and DC offset → decay time (flat top actually
-flat) → rise time and flat top (resolution) → peaking time → fine gain (spectrum
-in range) → threshold and hold-off (rate right).
+flat) → rise time and flat top (resolution) → peaking time → rescaling and
+fine gain (spectrum in range, see below) → threshold and hold-off (rate right).
 
 **Resolution against rate.** The rise time is the trade. Doubling it improves
 the signal-to-noise of the energy measurement but doubles the time the filter is
 busy, so pile-up starts at half the rate. Set it as long as your rate allows,
 not as long as possible.
+
+#### The energy scale: Trapezoid Rescaling and Fine Gain
+
+The trapezoid's height grows with the rise time *and* the decay time, so the
+same pulse gives a very different number depending on the shaping, and the
+energy word is only 15 bits (0–32767). Measured on the V1725S (14-bit,
+250 MS/s) with a pulser of known height:
+
+```
+E ≈ C · A · k · M · (FG / 65536) / 2^SHF        C ≈ 0.153
+```
+
+- `A` is the pulse height in ADC LSB (above the baseline);
+- `k` and `M` are the rise time and the decay time **in ADC samples**: one
+  register unit is 4 samples on the V1725 (16 ns) and the V1730 (8 ns), so
+  rise 200 and decay 5000 are k = 800, M = 20000;
+- `FG` is the Fine Gain register and `SHF` the Trapezoid Rescaling.
+
+The dependence on FG and SHF is exact (doubling FG or lowering SHF by one
+doubles every energy); the `k · M` part and `C` are good to about 10 % when the
+decay time matches the preamplifier and the flat top covers the signal's rise.
+With decimation on, `k` and `M` count decimated samples and the decimation gain
+multiplies the result; that part has not been checked on a board. The constant
+was measured on a V1725S only: check it on other models.
+
+The trap everybody falls into: SHF = 0 with FG = 0xFFFF and rise 200 / decay
+5000 gives E ≈ 5 × 10⁹ for a 1932 LSB pulse. That overflows the 15-bit word,
+and the board then reports energy 0 for every event — the histogram card warns
+"…have energy 0 — check Trapezoid Rescaling…". The same pulse with SHF = 18,
+FG = 0x1000 lands at 1124.
+
+**The calculator.** In *DAQ settings → Channel settings*, a DPP-PHA channel
+has a *Calculate…* button next to Trapezoid rescaling (and one by the energy
+filter heading in Advanced mode); the energy warning on a histogram card links
+to it with *Fix it*. It works two ways:
+
+- *From the shaping times*: takes the channel's rise time, decay time and
+  decimation, the largest pulse you expect (in ADC LSB or mV; the mV
+  conversion uses the input dynamic range) and where on the scale it should
+  land (75 % by default, leaving room for the 10 % model error). It proposes
+  SHF and FG, and says what the current settings give for that pulse ("far
+  beyond 32767: every energy comes out 0", "1 % of the scale: squeezed at the
+  bottom").
+- *From a measured peak* (exact, preferred once a run shows a line): where a
+  known line sits now (typed, or picked with *Find peaks in the live
+  spectrum*) and where you want it. Since the energy is linear in FG and
+  2^-SHF, the new values are exact; if the rise or decay time on the page also
+  differs from the one the peak was measured with, the `k · M` ratio is
+  applied and the result is marked approximate.
+
+FG is always chosen in 0x8000–0xFFFF (half to all of its range) and SHF as
+the matching power of two, for the finest steps. *Apply to this channel* or
+*Apply to all channels* saves both registers to `conf/<board>.json`, like the
+rest of the page, for the next run. The peaks move: re-check the energy
+calibration of the channel afterwards. DPP-PSD has no trapezoid, so no
+calculator.
 
 ### 2.4 Energy: charge integration (DPP-PSD)
 

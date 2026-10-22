@@ -1,6 +1,7 @@
 "use client"
 
 import { ConfirmAction } from '@/components/ui/confirm-action'
+import Link from "next/link"
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { getBoardConfiguration, getCalibStatus, getExperimentStats, getHistogram, setRebinFactor, type CalibStatus } from "@/lib/api"
 import { CalibrationDialog } from "@/components/calibration-dialog"
@@ -247,7 +248,19 @@ const SortableHistogramCard = ({
         {running && stats?.energyWarning && (
           <p className="flex items-start gap-1 text-xs text-warning" role="status">
             <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
-            {stats.energyWarning}
+            <span>
+              {stats.energyWarning}
+              {/* A PHA energy scale out of range is worked out in DAQ settings. */}
+              {/Trapezoid Rescaling/.test(stats.energyWarning) && (
+                <>
+                  {" "}
+                  <Link href={`/DAQ?trapezoid=${encodeURIComponent(config.boardId)}:${config.channel}`}
+                        className="font-medium underline underline-offset-2">
+                    Fix it
+                  </Link>
+                </>
+              )}
+            </span>
           </p>
         )}
       </CardHeader>
