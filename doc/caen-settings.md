@@ -165,7 +165,11 @@ doubles every energy); the `k · M` part and `C` are good to about 10 % when the
 decay time matches the preamplifier and the flat top covers the signal's rise.
 With decimation on, `k` and `M` count decimated samples and the decimation gain
 multiplies the result; that part has not been checked on a board. The constant
-was measured on a V1725S only: check it on other models.
+was measured on a V1725S only: check it on other models. The calculator's own
+proposals were checked on that board with the pulser, fine gain 0x8000–0xFFFF
+included: rescaling 21 / FG 0x8000 gave 1126.0 (predicted 1124.5), 20 / 0xA4EF
+gave 2902.6 (2898) and 17 / 0xAED5 gave 24619 (24575), so nothing saturates
+inside the board at high fine gain.
 
 The trap everybody falls into: SHF = 0 with FG = 0xFFFF and rise 200 / decay
 5000 gives E ≈ 5 × 10⁹ for a 1932 LSB pulse. That overflows the 15-bit word,

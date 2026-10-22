@@ -22,6 +22,9 @@
  * The k · M part is a model, good to about 10 % when the decay matches the
  * preamplifier (pole-zero) and the flat top covers the rise of the signal; the
  * FG and SHF parts are exact, which is why a measured peak gives exact values.
+ * Measured on the V1725S with the pulser (2026-10-22), proposals at high fine
+ * gain included: SHF 21 / FG 0x8000 → 1126.0 for 1124.5 predicted, 20 / 0xA4EF
+ * → 2902.6 for 2898, 17 / 0xAED5 → 24619 for 24575.
  * Pure functions only, so they can be tested without a board.
  */
 
