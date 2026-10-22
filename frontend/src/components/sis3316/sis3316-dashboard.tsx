@@ -16,7 +16,7 @@ import { useToast } from "@/components/ui/use-toast"
 import { RefreshCw, RotateCcw, Save, Trash2 } from 'lucide-react'
 import { useRunStatus } from '@/hooks/use-run-status'
 import { loadJSROOT } from '@/lib/load-jsroot'
-import { CounterInputsCard, LiveTimePanel, useCounters } from './sis3316-scalers'
+import { CounterInputsCard, LiveTimePanel, counterInputProblems, useCounters, useOffCounterInputs } from './sis3316-scalers'
 import {
   clearSis3316OnboardHistograms, getSis3316Info, getSis3316Maw,
   getSis3316OnboardHistogram, getSis3316Settings, setSis3316Settings,
@@ -254,6 +254,15 @@ function SettingsTab({ boardId }: { boardId: string }) {
 
   async function save() {
     if (!draft) return
+    // The counter-input card shows these next to the fields; the draft may
+    // still hold a per-pulse value that is not a number, never send it.
+    const problems = counterInputProblems(draft)
+    if (problems.length) {
+      toast({ title: "Not saved", variant: "destructive",
+              description: problems.length === 1 ? problems[0]
+                : `${problems.length} problems with the counter inputs, shown under Counter inputs.` })
+      return
+    }
     setSaving(true)
     try {
       const res = await setSis3316Settings(boardId, draft)
@@ -518,13 +527,14 @@ function OnboardHistogramTab({ boardId }: { boardId: string }) {
 
 function CountersTab({ boardId }: { boardId: string }) {
   const { data, error } = useCounters(boardId)
+  const offCounters = useOffCounterInputs(boardId)
   const labels: Record<string, string> = {
     internal: "Internal triggers", hit: "Hits recorded", deadtime: "Lost (dead time)",
     pileup: "Pileup", veto: "Vetoed", high_energy: "High-energy suppressed",
   }
   return (
     <div className="space-y-4">
-    {data && <LiveTimePanel run={data.run} />}
+    {data && <LiveTimePanel run={data.run} offCounters={offCounters} />}
     <Card>
       <CardHeader>
         <CardTitle>Trigger statistic counters</CardTitle>
