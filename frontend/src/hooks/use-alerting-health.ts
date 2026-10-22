@@ -73,7 +73,9 @@ async function pollOnce() {
     patch.undeliverableRules = enabled.filter((r) => deliverable.get(r.id) === false).length
   }
   if (recovery.status === 'fulfilled') {
-    patch.attention = needsAttention(recovery.value.actions)
+    // Graphite is optional (many setups have none): Troubleshoot still shows
+    // it, but the dashboard and the bell do not raise it as a problem.
+    patch.attention = needsAttention(recovery.value.actions).filter((a) => a.name !== 'graphite')
   }
   // No answer at all: keep what was last known. The header must never be the
   // thing that breaks, and the run status already says "No answer".

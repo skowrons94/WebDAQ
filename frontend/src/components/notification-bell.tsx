@@ -83,7 +83,9 @@ export function NotificationBell() {
   // An empty bell must not read as "all quiet" when nothing is watching, or
   // nothing would be delivered: that is said here for as long as it is true.
   const { problems, attention } = useAlertingHealth()
-  const warnings = problems.length + (attention.length > 0 ? 1 : 0)
+  // Notifications are each setup's choice: their state is said in the menu,
+  // but only a real problem puts a mark on the bell.
+  const warnings = attention.length > 0 ? 1 : 0
 
   const markAllSeen = async () => {
     try {
@@ -99,7 +101,7 @@ export function NotificationBell() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative" title={problems[0]?.title ?? 'Recent alerts'}>
+        <Button variant="ghost" size="icon" className="relative" title="Recent alerts">
           <BellRing className="h-5 w-5" />
           {unseen > 0 ? (
             <span className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center
@@ -140,8 +142,8 @@ export function NotificationBell() {
         {/* Before the list: the list cannot show what was never raised. */}
         {problems.map((p) => (
           <Link key={p.title} href={p.href} onClick={() => setOpen(false)}
-                className="flex items-start gap-2 border-b bg-warning/10 px-3 py-2 text-xs hover:bg-warning/15">
-            <BellOff className="mt-0.5 h-3.5 w-3.5 shrink-0 text-warning" aria-hidden="true" />
+                className="flex items-start gap-2 border-b px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50">
+            <BellOff className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1">
               <span className="font-semibold">{p.title}.</span> {p.detail}{' '}
               <span className="font-medium underline underline-offset-2">{p.linkLabel}</span>
@@ -185,7 +187,7 @@ export function NotificationBell() {
           ) : events.length === 0 ? (
             <p className="px-3 py-8 text-center text-sm text-muted-foreground">
               {error ? 'The history could not be read.'
-                : problems.length > 0 ? 'Nothing has been raised, but see above: that does not mean all is well.'
+                : problems.length > 0 ? 'Nothing has been raised (notifications are not set up).'
                 : 'Nothing has been raised yet.'}
             </p>
           ) : (
