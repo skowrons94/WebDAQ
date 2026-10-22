@@ -172,8 +172,15 @@ def cleanup_on_shutdown(signum=None, frame=None):
             except Exception as e:
                 logger.debug(f"acquisition stop: {e}")
 
+            # A run cut short by the shutdown gets its end time and moves the
+            # run number on, so the next Start does not land on it.
             if daq_mgr.is_running():
-                daq_mgr.set_running_state(False)
+                try:
+                    with app.app_context():
+                        daq_mgr.end_interrupted_run('a shutdown of the DAQ server')
+                except Exception as e:
+                    logger.error(f"Could not close the interrupted run: {e}")
+                    daq_mgr.set_running_state(False)
 
             # Cleanup digitizer connections
             logger.info("Cleaning up digitizer connections...")

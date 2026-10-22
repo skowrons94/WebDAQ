@@ -15,7 +15,7 @@ from ..services import calibration
 from ..services.daq_manager import get_daq_manager
 from ..utils.jwt_utils import jwt_required_custom
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 bp = Blueprint('calib', __name__)
 

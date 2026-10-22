@@ -39,6 +39,7 @@ import os
 import threading
 import time
 import uuid
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -541,7 +542,26 @@ class CoincidenceBuilder:
                 # A running build restarts with the new gates; the ones not
                 # changed (gate and time offsets alike) keep what they collected.
                 self._setup(keep_unchanged=True)
+                self._log_change(clean)
         return self.get_config()
+
+    HISTORY_FILE = "coincidences_history.jsonl"
+
+    def _log_change(self, cfg: Dict[str, Any]) -> None:
+        """Gates and time offsets changed during a saved run go into its
+        directory with their time, as register and calibration changes do:
+        the copy taken at the start no longer describes the whole run."""
+        try:
+            from .daq_manager import get_daq_manager
+            state = get_daq_manager().daq_state
+            run_dir = f"data/run{state.get('run')}"
+            if not state.get('save') or not os.path.isdir(run_dir):
+                return
+            entry = {"time": datetime.now().isoformat(timespec="seconds"), "config": cfg}
+            with open(os.path.join(run_dir, self.HISTORY_FILE), "a") as f:
+                f.write(json.dumps(entry) + "\n")
+        except Exception as e:
+            logger.warning(f"Coincidences: the change was not logged in the run directory: {e}")
 
     def needed(self) -> bool:
         return any(g["enabled"] and g["channels"] and g["partners"] for g in self._config["gates"])

@@ -20,7 +20,7 @@ from ..services import run_data
 
 logger = logging.getLogger(__name__)
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 # The Graphite/Carbon target for the independent rate publisher is read from
 # conf/stats.json by caen_acquisition (see _graphite_from_stats).
@@ -31,7 +31,10 @@ bp = Blueprint('experiment', __name__)
 # together (a double click, two browsers) used to configure a second
 # acquisition under the one already starting: both reported success, and the
 # coincidences failed until the next stop.
-_run_lock = threading.Lock()
+
+
+def _busy_running(what):
+    return jsonify({'message': f'A run is going: {what} can be changed once it has stopped.'}), 409
 
 
 def _busy():
@@ -40,6 +43,9 @@ def _busy():
 
 # Initialize managers (acquisition runs in-process via caendaq)
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
+# Start, stop, auto-restart and reset change the run one at a time. The lock is
+# the DAQ manager's, so a reset from Troubleshoot waits for it too.
+_run_lock = daq_mgr.run_lock
 spy_mgr = get_spy_manager(test_flag=TEST_FLAG)
 caen_acq = get_caen_acquisition(test_flag=TEST_FLAG)
 
@@ -92,6 +98,11 @@ def record_run_start(run_number, boards, user_id=None, notes=None, carry_over=No
             run_metadata.notes = None
             run_metadata.flag = 'unknown'
             run_metadata.accumulated_charge = None
+            # Its labels too: the page sets the new run's right after the start,
+            # but a start from a script (or a label request that fails) must not
+            # file the new data under the old target.
+            for field in CARRIED_OVER_FIELDS:
+                setattr(run_metadata, field, None)
             run_metadata.user_id = user_id
         for field, value in (carry_over or {}).items():
             setattr(run_metadata, field, value)
@@ -171,25 +182,26 @@ def perform_auto_restart(board_id: str, failure_type: str) -> None:
 
             # Update run metadata with note about auto-stop
             if save_data:
-                try:
-                    run_metadata = RunMetadata.query.filter_by(run_number=current_run_number).first()
-                    if run_metadata:
-                        run_metadata.end_time = datetime.now()
-                        # Append auto-restart note to existing notes
-                        auto_note = f"[AUTO-RESTART] Run stopped due to {failure_type} on board {board_id}"
-                        if run_metadata.notes:
-                            run_metadata.notes = run_metadata.notes + "\n" + auto_note
-                        else:
-                            run_metadata.notes = auto_note
-                        # Mark run as potentially bad
-                        run_metadata.flag = 'bad'
+                with _note_lock:
+                    try:
+                        run_metadata = RunMetadata.query.filter_by(run_number=current_run_number).first()
+                        if run_metadata:
+                            run_metadata.end_time = datetime.now()
+                            # Append auto-restart note to existing notes
+                            auto_note = f"[AUTO-RESTART] Run stopped due to {failure_type} on board {board_id}"
+                            if run_metadata.notes:
+                                run_metadata.notes = run_metadata.notes + "\n" + auto_note
+                            else:
+                                run_metadata.notes = auto_note
+                            # Mark run as potentially bad
+                            run_metadata.flag = 'bad'
 
-                        db.session.commit()
-                        sync_run_metadata_file(run_metadata)
-                        logger.info(f"Updated metadata for run {current_run_number} with auto-restart note")
-                except Exception as e:
-                    logger.error(f"Error updating run metadata: {e}")
-                    db.session.rollback()
+                            db.session.commit()
+                            sync_run_metadata_file(run_metadata)
+                            logger.info(f"Updated metadata for run {current_run_number} with auto-restart note")
+                    except Exception as e:
+                        logger.error(f"Error updating run metadata: {e}")
+                        db.session.rollback()
 
             # Increment run number for next run
             if save_data:
@@ -406,17 +418,18 @@ def add_note():
     run_number = data['run_number']
     note = data['note']
     
-    run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
-    if run_metadata:
-        run_metadata.notes = note
-        db.session.commit()
-        sync_run_metadata_file(run_metadata)
-        return jsonify({'message': 'Note added successfully'}), 200
+    with _note_lock:
+        run_metadata = RunMetadata.query.filter_by(run_number=run_number).first()
+        if run_metadata:
+            run_metadata.notes = note
+            db.session.commit()
+            sync_run_metadata_file(run_metadata)
+            return jsonify({'message': 'Note added successfully'}), 200
     return jsonify({'message': 'Run not found'}), 404
 
 # Appends are read-modify-write on one text field: serialised here so two
 # shifters adding a note at the same moment both keep theirs.
-_note_lock = threading.Lock()
+_note_lock = daq_mgr.notes_lock
 
 
 def _username(user_id):
@@ -592,7 +605,9 @@ def update_save_data():
 @bp.route("/experiment/set_limit_data_size", methods=['POST'])
 @jwt_required_custom
 def update_limit_size():
-    limit_size = request.get_json()["value"]
+    if daq_mgr.is_running():
+        return _busy_running('the file size limit')
+    limit_size = bool((request.get_json(silent=True) or {}).get("value"))
     daq_mgr.set_limit_data_size(limit_size)
     return jsonify(daq_mgr.get_limit_data_size())
 
@@ -600,7 +615,14 @@ def update_limit_size():
 @bp.route("/experiment/set_data_size_limit", methods=['POST'])
 @jwt_required_custom
 def update_file_size_limit():
-    file_size_limit = request.get_json()["value"]
+    if daq_mgr.is_running():
+        return _busy_running('the file size limit')
+    try:
+        file_size_limit = int((request.get_json(silent=True) or {})["value"])
+        if file_size_limit < 0:
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'message': 'The size limit must be a whole number, 0 or more'}), 400
     daq_mgr.set_data_size_limit(file_size_limit)
     return jsonify(daq_mgr.get_data_size_limit())
 
@@ -671,7 +693,16 @@ def get_run_number():
 @bp.route("/experiment/set_run_number", methods=['POST'])
 @jwt_required_custom
 def set_run_number():
-    run_number = request.get_json()["value"]
+    # During a run the number names the run being written: changing it would
+    # make Stop close the wrong run's record and move on from the wrong number.
+    if daq_mgr.is_running():
+        return _busy_running('the run number')
+    try:
+        run_number = int((request.get_json(silent=True) or {})["value"])
+        if run_number < 0:
+            raise ValueError
+    except (KeyError, TypeError, ValueError):
+        return jsonify({'message': 'The run number must be a whole number, 0 or more'}), 400
     daq_mgr.set_run_number(run_number)
     return jsonify(daq_mgr.get_run_number())
 

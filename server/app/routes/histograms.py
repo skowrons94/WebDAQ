@@ -8,7 +8,7 @@ from ..services.spy_manager import get_spy_manager
 from ..services import roi_analysis
 from ..services.histogram_config import get_histogram_config
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 bp = Blueprint('histograms', __name__)
 

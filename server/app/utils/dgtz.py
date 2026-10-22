@@ -26,7 +26,7 @@ from typing import Dict, Optional
 logger = logging.getLogger(__name__)
 
 # Check if running in test mode (no hardware)
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 # Load CAEN digitizer library if not in test mode
 if not TEST_FLAG:

@@ -19,7 +19,7 @@ from ..services.sis3316_acquisition import (DEFAULT_HOST, VENDOR, get_sis3316_ac
                                             is_sis3316)
 from ..services.spy_manager import get_spy_manager
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 bp = Blueprint('sis3316', __name__)
 

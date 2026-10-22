@@ -12,7 +12,7 @@ bp = Blueprint('stats', __name__)
 stats_manager = StatsManager(graphite_host='localhost', graphite_port=80)
 
 # Initialize DAQ manager for accessing save flag
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 
 DEBUG = os.getenv('DEBUG', False)

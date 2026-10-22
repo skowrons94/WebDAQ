@@ -24,7 +24,7 @@ bp = Blueprint('current', __name__)
 logger = logging.getLogger(__name__)
 
 #TEST_FLAG = True
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 # Initialize DAQ manager for accessing save flag
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
@@ -232,7 +232,8 @@ def _persist_run_charge(run_number: int, charge: float) -> None:
         return
     uncovered = float(getattr(controller, "uncovered_s", 0.0) or 0.0)
     try:
-        with app.app_context():
+        # The note is a read-modify-write of the notes: under their lock.
+        with app.app_context(), daq_mgr.notes_lock:
             run_metadata = RunMetadata.query.filter_by(run_number=int(run_number)).first()
             if run_metadata:
                 run_metadata.accumulated_charge = charge
@@ -339,8 +340,9 @@ def start_run_recording(run_number):
 
     # Only save data if save data is enabled in DAQ settings
     if daq_mgr.get_save_data():
-        if( not os.path.exists("./data/run{}".format(run)) ):
-            os.makedirs("./data/run{}".format(run))
+        # The first writer of a start claims the directory (an old run's files
+        # are moved aside, see DAQManager.claim_run_directory).
+        daq_mgr.claim_run_directory(run)
         controller.set_save_data(True, "./data/run{}/".format(run))
     else:
         controller.set_save_data(False, "./")
@@ -462,7 +464,9 @@ def _first_logged_current(run_number: int, column: int):
                     continue
                 parts = line.split()
                 try:
-                    return float(parts[1 + column] if len(parts) > 1 + column else parts[1])
+                    # The charge channel's own column, or nothing: another
+                    # channel's current would be a wrong reference.
+                    return float(parts[1 + column]) if len(parts) > 1 + column else None
                 except (ValueError, IndexError):
                     continue
     except OSError:

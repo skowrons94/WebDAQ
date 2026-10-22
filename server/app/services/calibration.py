@@ -71,14 +71,17 @@ REFERENCE_LINES: List[Dict[str, Any]] = [
     # LiveChart API. The ground-state decays of the 6.79, 6.18 and 5.18 MeV
     # levels follow every capture to them, whatever the beam energy (ENSDF
     # puts the 6.18 MeV level at 6176.3(17) keV; recent LUNA work quotes 6172).
-    {"name": "O-15, 14N(p,g) 6.79 MeV level", "energy": 6791.4},
-    {"name": "O-15, 14N(p,g) 6.18 MeV level", "energy": 6174.9},
-    {"name": "O-15, 14N(p,g) 5.18 MeV level", "energy": 5182.0},
+    # These are energies at rest: in beam the 15O recoil moves at beta ~ 0.002,
+    # which shifts a 6.79 MeV gamma by up to ~13 keV in a forward detector, so
+    # they calibrate a detector at 90 degrees, or one corrected for the shift.
+    {"name": "O-15, 14N(p,g) 6.79 MeV level (at rest)", "energy": 6791.4},
+    {"name": "O-15, 14N(p,g) 6.18 MeV level (at rest)", "energy": 6174.9},
+    {"name": "O-15, 14N(p,g) 5.18 MeV level (at rest)", "energy": 5182.0},
     # On the Ep = 278 keV resonance (the 7556.5 keV level) the primaries have
     # fixed energies too.
-    {"name": "O-15, 14N(p,g) 278 keV res. -> 6.18", "energy": 1380.1},
-    {"name": "O-15, 14N(p,g) 278 keV res. -> 6.79", "energy": 763.4},
-    {"name": "O-15, 14N(p,g) 278 keV res. -> 5.18", "energy": 2373.0},
+    {"name": "O-15, 14N(p,g) 278 keV res. -> 6.18 (at rest)", "energy": 1380.1},
+    {"name": "O-15, 14N(p,g) 278 keV res. -> 6.79 (at rest)", "energy": 763.4},
+    {"name": "O-15, 14N(p,g) 278 keV res. -> 5.18 (at rest)", "energy": 2373.3},
 ]
 
 

@@ -13,7 +13,7 @@ from ..utils.board_files import BOARD_FILE_LOCK, write_json_atomic
 
 bp = Blueprint('digitizer', __name__)
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 # Initialize DAQ manager
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)

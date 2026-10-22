@@ -18,7 +18,7 @@ from app.utils.jwt_utils import jwt_required_custom
 from ..services.coincidences import MATRIX_BINS, get_coincidence_builder
 from ..services.spy_manager import get_spy_manager
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 bp = Blueprint('coincidences', __name__)
 

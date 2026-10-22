@@ -33,7 +33,7 @@ from .spy_manager import get_spy_manager
 
 logger = logging.getLogger(__name__)
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 ROI_FILE = "roi.json"
 
 # The run whose ROIs the next stop should record. Captured when the run starts
@@ -180,8 +180,10 @@ def _on_run_state_changed(running: bool) -> None:
 
     daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
     if running:
+        # Only a saved run gets a roi.json: an unsaved one shares its number
+        # with the saved run before it, whose roi.json it would overwrite.
         try:
-            _run_number_at_start = int(daq_mgr.get_run_number())
+            _run_number_at_start = int(daq_mgr.get_run_number()) if daq_mgr.get_save_data() else None
         except (TypeError, ValueError):
             _run_number_at_start = None
         return

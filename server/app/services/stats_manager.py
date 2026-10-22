@@ -462,8 +462,14 @@ class StatsManager:
                     self.logger.warning("Already collecting stats")
                     return False
 
-                # Create run directory
+                # Create run directory; the first writer of a start claims it
+                # (an old run's files are moved aside: claim_run_directory).
                 run_dir = f"./data/run{run_number}"
+                try:
+                    from .daq_manager import get_daq_manager
+                    get_daq_manager().claim_run_directory(int(run_number))
+                except Exception as e:
+                    self.logger.warning(f"Could not claim {run_dir}: {e}")
                 os.makedirs(run_dir, exist_ok=True)
 
                 self.stats_file = os.path.join(run_dir, "stats.csv")

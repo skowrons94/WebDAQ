@@ -24,6 +24,7 @@ fills spectra and publishes rates, it just writes nothing.
 | `coincidences.json` | at start | The coincidence gates and per-channel time offsets the online spectra used. |
 | `histograms.json` | at start | The histogram ranges, rebinning and regions of interest in force. |
 | `register_history.jsonl` | on change | One line per register written to a board during the run (Tuner, online settings): time, board, address and value. |
+| `coincidences_history.jsonl` | on change | The coincidence gates and time offsets each time they were changed (or aligned) during the run. |
 | `settings_history.jsonl` | on change | The same for an SIS3316: its complete settings each time they were changed during the run. A new histogram divider also restarts that board's spectra. |
 | `current.txt` | during | The beam current, one row per sample, with the time relative to the start of the log. The first two lines name the start time and the columns. |
 | `stats.csv` | during | The accelerator readings you selected on the Stats page, one row per sampling tick. |

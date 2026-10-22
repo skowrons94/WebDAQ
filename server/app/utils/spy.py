@@ -14,7 +14,7 @@ from typing import Dict, Optional, Any
 
 logger = logging.getLogger(__name__)
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 try:
     import numpy as np

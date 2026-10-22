@@ -20,7 +20,7 @@ from ..services import recovery
 
 bp = Blueprint('notifications', __name__)
 
-TEST_FLAG = os.getenv('TEST_FLAG', False)
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
 
 daq_mgr = get_daq_manager(test_flag=TEST_FLAG)
 zulip = get_zulip_notifier()

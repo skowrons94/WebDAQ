@@ -101,6 +101,13 @@ class DAQManager:
         self.auto_restart_delay = max(5, int(self.daq_state.get('auto_restart_delay', 30)))
         self.restart_pending = False  # Flag to indicate restart is in progress
         self.last_restart_info = None  # Info about the last auto-restart event
+        self._claimed_run: Optional[int] = None   # see claim_run_directory
+        # Held while a run is started, stopped, restarted or reset.
+        self.run_lock = threading.Lock()
+        # Held by every read-modify-write of a run's notes (editor, quick
+        # notes, the charge and auto-restart notes), so none is lost.
+        self.notes_lock = threading.Lock()
+        self._claim_lock = threading.Lock()
         self.restart_callback = None  # Callback function to trigger restart
 
         # Flask app reference for background threads that need app context
@@ -698,6 +705,44 @@ class DAQManager:
         run_dir = f"data/run{self.daq_state['run']}"
         return os.path.exists(run_dir)
     
+    def claim_run_directory(self, run_number: int) -> None:
+        """Called by every step that writes into data/run<N> at a start (the
+        current log, stats.csv and the acquisition, in whichever order the
+        start sequence runs them): the first one sets an old directory aside,
+        the others find it already theirs. The claim ends when the run stops."""
+        with self._claim_lock:
+            if self._claimed_run == run_number:
+                return
+            self._set_aside_old_run(run_number)
+            os.makedirs(f"data/run{run_number}", exist_ok=True)
+            self._claimed_run = run_number
+
+    def _set_aside_old_run(self, run_number: int) -> Optional[str]:
+        """A run started under a number whose directory already holds data (an
+        overwrite, a run left unfinished by a crash) must not share it: the
+        acquisition writes its files next to the old ones (run_N_0000_1…),
+        RUReader converts them all as one run, and the old ROOT file, ROI and
+        history files would pass for the new run's. The old directory is
+        moved aside, never deleted. Returns where it went, or None."""
+        run_dir = f"data/run{run_number}"
+        if not os.path.isdir(run_dir):
+            return None
+        try:
+            entries = os.listdir(run_dir)
+        except OSError:
+            return None
+        if not entries:
+            return None
+        stamp = datetime.now().strftime('%Y%m%d-%H%M%S')
+        target = f"{run_dir}.overwritten-{stamp}"
+        n = 1
+        while os.path.exists(target):
+            n += 1
+            target = f"{run_dir}.overwritten-{stamp}-{n}"
+        os.rename(run_dir, target)
+        self.logger.warning(f"Run {run_number} started again: its earlier files were moved to {target}")
+        return target
+
     def prepare_run_start(self) -> bool:
         """
         Prepare for run start (create directories, copy configs).
@@ -719,8 +764,7 @@ class DAQManager:
             # If save is enabled, create the run directory
             if save:
                 run_dir = f"data/run{run_number}/"
-                if not os.path.exists(run_dir):
-                    os.makedirs(run_dir)
+                self.claim_run_directory(run_number)
                 
                 # Everything the data cannot be interpreted without goes with
                 # it: each board's settings, its energy calibration, and the
@@ -775,6 +819,7 @@ class DAQManager:
             self.daq_state['start_time'] = start_time
         else:
             self.daq_state['start_time'] = None
+            self._claimed_run = None
 
         self._update_project()
 
@@ -1007,6 +1052,18 @@ class DAQManager:
         return the boards to the probe layer, and clear the running flag. Used by
         the 'Reset acquisition' button to recover from a stuck state.
         """
+        # Never alongside a start, stop or auto-restart: two of them closing
+        # and reopening the boards at once leave the state out of step with
+        # the hardware (a run writing while the page says stopped).
+        if not self.run_lock.acquire(timeout=60):
+            self.logger.error("Reset refused: a start or stop has held the run for a minute")
+            return False
+        try:
+            return self._reset_acquisition_locked()
+        finally:
+            self.run_lock.release()
+
+    def _reset_acquisition_locked(self) -> bool:
         was_running = self.is_running()
         try:
             self.stop_board_monitoring()
@@ -1018,7 +1075,7 @@ class DAQManager:
         except Exception as e:
             self.logger.warning(f"reset: error stopping acquisition: {e}")
         if was_running:
-            self._end_run_after_reset()
+            self.end_interrupted_run('a reset of the acquisition')
         try:
             self.reacquire_digitizers()
         except Exception as e:
@@ -1026,11 +1083,26 @@ class DAQManager:
         self.set_running_state(False)
         return True
 
-    def _end_run_after_reset(self) -> None:
-        """A reset in the middle of a run ends that run as a Stop would: its end
-        time, its stats.csv and current log closed, and (when it was saved)
-        the next run number, so the next Start does not write into it."""
+    def end_interrupted_run(self, why: str) -> None:
+        """A run interrupted by a reset or a server shutdown ends as a Stop would, in the
+        same order: its end time, the next run number (when it was saved), the
+        stopped state (which ends the charge integration: the boards' reopening
+        below is no part of the run), then its stats.csv and current log."""
         run_number, saved = self.daq_state.get('run'), self.daq_state.get('save')
+        if saved:
+            try:
+                from app import db
+                from ..models.run_metadata import RunMetadata
+                from .run_metadata_snapshot import sync_run_metadata_file
+                row = RunMetadata.query.filter_by(run_number=run_number).first()
+                if row is not None and row.end_time is None:
+                    row.end_time = datetime.now()
+                    db.session.commit()
+                    sync_run_metadata_file(row)
+            except Exception as e:
+                self.logger.error(f"reset: run {run_number} end time not recorded: {e}")
+            self.increment_run_number()
+        self.set_running_state(False)
         try:
             from ..routes.stats import stats_manager
             if stats_manager.collecting:
@@ -1043,21 +1115,7 @@ class DAQManager:
                 current_routes.stop_run_recording()
         except Exception as e:
             self.logger.error(f"reset: closing the current log failed: {e}")
-        if not saved:
-            return
-        try:
-            from app import db
-            from ..models.run_metadata import RunMetadata
-            from .run_metadata_snapshot import sync_run_metadata_file
-            row = RunMetadata.query.filter_by(run_number=run_number).first()
-            if row is not None and row.end_time is None:
-                row.end_time = datetime.now()
-                db.session.commit()
-                sync_run_metadata_file(row)
-        except Exception as e:
-            self.logger.error(f"reset: run {run_number} end time not recorded: {e}")
-        self.increment_run_number()
-        self.logger.warning(f"Run {run_number} ended by a reset of the acquisition")
+        self.logger.warning(f"Run {run_number} ended by {why}")
     
     def get_board_info(self, board_id: str) -> Optional[Dict[str, Any]]:
         """
