@@ -376,18 +376,15 @@ export function CurrentModuleSettings() {
   return (
     <div className="space-y-6">
       {/* Module Selection */}
+      {/* No card title: the section heading above already says "Current module". */}
       <Card>
-        <CardHeader>
-          <CardTitle>Current measurement module</CardTitle>
-          <CardDescription>
-            Select where the beam current is read from — a picoammeter, or a value
-            already monitored in Graphite
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
+        <CardContent className="space-y-4 pt-6">
+          <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+            <div className="min-w-0 flex-1 basis-64 space-y-1.5">
               <Label htmlFor="module-select">Active module</Label>
+              <p className="text-xs text-muted-foreground">
+                Where the beam current is read from: a picoammeter, or a value already monitored in Graphite.
+              </p>
               <Select
                 value={moduleType}
                 onValueChange={handleSwitchModule}
@@ -403,7 +400,7 @@ export function CurrentModuleSettings() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex min-h-10 items-center gap-2">
               {status?.connected ? (
                 <Badge variant="default" className="bg-success text-success-foreground hover:bg-success/90">Connected</Badge>
               ) : (

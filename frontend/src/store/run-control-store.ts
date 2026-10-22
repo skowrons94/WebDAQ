@@ -10,6 +10,14 @@ import { tunerOwnsRun } from '@/lib/tuner-save';
  * `known` stays false until the server has answered once: until then nothing
  * may claim "Stopped".
  */
+export interface LeftoverRun {
+  run_number: number;
+  target_name?: string | null;
+  start_time?: string | null;
+  /** data/run<N>/ exists: Start would overwrite its files. */
+  has_data?: boolean;
+}
+
 export interface RunControlState {
   known: boolean;
   isRunning: boolean;
@@ -30,6 +38,11 @@ export interface RunControlState {
    *  the next run gets it again; the overview and the run bar say so. Known to
    *  this browser only (it is seen stopping), cleared by a saving run. */
   unsavedRun: number | null;
+  /** Stopped: the server already has a record for the next run's number that
+   *  never ended (a run that saved nothing, or one cut short by a server
+   *  restart). Read from the server, so every browser knows it; null when
+   *  there is none or while a run is going. */
+  leftoverRun: LeftoverRun | null;
   setIsRunning: (isRunning: boolean) => void;
   setStartTime: (startTime: string | null) => void;
   setRunNumber: (runNumber: number | null) => void;
@@ -63,6 +76,7 @@ const useRunControlStore = create<RunControlState>((set) => ({
   stopFailed: false,
   saving: null,
   unsavedRun: null,
+  leftoverRun: null,
   setIsRunning: (isRunning) => set((s) => withUnsavedRun(s, { isRunning, known: true })),
   setStartTime: (startTime) => set({ startTime }),
   setRunNumber: (runNumber) => set({ runNumber }),

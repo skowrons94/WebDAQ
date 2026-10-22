@@ -183,6 +183,33 @@ class DetectTests(unittest.TestCase):
         self.assertEqual(monitoring.port_of_url('https://grafana.lngs.infn.it'), 443)
 
 
+class GrafanaStatusTests(unittest.TestCase):
+    """/api/health needs no login: the alert-rule list says whether a token is missing."""
+
+    def status_with(self, rules_code, token=''):
+        def fake_get(url, **kwargs):
+            if url.endswith('/api/health'):
+                return _response(body={'database': 'ok', 'version': '11.2.2'})
+            self.seen_headers = kwargs.get('headers', {})
+            return _response(status=rules_code, body=[])
+
+        with mock.patch.object(monitoring.requests, 'get', side_effect=fake_get), \
+             mock.patch.object(monitoring, '_probe_graphite_at', return_value=False), \
+             mock.patch.object(monitoring, '_resolve', return_value=None):
+            return monitoring.status('', None, None, 'http://localhost:3001', token)['grafana']
+
+    def test_a_401_is_reported_with_the_server_reachable(self):
+        g = self.status_with(401)
+        self.assertTrue(g['reachable'])
+        self.assertEqual(g['rules_status'], 401)
+        self.assertFalse(g['has_token'])
+
+    def test_the_token_is_sent(self):
+        g = self.status_with(200, token='abc')
+        self.assertEqual(g['rules_status'], 200)
+        self.assertEqual(self.seen_headers.get('Authorization'), 'Bearer abc')
+
+
 class CarbonTargetTests(InTempConf):
     def test_it_is_the_graphite_host_and_carbon_port(self):
         self.write('stats.json', {'graphite_host': 'lunaserver', 'graphite_port': 80,

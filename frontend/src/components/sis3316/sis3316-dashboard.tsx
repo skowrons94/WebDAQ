@@ -319,7 +319,7 @@ function SettingsTab({ boardId }: { boardId: string }) {
                   <span className="text-sm font-medium">Ch {ch}</span>
                   <Switch aria-label={`Channel ${ch} enabled`} checked={on}
                           onCheckedChange={(v) => setChannel(ch, "enabled", v)} />
-                  <Badge variant={on ? "default" : "secondary"} className="px-2 text-xs">{on ? "ON" : "OFF"}</Badge>
+                  <Badge variant={on ? "default" : "secondary"} className="px-2 text-xs">{on ? "On" : "Off"}</Badge>
                 </div>
               )
             })}

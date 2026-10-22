@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import {
   getCurrentRunNumber,
   getExperimentStats,
+  getRunMetadataIfAny,
   getRunStatus,
   getSaveData,
   getStartTime,
@@ -89,6 +90,8 @@ let inFlight: { promise: Promise<void>; startedAt: number; generation: number } 
 let actionGeneration = 0
 /** Consecutive polls that saw the DAQ stopped. */
 let stoppedStreak = 0
+/** The run number (and action) the leftover record was last looked up for. */
+let leftoverCheckedFor: string | null = null
 
 /** Call when a Start or Stop has just changed the run on the server. Answers
  *  to polls sent earlier are then ignored, and a fresh poll is sent. */
@@ -132,6 +135,8 @@ async function pollOnce(): Promise<void> {
   // every board, and the server answers [] when nothing is running.
   if (isRunning) {
     stoppedStreak = 0
+    leftoverCheckedFor = null
+    patch.leftoverRun = null
     const stats = await settle(getExperimentStats())
     if (stale()) return
     if (stats.ok && Array.isArray(stats.v)) {
@@ -152,6 +157,26 @@ async function pollOnce(): Promise<void> {
     // another tab) cannot restore saving during the Tuner's run.
     stoppedStreak += 1
     if (stoppedStreak >= 2) void restoreTunerSaveFlag()
+    // Does the next run's number already have a record that never ended?
+    // Looked up once per number (and again after each Start/Stop), not on
+    // every poll.
+    const next = patch.runNumber ?? store.runNumber
+    const key = `${next}:${generation}`
+    if (next !== null && next !== undefined && key !== leftoverCheckedFor) {
+      leftoverCheckedFor = key
+      void getRunMetadataIfAny(next).then(
+        (res) => {
+          const r = res?.data
+          useRunControlStore.getState().update({
+            leftoverRun: r && !r.end_time && r.run_number === next
+              ? { run_number: r.run_number, target_name: r.target_name, start_time: r.start_time, has_data: r.has_data }
+              : null,
+          })
+        },
+        // Unreachable: say nothing rather than guess.
+        () => useRunControlStore.getState().update({ leftoverRun: null }),
+      )
+    }
   }
   store.update(patch)
 }

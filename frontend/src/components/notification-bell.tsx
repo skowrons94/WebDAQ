@@ -106,7 +106,9 @@ export function NotificationBell() {
           {unseen > 0 ? (
             <span className={`absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center
               justify-center rounded-full px-1 text-xs font-semibold ${
-              undelivered > 0 || warnings > 0 ? 'bg-warning text-warning-foreground' : 'bg-destructive text-destructive-foreground'}`}>
+              undelivered > 0 || warnings > 0 ? 'bg-warning text-warning-foreground' : 'bg-destructive text-destructive-foreground'}`}
+                  aria-hidden="true">
+              {/* The count is in the sr-only name below; read once, not twice. */}
               {unseen > 9 ? '9+' : unseen}
             </span>
           ) : warnings > 0 && (

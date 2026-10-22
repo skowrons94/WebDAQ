@@ -8,6 +8,7 @@ import { Activity, AlertTriangle, HeartPulse, Pause, RefreshCw } from 'lucide-re
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { boardLabel } from '@/lib/board-label'
 import { formatHz } from '@/lib/format-rate'
 import {
@@ -274,7 +275,14 @@ export default function BoardHealth() {
                     <Counter label="Read from board" value={formatBytes(row.counters.bytes_read)}
                              rate={stale || row.bytesPerSecond === null ? '—'
                                : `${formatBytes(row.bytesPerSecond)}/s`} />
-                    <Counter label="Sent to file" value={formatBytes(row.counters.bytes_written)} />
+                    {/* The SIS3316 file holds decoded events (sis3316daq's HDF5
+                        table: a few fields per hit), not the board's raw words
+                        with their headers, so less is written than read with
+                        nothing lost. */}
+                    <Counter label="Sent to file" value={formatBytes(row.counters.bytes_written)}
+                             hint={/sis3316/i.test(row.name)
+                               ? 'Less than read, and nothing is lost: the file stores each decoded hit (time stamp, energies, flags; waveforms if recorded), not the raw words with their event headers as they come from the board.'
+                               : undefined} />
                   </div>
 
                   <div className="grid grid-cols-3 gap-2 border-t pt-3 text-sm">
@@ -330,10 +338,13 @@ export default function BoardHealth() {
   )
 }
 
-function Counter({ label, value, rate }: { label: string; value: string; rate?: string }) {
+function Counter({ label, value, rate, hint }: { label: string; value: string; rate?: string; hint?: string }) {
   return (
     <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        {label}
+        {hint && <InfoTooltip text={hint} />}
+      </p>
       <p className="font-mono text-base">{value}</p>
       {rate && <p className="font-mono text-xs text-muted-foreground">{rate}</p>}
     </div>

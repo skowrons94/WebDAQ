@@ -320,11 +320,16 @@ STATUS_DEADLINE_S = 4.0   # the whole status check, name lookups included
 
 
 def status(graphite_host: str, web_port: Optional[int], carbon_port: Optional[int],
-           grafana_url: str) -> Dict[str, Any]:
+           grafana_url: str, grafana_token: str = "") -> Dict[str, Any]:
     """
     Whether each configured server answers: Graphite's web API, its Carbon
     port, and Grafana. Checked together, so the page waits for the slowest
     one rather than for all three in a row.
+
+    For Grafana, /api/health answers without a login, so "reachable" alone
+    said nothing about whether the Alerts page can work: the alert-rule list
+    is asked for too, with the token, and its HTTP status is reported as
+    `rules_status` (401/403: a token is missing or refused).
     """
     carbon_port = carbon_port or DEFAULT_CARBON_PORT
     grafana_url = (grafana_url or "").rstrip("/")
@@ -348,7 +353,17 @@ def status(graphite_host: str, web_port: Optional[int], carbon_port: Optional[in
             return None
         if not isinstance(body, dict) or "database" not in body:
             return None
-        return {"version": str(body.get("version") or "")}
+        rules_status: Optional[int] = None
+        headers = {"Accept": "application/json"}
+        if grafana_token:
+            headers["Authorization"] = f"Bearer {grafana_token}"
+        try:
+            rules_status = requests.get(f"{grafana_url}/api/v1/provisioning/alert-rules",
+                                        headers=headers,
+                                        timeout=(STATUS_TIMEOUT_S, STATUS_TIMEOUT_S)).status_code
+        except requests.RequestException:
+            pass
+        return {"version": str(body.get("version") or ""), "rules_status": rules_status}
 
     # A name lookup has no timeout of its own: a broken DNS must not hold the
     # page, so whatever has not answered by the deadline counts as down.
@@ -370,7 +385,9 @@ def status(graphite_host: str, web_port: Optional[int], carbon_port: Optional[in
         "graphite": {"reachable": graphite_up, "host": graphite_host, "port": web_port},
         "carbon": {"reachable": carbon_up, "host": graphite_host, "port": carbon_port},
         "grafana": {"reachable": grafana is not None, "url": grafana_url,
-                    "version": (grafana or {}).get("version", "")},
+                    "version": (grafana or {}).get("version", ""),
+                    "rules_status": (grafana or {}).get("rules_status"),
+                    "has_token": bool(grafana_token)},
     }
 
 

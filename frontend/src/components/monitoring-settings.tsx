@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { CheckCircle, Loader2, Plug, Radar, XCircle } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { ConfirmAction } from '@/components/ui/confirm-action'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,6 +28,29 @@ import {
 // Remembered per browser: the note about where the beam current used to go
 // is news once, not on every visit.
 const LEGACY_NOTE_KEY = 'webdaq.monitoring.legacyCurrentNoteDismissed'
+
+/**
+ * Grafana answers /api/health without a login, so "reachable" alone said
+ * nothing about the Alerts page: the server also asks for the alert rules,
+ * and a 401/403 there means a service-account token is missing or refused.
+ */
+function grafanaBadge(g: MonitoringStatus['grafana'] | undefined) {
+  if (!g) return <StatusBadge state="unknown" label="Grafana: checking" />
+  if (!g.reachable) return <StatusBadge state="error" label="Grafana: no answer" />
+  if (g.rules_status === 401 || g.rules_status === 403) {
+    return <StatusBadge state="warning" label={g.has_token ? 'Grafana: token refused' : 'Grafana: needs a token'}
+                        title="Grafana answers, but will not list the alert rules without a valid service-account token" />
+  }
+  return <StatusBadge state="ready" label="Grafana: reachable" />
+}
+
+/** A dotted metric path that may wrap after each dot, and nowhere else. */
+function withBreaks(path: string) {
+  const parts = path.split('.')
+  return parts.map((part, i) => (
+    <span key={i}>{part}{i < parts.length - 1 && <>.<wbr /></>}</span>
+  ))
+}
 
 function reachBadge(reachable: boolean | undefined, what: string) {
   if (reachable === undefined) return <StatusBadge state="unknown" label={`${what}: checking`} />
@@ -50,6 +74,9 @@ export function MonitoringSettings() {
   const [legacyDismissed, setLegacyDismissed] = useState(true)
 
   const [status, setStatus] = useState<MonitoringStatus | null>(null)
+  // What is saved now (not what is typed): Detect marks a match as in use.
+  const [savedCfg, setSavedCfg] = useState<{ host: string; web: number; carbon: number; grafana: string } | null>(null)
+  const [confirmSave, setConfirmSave] = useState<null | { clear_api_key?: boolean }>(null)
   const [detection, setDetection] = useState<MonitoringDetection | null>(null)
   const [detecting, setDetecting] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -67,6 +94,7 @@ export function MonitoringSettings() {
 
   const loadGrafana = () => getGrafanaSettings().then((g) => {
     setGrafanaUrl(g.url || '')
+    setSavedCfg((prev) => ({ host: prev?.host ?? '', web: prev?.web ?? 0, carbon: prev?.carbon ?? 0, grafana: g.url || '' }))
     // The token arrives masked; the field stays empty so saving without
     // touching it keeps the stored one.
     setApiKey('')
@@ -75,6 +103,8 @@ export function MonitoringSettings() {
 
   useEffect(() => {
     getStatsGraphiteConfig().then((c) => {
+      setSavedCfg((prev) => ({ grafana: prev?.grafana ?? '', host: c.graphite_host || 'localhost',
+                               web: Number(c.graphite_port || 80), carbon: Number(c.carbon_port || 2003) }))
       setHost(c.graphite_host || 'localhost')
       setWebPort(String(c.graphite_port || 80))
       setCarbonPort(String(c.carbon_port || 2003))
@@ -125,6 +155,7 @@ export function MonitoringSettings() {
     try {
       const saved = await setStatsGraphiteConfig(host.trim(), web, prefix, carbon)
       if (saved?.graphite_prefix) setPrefix(saved.graphite_prefix)
+      setSavedCfg((prev) => ({ grafana: prev?.grafana ?? '', host: host.trim(), web, carbon }))
       await setGrafanaSettings({ url: grafanaUrl, api_key: apiKey, ...extra })
       await loadGrafana()
       setTestResult(null)
@@ -140,6 +171,17 @@ export function MonitoringSettings() {
       setSaving(false)
     }
   }
+
+  // Mid-run the new addresses take effect at once: asked first, not only said.
+  const requestSave = (extra: { clear_api_key?: boolean } = {}) => {
+    if (isRunning) setConfirmSave(extra)
+    else void save(extra)
+  }
+
+  const graphiteInUse = (g: DetectedGraphite) => !!savedCfg && g.host === savedCfg.host
+    && (!g.web_port || g.web_port === savedCfg.web) && (!g.carbon_port || g.carbon_port === savedCfg.carbon)
+  const grafanaInUse = (g: DetectedGrafana) => !!savedCfg?.grafana
+    && g.url.replace(/\/+$/, '') === savedCfg.grafana.replace(/\/+$/, '')
 
   const testGrafana = async () => {
     setTesting(true)
@@ -186,7 +228,9 @@ export function MonitoringSettings() {
                     : <>Carbon only at <span className="font-mono">{g.host}:{g.carbon_port}</span>{' '}
                         <span className="text-muted-foreground">(no web API found)</span></>}
                 </p>
-                <Button size="sm" variant="secondary" className="min-h-9" onClick={() => pickGraphite(g)}>Use</Button>
+                {graphiteInUse(g)
+                  ? <span className="text-xs font-medium text-muted-foreground">Already in use</span>
+                  : <Button size="sm" variant="secondary" className="min-h-9" onClick={() => pickGraphite(g)}>Use</Button>}
               </div>
             ))}
             {detection.grafana.map((g) => (
@@ -196,7 +240,9 @@ export function MonitoringSettings() {
                   Grafana at <span className="font-mono">{g.url}</span>
                   {g.version && <span className="text-muted-foreground"> (version {g.version})</span>}
                 </p>
-                <Button size="sm" variant="secondary" className="min-h-9" onClick={() => pickGrafana(g)}>Use</Button>
+                {grafanaInUse(g)
+                  ? <span className="text-xs font-medium text-muted-foreground">Already in use</span>
+                  : <Button size="sm" variant="secondary" className="min-h-9" onClick={() => pickGrafana(g)}>Use</Button>}
               </div>
             ))}
             {nothingFound && (
@@ -237,13 +283,23 @@ export function MonitoringSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           {legacy && !legacyDismissed && (
-            <div className="flex flex-wrap items-start justify-between gap-2 rounded-md border border-warning/50 bg-warning/10 px-3 py-2" role="note">
-              <p className="min-w-0 flex-1 basis-56 text-sm">
-                The beam current used to go to <span className="font-mono">{legacy.host}:{legacy.port}</span>;
-                it now goes to <span className="font-mono">{status?.carbon.host || host}:{status?.carbon.port ?? carbonPort}</span>,
-                like the rates. If the old server is the right one, set it here.
+            // Information, not a warning: nothing is broken, the beam current
+            // simply follows this one server now. Two plain choices end it.
+            <div className="space-y-2 rounded-md border bg-muted/50 px-3 py-2" role="note">
+              <p className="text-sm">
+                For information: the beam current now goes to the same server as the rates,{' '}
+                <span className="font-mono">{status?.carbon.host || host}:{status?.carbon.port ?? carbonPort}</span>.
+                An older setting sent it to <span className="font-mono">{legacy.host}:{legacy.port}</span>.
               </p>
-              <Button size="sm" variant="ghost" className="min-h-9" onClick={dismissLegacy}>Got it</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="secondary" className="min-h-9" onClick={dismissLegacy}>Keep this server</Button>
+                <Button size="sm" variant="ghost" className="min-h-9" onClick={() => {
+                  setHost(legacy.host)
+                  setCarbonPort(String(legacy.port))
+                  dismissLegacy()
+                  toast({ title: 'Filled in', description: `Graphite at ${legacy.host}:${legacy.port}. Check the web port, then press Save.` })
+                }}>Use {legacy.host} instead</Button>
+              </div>
             </div>
           )}
           <div className="grid gap-4 sm:grid-cols-3">
@@ -265,7 +321,8 @@ export function MonitoringSettings() {
             <Input id="graphite-prefix" value={prefix} onChange={(e) => setPrefix(e.target.value)} placeholder="ancillary.rates.12c12c" />
             <p className="text-xs text-muted-foreground">
               Give each experiment its own subtree so campaigns never share a series: rates land under{' '}
-              <code className="break-all font-mono">{prefix || 'ancillary.rates'}.bo_&lt;board&gt;.ch_&lt;channel&gt;.totalRate</code>.
+              {/* Broken only after a dot (<wbr>), never inside a word. */}
+              <code className="break-words font-mono">{withBreaks(`${prefix || 'ancillary.rates'}.bo_<board>.ch_<channel>.totalRate`)}</code>.
               The beam current keeps its own names (<code className="font-mono">tetramm.*</code>,{' '}
               <code className="font-mono">rbd9103.current</code>).
             </p>
@@ -285,7 +342,7 @@ export function MonitoringSettings() {
               </CardDescription>
             </div>
             {grafanaUrl
-              ? reachBadge(status?.grafana.reachable, 'Grafana')
+              ? grafanaBadge(status?.grafana)
               : <StatusBadge state="off" label="Not set" />}
           </div>
         </CardHeader>
@@ -305,7 +362,7 @@ export function MonitoringSettings() {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             {hasToken && (
-              <Button variant="outline" onClick={() => save({ clear_api_key: true })} disabled={saving}>Remove token</Button>
+              <Button variant="outline" onClick={() => requestSave({ clear_api_key: true })} disabled={saving}>Remove token</Button>
             )}
             <Button variant="outline" onClick={testGrafana} disabled={testing || !grafanaUrl}>
               {testing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Plug className="mr-1.5 h-4 w-4" />}
@@ -330,7 +387,7 @@ export function MonitoringSettings() {
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={() => save()} disabled={saving} className="max-sm:w-full">
+        <Button onClick={() => requestSave()} disabled={saving} className="max-sm:w-full">
           {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
           {saving ? 'Saving…' : 'Save'}
         </Button>
@@ -340,6 +397,15 @@ export function MonitoringSettings() {
           Graphite and Grafana on this PC in Docker.
         </p>
       </div>
+      <ConfirmAction
+        open={confirmSave !== null}
+        onOpenChange={(o) => { if (!o) setConfirmSave(null) }}
+        title="Save during the run?"
+        description={<p>A run is going: this applies now. Its rates move to the new server from the next statistics interval, the beam current from its next sample.</p>}
+        confirmLabel="Save now"
+        variant="default"
+        onConfirm={() => { const extra = confirmSave ?? {}; setConfirmSave(null); void save(extra) }}
+      />
     </div>
   )
 }

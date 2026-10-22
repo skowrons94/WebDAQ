@@ -163,18 +163,19 @@ export function NotificationSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Switch
-              aria-label="Telegram notifications on"
+              id="telegram-enabled"
               checked={telegram?.enabled ?? false}
               disabled={!telegram?.configured || busy !== null}
               onCheckedChange={(checked) => act('telegram-enabled',
                 () => setTelegramTransport({ enabled: checked }))}
             />
-            <Label>Send messages to Telegram</Label>
+            {/* Tapping the words toggles the switch too. */}
+            <Label htmlFor="telegram-enabled" className="min-w-0 flex-1">Send messages to Telegram</Label>
             {telegram?.configured
-              ? <Badge variant="secondary">Configured</Badge>
-              : <Badge variant="outline">Not configured</Badge>}
+              ? <Badge variant="secondary" className="whitespace-nowrap">Configured</Badge>
+              : <Badge variant="outline" className="whitespace-nowrap">Not configured</Badge>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -217,18 +218,19 @@ export function NotificationSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Switch
-              aria-label="Zulip notifications on"
+              id="zulip-enabled"
               checked={zulip?.enabled ?? false}
               disabled={!zulip?.configured || busy !== null}
               onCheckedChange={(checked) => act('zulip-enabled',
                 () => setZulipTransport({ enabled: checked }))}
             />
-            <Label>Send messages to Zulip</Label>
+            {/* Tapping the words toggles the switch too. */}
+            <Label htmlFor="zulip-enabled" className="min-w-0 flex-1">Send messages to Zulip</Label>
             {zulip?.configured
-              ? <Badge variant="secondary">Configured</Badge>
-              : <Badge variant="outline">Not configured</Badge>}
+              ? <Badge variant="secondary" className="whitespace-nowrap">Configured</Badge>
+              : <Badge variant="outline" className="whitespace-nowrap">Not configured</Badge>}
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
@@ -371,7 +373,7 @@ export function NotificationSettings() {
           <div className="flex flex-wrap items-center gap-2 border-t pt-4">
             <Select value={newRuleType}
                     onValueChange={(value) => setNewRuleType(value as AlertRule['type'])}>
-              <SelectTrigger className="w-72" aria-label="Type of the new alert"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-full sm:w-72" aria-label="Type of the new alert"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {types.map((type) => (
                   <SelectItem key={type.type} value={type.type}>{type.name}</SelectItem>

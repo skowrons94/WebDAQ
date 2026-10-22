@@ -1,12 +1,11 @@
 import { useVisualizationStore } from '@/store/visualization-settings-store'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
 import { useTheme } from 'next-themes'
-import { set } from 'react-hook-form'
 
 export function VisualizationSettings() {
     const { settings, updateSettings, resetSettings } = useVisualizationStore()
@@ -14,18 +13,12 @@ export function VisualizationSettings() {
     const { setTheme } = useTheme()
 
     return (
+        // No card title: the section heading above ("Appearance") says it.
         <Card>
-            <CardHeader>
-                <CardTitle>Visualization settings</CardTitle>
-                <CardDescription>
-                    Customize how the main dashboard is displayed
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-6 pt-6">
 
                 <div className="grid gap-4">
 
-                    <p className="text-lg font-bold">General settings</p>
                     <div className="space-y-2 p-2">
                         <Label htmlFor="theme">Theme</Label>
                         <Select
@@ -56,7 +49,7 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ currentEnabled: checked })}
                         />
                     </div>
-                    <p className="text-xl font-bold">Show/Hide tabs</p>
+                    <h3 className="px-2 pt-2 text-base font-semibold">Dashboard views</h3>
                     <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showStats">Show stats</Label>
                         <Switch
@@ -96,7 +89,7 @@ export function VisualizationSettings() {
                             onCheckedChange={(checked) => updateSettings({ showPSD: checked })}
                         />
                     </div>
-                    <p className="text-lg font-bold">Show/Hide cards in dashboard</p>
+                    <h3 className="px-2 pt-2 text-base font-semibold">Overview cards</h3>
 
                     <div className="flex items-center justify-between p-2">
                         <Label htmlFor="showStatus">Show run status</Label>

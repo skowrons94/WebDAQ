@@ -90,6 +90,10 @@ export const addRunMetadata = (runNumber: number, targetName: string, terminalVo
 export const getRunMetadata = (runNumber: number) =>
     api.get(`/experiment/get_run_metadata/${runNumber}`);
 
+/** A run's record, or null (200, not a 404) when that number has none. */
+export const getRunMetadataIfAny = (runNumber: number) =>
+    api.get(`/experiment/get_run_metadata/${runNumber}`, { params: { missing_ok: 1 } });
+
 export const getRunMetadataAll = () =>
     api.get('/experiment/get_run_metadata');
 
@@ -937,7 +941,8 @@ export const detectMonitoringServers = () =>
 export type MonitoringStatus = {
     graphite: { reachable: boolean; host: string; port: number | null };
     carbon: { reachable: boolean; host: string; port: number };
-    grafana: { reachable: boolean; url: string; version: string };
+    // rules_status: HTTP status of the alert-rule list (401/403: token missing or refused).
+    grafana: { reachable: boolean; url: string; version: string; rules_status?: number | null; has_token?: boolean };
 };
 
 export const getMonitoringStatus = () =>
@@ -1423,3 +1428,27 @@ export type RecentMetric = { path: string; value: number; timestamp: string; tre
 export const getRecentMetrics = (refresh = false) =>
     api.get('/stats/recent', { params: refresh ? { refresh: 1 } : {} })
         .then(res => res.data as { metrics: RecentMetric[]; scanned: number; truncated: boolean; window: string });
+
+/** The beam current at the start of the running run ({current: null} when not known). */
+export const getRunStartCurrent = () =>
+    api.get('/current/run_start').then(res => res.data as { current: number | null; source: string | null });
+
+/** The first run number above every recorded run and data directory. */
+export const getNextFreeRun = () =>
+    api.get('/experiment/next_free_run').then(res => Number(res.data?.run));
+
+/** The signed-in account's name (often an account the whole shift shares). */
+export const getMe = () =>
+    api.get('/me').then(res => res.data as { username: string });
+
+/**
+ * The registers behind a board's live spectra: during a run the ones it
+ * started with ('run'), between runs the saved configuration ('saved').
+ * Same register shape as getBoardSettings.
+ */
+export const getRunRegisters = (id: string) =>
+    api.get(`/digitizer/${id}/run_registers`).then(res => res.data as {
+        source: 'run' | 'saved'
+        run: number | null
+        registers: Record<string, { value_hex: string; value_dec: number; name: string; channel: number; address: string }>
+    });

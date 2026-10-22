@@ -693,7 +693,7 @@ const PHA_FIELD_DOCS: { [fieldName: string]: string } = {
   "Peak Mean":
     "How many samples the trapezoid height is averaged over. It must fit inside the flat top.",
   "Trapezoid Rescaling":
-    "Right shift applied to the trapezoid before the 15-bit pulse height is extracted. Together with the fine gain this sets the energy scale — pick the shift so the peaks land in range (Calculate… works both out).",
+    "Right shift applied to the trapezoid before the 15-bit pulse height is extracted. Together with the fine gain this sets the energy scale — pick the shift so the peaks land in range (the energy-scale calculator works both out).",
   Decimation:
     "Averages input samples for the energy filter only, as if the sampling frequency were lower. Timing, baseline, hold-off and record length are unaffected.",
   "Decimation Gain":

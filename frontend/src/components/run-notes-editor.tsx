@@ -19,7 +19,7 @@ import {
   Columns2,
 } from "lucide-react"
 
-import { updateRunNotes } from "@/lib/api"
+import { getMe, updateRunNotes } from "@/lib/api"
 import { appendRunNote, savedNoteAuthor } from "@/lib/run-actions"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -367,8 +367,14 @@ export function QuickNoteButton({ runNumber, className, compact = false }: {
   const [author, setAuthor] = useState("")
   const [saving, setSaving] = useState(false)
 
+  // The account is usually shared by the whole shift, so it signs nobody:
+  // a name is asked for once per browser and remembered; the account name is
+  // only the placeholder.
+  const [account, setAccount] = useState("")
   useEffect(() => {
-    if (open) setAuthor(savedNoteAuthor())
+    if (!open) return
+    setAuthor(savedNoteAuthor())
+    getMe().then((me) => setAccount(me.username || "")).catch(() => {})
   }, [open])
 
   if (runNumber === null) return null
@@ -407,17 +413,21 @@ export function QuickNoteButton({ runNumber, className, compact = false }: {
               <Label htmlFor="quick-note-text">Note</Label>
               <Textarea id="quick-note-text" value={text} onChange={(e) => setText(e.target.value)} rows={4}
                         placeholder="e.g. Beam retuned, current back to 80 µA"
-                        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void save() }} />
+                        onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && author.trim()) void save() }} />
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="quick-note-author">Your name</Label>
               <Input id="quick-note-author" value={author} onChange={(e) => setAuthor(e.target.value)}
-                     autoComplete="name" placeholder="Remembered in this browser" className="sm:max-w-xs" />
+                     autoComplete="name" placeholder={account || "e.g. Anna"}
+                     aria-describedby="quick-note-author-hint" className="sm:max-w-xs" required />
+              <p id="quick-note-author-hint" className="text-xs text-muted-foreground">
+                Needed once: remembered in this browser. The account is shared, so it does not say who wrote the note.
+              </p>
             </div>
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={() => void save()} disabled={saving || !text.trim()}>
+            <Button onClick={() => void save()} disabled={saving || !text.trim() || !author.trim()}>
               <Save className="mr-1.5 h-4 w-4" />{saving ? "Saving…" : "Add note"}
             </Button>
           </DialogFooter>

@@ -193,6 +193,14 @@ def _on_run_state_changed(running: bool) -> None:
             # claims no run number and stores nothing.
             current_accumulating_run_number = (
                 daq_mgr.get_run_number() if daq_mgr.get_save_data() else 0)
+            # The current at the start, for the dashboard's "± since start".
+            # A run that saves also has it as the first line of its current
+            # log, which survives a server restart; this covers the others.
+            global _run_start_current
+            try:
+                _run_start_current = _charge_channel_reading()
+            except Exception:
+                _run_start_current = None
             controller.reset_accumulated_charge()
             controller.set_accumulating(True)
         else:
@@ -410,19 +418,78 @@ def reset_device():
     running = False
     return jsonify({"message": "Device reset"}), 200
 
+def _charge_channel_index() -> int:
+    """Which input carries the beam current that is integrated (0 on a single-channel module)."""
+    if _is_single_channel() or not hasattr(controller, "get_charge_channel"):
+        return 0
+    try:
+        return int(controller.get_charge_channel())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _charge_channel_reading() -> float:
+    """The beam current now, on the integrated channel, in uA."""
+    if _is_single_channel():
+        data = controller.get_data()
+    else:
+        all_data = controller.get_data()
+        data = all_data.get(str(_charge_channel_index()), all_data["0"])
+    if( data < 1e-9 ): data = 0
+    return data
+
+
 @bp.route('/current/data', methods=['GET'])
 @jwt_required_custom
 def get_data():
-    if _is_single_channel():
-        data = controller.get_data()
-        if( data < 1e-9 ): data = 0
-        return jsonify(data)
-    else:
-        all_data = controller.get_data()
-        channel = str(controller.get_charge_channel()) if hasattr(controller, "get_charge_channel") else "0"
-        data = all_data.get(channel, all_data["0"])
-        if( data < 1e-9 ): data = 0
-        return jsonify(data)
+    return jsonify(_charge_channel_reading())
+
+
+# The current read when the running run started (see _on_run_state_changed).
+_run_start_current = None
+
+
+def _first_logged_current(run_number: int, column: int):
+    """The first reading of a run's current log (data/run<N>/current.txt), or None."""
+    path = os.path.join(run_data.run_dir(run_number), run_data.CURRENT_FILE)
+    try:
+        with open(path, "r") as f:
+            for n, line in enumerate(f):
+                if n > 50:
+                    break
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split()
+                try:
+                    return float(parts[1 + column] if len(parts) > 1 + column else parts[1])
+                except (ValueError, IndexError):
+                    continue
+    except OSError:
+        return None
+    return None
+
+
+@bp.route('/current/run_start', methods=['GET'])
+@jwt_required_custom
+def get_run_start_current():
+    """
+    The beam current at the start of the running run, for "± µA since start".
+
+    It used to be the first reading the browser saw, so a reload or another
+    device moved the reference. A run that saves data has it in its current
+    log; otherwise the reading taken here when the run started. None when
+    neither is known (no run, or the server restarted during an unsaved run).
+    """
+    if not daq_mgr.is_running():
+        return jsonify({"current": None, "source": None})
+    if daq_mgr.get_save_data():
+        value = _first_logged_current(daq_mgr.get_run_number(), _charge_channel_index())
+        if value is not None:
+            return jsonify({"current": value, "source": "log"})
+    if _run_start_current is not None:
+        return jsonify({"current": _run_start_current, "source": "start"})
+    return jsonify({"current": None, "source": None})
 
 def _collimator(channel: str):
     """A collimator channel, or zero on the modules that have none.

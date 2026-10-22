@@ -45,12 +45,15 @@ import { formatCharge } from "@/lib/format-charge"
 import { useRunStatus } from "@/hooks/use-run-status"
 import { formatElapsed, useElapsed } from "@/components/run-status-indicator"
 import { useForm } from "react-hook-form"
+import { formatRunDate, runRowNote, runRowState } from "@/lib/run-rows"
 
 export type RunMetadata = {
     id: string
     run_number: number
     start_time: string
     end_time: string
+    /** data/run<N>/ exists (see lib/run-rows). */
+    has_data?: boolean
     notes: string
     target_name: string
     terminal_voltage: number
@@ -213,13 +216,21 @@ function prettyDuration(seconds: number): string {
 
 /** The run being taken has no end time yet: its duration is the live elapsed
  *  time, the same clock as the header's. */
-function LiveDuration({ runNumber }: { runNumber: number }) {
+function LiveDuration({ run }: { run: RunMetadata }) {
     const isRunning = useRunStatus((s) => s.isRunning)
     const current = useRunStatus((s) => s.runNumber)
+    const saving = useRunStatus((s) => s.saving)
     const startTime = useRunStatus((s) => s.startTime)
-    const live = isRunning && current === runNumber
+    const now = { isRunning, runNumber: current, saving }
+    const live = runRowState(run, now) === "live"
     const elapsed = useElapsed(live, startTime)
-    if (!live) return <div className="text-muted-foreground text-right">—</div>
+    if (!live) {
+        // Not running and never ended: say why there is no duration.
+        const note = runRowNote(run, now)
+        return note
+            ? <div className="text-right text-xs text-warning">{note}</div>
+            : <div className="text-muted-foreground text-right">—</div>
+    }
     return (
         <div className="text-right text-sm tabular-nums" title="Still running">
             <span className="font-mono">{formatElapsed(elapsed)}</span>
@@ -307,12 +318,12 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
         cell: ({ row }) => {
             if (!row.original.start_time) return <div className="text-muted-foreground">—</div>
             const date = new Date(row.original.start_time)
+            // The same format as Recent runs (lib/run-rows formatRunDate).
+            const [day, time] = formatRunDate(date.toISOString()).split(" ")
             return (
-                <div className="whitespace-nowrap text-sm">
-                    {date.toLocaleDateString()}{" "}
-                    <span className="text-muted-foreground">
-                        {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+                <div className="whitespace-nowrap text-sm tabular-nums">
+                    {day}{" "}
+                    <span className="text-muted-foreground">{time}</span>
                 </div>
             )
         },
@@ -324,12 +335,12 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
         cell: ({ row }) => {
             if (!row.original.end_time) return <div className="text-muted-foreground">—</div>
             const date = new Date(row.original.end_time)
+            // The same format as Recent runs (lib/run-rows formatRunDate).
+            const [day, time] = formatRunDate(date.toISOString()).split(" ")
             return (
-                <div className="whitespace-nowrap text-sm">
-                    {date.toLocaleDateString()}{" "}
-                    <span className="text-muted-foreground">
-                        {date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </span>
+                <div className="whitespace-nowrap text-sm tabular-nums">
+                    {day}{" "}
+                    <span className="text-muted-foreground">{time}</span>
                 </div>
             )
         },
@@ -347,7 +358,7 @@ export const createColumns = ({ onDataUpdate, alertsByRun }: ColumnsProps = {}):
         cell: ({ row }) => {
             const start = row.original.start_time ? new Date(row.original.start_time) : null
             const end = row.original.end_time ? new Date(row.original.end_time) : null
-            if (start && !end) return <LiveDuration runNumber={row.original.run_number} />
+            if (start && !end) return <LiveDuration run={row.original} />
             if (!start || !end) return <div className="text-muted-foreground text-right">—</div>
             const seconds = Math.max(0, Math.round((end.getTime() - start.getTime()) / 1000))
             return <div className="text-right text-sm tabular-nums">{prettyDuration(seconds)}</div>

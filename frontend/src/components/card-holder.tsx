@@ -266,6 +266,9 @@ export function CardHolder({
   // A run stopped unsaved keeps its number for the next run (by design): say
   // so instead of "no previous run".
   const unsavedRun = useRunStatus((s) => s.unsavedRun)
+  // The same, read from the server's records (any browser, after a restart):
+  // the next number already has a record that never ended.
+  const leftoverRun = useRunStatus((s) => s.leftoverRun)
   const [phoneCardsOpen, setPhoneCardsOpen] = useState(true)
   // Run number editor, opened by clicking the run number on the status card.
   const [runEditorOpen, setRunEditorOpen] = useState(false)
@@ -915,6 +918,10 @@ export function CardHolder({
   const failedBoards = settings.showStatus ? boards.filter(boardFailedNow) : []
   const healthyBoards = boards.filter((b) => !boardFailedNow(b))
   const runBadge = useRunBadge({ boardFailed: failedBoards.length > 0 })
+  const leftoverHere = runNumber !== null && leftoverRun?.run_number === runNumber
+  const reusedUnsaved = runNumber !== null
+    && (unsavedRun === runNumber || (leftoverHere && leftoverRun?.has_data === false))
+  const leftoverUnfinished = !reusedUnsaved && leftoverHere
 
   return (
     <div className="h-full">
@@ -1104,8 +1111,10 @@ export function CardHolder({
                 className="min-w-0 truncate text-xs text-muted-foreground"
                 title={isRunning && !runBadge.tuning && !dataSavingEnabled
                   ? 'Save to disk is off: nothing of this run is written, and the next run gets the same number'
-                  : !isRunning && unsavedRun !== null && unsavedRun === runNumber
-                    ? `Run ${unsavedRun} was taken with Save to disk off: nothing was written, so the next run is run ${unsavedRun} again`
+                  : !isRunning && reusedUnsaved
+                    ? `Run ${runNumber} was taken with Save to disk off: nothing was written, so the next run is run ${runNumber} again`
+                  : !isRunning && leftoverUnfinished
+                    ? `Run ${runNumber} started but never stopped properly (the server went down?): Start asks before overwriting it`
                     : undefined}
               >
                 {isRunning
@@ -1115,10 +1124,16 @@ export function CardHolder({
                         <span className="font-semibold text-destructive"> · not saved</span>
                       )}
                     </>
-                  : unsavedRun !== null && unsavedRun === runNumber
+                  : reusedUnsaved
                     ? <>
-                        <span className="font-semibold text-destructive">run {unsavedRun} not saved</span>
+                        <span className="font-semibold text-destructive">run {runNumber} not saved</span>
                         {' · number reused'}
+                      </>
+                  : leftoverUnfinished
+                    ? <>
+                        <Link href={`/logbook/${runNumber}`} className="font-semibold text-warning underline underline-offset-2">
+                          run {runNumber} never stopped
+                        </Link>
                       </>
                   : lastRun !== null
                     ? <>
@@ -1410,7 +1425,7 @@ export function CardHolder({
                 {/* The number alone ("9724") did not say what it counts. The
                     rate is the run average: the integral over the run's time. */}
                 <div className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="text-2xl font-bold tabular-nums">{cardData.roi.integral.toFixed(0)}</span>
+                  <span className="text-2xl font-bold tabular-nums">{Math.round(cardData.roi.integral).toLocaleString("en-US")}</span>
                   <span className="text-xs text-muted-foreground">
                     {isRunning ? 'counts since run start' : 'counts, last run'}
                   </span>

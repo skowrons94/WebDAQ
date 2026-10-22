@@ -78,4 +78,5 @@ def status():
         _int_or_none(stats.get('graphite_port')),
         _int_or_none(stats.get('carbon_port')),
         get_grafana_client().url or '',
+        get_grafana_client().api_key or '',
     )), 200

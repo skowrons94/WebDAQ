@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Zap } from 'lucide-react'
+import Link from 'next/link'
+import { AlertTriangle, Calculator, Zap } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
@@ -60,6 +61,8 @@ interface Props {
   measuredBaseline?: number | null
   /** True while a value is typed but not yet committed. */
   onTyping?: (typing: boolean) => void
+  /** The energy-scale calculator for this channel (DAQ page), shown beside rescaling and fine gain. */
+  scaleHref?: string
 }
 
 /**
@@ -68,7 +71,7 @@ interface Props {
  * `pending` and written with "Save all".
  */
 export function ControlsPanel({
-  dpp, channel, timing, settings, pending, onChange, online, isOnlineTunable, measuredBaseline, onTyping,
+  dpp, channel, timing, settings, pending, onChange, online, isOnlineTunable, measuredBaseline, onTyping, scaleHref,
 }: Props) {
   const specs = useMemo(() => controlsFor(dpp), [dpp])
   const rows = specs
@@ -210,6 +213,15 @@ export function ControlsPanel({
                     {spec.help && <InfoTooltip text={spec.help} />}
                   </div>
                   {control}
+                  {/* Rescaling and fine gain are worked out together, not tried
+                      one step at a time: the calculator does both. */}
+                  {scaleHref && (spec.id === 'rescale' || spec.id === 'finegain') && (
+                    <Link href={scaleHref}
+                      className="inline-flex min-h-9 items-center gap-1 text-xs font-medium text-primary underline-offset-2 hover:underline sm:min-h-0">
+                      <Calculator className="h-3.5 w-3.5" aria-hidden="true" />
+                      Energy-scale calculator
+                    </Link>
+                  )}
                   {online && (live ? (
                     <span className="flex items-center gap-1 text-xs text-success" title="Written to the board as soon as you save">
                       <Zap className="h-3 w-3" aria-hidden="true" />live

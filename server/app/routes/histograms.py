@@ -221,10 +221,13 @@ def get_histogram_by_type(board_id, channel, histogram_type):
     """
     try:
         boards = daq_mgr.get_boards()
-        # ?raw=1: in channels, without the energy calibration.
+        # ?raw=1: in channels, one bin per channel, without the energy
+        # calibration or the display rebinning, so a peak position read from
+        # it is the board's own (the energy-scale calculator and the
+        # calibration pick peaks from it).
         raw = request.args.get('raw', '').lower() in ('1', 'true', 'yes')
         histo = spy_mgr.get_histogram(board_id, channel, boards, histogram_type=histogram_type,
-                                      calibrate=not raw)
+                                      calibrate=not raw, display_rebin=not raw)
         json_data = spy_mgr.convert_histogram_to_json(histo)
         return json_data if json_data else ""
     except Exception as e:

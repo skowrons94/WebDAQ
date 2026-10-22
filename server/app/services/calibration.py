@@ -66,6 +66,19 @@ REFERENCE_LINES: List[Dict[str, Any]] = [
     {"name": "O-16, 19F(p,ag)", "energy": 6128.63},
     {"name": "O-16, 19F(p,ag)", "energy": 6915.5},
     {"name": "O-16, 19F(p,ag)", "energy": 7115.15},
+    # 14N(p,g)15O campaign. Gamma energies (recoil-corrected) from ENSDF,
+    # adopted 15O levels and gammas (Ajzenberg-Selove 1991), via the IAEA
+    # LiveChart API. The ground-state decays of the 6.79, 6.18 and 5.18 MeV
+    # levels follow every capture to them, whatever the beam energy (ENSDF
+    # puts the 6.18 MeV level at 6176.3(17) keV; recent LUNA work quotes 6172).
+    {"name": "O-15, 14N(p,g) 6.79 MeV level", "energy": 6791.4},
+    {"name": "O-15, 14N(p,g) 6.18 MeV level", "energy": 6174.9},
+    {"name": "O-15, 14N(p,g) 5.18 MeV level", "energy": 5182.0},
+    # On the Ep = 278 keV resonance (the 7556.5 keV level) the primaries have
+    # fixed energies too.
+    {"name": "O-15, 14N(p,g) 278 keV res. -> 6.18", "energy": 1380.1},
+    {"name": "O-15, 14N(p,g) 278 keV res. -> 6.79", "energy": 763.4},
+    {"name": "O-15, 14N(p,g) 278 keV res. -> 5.18", "energy": 2373.0},
 ]
 
 

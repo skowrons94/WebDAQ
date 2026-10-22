@@ -802,6 +802,7 @@ export default function ParamTuner() {
               isOnlineTunable={isOnlineTunable}
               measuredBaseline={measuredBaseline}
               onTyping={setTyping}
+              scaleHref={`/DAQ?trapezoid=${encodeURIComponent(selectedBoardId)}:${selectedChannel}`}
             />
             <div className="flex items-center justify-end gap-2 border-t pt-4">
               {pendingCount > 0 && (

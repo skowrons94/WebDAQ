@@ -1716,7 +1716,10 @@ export default function EnhancedHistogramDashboard() {
     })
     roisChanged(histogramId)
     if (!overlapped) {
-      toast({ title: "ROI added", description: `${round(xmin)} – ${round(xmax)}. Click its name to rename or adjust it.` })
+      toast({ title: "ROI added", description: `${round(xmin)} – ${round(xmax)}. ${
+        // "Tap" on a touch screen, where nothing is clicked.
+        typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches ? "Tap" : "Click"
+      } its name to rename or adjust it.` })
     }
   }
 

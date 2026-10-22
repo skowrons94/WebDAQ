@@ -509,6 +509,10 @@ def get_run_metadata(run_number):
             'software_versions': run_metadata.get_software_versions(),
             'sync_mode': run_metadata.sync_mode
         }), 200
+    # ?missing_ok=1: "no record" is an expected answer (the poller asks about
+    # the next run number, which normally has none), not an error to log.
+    if request.args.get('missing_ok', '').lower() in ('1', 'true', 'yes'):
+        return jsonify(None), 200
     return jsonify({'message': 'Run not found'}), 404
 
 @bp.route("/experiment/get_run_metadata", methods=['GET'])

@@ -46,6 +46,24 @@ class AuthenticationTests(RouteTestCase):
             self.assertEqual(response.status_code, 401, f'{url} is unauthenticated')
 
 
+class MeRouteTests(RouteTestCase):
+    def test_me_needs_a_token_and_names_the_account(self):
+        self.assertEqual(self.client.get('/me').status_code, 401)
+        response = self.get('/me')
+        # User 1 exists in a seeded database; a bare test database has none.
+        self.assertIn(response.status_code, (200, 404))
+        if response.status_code == 200:
+            self.assertTrue(response.get_json()['username'])
+
+
+class RunMetadataMissingOkTests(RouteTestCase):
+    def test_a_missing_run_is_null_with_missing_ok_and_404_without(self):
+        self.assertEqual(self.get('/experiment/get_run_metadata/987654321').status_code, 404)
+        response = self.get('/experiment/get_run_metadata/987654321?missing_ok=1')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.get_json())
+
+
 class CurrentHistoryRouteTests(RouteTestCase):
     def test_recent_history_has_real_timestamps_and_values(self):
         import time

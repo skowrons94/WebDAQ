@@ -422,10 +422,34 @@ def get_all_registers(id):
     config = load_board_config(id)
     if not config or 'registers' not in config:
         return jsonify({'message': 'Registers not found'}), 404
-    
-    # Convert hex values to decimal for easier frontend use
+    return jsonify(_registers_view(config['registers']))
+
+
+@bp.route('/digitizer/<id>/run_registers', methods=['GET'])
+@jwt_required_custom
+def get_run_registers(id):
+    """
+    The registers that produced the live spectra: during a run, the ones the
+    run started with (plus what was written to the board since); between
+    runs, the saved configuration, which the next run will use.
+
+    {'source': 'run' | 'saved', 'run': <run number>, 'registers': {...}}
+    """
+    running = daq_mgr.run_registers(id)
+    if running is not None:
+        return jsonify({'source': 'run', 'run': daq_mgr.get_run_number(),
+                        'registers': _registers_view(running)})
+    config = load_board_config(id)
+    if not config or 'registers' not in config:
+        return jsonify({'message': 'Registers not found'}), 404
+    return jsonify({'source': 'saved', 'run': daq_mgr.get_run_number(),
+                    'registers': _registers_view(config['registers'])})
+
+
+def _registers_view(raw_registers: dict) -> dict:
+    """A register dump with each value in hex and decimal, for the frontend."""
     registers = {}
-    for reg_name, reg_data in config['registers'].items():
+    for reg_name, reg_data in raw_registers.items():
         try:
             registers[reg_name] = {
                 'value_hex': reg_data['value'],
@@ -442,8 +466,7 @@ def get_all_registers(id):
                 'channel': reg_data.get('channel', 0),
                 'address': reg_data.get('address', 'N/A')
             }
-    
-    return jsonify(registers)
+    return registers
 
 @bp.route('/digitizer/available_settings', methods=['GET'])
 @jwt_required_custom

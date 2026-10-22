@@ -14,6 +14,8 @@ import {
   currentUnit, maxMagnitude, formatTick, formatValue,
   CHART_MARGIN, yAxisLabel,
 } from '@/lib/chart-format'
+import { signed } from '@/lib/run-rows'
+import { niceAxis } from '@/lib/nice-axis'
 
 /**
  * One plotted point: a time bucket of the beam current, in µA.
@@ -77,26 +79,6 @@ const clockLabel = (timestamp: number) =>
 const shortClockLabel = (timestamp: number) =>
   new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
-/**
- * Round y ticks (steps of 1, 2 or 5 × 10ⁿ) and one number of decimals for
- * the whole axis, set by the step: "12, 9, 6, 3, 0" rather than recharts'
- * own "12.0, 9.00, 6.00, 3.00, 0", where each label had its own precision.
- */
-function niceAxis(lo: number, hi: number, count = 5): { ticks: number[]; decimals: number } | null {
-  if (!Number.isFinite(lo) || !Number.isFinite(hi)) return null
-  if (hi === lo) { hi = lo + (Math.abs(lo) || 1); lo = Math.min(lo, 0) }
-  const raw = (hi - lo) / Math.max(1, count - 1)
-  const mag = Math.pow(10, Math.floor(Math.log10(raw)))
-  const step = [1, 2, 5, 10].map((m) => m * mag).find((v) => v >= raw) ?? 10 * mag
-  const start = Math.floor(lo / step) * step
-  const ticks: number[] = []
-  for (let v = start; v <= hi + step * 1e-9 || ticks.length < 2; v += step) {
-    ticks.push(Number(v.toPrecision(12)))
-    if (ticks.length > 20) break
-  }
-  return { ticks, decimals: Math.max(0, -Math.floor(Math.log10(step) + 1e-9)) }
-}
-
 /** "7 min", "12 s" — the averaging window, for the operator's benefit. */
 const describeResolution = (seconds: number): string => {
   if (seconds >= 3600) return `${(seconds / 3600).toFixed(1)} h`
@@ -124,6 +106,9 @@ interface CurrentGraphProps {
   compact?: boolean
   className?: string
   fillHeight?: boolean
+  /** Let the chart grow to fill a card stretched by its row (beside the run
+   *  controls on a desktop), keeping its usual height as the minimum. */
+  grow?: boolean
 }
 
 export default function CurrentGraph({
@@ -134,6 +119,7 @@ export default function CurrentGraph({
   compact = false,
   className,
   fillHeight = false,
+  grow = false,
 }: CurrentGraphProps = {}) {
   const [data, setData] = useState<CurrentPoint[]>([])
   const [binWidth, setBinWidth] = useState<number | null>(null)
@@ -248,7 +234,7 @@ export default function CurrentGraph({
     // A current is drawn from zero, as before, unless it is negative.
     return niceAxis(Math.min(0, lo), hi)
   }, [scaled])
-  const yTick = (v: number) => (yAxis ? v.toFixed(yAxis.decimals) : formatTick(v))
+  const yTick = (v: number) => (yAxis ? signed(v, yAxis.decimals, false) : formatTick(v).replace(/^-/, "−"))
   // Over a few minutes the seconds of each clock label are noise, and the
   // shorter labels let a phone show more than the first and the last.
   const spanMs = scaled.length > 1 ? scaled[scaled.length - 1].timestamp - scaled[0].timestamp : 0
@@ -300,7 +286,7 @@ export default function CurrentGraph({
   )
 
   return (
-    <Card className={cn(fillHeight && 'flex min-h-0 flex-col overflow-hidden', className)}>
+    <Card className={cn(fillHeight && 'flex min-h-0 flex-col overflow-hidden', grow && 'flex flex-col', className)}>
       <CardHeader className="space-y-4 pb-2">
         {/* Title and actions share a line and wrap only when they must: a
             stacked layout left the "…" menu alone on its own line on a phone. */}
@@ -333,9 +319,10 @@ export default function CurrentGraph({
           </div>
         )}
       </CardHeader>
-      <CardContent className={cn(fillHeight && 'flex min-h-0 flex-1 flex-col overflow-hidden')}>
+      <CardContent className={cn(fillHeight && 'flex min-h-0 flex-1 flex-col overflow-hidden', grow && 'flex flex-1 flex-col')}>
         <div className={fillHeight
           ? "min-h-0 flex-1"
+          : grow ? (compact ? "min-h-52 flex-1 sm:min-h-56" : "min-h-64 flex-1")
           : compact ? "h-52 sm:h-56" : "h-64"}>
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={scaled} margin={CHART_MARGIN}>

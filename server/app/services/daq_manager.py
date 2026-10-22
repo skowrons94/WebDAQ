@@ -67,6 +67,13 @@ class DAQManager:
         # Initialize DAQ state
         self.daq_state = self._load_or_create_state()
 
+        # Each CAEN board's registers as the running run started with them
+        # (board id -> register dump), whether or not the run saves: the
+        # energy-scale calculator compares a live peak with the settings that
+        # produced it, not with the configuration edited since. Registers
+        # written to the board during the run are folded in (note_run_register).
+        self._run_start_registers: Dict[str, Dict[str, Any]] = {}
+
         # Acquisition runs inside this process, so a fresh manager means nothing is
         # acquiring — whatever the file says. A 'running' left behind by a crash or
         # a restart used to make the server claim a run was in progress: recovery
@@ -707,6 +714,8 @@ class DAQManager:
             if not os.path.exists(data_dir):
                 os.makedirs(data_dir)
             
+            self._snapshot_run_registers()
+
             # If save is enabled, create the run directory
             if save:
                 run_dir = f"data/run{run_number}/"
@@ -735,6 +744,8 @@ class DAQManager:
                             shutil.copy2(path, run_dir)
                         except OSError as e:
                             self.logger.warning(f"Could not copy {path} into {run_dir}: {e}")
+                # ensure_recording_bits may have changed the files just copied.
+                self._snapshot_run_registers()
             
             return True
             
@@ -809,6 +820,40 @@ class DAQManager:
             self.logger.debug(f"Error getting file bandwidth: {e}")
             return 0.0
     
+    def _snapshot_run_registers(self) -> None:
+        """Keep each CAEN board's register dump as this run starts with it."""
+        from .sis3316_acquisition import is_sis3316
+        snapshot: Dict[str, Dict[str, Any]] = {}
+        for board in self.daq_state.get('boards', []):
+            if is_sis3316(board):
+                continue
+            try:
+                with open(f"conf/{board['name']}_{board['id']}.json") as f:
+                    registers = json.load(f).get('registers')
+                if isinstance(registers, dict):
+                    snapshot[str(board['id'])] = registers
+            except (OSError, ValueError, KeyError) as e:
+                self.logger.warning(f"No register snapshot for board {board.get('id')}: {e}")
+        self._run_start_registers = snapshot
+
+    def run_registers(self, board_id: str) -> Optional[Dict[str, Any]]:
+        """The registers the running run uses on this board, or None between runs."""
+        if not self.is_running():
+            return None
+        return self._run_start_registers.get(str(board_id))
+
+    def _note_run_register(self, board_id: str, address: int, value: int) -> None:
+        """A register written to the board during the run: the run uses it from now on."""
+        registers = self._run_start_registers.get(str(board_id))
+        if not registers:
+            return
+        for reg in registers.values():
+            try:
+                if int(str(reg.get('address', '')), 16) == int(address):
+                    reg['value'] = hex(int(value))
+            except ValueError:
+                continue
+
     def write_board_register(self, board_id: str, address: int, value: int) -> Dict[str, Any]:
         """
         Write a register straight to a board (online tuning).
@@ -842,6 +887,7 @@ class DAQManager:
             acquisition = get_caen_acquisition(self.test_flag)
             if acquisition.write_register(str(board_id), int(address), int(value)):
                 self._log_register_change(board, int(address), int(value))
+                self._note_run_register(str(board_id), int(address), int(value))
                 return {'written': True, 'reason': '', 'via': 'run'}
             return {'written': False, 'via': 'run', 'reason': (
                 "The running acquisition did not accept the write. The configuration has "

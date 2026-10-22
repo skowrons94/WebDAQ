@@ -345,7 +345,16 @@ function GateResults({ gate, status, boards, onAligned }: {
         </div>
         <div>
           <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm font-medium">Δt = t(partner) − t(channel)</p>
+            <div>
+              <p className="text-sm font-medium">Δt = t(partner) − t(channel)</p>
+              {/* The plot range setting says ±1000 while the axis shows ±300:
+                  say that the view is zoomed, and by how much. */}
+              <p className="text-xs text-muted-foreground">
+                {dtRange
+                  ? `Zoomed to ±3 windows (±${dtZoom} ns) of the ±${gate.dt_range_ns} ns plot range`
+                  : `Whole plot range, ±${gate.dt_range_ns} ns`}
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               {gate.partners.length > 1 && (
                 <Select value={partner} onValueChange={setPartner}>
@@ -383,9 +392,14 @@ function GateResults({ gate, status, boards, onAligned }: {
         </div>
         {gate.matrix && !veto && (
           <div className="xl:col-span-2">
-            <p className="mb-1 text-sm font-medium">Energy of {label(key(gate.channels[0]))} (x) against its partner (y)</p>
+            <p className="text-sm font-medium">Energy of {label(key(gate.channels[0]))} (x) against its partner (y)</p>
+            {/* The matrix is filled with raw energies; only the 1-D spectra
+                are mapped to keV. Said here so nobody reads keV off it. */}
+            <p className="mb-1 text-xs text-muted-foreground">
+              Both axes in ADC channels, not calibrated (the gated spectrum above is in keV when its channel is calibrated).
+            </p>
             <RootPlot fetch={() => getCoincMatrix(gate.id)} deps={[gate.id]} twoD height={360}
-                      xTitle={`${label(key(gate.channels[0]))} (ADC channel)`} yTitle="Partner (ADC channel)" />
+                      xTitle={`${label(key(gate.channels[0]))} (ADC channel, uncalibrated)`} yTitle="Partner (ADC channel, uncalibrated)" />
           </div>
         )}
       </div>

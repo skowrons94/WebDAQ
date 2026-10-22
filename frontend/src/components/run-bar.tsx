@@ -20,6 +20,7 @@ import useRunControlStore from '@/store/run-control-store'
 import { formatHz } from '@/lib/format-rate'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
+import { signed } from '@/lib/run-rows'
 
 // One rate format on every page (lib/format-rate.ts).
 export const formatRate = (hz: number) => formatHz(hz)
@@ -44,7 +45,7 @@ export function RunBar() {
   const router = useRouter()
   const pathname = usePathname()
   const setDashboardTab = useDashboardTabStore((s) => s.setTab)
-  const { known, isRunning, startTime, runNumber, boardError, totalRate, unreachable, stopFailed, saving, unsavedRun } = useRunStatus()
+  const { known, isRunning, startTime, runNumber, boardError, totalRate, unreachable, stopFailed, saving, unsavedRun, leftoverRun } = useRunStatus()
   const elapsed = useElapsed(isRunning, startTime)
   const currentEnabled = useVisualizationStore((s) => s.settings.currentEnabled !== false)
   const [beam, setBeam] = useState<number | null>(null)
@@ -130,7 +131,7 @@ export function RunBar() {
   // fact. Board failure outranks Running, and a Tuner acquisition says so
   // (hooks/use-run-badge.ts, the same rule as the header).
   const badge = deriveRunBadge({ known, isRunning, startTime, boardError, unreachable })
-  const beamText = beam !== null && Number.isFinite(beam) ? `${beam.toFixed(2)} µA` : null
+  const beamText = beam !== null && Number.isFinite(beam) ? `${signed(beam, 2, false)} µA` : null
 
   return (
     <div
@@ -153,7 +154,10 @@ export function RunBar() {
                 </Link>
               ) : (
                 <span className="truncate text-sm text-muted-foreground">
-                  Next: run {runNumber}{unsavedRun === runNumber ? ' (again: last one not saved)' : ''}
+                  Next: run {runNumber}{
+                    unsavedRun === runNumber || (leftoverRun?.run_number === runNumber && leftoverRun.has_data === false)
+                      ? ' (again: last one not saved)'
+                      : leftoverRun?.run_number === runNumber ? ' (overwrites an unfinished run)' : ''}
                 </span>
               )
             )}

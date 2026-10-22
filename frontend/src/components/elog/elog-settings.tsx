@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
-  Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Card, CardContent,
 } from '@/components/ui/card'
 import { useToast } from '@/components/ui/use-toast'
 import {
@@ -110,15 +110,13 @@ export function ElogSettings() {
   }
 
   return (
+    // No card title: the section heading above ("Logbook (ELOG)") says it.
     <Card>
-      <CardHeader>
-        <CardTitle>ELOG</CardTitle>
-        <CardDescription>
+      <CardContent className="space-y-6 pt-6">
+        <p className="text-sm text-muted-foreground">
           Connect LUNADAQ to the collaboration&apos;s PSI ELOG logbook. One shared account is used for
           the connection; each entry is signed with the LUNADAQ user who writes it.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
+        </p>
         {settings && !settings.available && (
           <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-sm">
             The <code>py_elog</code> package is not installed on the server, so reading and posting
@@ -147,8 +145,12 @@ export function ElogSettings() {
               id="elog-user"
               value={user}
               onChange={(e) => setUser(e.target.value)}
-              placeholder="Leave empty if the logbook needs no login"
+              placeholder="Optional"
+              aria-describedby="elog-user-hint"
             />
+            <p id="elog-user-hint" className="text-xs text-muted-foreground">
+              Leave empty if the logbook needs no login.
+            </p>
           </div>
           <div className="space-y-2">
             <Label htmlFor="elog-password">Password</Label>

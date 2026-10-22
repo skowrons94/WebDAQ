@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NumericInput } from "@/components/ui/numeric-input"
@@ -15,7 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { ReloadIcon } from "@radix-ui/react-icons"
 import { useToast } from "@/components/ui/use-toast"
 import {
-  getBoardConfiguration, getBoardSettings, setSetting, updateJSON,
+  getBoardConfiguration, getBoardSettings, getRunRegisters, setSetting, updateJSON,
   getChannelEnabled, setChannelEnabled, getSyncSettings,
   START_MODE_SW, START_MODE_FIRST_TRIGGER,
   type SyncSettings,
@@ -33,8 +33,8 @@ import { Calculator, Plus } from "lucide-react"
 import { Sis3316Dashboard } from "@/components/sis3316/sis3316-dashboard"
 import { useIsPhone } from "@/hooks/use-is-phone"
 import { boardLabel } from "@/lib/board-label"
-import { TrapezoidScaleDialog, type ChannelEnergyRegs } from "@/components/trapezoid-scale-dialog"
-import type { Scale } from "@/lib/trapezoid-scale"
+import { TrapezoidScaleDialog, type ChannelEnergyRegs, type ScaleReference } from "@/components/trapezoid-scale-dialog"
+import { nsPerUnitFor, type Scale } from "@/lib/trapezoid-scale"
 
 // ============================================================
 // Bit-field definitions extracted from CAENRegisterBuilder*.cc
@@ -333,10 +333,8 @@ const TIME_REG_KEYWORDS = [
  * Tuner does, so nobody reads the register value as a number of samples.
  */
 function getNsPerStep(boardName: string): number {
-  if (boardName.includes('1730')) return 8
-  if (boardName.includes('1725')) return 16
-  if (boardName.includes('1724')) return 10
-  return 1
+  // By family, so DT5725, VX1725 and N6724 count like the V1725 and V1724.
+  return nsPerUnitFor(boardName) ?? 1
 }
 
 function isTimeReg(name: string): boolean {
@@ -502,7 +500,8 @@ export default function Dashboard() {
           {selectedBoard && (selectedBoard.vendor === "sis3316"
             ? <Sis3316Dashboard key={selectedBoard.id} board={selectedBoard} />
             : <BoardComponent key={selectedBoard.id} boardData={selectedBoard}
-                              openScaleFor={scaleLink?.board === selectedBoard.id ? scaleLink.channel : undefined} />)}
+                              openScaleFor={scaleLink?.board === selectedBoard.id ? scaleLink.channel : undefined}
+                              onScaleLinkUsed={() => setScaleLink(null)} />)}
         </TabsContent>
 
         <TabsContent value="sync">
@@ -938,7 +937,12 @@ function AcquisitionControlCard({ onChanged }: { onChanged?: () => void }) {
 // Per-board settings component
 // ============================================================
 
-function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; openScaleFor?: number }) {
+function BoardComponent({ boardData, openScaleFor, onScaleLinkUsed }: {
+  boardData: BoardData
+  openScaleFor?: number
+  /** The deep link has opened the calculator: it must not open it again (e.g. on switching boards and back). */
+  onScaleLinkUsed?: () => void
+}) {
   const [settings, setSettings] = useState<BoardSettings>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -968,7 +972,10 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
   const isPHA = !boardData.dpp.toUpperCase().includes("PSD")
   const [scaleOpen, setScaleOpen] = useState(false)
   const [scaleChannel, setScaleChannel] = useState(0)
-  const [savedSettings, setSavedSettings] = useState<BoardSettings | null>(null)
+  // The settings a live peak was measured with (see openScale).
+  const [scaleRef, setScaleRef] = useState<ScaleReference | null>(null)
+  // Where focus returns when the calculator closes: the control that opened it.
+  const scaleOpener = useRef<HTMLElement | null>(null)
   const [tab, setTab] = useState(openScaleFor !== undefined ? "channels" : "general")
   const { toast } = useToast()
 
@@ -1251,21 +1258,49 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
     setCopying(false)
   }
 
-  /** Open the energy-scale calculator on a channel, with the saved values beside the page's. */
+  /**
+   * Open the energy-scale calculator on a channel. A measured peak is
+   * compared with the registers that produced it: during a run, the ones the
+   * run started with (a scale saved since applies only at the next run, and
+   * correcting from it would apply the correction twice); between runs, the
+   * saved configuration.
+   */
   const openScale = (channel: number) => {
+    scaleOpener.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+      ? document.activeElement : null
     setScaleChannel(channel)
-    setSavedSettings(null)
+    setScaleRef(null)
     setScaleOpen(true)
-    getBoardSettings(boardData.id)
-      .then(fresh => setSavedSettings(fresh as BoardSettings))
+    getRunRegisters(boardData.id)
+      .then(res => {
+        const byCh = groupChannelSettings(res.registers as BoardSettings)
+        const regs: Record<number, ChannelEnergyRegs | null> = {}
+        for (const ch of Object.keys(byCh).map(Number)) regs[ch] = energyRegsOf(byCh[ch])
+        setScaleRef({ source: res.source, run: res.run ?? null, regs })
+      })
       .catch(() => { /* the page's own values stand in */ })
   }
 
-  // Arriving from a histogram card's "Fix it": straight to that channel.
+  const returnScaleFocus = (e: Event) => {
+    const opener = scaleOpener.current
+    // The opener may have been re-rendered away, or there was none (the
+    // histogram card's link): then the channel's own Calculate… button, or
+    // its button in the channel picker.
+    const target = opener?.isConnected ? opener
+      : document.querySelector<HTMLElement>(`[data-scale-opener="${scaleChannel}"]`)
+        ?? document.querySelector<HTMLElement>(`[data-channel-pick="${scaleChannel}"]`)
+    if (target) {
+      e.preventDefault()
+      target.focus()
+    }
+  }
+
+  // Arriving from a histogram card's "Fix it": straight to that channel, once.
   useEffect(() => {
     if (loading || openScaleFor === undefined || !isPHA) return
     setSelectedChannel(String(openScaleFor))
     openScale(openScaleFor)
+    onScaleLinkUsed?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, openScaleFor])
 
@@ -1276,8 +1311,9 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
    * fields, so it is put into the saved value of that register, not the one
    * on screen, which may carry other unsaved edits; those stay pending.
    */
-  const handleApplyScale = async (scale: Scale, targets: number[]): Promise<boolean> => {
+  const handleApplyScale = async (scales: Record<number, Scale>): Promise<boolean> => {
     if (busy) return false
+    const targets = Object.keys(scales).map(Number).sort((x, y) => x - y)
     setCopying(true)
     let fresh: BoardSettings
     try {
@@ -1288,14 +1324,14 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
       return false
     }
     const byChannel = groupChannelSettings(fresh)
-    const writes: { regName: string; value: number; algo: boolean }[] = []
+    const writes: { regName: string; value: number; algo: boolean; ch: number }[] = []
     for (const ch of targets) {
       const regs = byChannel[ch]
       const algo = regs && Object.entries(regs).find(([, r]) => r.name === "DPP Algorithm Control")
       const fg = regs && Object.entries(regs).find(([, r]) => r.name === "Fine Gain")
       if (!algo || !fg) continue
-      writes.push({ regName: algo[0], value: setFieldInRegister(algo[1].value_dec, 0, 5, scale.shf), algo: true })
-      writes.push({ regName: fg[0], value: scale.fg, algo: false })
+      writes.push({ regName: algo[0], value: setFieldInRegister(algo[1].value_dec, 0, 5, scales[ch].shf), algo: true, ch })
+      writes.push({ regName: fg[0], value: scales[ch].fg, algo: false, ch })
     }
     const done: typeof writes = []
     try {
@@ -1315,7 +1351,7 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
           const onScreen = prev[w.regName]
           if (w.algo && onScreen && modifiedSettings.has(w.regName)) {
             // Other fields of this register have unsaved edits: keep them, with the new rescaling.
-            const v = setFieldInRegister(onScreen.value_dec, 0, 5, scale.shf)
+            const v = setFieldInRegister(onScreen.value_dec, 0, 5, scales[w.ch].shf)
             next[w.regName] = { ...onScreen, value_dec: v, value_hex: `0x${v.toString(16).toUpperCase()}` }
             if (v === w.value) cleared.push(w.regName)
           } else {
@@ -1332,16 +1368,37 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
         return next
       })
       const ok = writes.length > 0 && confirmed.length === writes.length
-      const where = targets.length === 1 ? `channel ${targets[0]}` : `${targets.length} channels`
+      const sc = (ch: number) => `rescaling ${scales[ch].shf}, fine gain ${scales[ch].fg}`
       if (ok) {
+        const same = targets.every(ch => scales[ch].shf === scales[targets[0]].shf && scales[ch].fg === scales[targets[0]].fg)
         toast({
           title: "Energy scale saved",
-          description: `Trapezoid rescaling ${scale.shf} and fine gain 0x${scale.fg.toString(16).toUpperCase()} on ${where}, for the next run. Peaks move: re-check the energy calibration of ${targets.length === 1 ? "this channel" : "these channels"}.`,
+          description: targets.length === 1
+            ? `Trapezoid ${sc(targets[0])} on channel ${targets[0]}, for the next run. Peaks move: re-check the energy calibration of this channel.`
+            : `${same ? `Trapezoid ${sc(targets[0])} on` : "Worked out per channel and saved on"} channels ${targets.join(", ")}, for the next run. Peaks move: re-check the energy calibration of these channels.`,
         })
       } else {
+        // Say exactly what each channel now has: a channel can be half done
+        // (rescaling written, fine gain not), which a count would hide.
+        const has = (w?: { regName: string }) => !!w && confirmed.some(c => c.regName === w.regName)
+        const full: number[] = [], half: string[] = [], none: number[] = []
+        for (const ch of targets) {
+          const a = writes.find(w => w.ch === ch && w.algo), f = writes.find(w => w.ch === ch && !w.algo)
+          if (has(a) && has(f)) full.push(ch)
+          else if (has(a)) half.push(`channel ${ch} got rescaling ${scales[ch].shf} but kept its old fine gain`)
+          else if (has(f)) half.push(`channel ${ch} got fine gain ${scales[ch].fg} but kept its old rescaling`)
+          else none.push(ch)
+        }
+        const parts = [
+          full.length ? (full.length === 1 && targets.length === 1
+            ? `Saved: ${sc(full[0])} on channel ${full[0]}.`
+            : `Saved on channel${full.length === 1 ? "" : "s"} ${full.map(ch => `${ch} (${sc(ch)})`).join(", ")}.`) : "",
+          half.length ? `Half done: ${half.join("; ")}.` : "",
+          none.length ? `Unchanged: channel${none.length === 1 ? "" : "s"} ${none.join(", ")}.` : "",
+        ].filter(Boolean)
         toast({
           title: "Energy scale not fully saved",
-          description: `${confirmed.length / 2 | 0} of ${writes.length / 2} channels saved. The values shown are read back from the configuration.`,
+          description: `${parts.join(" ")} The values shown are read back from the configuration.`,
           variant: "destructive",
         })
       }
@@ -1561,7 +1618,7 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
                         handleBitFieldChange(regName, field.startBit, field.endBit, iv)
                       }
                     }}
-                    className="h-7 w-24 text-sm text-right"
+                    className="h-7 w-24 text-sm"
                     title={`0–${maxValue}`}
                   />
                 )}
@@ -1640,9 +1697,12 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
           <InfoTooltip text={tip} />
           {/* The hardest setting on the page: worked out from the shaping
               times or a measured peak rather than guessed. */}
-          {isPHA && field.name === "Trapezoid Rescaling" && (
+          {/* Advanced only: the energy scale is set between campaigns, not
+              on a shift (the histogram card's "Fix it" still opens it). */}
+          {isPHA && advancedMode && field.name === "Trapezoid Rescaling" && (
             <Button type="button" variant="link" size="sm"
                     className="ml-auto h-9 px-1 text-sm sm:h-5"
+                    data-scale-opener={reg.channel}
                     onClick={() => openScale(reg.channel)}>
               <Calculator className="mr-1 h-3.5 w-3.5" aria-hidden="true" />
               Calculate…
@@ -1690,7 +1750,7 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
                   handleBitFieldChange(regName, field.startBit, field.endBit, iv)
                 }
               }}
-              className="h-8 flex-1 text-sm text-right"
+              className="h-8 flex-1 text-sm"
               title={`0–${maxValue}`}
             />
           )}
@@ -1894,7 +1954,7 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
                     onCheckedChange={enabled => handleChannelToggle(ch, enabled)}
                   />
                   <Badge variant={channelEnabled[ch] ? "default" : "secondary"} className="px-2 text-xs">
-                    {channelEnabled[ch] ? "ON" : "OFF"}
+                    {channelEnabled[ch] ? "On" : "Off"}
                   </Badge>
                 </div>
               ))}
@@ -2198,6 +2258,7 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
                     variant={selectedChannel === ch.toString() ? "default" : "outline"}
                     size="sm"
                     onClick={() => setSelectedChannel(ch.toString())}
+                    data-channel-pick={ch}
                     className="flex items-center gap-1.5"
                   >
                     Ch {ch}
@@ -2205,7 +2266,7 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
                       variant={channelEnabled[ch] ? "default" : "secondary"}
                       className="text-xs px-1.5 py-0 ml-0.5"
                     >
-                      {channelEnabled[ch] ? "ON" : "OFF"}
+                      {channelEnabled[ch] ? "On" : "Off"}
                     </Badge>
                   </Button>
                 ))}
@@ -2326,10 +2387,12 @@ function BoardComponent({ boardData, openScaleFor }: { boardData: BoardData; ope
           boardName={boardData.name}
           channel={scaleChannel}
           channels={channels.filter(ch => energyRegsOf(channelSettingsMap[ch]))}
+          enabled={enabledChannels.filter(ch => energyRegsOf(channelSettingsMap[ch]))}
           onChannelChange={ch => { setScaleChannel(ch); setSelectedChannel(String(ch)) }}
-          current={energyRegsOf(channelSettingsMap[scaleChannel])}
-          saved={savedSettings ? energyRegsOf(groupChannelSettings(savedSettings)[scaleChannel]) : null}
+          pageRegs={Object.fromEntries(channels.map(ch => [ch, energyRegsOf(channelSettingsMap[ch])]))}
+          reference={scaleRef}
           onApply={handleApplyScale}
+          onCloseAutoFocus={returnScaleFocus}
         />
       )}
 

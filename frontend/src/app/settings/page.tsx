@@ -1,7 +1,7 @@
 'use client'
 
 import { AuthGate } from '@/components/auth-gate'
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Layout } from '@/components/dashboard-layout';
 import { PageHeader } from '@/components/page-header';
@@ -33,30 +33,45 @@ const RENAMED: Record<string, string> = { graphite: 'monitoring', grafana: 'moni
 
 function SettingsPageContent() {
     const router = useRouter();
-    const [activeView, setActiveView] = useState('current');
-    // Phones show either the list of sections or one section (with a way
-    // back), like a phone's own settings app; a link to a section opens it.
-    const [picked, setPicked] = useState(false);
-
-    // Deep links to a section, e.g. /settings?view=current from the command
-    // palette, and links between sections (the current module points at
-    // Monitoring): followed whenever the query changes, not only on load.
+    // The section lives in the URL (?view=…) and nowhere else, so a reload
+    // keeps it and the browser's Back goes from a section to the list on a
+    // phone, which shows either the list or one section, like a phone's own
+    // settings app. Deep links (the command palette, links between sections)
+    // open a section the same way.
     const viewParam = useSearchParams().get('view');
+    const view = viewParam ? (RENAMED[viewParam] ?? viewParam) : null;
+    const picked = !!view && SECTIONS.some((s) => s.id === view);
+    const activeView = picked ? view! : 'current';
+    // Whether this page pushed the section's history entry: then "All
+    // settings" is the same as Back; after a reload or a deep link there is
+    // nothing of ours to go back to, and the entry is replaced instead.
+    const pushed = useRef(false);
+
     useEffect(() => {
         // The boards are set up under Setup → Boards; old links still land there.
-        if (viewParam === 'boards') { router.replace('/board'); return; }
-        const view = viewParam ? (RENAMED[viewParam] ?? viewParam) : null;
-        if (view && SECTIONS.some((s) => s.id === view)) { setActiveView(view); setPicked(true); }
+        if (viewParam === 'boards') router.replace('/board');
     }, [router, viewParam]);
 
-    // The section is in the URL too, so a reload or a shared link opens it.
-    const selectView = (view: string) => {
-        setActiveView(view);
-        setPicked(true);
-        window.scrollTo({ top: 0 });
-        const url = new URL(window.location.href);
-        url.searchParams.set('view', view);
-        window.history.replaceState(null, '', url.toString());
+    const selectView = (id: string) => {
+        if (id === view) return;
+        // On a desktop the list stays beside the section: picking another is
+        // not a step to go back from.
+        const wide = window.matchMedia?.('(min-width: 768px)').matches;
+        if (wide) {
+            router.replace(`/settings?view=${id}`, { scroll: false });
+        } else {
+            pushed.current = true;
+            router.push(`/settings?view=${id}`);
+        }
+    };
+
+    const showList = () => {
+        if (pushed.current) {
+            pushed.current = false;
+            router.back();
+        } else {
+            router.replace('/settings');
+        }
     };
 
     const current = SECTIONS.find((s) => s.id === activeView) ?? SECTIONS[0];
@@ -101,8 +116,8 @@ function SettingsPageContent() {
                     <div>
                         <button
                             type="button"
-                            onClick={() => setPicked(false)}
-                            className="-ml-1 mb-2 inline-flex min-h-10 items-center gap-1 rounded-md px-1 text-sm text-muted-foreground hover:text-foreground md:hidden"
+                            onClick={showList}
+                            className="-ml-1 mb-2 inline-flex min-h-11 items-center gap-1 rounded-md px-1 text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
                         >
                             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
                             All settings

@@ -10,6 +10,7 @@ import { formatElapsed } from '@/components/run-status-indicator'
 import { useRunStatus } from '@/hooks/use-run-status'
 import { useRunBadge } from '@/hooks/use-run-badge'
 import { getRunMetadataAll } from '@/lib/api'
+import { formatRunDate, runRowNote, runRowState } from '@/lib/run-rows'
 
 interface RunRow {
   run_number: number
@@ -17,6 +18,7 @@ interface RunRow {
   run_type?: string
   start_time?: string
   end_time?: string | null
+  has_data?: boolean
   flag?: string
 }
 
@@ -25,7 +27,7 @@ const SHOWN = 5
 // Start records the run's name and type a moment after the run itself; a list
 // read when isRunning flipped showed "Untitled run". Whoever writes run
 // metadata says so, and the list reads again.
-const RUNS_CHANGED = 'webdaq:runs-changed'
+export const RUNS_CHANGED = 'webdaq:runs-changed'
 
 export function notifyRunsChanged() {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(RUNS_CHANGED))
@@ -91,7 +93,10 @@ export function RecentRuns() {
         ) : (
           <ul className="divide-y">
             {runs.map((run) => {
-              const live = !run.end_time && isRunning && saving !== false && run.run_number === runNumber
+              const now = { isRunning, runNumber, saving }
+              const live = runRowState(run, now) === 'live'
+              // A run that never ended says why it has no duration.
+              const note = runRowNote(run, now)
               const seconds = run.start_time && run.end_time
                 ? Math.max(0, (new Date(run.end_time).getTime() - new Date(run.start_time).getTime()) / 1000)
                 : null
@@ -106,12 +111,14 @@ export function RecentRuns() {
                       {run.target_name || 'Untitled run'}
                       {run.start_time && (
                         <span className="hidden sm:inline">
-                          {' · '}{new Date(run.start_time).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          {' · '}{formatRunDate(run.start_time)}
                         </span>
                       )}
                     </span>
                     {live ? (
                       <StatusBadge state={badge.state} label={badge.label} title={badge.title} />
+                    ) : note ? (
+                      <span className="shrink-0 text-right text-xs text-warning">{note}</span>
                     ) : seconds !== null ? (
                       <span className="shrink-0 font-mono text-xs tabular-nums text-muted-foreground">
                         {formatElapsed(seconds)}

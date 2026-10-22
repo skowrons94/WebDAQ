@@ -78,6 +78,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
         document.title = activeItem ? `${activeItem.label} · LUNADAQ` : "LUNADAQ"
     }, [activeItem])
 
+    // Ctrl+K (⌘K on a Mac) opens Search from anywhere, as the button hints.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
+                e.preventDefault()
+                setOpen((o) => !o)
+            }
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+    }, [])
+
     const handleLogout = () => {
         clearToken()
         router.push('/')
@@ -179,6 +191,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         className="hidden lg:inline-flex xl:hidden"
                         onClick={() => setOpen(true)}
                         aria-label="Search"
+                        title="Search (Ctrl K)"
                     >
                         <Search className="h-4 w-4" />
                     </Button>
@@ -189,6 +202,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     >
                         <Search className="mr-2 h-4 w-4" />
                         Search…
+                        <kbd className="pointer-events-none ml-3 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground">Ctrl K</kbd>
                     </Button>
                     <CommandDialog open={open} onOpenChange={setOpen}>
                         <CommandInput placeholder="Type a command or search..." />

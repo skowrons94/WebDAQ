@@ -222,6 +222,27 @@ export default function GrafanaAlertManager() {
         </CardHeader>
       </Card>
 
+      {/* Grafana unreachable: that comes first, and the counters, filters
+          and bulk actions (all about rules it could not list) are hidden. */}
+      {!loading && error && (
+        <ErrorState
+          // A 401/403 is an answer: Grafana is there but wants a token.
+          title={/\((401|403)\)/.test(error) ? 'Grafana needs a service-account token' : 'Grafana could not be reached'}
+          action={
+            <>
+              <Button onClick={() => loadAlerts()} variant="outline" size="sm">
+                Retry
+              </Button>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/settings?view=monitoring">Monitoring settings</Link>
+              </Button>
+            </>
+          }
+        >
+          {error}
+        </ErrorState>
+      )}
+
       {/* Run status + auto-managed count */}
       <Card>
         <CardContent className="flex items-center justify-between pt-5 pb-5">
@@ -241,6 +262,7 @@ export default function GrafanaAlertManager() {
         </CardContent>
       </Card>
 
+      {!error && (<>
       {/* Stats bar */}
       <div className="grid grid-cols-3 gap-3">
         <Card>
@@ -295,14 +317,15 @@ export default function GrafanaAlertManager() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => bulkAction('pause')}>
             <BellOff className="mr-1.5 h-3.5 w-3.5" />
-            Pause All
+            Pause all
           </Button>
           <Button variant="outline" size="sm" onClick={() => bulkAction('unpause')}>
             <Bell className="mr-1.5 h-3.5 w-3.5" />
-            Unpause All
+            Unpause all
           </Button>
         </div>
       </div>
+      </>)}
 
       {/* Content */}
       {loading ? (
@@ -312,23 +335,7 @@ export default function GrafanaAlertManager() {
             Loading alerts…
           </CardContent>
         </Card>
-      ) : error ? (
-        <ErrorState
-          title="Grafana could not be reached"
-          action={
-            <>
-              <Button onClick={() => loadAlerts()} variant="outline" size="sm">
-                Retry
-              </Button>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/settings?view=monitoring">Grafana settings</Link>
-              </Button>
-            </>
-          }
-        >
-          {error}
-        </ErrorState>
-      ) : filteredAlerts.length === 0 ? (
+      ) : error ? null : filteredAlerts.length === 0 ? (
         <EmptyState title={search ? `No Grafana alerts match "${search}"` : 'No Grafana alerts'}>
           Alert rules are defined in Grafana; the ones it reports appear here.
         </EmptyState>
@@ -520,7 +527,7 @@ export default function GrafanaAlertManager() {
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
+      {!error && <div className="flex items-center justify-between px-1 text-xs text-muted-foreground">
         <span>
           Showing {filteredAlerts.length} of {alerts.length} alert rules
         </span>
@@ -530,7 +537,7 @@ export default function GrafanaAlertManager() {
             {autoManageUids.length} alert(s) linked to run lifecycle
           </span>
         )}
-      </div>
+      </div>}
     </div>
   )
 }

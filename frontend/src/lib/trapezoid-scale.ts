@@ -15,7 +15,7 @@
  *
  * The energy is exactly proportional to FG / 65536 and to 2^-SHF, and close to
  * proportional to the rise time k and the decay time M, both counted in ADC
- * samples (a register unit is 4 samples on the V1725 and V1730):
+ * samples (a register unit is 4 samples on the x725 and x730):
  *
  *   E ≈ C · A · k · M · (FG / 65536) / 2^SHF,   C ≈ 0.153
  *
@@ -95,33 +95,76 @@ export function predictEnergy(amplitude: number, s: Shaping, sc: Scale): number 
 }
 
 /**
+ * A scale the registers can hold. `limit` is set when the wanted scale is out
+ * of their reach and this is the nearest end: 'max-gain' when even SHF 0 with
+ * FG 0xFFFF gives too little energy, 'min-gain' when even SHF 63 with FG 1
+ * gives too much.
+ */
+export interface ScaleResult extends Scale {
+  limit?: 'max-gain' | 'min-gain'
+}
+
+/** How far a scale may miss the wanted one before it counts as out of reach. */
+const REACH_TOLERANCE = 0.01
+
+/**
  * Trapezoid Rescaling and Fine Gain that divide by `divisor` (the filter
  * output over the wanted energy). FG is kept in [0x8000, 0xFFFF], half to all
  * of its range, for the finest steps: SHF is the largest shift that still
- * leaves the fine gain under 1.
+ * leaves the fine gain under 1. Beyond 2^64 the shift is at its 63 and the
+ * fine gain goes down from 0x8000 instead. Null when there is no answer (a
+ * divisor that is not a positive number, which means an input is missing).
  */
-export function scaleForDivisor(divisor: number): Scale {
-  if (!(divisor > 0) || !Number.isFinite(divisor)) return { shf: 0, fg: FINE_GAIN_MAX }
-  let shf = Math.floor(Math.log2(divisor))
-  if (shf > SHF_MAX) return { shf: SHF_MAX, fg: 1 }
-  if (shf < 0) return { shf: 0, fg: FINE_GAIN_MAX } // more gain than the board has
-  let fg = Math.round((FINE_GAIN_UNITY * 2 ** shf) / divisor)
-  // A divisor of exactly 2^n would ask for FG = 65536, one more than the
-  // register holds: the same scale is one shift less with FG = 0x8000.
-  if (fg > FINE_GAIN_MAX) {
-    if (shf === 0) return { shf: 0, fg: FINE_GAIN_MAX }
-    shf -= 1
-    fg = Math.round(fg / 2)
+export function scaleForDivisor(divisor: number): ScaleResult | null {
+  if (Number.isNaN(divisor) || !(divisor > 0)) return null
+  let shf: number
+  let fg: number
+  if (divisor === Infinity) {
+    shf = SHF_MAX
+    fg = 1
+  } else {
+    shf = Math.floor(Math.log2(divisor))
+    if (shf > SHF_MAX) shf = SHF_MAX
+    if (shf < 0) shf = 0
+    fg = Math.round((FINE_GAIN_UNITY * 2 ** shf) / divisor)
+    // A divisor of exactly 2^n would ask for FG = 65536, one more than the
+    // register holds: the same scale is one shift less with FG = 0x8000.
+    if (fg > FINE_GAIN_MAX && shf > 0) {
+      shf -= 1
+      fg = Math.round(fg / 2)
+    }
+    fg = Math.max(1, Math.min(FINE_GAIN_MAX, fg))
   }
-  return { shf, fg: Math.max(1, Math.min(FINE_GAIN_MAX, fg)) }
+  const sc: ScaleResult = { shf, fg }
+  // Out of reach: the nearest end of the registers misses the wanted scale.
+  const miss = scaleFactor(sc) * divisor - 1
+  if (miss < -REACH_TOLERANCE) sc.limit = 'max-gain'
+  else if (miss > REACH_TOLERANCE) sc.limit = 'min-gain'
+  return sc
 }
 
 /**
  * From the shaping times: the scale that puts a pulse of `amplitude` ADC LSB
  * at `targetEnergy` channels. Good to the ~10 % of the model.
  */
-export function scaleFromShaping(amplitude: number, s: Shaping, targetEnergy: number): Scale {
+export function scaleFromShaping(amplitude: number, s: Shaping, targetEnergy: number): ScaleResult | null {
   return scaleForDivisor((amplitude * filterGain(s)) / targetEnergy)
+}
+
+/**
+ * How much a measured line has to move: `energyWanted / energyNow`, and, when
+ * the shaping changes too (`before` → `after`), the k · M model's correction
+ * for it, approximately.
+ */
+export function peakRatio(energyNow: number, energyWanted: number, before?: Shaping, after?: Shaping): number {
+  let ratio = energyWanted / energyNow
+  if (before && after) ratio *= filterGain(before) / filterGain(after)
+  return ratio
+}
+
+/** The scale that multiplies the energy given by `current` by `ratio`. */
+export function scaleTimes(current: Scale, ratio: number): ScaleResult | null {
+  return scaleForDivisor(1 / (scaleFactor(current) * ratio))
 }
 
 /**
@@ -136,10 +179,8 @@ export function scaleFromPeak(
   energyWanted: number,
   before?: Shaping,
   after?: Shaping,
-): Scale {
-  let ratio = energyWanted / energyNow
-  if (before && after) ratio *= filterGain(before) / filterGain(after)
-  return scaleForDivisor(1 / (scaleFactor(current) * ratio))
+): ScaleResult | null {
+  return scaleTimes(current, peakRatio(energyNow, energyWanted, before, after))
 }
 
 /** Whether the shaping changes enough between two settings to make a peak-based result approximate. */
@@ -171,28 +212,55 @@ export function verdict(energy: number): ScaleVerdict {
   return "good"
 }
 
+/**
+ * The digitizer family of a CAEN model name: "725" for V1725, V1725S, VX1725,
+ * DT5725 and N6725 alike (the first digit is the form factor: 1 VME, 5
+ * desktop, 6 NIM). Null when the name carries no model number.
+ */
+export function caenFamily(boardName: string): string | null {
+  return boardName.match(/(?:^|[^0-9])[156](7\d\d)(?![0-9])/)?.[1] ?? null
+}
+
 /** ADC resolution of a CAEN digitizer, from its name (14 bits unless known otherwise). */
 export function adcBitsFor(boardName: string): number {
-  if (boardName.includes("1720")) return 12
-  if (boardName.includes("1751")) return 10
-  if (boardName.includes("1740") || boardName.includes("1742")) return 12
+  const f = caenFamily(boardName)
+  if (f === '720' || f === '740' || f === '742') return 12
+  if (f === '751') return 10
   return 14
 }
 
 /**
- * ADC samples per register time unit. 4 on the V1725 (16 ns, 4 ns samples)
- * and the V1730 (8 ns, 2 ns samples); 1 on the V1724, whose unit is its 10 ns
- * sample (not checked on a board).
+ * The DPP-PHA time register unit in ns: 16 on the x725 (four 4 ns samples), 8
+ * on the x730 (four 2 ns samples), 10 on the x724 (its one 10 ns sample).
+ * Null for a model not known here.
+ */
+export function nsPerUnitFor(boardName: string): number | null {
+  const f = caenFamily(boardName)
+  if (f === '730') return 8
+  if (f === '725') return 16
+  if (f === '724') return 10
+  return null
+}
+
+/**
+ * ADC samples per register time unit. 4 on the x725 (16 ns, 4 ns samples)
+ * and the x730 (8 ns, 2 ns samples); 1 on the x724, whose unit is its 10 ns
+ * sample (not checked on a board), and on the x781/x782.
  */
 export function samplesPerUnitFor(boardName: string): number {
-  if (boardName.includes("1724") || boardName.includes("1781") || boardName.includes("1782")) return 1
+  const f = caenFamily(boardName)
+  if (f === '724' || f === '781' || f === '782') return 1
   return 4
 }
 
-/** Whether the energy constant was measured on this model (only the V1725). */
+/** Whether the energy constant was measured on this family (only the x725: a V1725S). */
 export function measuredOn(boardName: string): boolean {
-  return boardName.includes("1725")
+  return caenFamily(boardName) === '725'
 }
+
+/** Trapezoid Rise Time (0x1n5C) is 12 bits wide, Decay Time (0x1n68) 16 (UM5678). */
+export const RISE_UNITS_MAX = 0xfff
+export const DECAY_UNITS_MAX = 0xffff
 
 /** Input range in mV peak-to-peak from the Input Dynamic Range register (0 = 2 Vpp, 1 = 0.5 Vpp). */
 export function inputRangeMv(dynamicRangeReg: number | undefined): number {

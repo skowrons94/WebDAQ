@@ -11,11 +11,16 @@ import {
   Wrench,
 } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select"
 import { ConfirmAction } from "@/components/ui/confirm-action"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { Button, buttonVariants } from "@/components/ui/button"
+import { formatRunDate } from "@/lib/run-rows"
 import { cn } from "@/lib/utils"
 import {
   Card,
@@ -46,6 +51,8 @@ import {
   getCurrentModuleType,
   getCurrentRunNumber,
   getRunMetadataAll,
+  getRunMetadata,
+  getNextFreeRun,
   refreshBoardConnections,
   startStatsRun,
   getSaveData,
@@ -106,6 +113,10 @@ export function RunControlButtons({
 
   // Dialog states
   const [showOverrideDialog, setShowOverrideDialog] = useState(false)
+  // What the overwrite question says about the earlier run, and the number offered instead.
+  const [overwriteInfo, setOverwriteInfo] = useState<{
+    name: string | null; start: string | null; end: string | null; known: boolean; nextFree: number | null
+  } | null>(null)
   const [stopping, setStopping] = useState(false)
   const [starting, setStarting] = useState(false)
   // Also a ref: a double click lands before React re-renders the disabled
@@ -129,6 +140,38 @@ export function RunControlButtons({
   const [runType, setRunType] = useState<string>('')
   const [tv, setTv] = useState<string>("0")
   const [pv, setPv] = useState<string>("0")
+
+  // Starting a run changes the height of what is above and in this card (the
+  // status cards fill in, and on a phone this card folds to one line): the
+  // page jumped, or the browser's scroll anchoring scrolled it away. For a
+  // moment after the start, this card is kept where the operator saw it,
+  // unless they scroll themselves.
+  const cardRef = useRef<HTMLDivElement>(null)
+  const holdCardInPlace = () => {
+    const el = cardRef.current
+    if (!el || typeof window === 'undefined') return
+    const top = el.getBoundingClientRect().top
+    const until = Date.now() + 2500
+    let cancelled = false
+    const cancel = () => { cancelled = true }
+    const opts = { passive: true, once: true } as const
+    window.addEventListener('wheel', cancel, opts)
+    window.addEventListener('touchstart', cancel, opts)
+    window.addEventListener('keydown', cancel, opts)
+    const fix = () => {
+      const node = cardRef.current
+      if (cancelled || !node || Date.now() > until) {
+        window.removeEventListener('wheel', cancel)
+        window.removeEventListener('touchstart', cancel)
+        window.removeEventListener('keydown', cancel)
+        return
+      }
+      const drift = node.getBoundingClientRect().top - top
+      if (Math.abs(drift) > 1) window.scrollBy(0, drift)
+      requestAnimationFrame(fix)
+    }
+    requestAnimationFrame(fix)
+  }
 
   // Fetch last run metadata on component mount
   useEffect(() => {
@@ -200,6 +243,25 @@ export function RunControlButtons({
     }
   }
 
+  /** From the overwrite dialog: leave the earlier run alone and start under the next free number. */
+  const startAsNextFree = async () => {
+    const next = overwriteInfo?.nextFree
+    if (next == null || startingRef.current) return
+    setShowOverrideDialog(false)
+    setStartBusy(true)
+    try {
+      await setRunNumber(next)
+      onRunNumberChange(next)
+      useRunControlStore.getState().update({ runNumber: next })
+      await startRunProcess(next)
+    } catch (error) {
+      console.error('Failed to start under the next free number:', error)
+      toast({ title: 'Error', description: `Could not set the run number to ${next}.`, variant: 'destructive' })
+    } finally {
+      setStartBusy(false)
+    }
+  }
+
   /** Set up and start with the saving setting the operator confirmed. */
   const beginStart = async (save: boolean) => {
     pendingSave.current = save
@@ -212,6 +274,18 @@ export function RunControlButtons({
 
       // Only confirm when the run directory already exists (would be overwritten).
       if (directoryExists) {
+        // Say which run would be lost, and offer the next free number.
+        const [record, nextFree] = await Promise.all([
+          getRunMetadata(runNumber!).then((r) => r.data).catch(() => null),
+          getNextFreeRun().catch(() => NaN),
+        ])
+        setOverwriteInfo({
+          name: record?.target_name || null,
+          start: record?.start_time || null,
+          end: record?.end_time || null,
+          known: Boolean(record),
+          nextFree: Number.isFinite(nextFree) && nextFree > runNumber! ? nextFree : null,
+        })
         setStartBusy(false)
         setShowOverrideDialog(true)
         return
@@ -237,8 +311,8 @@ export function RunControlButtons({
   /**
    * Core run start process that configures all systems and starts data acquisition
    */
-  const startRunProcess = async () => {
-    if (runNumber === null) {
+  const startRunProcess = async (n: number | null = runNumber) => {
+    if (n === null) {
       toast({
         title: 'Error',
         description: 'Run number is not set. Please set a run number before starting.',
@@ -251,7 +325,7 @@ export function RunControlButtons({
     try {
       toast({
         title: 'Starting run…',
-        description: `Please wait while run ${runNumber} is being started.`,
+        description: `Please wait while run ${n} is being started.`,
       })
 
       // Configure acquisition parameters
@@ -268,7 +342,7 @@ export function RunControlButtons({
       // acquisition has not been disabled in the settings.
       //
       // Neither of these may stop the run. They used to be awaited bare, so a
-      // picoammeter that was connected but not sampling answered 4xx, threw,
+      // picoammeter that was conRunNumberected but not sampling answered 4xx, threw,
       // and the DAQ was never started at all — the operator saw only "Failed to
       // start the run" and lost beam time to a monitor. A run without its
       // current log or its stats.csv is worth far more than no run.
@@ -276,14 +350,14 @@ export function RunControlButtons({
       if (saveData) {
         if (currentEnabled) {
           try {
-            await startAcquisitionCurrent(String(runNumber))
+            await startAcquisitionCurrent(String(n))
           } catch (error) {
             console.error('Current recording did not start:', error)
             sideEffects.push('beam current is not being recorded')
           }
         }
         try {
-          await startStatsRun(runNumber)
+          await startStatsRun(n)
         } catch (error) {
           console.error('stats.csv did not start:', error)
           sideEffects.push('stats.csv is not being written')
@@ -300,6 +374,7 @@ export function RunControlButtons({
 
       // The run is on: say so now, and make the shared poller ignore any
       // answer to a poll sent before the start (it would show Stopped again).
+      holdCardInPlace()
       onIsRunningChange(true)
       setIsRunningStore(true)
       noteRunAction()
@@ -320,7 +395,7 @@ export function RunControlButtons({
         },
         saveData && {
           warning: 'the run name and type were not saved to the Logbook',
-          run: () => addRunMetadata(runNumber, targetName, tv, pv, runType),
+          run: () => addRunMetadata(n, targetName, tv, pv, runType),
         },
         {
           // Activate (unpause) Grafana alerts selected for auto-management
@@ -335,8 +410,8 @@ export function RunControlButtons({
       toast({
         title: sideEffects.length ? 'Run started (with warnings)' : 'Run started',
         description: sideEffects.length
-          ? `Run ${runNumber} is acquiring, but ${sideEffects.join(' and ')}.`
-          : `Run ${runNumber} started successfully with all parameters set.`,
+          ? `Run ${n} is acquiring, but ${sideEffects.join(' and ')}.`
+          : `Run ${n} started successfully with all parameters set.`,
         variant: sideEffects.length ? 'destructive' : undefined,
       })
     } catch (error) {
@@ -530,7 +605,7 @@ export function RunControlButtons({
   const folded = isRunning && !phoneDetailsOpen
 
   return (
-    <Card id="run-control" className="scroll-mt-28">
+    <Card id="run-control" ref={cardRef} className="scroll-mt-28">
       <CardHeader className={cn('pb-4', folded && 'max-md:p-3')}>
         <CardTitle className={cn(folded && 'max-md:hidden')}>Run setup &amp; control</CardTitle>
         {isRunning && (
@@ -749,20 +824,51 @@ export function RunControlButtons({
         </Collapsible>
       </CardContent>
 
-      {/* Directory Override Confirmation Dialog */}
-      <ConfirmAction
-        open={showOverrideDialog}
-        onOpenChange={setShowOverrideDialog}
-        title={`Overwrite run ${runNumber}?`}
-        description={
-          <p>
-            The directory for run {runNumber} already exists. Starting writes this run
-            into it and overwrites the files of the earlier run {runNumber}.
-          </p>
-        }
-        confirmLabel={`Overwrite and start run ${runNumber}`}
-        onConfirm={startAfterOverwrite}
-      />
+      {/* Directory Override Confirmation Dialog. Starting under the next free
+          number is the main answer: an earlier run's files are only ever
+          overwritten on purpose. */}
+      <AlertDialog open={showOverrideDialog} onOpenChange={setShowOverrideDialog}>
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-md rounded-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle>{`Overwrite run ${runNumber}?`}</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Run {runNumber} already has a data directory. Starting it again writes into it
+                  and overwrites the files of the earlier run {runNumber}.
+                </p>
+                {overwriteInfo?.known && (
+                  <p className="rounded-md border bg-muted/40 px-3 py-2 text-foreground">
+                    <span className="font-semibold">{overwriteInfo.name || 'Untitled run'}</span>
+                    {overwriteInfo.start && <>, started {formatRunDate(overwriteInfo.start)}</>}
+                    {overwriteInfo.end
+                      ? <>, ended {formatRunDate(overwriteInfo.end)}.</>
+                      : <>: <span className="font-semibold text-warning">never stopped properly</span> (the server went down during it?).</>}
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {/* Three buttons do not fit one line of this dialog: they wrap, the main one last. */}
+          <AlertDialogFooter className="gap-2 max-sm:flex-col sm:flex-wrap sm:space-x-0">
+            <AlertDialogCancel className="mt-0 pointer-coarse:min-h-11">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={cn(buttonVariants({ variant: 'outline' }), 'border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive pointer-coarse:min-h-11')}
+              onClick={() => { void startAfterOverwrite() }}
+            >
+              Overwrite run {runNumber}
+            </AlertDialogAction>
+            {overwriteInfo?.nextFree != null && (
+              <AlertDialogAction
+                className={cn(buttonVariants({ variant: 'success' }), 'pointer-coarse:min-h-11')}
+                onClick={() => { void startAsNextFree() }}
+              >
+                Start as run {overwriteInfo.nextFree} instead
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   )
 }

@@ -24,6 +24,7 @@ import {
   getRegisterOptions,
   type RegisterOption,
 } from '@/lib/caen-registers'
+import { caenFamily } from '@/lib/trapezoid-scale'
 
 export interface BoardTiming {
   /** One ADC sample, ns. */
@@ -35,10 +36,12 @@ export interface BoardTiming {
 }
 
 export function boardTiming(boardName: string): BoardTiming {
-  if (boardName.includes('1730')) return { sampleNs: 2, phaStepNs: 8, adcMax: 16383 }
-  if (boardName.includes('1725')) return { sampleNs: 4, phaStepNs: 16, adcMax: 16383 }
-  if (boardName.includes('1724')) return { sampleNs: 10, phaStepNs: 10, adcMax: 16383 }
-  if (boardName.includes('1720')) return { sampleNs: 4, phaStepNs: 16, adcMax: 4095 }
+  // By family: V1725, VX1725, DT5725 and N6725 are the same digitizer.
+  const family = caenFamily(boardName)
+  if (family === '730') return { sampleNs: 2, phaStepNs: 8, adcMax: 16383 }
+  if (family === '725') return { sampleNs: 4, phaStepNs: 16, adcMax: 16383 }
+  if (family === '724') return { sampleNs: 10, phaStepNs: 10, adcMax: 16383 }
+  if (family === '720') return { sampleNs: 4, phaStepNs: 16, adcMax: 4095 }
   // Unknown model: say "samples" rather than invent nanoseconds.
   return { sampleNs: 1, phaStepNs: 1, adcMax: 16383 }
 }

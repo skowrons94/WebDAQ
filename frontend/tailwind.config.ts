@@ -3,6 +3,9 @@ import plugin from "tailwindcss/plugin"
 
 const config = {
   darkMode: ["class"],
+  // hover: styles only where a pointer can hover: on a touch screen a tapped
+  // button otherwise keeps its hover colour until the next tap elsewhere.
+  future: { hoverOnlyWhenSupported: true },
   content: [
     './pages/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',
