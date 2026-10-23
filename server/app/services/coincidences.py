@@ -9,7 +9,7 @@ The operator describes what to look at as *gates*, each one a sentence:
 and gets, per gate and live during the run: the gated (or vetoed) energy
 spectrum of each channel, the Δt spectrum between each channel and each
 partner (to choose the window and align the channels in time), optionally
-the energy-energy matrix, and the rates.
+the energy-energy matrix, the sum spectrum, and the rates.
 
 How it works
 ------------
@@ -31,6 +31,18 @@ costs memory and display delay only.
 Memory is bounded: the pending hits (16 bytes each) are capped at
 MAX_PENDING_HITS, the oldest evaluated early beyond it, which is counted.
 Spectra are fixed-size arrays; nothing grows with the run length.
+
+Sum spectrum
+------------
+A coincidence gate can also fill the spectrum of the summed calibrated energy
+(keV) of each hit that passes and of its partners within the window: every
+partner hit ("all"), or the nearest hit of each partner channel ("nearest").
+When a channel is both a gate channel and a partner, one event would be summed
+once from each of its hits; it is summed only from its earliest hit (the
+*anchor*): a hit is skipped when an earlier hit within the window could have
+summed it. The calibrations are read when the gate is set up and checked
+again every second; a change starts the sum spectrum over, since its bins
+would no longer mean the same energies.
 """
 
 import json
@@ -59,6 +71,8 @@ RATE_WINDOW_S = 5.0
 
 MAX_GATES = 16
 MAX_CHANNELS_PER_SIDE = 32
+MAX_SUM_BINS = 65536          # sum spectrum, uint32: 256 kB per gate at most
+CALIB_CHECK_S = 1.0           # how often the sum's calibrations are compared with the files
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "version": SCHEMA_VERSION,
@@ -77,6 +91,10 @@ DEFAULT_GATE: Dict[str, Any] = {
     "min_partners": 1,
     "dt_range_ns": 1000.0,
     "matrix": False,
+    "sum": False,                 # sum spectrum, coincidence gates only
+    "sum_partners": "all",        # or "nearest": the nearest hit of each partner channel
+    "sum_max_kev": 16384.0,
+    "sum_bin_kev": 1.0,
 }
 
 
@@ -150,6 +168,21 @@ def normalise_config(cfg: Any) -> Dict[str, Any]:
             raise ValueError(f"{label}: the Δt range must be between 0 and 10 ms")
         gate["min_partners"] = max(1, int(gate["min_partners"]))
         gate["matrix"] = bool(gate["matrix"])
+        gate["sum"] = bool(gate["sum"])
+        if gate["sum_partners"] not in ("all", "nearest"):
+            raise ValueError(f"{label}: the sum's partners must be 'all' or 'nearest'")
+        gate["sum_max_kev"] = float(gate["sum_max_kev"])
+        gate["sum_bin_kev"] = float(gate["sum_bin_kev"])
+        if not (np.isfinite(gate["sum_max_kev"]) and np.isfinite(gate["sum_bin_kev"])
+                and gate["sum_max_kev"] > 0 and gate["sum_bin_kev"] > 0):
+            raise ValueError(f"{label}: the sum spectrum's range and bin width must be positive")
+        # The sum spectrum is one fixed array per gate: its size is bounded
+        # here, not by how long the run lasts.
+        if round(gate["sum_max_kev"] / gate["sum_bin_kev"]) > MAX_SUM_BINS:
+            raise ValueError(f"{label}: the sum spectrum would have more than {MAX_SUM_BINS} bins; "
+                             f"widen the bins or shorten the range")
+        if round(gate["sum_max_kev"] / gate["sum_bin_kev"]) < 1:
+            raise ValueError(f"{label}: the sum spectrum's bin is wider than its range")
         out["gates"].append(gate)
     return out
 
@@ -283,6 +316,40 @@ def check_gates(cfg: Dict[str, Any], boards: List[Dict[str, Any]]) -> Dict[str, 
     return out
 
 
+# ──────────────────────────────────────────────────────────── calibrations
+
+_calib_cache: Dict[str, Tuple[Tuple[int, int, int], List[Tuple[float, float]]]] = {}
+
+
+def read_calibrations(boards: List[Dict[str, Any]], keys: List[str]) -> Dict[str, Tuple[float, float]]:
+    """(offset, slope) of each 'board:channel', from calib/<name>_<id>.cal,
+    (0, 1) where uncalibrated. A file is parsed again only when it has been
+    rewritten, so checking every second costs a stat() per board."""
+    from . import calibration
+    names = {str(b["id"]): str(b.get("name", "")) for b in boards}
+    out: Dict[str, Tuple[float, float]] = {}
+    for k in keys:
+        bid, _, ch = k.rpartition(":")
+        name = names.get(bid)
+        if name is None:
+            out[k] = (0.0, 1.0)
+            continue
+        path = os.path.join(calibration.CALIB_DIR, f"{name}_{bid}.cal")
+        try:
+            st = os.stat(path)
+            stamp = (st.st_mtime_ns, st.st_size, st.st_ino)
+        except OSError:
+            _calib_cache.pop(path, None)
+            out[k] = (0.0, 1.0)
+            continue
+        cached = _calib_cache.get(path)
+        if cached is None or cached[0] != stamp:
+            cached = (stamp, calibration.read_table(name, bid, 64))
+            _calib_cache[path] = cached
+        out[k] = cached[1][int(ch)] if 0 <= int(ch) < len(cached[1]) else (0.0, 1.0)
+    return out
+
+
 # ──────────────────────────────────────────────────────────── evaluation
 
 class GateState:
@@ -309,8 +376,47 @@ class GateState:
         self.singles = {k: 0 for k in self.channels}
         self.passed = {k: 0 for k in self.channels}
         self.pairs_skipped = 0
+        # Sum spectrum: one fixed array, filled once the calibrations of every
+        # summed channel are known (set_sum_calibration).
+        self.sum_on = bool(gate.get("sum")) and gate["mode"] == "coincidence"
+        self.sum_bin_kev = float(gate.get("sum_bin_kev", 1.0))
+        n_sum = int(round(float(gate.get("sum_max_kev", 16384.0)) / self.sum_bin_kev))
+        self.sum = np.zeros(n_sum, np.uint32) if self.sum_on else None
+        self.sum_cal: Optional[Dict[str, Tuple[float, float]]] = None
+        self.sum_missing: List[str] = []
+        self.sum_overflow = 0             # sums above the range
+        self.sum_underflow = 0            # sums below 0 keV (a negative calibration offset)
+        self.sum_since = time.time()
+        self.sum_restarted = False        # started over because a calibration changed
         self.history: List[Tuple[float, int, int]] = []   # (wall time, singles, passed)
         self.since = time.time()                            # collecting since
+
+    @property
+    def sum_keys(self) -> List[str]:
+        """Every channel whose energy can go into the sum."""
+        return list(dict.fromkeys(self.channels + self.partners))
+
+    @property
+    def sum_filling(self) -> bool:
+        return self.sum is not None and self.sum_cal is not None and not self.sum_missing
+
+    def set_sum_calibration(self, table: Dict[str, Tuple[float, float]]) -> bool:
+        """Take the current calibrations of the summed channels. A change
+        empties the sum spectrum: what it holds was binned with the old ones.
+        Returns True when the spectrum started over."""
+        if self.sum is None:
+            return False
+        mine = {k: tuple(map(float, table.get(k, (0.0, 1.0)))) for k in self.sum_keys}
+        if mine == self.sum_cal:
+            return False
+        was_filling = self.sum_filling and (self.sum.any() or self.sum_overflow or self.sum_underflow)
+        self.sum_cal = mine
+        self.sum_missing = [k for k, v in mine.items() if v == (0.0, 1.0)]
+        self.sum[:] = 0
+        self.sum_overflow = self.sum_underflow = 0
+        self.sum_since = time.time()
+        self.sum_restarted = bool(was_filling)
+        return bool(was_filling)
 
     @property
     def reach_ps(self) -> int:
@@ -335,6 +441,24 @@ class GateState:
             return
         tA, dA, eA = t[rows], det[rows], e[rows]
         n_found = np.zeros(rows.size, np.int32)
+        mode = self.gate["mode"]
+        do_sum = self.sum_filling and mode == "coincidence"
+        if do_sum:
+            # E = offset + slope × energy, per channel. Summed per partner
+            # channel from integer prefix sums of the raw energies, so the
+            # "all" sum costs no pair expansion and loses no precision.
+            cal = self.sum_cal or {}
+            off = np.zeros(max(keys.values()) + 1)
+            slope = np.zeros_like(off)
+            for k, (o, s) in cal.items():
+                if k in keys:
+                    off[keys[k]], slope[keys[k]] = o, s
+            total = off[dA] + slope[dA] * eA
+            nearest = self.gate.get("sum_partners") == "nearest"
+            partner_codes = [keys[k] for k in self.partners if k in keys]
+            both = {keys[k] for k in self.channels if k in keys} & set(partner_codes)
+            a_is_partner = np.isin(dA, partner_codes)
+            anchor = np.ones(rows.size, bool)
         # Matrix: the partner hit nearest in time, already in matrix bins.
         partner_y = np.full(rows.size, -1, np.int64)
         partner_gap = np.full(rows.size, np.iinfo(np.int64).max, np.int64)
@@ -360,9 +484,11 @@ class GateState:
                 better = found & ~selfrow & (gap < partner_gap)
                 partner_gap[better] = gap[better]
                 partner_y[better] = (e[pidx[pick[better]]].astype(np.int64) * MATRIX_BINS) // self.matrix_bins[1]
+            if do_sum:
+                self._add_to_sum(total, anchor, a_is_partner, pcode in both, nearest, rows, tA, selfrow,
+                                 pidx, tp, e[pidx], left, right, off[pcode], slope[pcode])
             self._fill_dt(tA, dA, tp, pkey, selfrow, keys)
 
-        mode = self.gate["mode"]
         passed = n_found == 0 if mode == "anticoincidence" else n_found >= self.gate["min_partners"]
 
         for key in self.channels:
@@ -386,6 +512,53 @@ class GateState:
                 y = partner_y[ok]
                 keep = (x < MATRIX_BINS) & (y < MATRIX_BINS)
                 np.add.at(self.matrix, (x[keep], y[keep]), 1)
+
+        if do_sum:
+            sums = total[passed & anchor]
+            idx = np.floor(sums / self.sum_bin_kev)
+            low, high = idx < 0, idx >= self.sum.size
+            self.sum_underflow += int(low.sum())
+            self.sum_overflow += int(high.sum())
+            idx = idx[~low & ~high].astype(np.int64)
+            if idx.size:
+                self.sum += np.bincount(idx, minlength=self.sum.size).astype(np.uint32)
+
+    def _add_to_sum(self, total, anchor, a_is_partner, overlapping, nearest, rows, tA, selfrow,
+                    pidx, tp, ep, left, right, off_p, slope_p) -> None:
+        """Add one partner channel's calibrated energies to each hit's sum,
+        and drop the hits that are not their event's anchor."""
+        # Hits of this channel before the hit itself in the time-sorted buffer
+        # (the hit itself excluded when it is on this channel): ties in time
+        # are broken by buffer order, the same in every tick.
+        pos = np.searchsorted(pidx, rows, "left")
+        if overlapping:
+            # An earlier hit within the window on a channel that is both a
+            # gate channel and a partner sums this hit itself: this one is
+            # not the anchor, or the event would be counted twice.
+            anchor &= ~(a_is_partner & (pos > left))
+        if tp.size == 0:
+            return
+        if nearest:
+            before = pos - 1
+            after = pos + selfrow.astype(np.int64)        # step over the hit itself
+            okb = before >= 0
+            oka = after < tp.size
+            gap_b = np.where(okb, tA - tp[np.clip(before, 0, tp.size - 1)], np.iinfo(np.int64).max)
+            gap_a = np.where(oka, tp[np.clip(after, 0, tp.size - 1)] - tA, np.iinfo(np.int64).max)
+            pick = np.where(gap_b <= gap_a, before, after)
+            found = np.minimum(gap_b, gap_a) <= self.window_ps
+            if found.any():
+                total[found] += off_p + slope_p * ep[pick[found]]
+        else:
+            csum = np.concatenate(([0], np.cumsum(ep, dtype=np.int64)))
+            raw = csum[right] - csum[left]
+            n = right - left
+            # A hit is not its own partner.
+            own = selfrow
+            if own.any():
+                raw = raw - np.where(own, ep[np.clip(pos, 0, tp.size - 1)], 0)
+                n = n - own.astype(np.int64)
+            total += n * off_p + slope_p * raw
 
     # Δt pairs are expanded in chunks of A rows, each at most this many pairs,
     # so a burst never allocates more than a few tens of MB.
@@ -441,6 +614,18 @@ class GateState:
             "per_channel": {k: {"singles": self.singles[k], "passed": self.passed[k]}
                             for k in self.channels},
             "pairs_skipped": self.pairs_skipped,
+            "sum": None if self.sum is None else {
+                "filling": self.sum_filling,
+                "entries": int(self.sum.sum()),
+                "overflow": self.sum_overflow,
+                "underflow": self.sum_underflow,
+                "missing": list(self.sum_missing),
+                "since": self.sum_since,
+                "restarted": self.sum_restarted,
+                "bins": int(self.sum.size),
+                "bin_kev": self.sum_bin_kev,
+                "max_kev": self.sum.size * self.sum_bin_kev,
+            },
         }
 
 
@@ -527,6 +712,7 @@ class CoincidenceBuilder:
         self._source_problems: Dict[str, List[str]] = {}
         self._started_at = 0.0
         self._last_error = ""
+        self._calib_checked = 0.0
 
     # ── configuration ──────────────────────────────────────────────────────
     def get_config(self) -> Dict[str, Any]:
@@ -611,7 +797,12 @@ class CoincidenceBuilder:
                 self._setup()
             else:
                 bins = self._energy_bins()
-                self._gates = {gid: GateState(g.gate, bins, g.offsets_ns) for gid, g in self._gates.items()}
+                fresh = {}
+                for gid, g in self._gates.items():
+                    fresh[gid] = GateState(g.gate, bins, g.offsets_ns)
+                    if g.sum_cal is not None:
+                        fresh[gid].set_sum_calibration(g.sum_cal)
+                self._gates = fresh
 
     def _energy_bins(self) -> Dict[str, int]:
         return {bid: s.energy_bins for bid, s in self._sources.items()}
@@ -671,10 +862,31 @@ class CoincidenceBuilder:
                 old.offsets_ns = fresh.offsets_ns
                 fresh = old
             self._gates[g["id"]] = fresh
+        self._check_calibrations(time.time())
         if not keep_unchanged:
             self._started_at = time.time()
         if gates:
             logger.info(f"Coincidences: {len(gates)} gate(s) over {len(self._keys)} channel(s)")
+
+    def _check_calibrations(self, now: float) -> None:
+        """Give the sum spectra the current calibrations. Called at setup and
+        then every CALIB_CHECK_S from the tick, so a calibration saved during
+        the run (from the Histograms page or any other way the file changes)
+        starts the affected sum spectra over instead of mixing two scales."""
+        self._calib_checked = now
+        sums = [g for g in self._gates.values() if g.sum is not None]
+        if not sums or self._acq is None:
+            return
+        try:
+            boards = self._acq.get_boards()
+            table = read_calibrations(boards, sorted({k for g in sums for k in g.sum_keys}))
+        except Exception as e:
+            logger.warning(f"Coincidences: could not read the calibrations for the sum spectra: {e}")
+            return
+        for g in sums:
+            if g.set_sum_calibration(table):
+                logger.info(f"Coincidences: gate '{g.gate['name']}': a calibration changed, "
+                            f"its sum spectrum starts over")
 
     @staticmethod
     def _safe(counter) -> int:
@@ -698,6 +910,8 @@ class CoincidenceBuilder:
         if not self._gates:
             return
         now = time.time()
+        if now - self._calib_checked >= CALIB_CHECK_S:
+            self._check_calibrations(now)
         latency_ps = int(self._config["latency_ms"]) * 1_000_000_000
         reach = max(g.reach_ps for g in self._gates.values())
         for bid, src in self._sources.items():
@@ -763,10 +977,22 @@ class CoincidenceBuilder:
             if self._acq is not None:
                 for gid, extra in self._source_problems.items():
                     problems.setdefault(gid, []).extend(extra)
+            # Problems of one output only: the rest of the gate works, so they
+            # are kept apart from the problems that stop the gate.
+            names = {str(b["id"]): f"{b.get('name', 'board')} {b['id']}" for b in boards}
+            warnings: Dict[str, List[str]] = {}
+            for gid, g in self._gates.items():
+                if g.sum is not None and g.sum_missing:
+                    where = ", ".join(f"{names.get(k.split(':')[0], 'board ' + k.split(':')[0])} · ch {k.split(':')[1]}"
+                                      for k in g.sum_missing)
+                    warnings[gid] = [f"Sum spectrum needs an energy calibration on: {where}. "
+                                     f"Calibrate {'it' if len(g.sum_missing) == 1 else 'them'} on the Histograms "
+                                     f"page; the other outputs of this gate work."]
             return {
                 "running": self._acq is not None,
                 "gates": [g.status(now) for g in self._gates.values()],
                 "problems": problems,
+                "warnings": warnings,
                 "domains": [{"name": d.name, "boards": d.boards, "pending": d.pending,
                              "late": d.late, "overflow": d.overflow,
                              "memory_mb": round(d.pending * 14 / 1e6, 1)}
@@ -798,6 +1024,12 @@ class CoincidenceBuilder:
                 return np.sum(arrays, axis=0).astype(np.uint32), g.gate["dt_range_ns"]
             h = g.dt.get((key, partner))
             return None if h is None else (h.copy(), g.gate["dt_range_ns"])
+
+    def sum_spectrum(self, gate_id: str) -> Optional[Tuple[np.ndarray, float]]:
+        """The gate's sum spectrum and its bin width in keV."""
+        with self._lock:
+            g = self._gates.get(gate_id)
+            return None if g is None or g.sum is None else (g.sum.copy(), g.sum_bin_kev)
 
     def matrix(self, gate_id: str) -> Optional[Tuple[np.ndarray, Tuple[int, int]]]:
         with self._lock:

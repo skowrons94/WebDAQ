@@ -8,7 +8,8 @@
  *
  * — and watches, live, what it lets through: the gated spectrum of each
  * channel, the Δt spectrum to the partners (to choose the window, and to align
- * the channels in time with one click), and optionally the energy-energy matrix.
+ * the channels in time with one click), and optionally the energy-energy matrix
+ * and the sum spectrum (the calibrated energy of a hit and its partners, added).
  *
  * Only channels on one clock can be compared: the channel picker greys out the
  * boards that do not share a clock with what is already picked, and says why.
@@ -17,7 +18,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   alignCoincGate, getBoardConfiguration, getCoincConfig, getCoincDt, getCoincMatrix,
-  getCoincSpectrum, getCoincStatus, getIntervalHistogram, putCoincConfig, resetCoincidences,
+  getCoincSpectrum, getCoincStatus, getCoincSum, getIntervalHistogram, putCoincConfig, resetCoincidences,
   type CoincChannel, type CoincConfig, type CoincGate, type CoincStatus,
 } from '@/lib/api'
 import { RootPlot } from '@/components/root-plot'
@@ -37,6 +38,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { EmptyState } from '@/components/ui/empty-state'
 import { ConfirmAction } from '@/components/ui/confirm-action'
 import { useToast } from '@/components/ui/use-toast'
+import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { AlertTriangle, ChevronDown, Crosshair, GitMerge, Plus, RotateCcw, Save, Trash2, Undo2, X } from 'lucide-react'
 
 type Board = { id: string; name: string; chan: number; dpp?: string; vendor?: string }
@@ -57,8 +59,15 @@ function newGate(index: number): CoincGate {
     min_partners: 1,
     dt_range_ns: 1000,
     matrix: false,
+    sum: false,
+    sum_partners: 'all',
+    sum_max_kev: 16384,
+    sum_bin_kev: 1,
   }
 }
+
+// The server refuses a sum spectrum of more bins than this (256 kB per gate).
+const MAX_SUM_BINS = 65536
 
 function formatCount(n: number): string {
   if (n >= 1e9) return `${(n / 1e9).toFixed(2)} G`
@@ -176,11 +185,12 @@ function ChannelPicker({ open, onOpenChange, title, boards, value, other, domain
 
 // ───────────────────────────────────────────────────────────── one gate
 
-function GateEditor({ gate, boards, domains, problems, onChange, onDelete }: {
+function GateEditor({ gate, boards, domains, problems, warnings, onChange, onDelete }: {
   gate: CoincGate
   boards: Board[]
   domains: Record<string, string>
   problems: string[]
+  warnings: string[]
   onChange: (g: CoincGate) => void
   onDelete: () => void
 }) {
@@ -192,6 +202,7 @@ function GateEditor({ gate, boards, domains, problems, onChange, onDelete }: {
     onChange(next)
   }
   const veto = gate.mode === 'anticoincidence'
+  const sumBins = Math.round(gate.sum_max_kev / gate.sum_bin_kev)
 
   return (
     <div className="space-y-3">
@@ -256,11 +267,59 @@ function GateEditor({ gate, boards, domains, problems, onChange, onDelete }: {
                         onValueChange={(v) => v > 0 && set({ dt_range_ns: v })} aria-label="Δt range in ns" />
           ns
         </span>
+        {!veto && (
+          <label className="flex items-center gap-2">
+            <Switch checked={gate.sum} onCheckedChange={(v) => set({ sum: v })} aria-label="Sum spectrum" />
+            Sum spectrum
+          </label>
+        )}
       </div>
+
+      {/* The sum's settings, only once it is on: on a phone each pair of
+          label and field wraps as one piece. */}
+      {!veto && gate.sum && (
+        <div className="space-y-2 rounded-md border p-3 text-sm">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <span className="flex items-center gap-2">
+              Partners
+              <Select value={gate.sum_partners} onValueChange={(v) => set({ sum_partners: v as CoincGate['sum_partners'] })}>
+                <SelectTrigger className="h-8 w-auto gap-1 pointer-coarse:h-10" aria-label="Partners in the sum"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">all in the window</SelectItem>
+                  <SelectItem value="nearest">nearest of each channel</SelectItem>
+                </SelectContent>
+              </Select>
+            </span>
+            <span className="flex items-center gap-2">
+              Range 0 –
+              <NumericInput value={gate.sum_max_kev} min={1} step={1000} className="h-8 w-24 pointer-coarse:h-10"
+                            onValueChange={(v) => v > 0 && set({ sum_max_kev: v })} aria-label="Sum range in keV" />
+              keV
+            </span>
+            <span className="flex items-center gap-2">
+              Bin
+              <NumericInput value={gate.sum_bin_kev} min={0.01} step={0.5} className="h-8 w-20 pointer-coarse:h-10"
+                            onValueChange={(v) => v > 0 && set({ sum_bin_kev: v })} aria-label="Sum bin width in keV" />
+              keV
+            </span>
+          </div>
+          <p className={`text-xs ${sumBins > MAX_SUM_BINS ? 'text-warning' : 'text-muted-foreground'}`}>
+            {sumBins > MAX_SUM_BINS
+              ? `${sumBins.toLocaleString()} bins: at most ${MAX_SUM_BINS.toLocaleString()}. Widen the bins or shorten the range.`
+              : `Adds the calibrated energy (keV) of each hit that passes to that of ${gate.sum_partners === 'all'
+                  ? 'every partner hit in the window' : 'the nearest hit of each partner channel'}; ${sumBins.toLocaleString()} bins. Every channel of the gate needs an energy calibration.`}
+          </p>
+        </div>
+      )}
 
       {problems.length > 0 && (
         <div className="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-2 text-xs text-warning">
           {problems.map((p) => <p key={p} className="flex gap-1"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />{p}</p>)}
+        </div>
+      )}
+      {warnings.length > 0 && (
+        <div className="space-y-1 rounded-md border border-warning/40 bg-warning/5 p-2 text-xs text-warning">
+          {warnings.map((p) => <p key={p} className="flex gap-1"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />{p}</p>)}
         </div>
       )}
 
@@ -284,6 +343,8 @@ function GateResults({ gate, status, boards, onAligned }: {
   const [channel, setChannel] = useState<string>(key(gate.channels[0]))
   const [partner, setPartner] = useState<string>('*')
   const [logy, setLogy] = useState(false)
+  const [sumLogy, setSumLogy] = useState(false)
+  const setTab = useDashboardTabStore((st) => st.setTab)
   // The Δt peak of real coincidences is a few bins wide in a range many times
   // the window: on a phone it was one line at 0. The plot opens on a few
   // windows around 0; "Full range" shows the whole Δt range.
@@ -390,6 +451,60 @@ function GateResults({ gate, status, boards, onAligned }: {
             </p>
           )}
         </div>
+        {gate.sum && !veto && (
+          <div className="xl:col-span-2">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Sum spectrum</p>
+                <p className="text-xs text-muted-foreground">
+                  Calibrated energy of each hit that passes plus {gate.sum_partners === 'all'
+                    ? 'every partner hit in the window' : 'the nearest hit of each partner channel'}.
+                </p>
+              </div>
+              <label className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Checkbox checked={sumLogy} onCheckedChange={(v) => setSumLogy(v === true)} />Log
+              </label>
+            </div>
+            <div className="mb-1 flex flex-wrap gap-x-6 gap-y-1 text-sm">
+              <span><span className="text-muted-foreground">Sums: </span>
+                <span className="font-semibold tabular-nums">{status?.sum ? formatCount(status.sum.entries) : '—'}</span>
+              </span>
+              {/* Never lost silently: what falls outside the range is counted. */}
+              <span className={(status?.sum?.overflow ?? 0) > 0 ? 'text-warning' : ''}>
+                <span className={(status?.sum?.overflow ?? 0) > 0 ? '' : 'text-muted-foreground'}>Above {gate.sum_max_kev} keV: </span>
+                <span className="font-semibold tabular-nums">{status?.sum ? formatCount(status.sum.overflow) : '—'}</span>
+              </span>
+              {(status?.sum?.underflow ?? 0) > 0 && (
+                <span className="text-warning">Below 0 keV: <span className="font-semibold tabular-nums">{formatCount(status!.sum!.underflow)}</span></span>
+              )}
+            </div>
+            {status?.sum?.restarted && (
+              <p className="mb-1 text-xs text-muted-foreground">
+                Started over at {new Date(status.sum.since * 1000).toLocaleTimeString()}: a calibration of one of its channels changed.
+              </p>
+            )}
+            {status?.sum && status.sum.missing.length > 0 ? (
+              <div className="space-y-2 rounded-md border border-warning/40 bg-warning/5 p-3 text-sm text-warning">
+                {/* The gate's problem list above names the channels; this
+                    says what to do about it, where the plot would be. */}
+                <p className="flex gap-1">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>Not filled: {status.sum.missing.length === 1 ? 'one channel has' : `${status.sum.missing.length} channels have`} no energy calibration.</span>
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Calibrate {status.sum.missing.length === 1 ? 'it' : 'each one'} from its card on the Histograms page
+                  (the “ADC” badge beside its title). The sum starts as soon as all are calibrated.
+                </p>
+                <Button size="sm" variant="outline" className="pointer-coarse:h-10" onClick={() => setTab('histograms')}>
+                  Open the Histograms page
+                </Button>
+              </div>
+            ) : (
+              <RootPlot fetch={() => getCoincSum(gate.id)} deps={[gate.id]} logy={sumLogy}
+                        xTitle="Sum energy (keV)" yTitle={COUNTS} />
+            )}
+          </div>
+        )}
         {gate.matrix && !veto && (
           <div className="xl:col-span-2">
             <p className="text-sm font-medium">Energy of {label(key(gate.channels[0]))} (x) against its partner (y)</p>
@@ -540,6 +655,7 @@ export default function CoincidencesDashboard() {
           <Card key={gate.id} className={gate.enabled ? '' : 'opacity-70'}>
             <CardContent className="space-y-3 pt-4">
               <GateEditor gate={gate} boards={boards} domains={domains} problems={unchanged ? problems : []}
+                          warnings={unchanged ? status?.warnings?.[gate.id] ?? [] : []}
                           onChange={(g) => setGate(i, g)}
                           onDelete={() => setDraft({ ...draft, gates: draft.gates.filter((_, j) => j !== i) })} />
               {unchanged && gate.enabled && gate.channels.length > 0 && gate.partners.length > 0 && problems.length === 0 && (

@@ -138,6 +138,23 @@ def dt(gate_id, board_id, channel, partner):
     return _json(_th1(f"dt_{gate_id}", "Δt to partner", arr, -rng, rng, "t(partner) - t(channel) [ns]"))
 
 
+@bp.route('/coincidences/<gate_id>/sum', methods=['GET'])
+@jwt_required_custom
+def sum_spectrum(gate_id):
+    """The gate's sum spectrum, already in keV: the energies were calibrated
+    hit by hit before being added, so no axis mapping and no rebinning here —
+    the operator chose its bin width."""
+    if _root() is None:
+        return jsonify({'error': 'ROOT is not available'}), 503
+    got = _builder().sum_spectrum(gate_id)
+    if got is None:
+        return _empty("The sum spectrum is off for this gate")
+    arr, bin_kev = got
+    hist = _th1(f"sum_{gate_id}", "Sum spectrum", arr, 0.0, len(arr) * bin_kev, "Sum energy (keV)")
+    hist.GetYaxis().SetTitle("Counts / bin")
+    return _json(hist)
+
+
 @bp.route('/coincidences/<gate_id>/matrix', methods=['GET'])
 @jwt_required_custom
 def matrix(gate_id):

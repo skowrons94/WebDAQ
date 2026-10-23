@@ -31,6 +31,8 @@ Optional:
 - **Energy–energy matrix**: the energy of the gated channel against the energy
   of its partner, for coincidence gates.
 - **Δt plot range**: how far either side the Δt spectrum reaches (below).
+- **Sum spectrum**: the energy of a hit and of its partners added, in keV, for
+  coincidence gates (section 3).
 
 ## 2. What a gate shows
 
@@ -43,8 +45,56 @@ Optional:
   by one. Real coincidences make a peak; the flat floor under it is chance. Set
   the window so it covers the peak, and not much more.
 - **The matrix**, if switched on.
+- **The sum spectrum**, if switched on, with the number of sums and how many
+  fell above its range.
 
-## 3. Aligning channels in time
+## 3. Sum spectrum
+
+For a coincidence gate, **Sum spectrum** adds up, for every hit of the gate's
+channels that passes the gate, its calibrated energy and that of its partners
+within the window, and fills one spectrum per gate with the total (keV). A
+cascade whose gammas land in different detectors shows up as a peak at the
+energy of the level it started from.
+
+- **Partners: all in the window** adds every partner hit within ± window, on
+  any partner channel. **Nearest of each channel** adds only the hit of each
+  partner channel nearest in time, which keeps a second, unrelated hit on the
+  same detector out of the sum.
+- The fold is the gate's own condition: a hit is summed when at least *n*
+  partner channels fired (*at least n of them*), the same hits that go into
+  the gated spectrum.
+- **Each event is summed once.** When the channels and the partners are
+  different detectors, the sum is built from each gated hit to its partners.
+  When a detector is on both sides (channels A, B in coincidence with A, B),
+  the event A+B would otherwise be summed twice, once from A and once from B.
+  It is summed only from its earliest hit, the *anchor*: a hit is skipped when
+  an earlier hit within the window, on a channel that is both gated and a
+  partner, would have summed it. Hits at exactly the same time are ordered the
+  same way every time. In a long chain of hits each closer than the window to
+  the next, the later ones are skipped too; at the rates where that happens
+  the sum is dominated by chance anyway.
+- **Every channel of the gate needs an energy calibration**, on both sides,
+  since energies from different detectors can only be added in keV. Until they
+  have one, the gate's card says which channels lack it and the sum stays
+  empty; the rest of the gate works. Calibrate them from their cards on the
+  Histograms page. The calibrations are read when the gate starts and checked
+  every second: a new calibration of one of the gate's channels during the run
+  empties the sum spectrum and starts it again (the card says when), because
+  its bins would otherwise mix two energy scales.
+- **Range and bin width** (default 0 – 16384 keV in 1 keV bins). Sums above the
+  range are counted as **Above … keV** on the card, never dropped silently;
+  sums below 0 keV (a negative calibration offset) are counted too.
+
+**Chance coincidences under the sum peak.** A partner hit that fired by chance
+within the window adds its energy to the sum like a real one and moves the
+event out of its peak, or a chance pair makes a sum where there is no real
+event. Judge how many there are from the Δt plot: the flat floor is chance,
+so the floor level per ns × 2 × window, compared with the counts in the
+peak, is the fraction of summed events that are chance. Narrow the window to
+the Δt peak (after **Align in time**) to keep it small; *nearest* helps when
+one detector fires often.
+
+## 4. Aligning channels in time
 
 Cables, detectors and shaping put each channel's signal at its own delay, so
 the Δt peak of a real coincidence is rarely at 0. Once a gate has collected a
@@ -55,7 +105,7 @@ offsets, and a narrow window is enough.
 The offsets are listed, and can be edited, under **Timing settings**. They are
 per channel and shared by every gate.
 
-## 4. Only channels on one clock
+## 5. Only channels on one clock
 
 Two hits can only be compared if they were timed by the same clock. That is
 the case for the channels of one board, and for the CAEN boards of a
@@ -68,7 +118,7 @@ apart by microseconds within seconds, so no gate can mix them. The channel
 picker greys out the boards that do not share a clock with what is already
 picked, and a saved gate that mixes them says so on its card.
 
-## 5. Time between hits
+## 6. Time between hits
 
 At the bottom of the page, pick any channel to see the time between its
 consecutive hits, on a log time axis from 1 ns to 10 s. A random source gives
@@ -78,7 +128,7 @@ one smooth bump at 1/rate. Look for:
 - a spike at short times: double triggering, or ringing;
 - sharp lines: a pulser, or periodic noise.
 
-## 6. How it works, and what it costs
+## 7. How it works, and what it costs
 
 The boards involved in a gate export their hits (16 bytes each; boards not in
 any gate export nothing). Every quarter of a second the server collects them,
@@ -94,7 +144,14 @@ singles spectra and the file). If late hits appear, raise that latency; it
 costs only display delay and a little memory.
 
 Memory stays bounded: the pending hits are shown in the header in MB, and are
-capped (about 64 MB per clock) whatever the rate. Hits the online decoder had to
+capped (about 64 MB per clock) whatever the rate. Each gate's outputs are
+fixed-size arrays, made when the gate starts and never grown: 4 bytes per bin
+of each gated channel's spectrum (128 kB for a 32768-bin channel), 4 kB per
+Δt spectrum (one per channel–partner pair), 1 MB for the energy–energy matrix
+when it is on (512 × 512), and for the sum spectrum 4 bytes per bin, 64 kB at
+the default 16384 bins and at most 256 kB (65536 bins). With the most of
+everything (16 gates of 32 + 32 channels) that is about 200 MB; a
+usual setup of a few gates over a few channels stays within a few MB. Hits the online decoder had to
 skip because it was behind are shown as **not seen**: the coincidence rates miss
 them, the file does not.
 

@@ -1347,6 +1347,12 @@ export type CoincGate = {
     min_partners: number;
     dt_range_ns: number;
     matrix: boolean;
+    // Sum spectrum (coincidence gates): the calibrated energy of each hit that
+    // passes plus its partners', in keV, on sum_max_kev / sum_bin_kev bins.
+    sum: boolean;
+    sum_partners: 'all' | 'nearest';
+    sum_max_kev: number;
+    sum_bin_kev: number;
 };
 export type CoincConfig = {
     version: number;
@@ -1363,11 +1369,24 @@ export type CoincGateStatus = {
     singles_rate: number;
     per_channel: Record<string, { singles: number; passed: number }>;
     pairs_skipped: number;
+    sum: null | {
+        filling: boolean;
+        entries: number;
+        overflow: number;
+        underflow: number;
+        missing: string[];          // 'board:channel' without an energy calibration
+        since: number;
+        restarted: boolean;         // emptied because a calibration changed
+        bins: number;
+        bin_kev: number;
+        max_kev: number;
+    };
 };
 export type CoincStatus = {
     running: boolean;
     gates: CoincGateStatus[];
     problems: Record<string, string[]>;
+    warnings?: Record<string, string[]>;   // one output of the gate is off; the rest works
     domains: { name: string; boards: string[]; pending: number; late: number; overflow: number; memory_mb: number }[];
     dropped: number;
     skipped_blocks: number;
@@ -1389,6 +1408,8 @@ export const getCoincSpectrum = (gateId: string, boardId: string, channel: numbe
 // partner: 'board:channel' or '*' (all partners together)
 export const getCoincDt = (gateId: string, boardId: string, channel: number | '*', partner: string) =>
     api.get(`/coincidences/${gateId}/dt/${boardId}/${channel}/${encodeURIComponent(partner)}`).then(res => res.data);
+export const getCoincSum = (gateId: string) =>
+    api.get(`/coincidences/${gateId}/sum`).then(res => res.data);
 export const getCoincMatrix = (gateId: string) =>
     api.get(`/coincidences/${gateId}/matrix`).then(res => res.data);
 // Time between consecutive hits of one channel (log time axis).

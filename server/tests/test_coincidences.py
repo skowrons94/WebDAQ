@@ -69,14 +69,17 @@ class BuilderTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def _run(self, gates, board, offsets=None, latency_ms=2000):
+    def _run(self, gates, board, offsets=None, latency_ms=2000, calib=None):
         b = C.CoincidenceBuilder(self.path)
+        table = calib or {}
         src = C.HitSource("0", "board-0", take=board.take, dropped=lambda: 0,
                           enable=lambda on: setattr(board, "enabled", on), energy_bins=32768)
         acq = mock.Mock()
         acq.get_boards.return_value = [{"id": "0", "name": "V1725S", "dpp": "DPP-PHA"}]
         with mock.patch.object(C, "sources_for_run", return_value={"0": src}), \
-             mock.patch.object(C, "clock_domains", return_value={"0": "board-0"}):
+             mock.patch.object(C, "clock_domains", return_value={"0": "board-0"}), \
+             mock.patch.object(C, "read_calibrations",
+                               side_effect=lambda boards, keys: {k: table.get(k, (0.0, 1.0)) for k in keys}):
             b.set_config({"gates": gates, "offsets_ns": offsets or {}, "latency_ms": latency_ms})
             b._acq = acq
             b._setup()
@@ -227,6 +230,187 @@ class BuilderTests(unittest.TestCase):
             cfg["offsets_ns"] = {"0:1": 5.0}
             b.set_config(cfg)
             self.assertIsNot(b._gates["g"], kept)
+
+    # ── sum spectrum ───────────────────────────────────────────────────────
+    # ch0: E = 10 + 0.5 × energy; ch1: E = 5 + 2 × energy (keV).
+    CAL = {"0:0": (10.0, 0.5), "0:1": (5.0, 2.0)}
+
+    @staticmethod
+    def two_partner_hits(n=2000):
+        """Events 1 ms apart: ch0 (energy 1000, 510 keV), then ch1 10 ns
+        later (energy 500, 1005 keV) and 40 ns later (energy 300, 605 keV)."""
+        t = (np.arange(1, n + 1) * 1e9).astype(np.int64)
+        tb = np.sort(np.concatenate((t + 10_000, t + 40_000)))
+        eb = np.where(np.isin(tb, t + 10_000), 500, 300).astype(np.uint16)
+        return {0: (t, np.full(n, 1000, np.uint16)), 1: (tb, eb)}, n
+
+    def test_sum_all_and_nearest(self):
+        data, n = self.two_partner_hits()
+        b = self._run([self.gate(sum=True)], FakeBoard(data), calib=self.CAL)
+        s, bin_kev = b.sum_spectrum("g")
+        self.assertEqual(bin_kev, 1.0)
+        self.assertEqual(s.size, 16384)
+        self.assertEqual(int(s[510 + 1005 + 605]), n)          # every partner hit
+        self.assertEqual(int(s.sum()), n)
+        b = self._run([self.gate(sum=True, sum_partners="nearest")], FakeBoard(data), calib=self.CAL)
+        s, _ = b.sum_spectrum("g")
+        self.assertEqual(int(s[510 + 1005]), n)                 # the nearest ch1 hit only
+        st = b.gate("g").status(0)["sum"]
+        self.assertTrue(st["filling"])
+        self.assertEqual((st["entries"], st["overflow"]), (n, 0))
+
+    def test_sum_bin_width(self):
+        data, n = self.two_partner_hits()
+        b = self._run([self.gate(sum=True, sum_bin_kev=4.0, sum_max_kev=4096)], FakeBoard(data), calib=self.CAL)
+        s, bin_kev = b.sum_spectrum("g")
+        self.assertEqual((s.size, bin_kev), (1024, 4.0))
+        self.assertEqual(int(s[2120 // 4]), n)
+
+    def test_sum_anchor_rule_no_double_counting(self):
+        """Channels 0 and 1 both gated and both partners: each event is
+        summed once, from its earliest hit, whichever channel that is."""
+        n = 1000
+        t = (np.arange(1, n + 1) * 1e9).astype(np.int64)
+        # ch1 leads in the first half, ch0 in the second.
+        t1 = np.where(np.arange(n) < n // 2, t - 10_000, t + 10_000)
+        data = {0: (t, np.full(n, 1000, np.uint16)), 1: (t1, np.full(n, 500, np.uint16))}
+        both = [{"board": "0", "channel": 0}, {"board": "0", "channel": 1}]
+        for how in ("all", "nearest"):
+            b = self._run([self.gate(channels=both, partners=both, sum=True, sum_partners=how)],
+                          FakeBoard(data), calib=self.CAL)
+            s, _ = b.sum_spectrum("g")
+            self.assertEqual(int(s.sum()), n, how)
+            self.assertEqual(int(s[1515]), n, how)
+            # The gated spectra still count every hit that passed.
+            self.assertEqual(int(b.spectrum("g", "0:0")[1000]), n)
+            self.assertEqual(int(b.spectrum("g", "0:1")[500]), n)
+
+    def test_sum_matches_a_brute_force_count(self):
+        """Random hits on three channels, overlapping sides, delivered out of
+        order in chunks: the vectorised sum equals the event-by-event rule."""
+        rng = np.random.default_rng(11)
+        seconds, w = 1.0, 1_000_000
+        data, hits = {}, []
+        for ch, rate in ((0, 20000.0), (1, 15000.0), (2, 10000.0)):
+            tt = np.sort(rng.choice(int(seconds * 1e9), int(rate * seconds), replace=False)) * 1000
+            ee = rng.integers(1, 4000, tt.size).astype(np.uint16)
+            data[ch] = (tt.astype(np.int64), ee)
+            hits += [(int(x), ch, int(y)) for x, y in zip(tt, ee)]
+        hits.sort()
+        cal = {"0:0": (1.5, 0.75), "0:1": (-2.0, 1.25), "0:2": (0.25, 0.5)}
+        chans, partners = [0, 1], [1, 2]
+        times = np.array([h[0] for h in hits])
+        for how in ("all", "nearest"):
+            for need in (1, 2):
+                expect = np.zeros(16384, np.int64)
+                for i, (ti, ci, ei) in enumerate(hits):
+                    if ci not in chans:
+                        continue
+                    j0, j1 = np.searchsorted(times, [ti - w, ti + w + 1])
+                    near = [hits[j] for j in range(j0, j1) if j != i and hits[j][1] in partners]
+                    if len({h[1] for h in near}) < need:
+                        continue
+                    if ci in partners and any(h[0] < ti and h[1] in chans for h in near):
+                        continue                               # not the anchor
+                    total = cal[f"0:{ci}"][0] + cal[f"0:{ci}"][1] * ei
+                    if how == "all":
+                        picked = near
+                    else:
+                        picked = [min((h for h in near if h[1] == p), key=lambda h: (abs(h[0] - ti), h[0]))
+                                  for p in {h[1] for h in near}]
+                    total += sum(cal[f"0:{h[1]}"][0] + cal[f"0:{h[1]}"][1] * h[2] for h in picked)
+                    expect[int(np.floor(total))] += 1
+                gate = self.gate(channels=[{"board": "0", "channel": c} for c in chans],
+                                 partners=[{"board": "0", "channel": c} for c in partners],
+                                 min_partners=need, sum=True, sum_partners=how, window_ns=1000)
+                s, _ = self._run([gate], FakeBoard(data, chunk_s=0.05, skew_s=0.1), calib=cal).sum_spectrum("g")
+                np.testing.assert_array_equal(s, expect, err_msg=f"{how}, at least {need}")
+
+    def test_sum_overflow_is_counted(self):
+        data, n = self.two_partner_hits()
+        b = self._run([self.gate(sum=True, sum_max_kev=2000)], FakeBoard(data), calib=self.CAL)
+        st = b.gate("g").status(0)["sum"]
+        self.assertEqual((st["entries"], st["overflow"]), (0, n))
+
+    def test_sum_needs_calibrations(self):
+        data, n = self.two_partner_hits()
+        b = self._run([self.gate(sum=True)], FakeBoard(data), calib={"0:0": (10.0, 0.5)})
+        s, _ = b.sum_spectrum("g")
+        self.assertEqual(int(s.sum()), 0)
+        self.assertEqual(int(b.spectrum("g", "0:0")[1000]), n)     # the rest of the gate works
+        st = b.gate("g").status(0)["sum"]
+        self.assertFalse(st["filling"])
+        self.assertEqual(st["missing"], ["0:1"])
+        with mock.patch.object(C, "check_gates", return_value={"g": []}):
+            status = b.status()
+        self.assertEqual(status["problems"]["g"], [])
+        self.assertIn("Sum spectrum needs an energy calibration on: V1725S 0 · ch 1", status["warnings"]["g"][0])
+
+    def test_sum_is_off_for_vetoes_and_by_default(self):
+        data, _ = self.two_partner_hits(100)
+        self.assertIsNone(self._run([self.gate()], FakeBoard(data), calib=self.CAL).sum_spectrum("g"))
+        self.assertIsNone(self._run([self.gate(sum=True, mode="anticoincidence")], FakeBoard(data),
+                                    calib=self.CAL).sum_spectrum("g"))
+
+    def test_sum_kept_on_save_and_restarted_by_a_calibration(self):
+        data, n = self.two_partner_hits()
+        board = FakeBoard(data)
+        b = self._run([self.gate(sum=True), self.gate(id="h", window_ns=200)], board, calib=self.CAL)
+        kept = b._gates["g"]
+        self.assertEqual(int(kept.sum.sum()), n)
+        src = C.HitSource("0", "board-0", take=board.drain, dropped=lambda: 0,
+                          enable=lambda on: None, energy_bins=32768)
+        b._acq = mock.Mock()
+        b._acq.get_boards.return_value = [{"id": "0", "name": "V1725S", "dpp": "DPP-PHA"}]
+        cal = dict(self.CAL)
+        with mock.patch.object(C, "sources_for_run", return_value={"0": src}), \
+             mock.patch.object(C, "clock_domains", return_value={"0": "board-0"}), \
+             mock.patch.object(C, "read_calibrations",
+                               side_effect=lambda boards, keys: {k: cal.get(k, (0.0, 1.0)) for k in keys}):
+            cfg = b.get_config()
+            cfg["gates"][1]["window_ns"] = 300
+            b.set_config(cfg)
+            self.assertIs(b._gates["g"], kept)
+            self.assertEqual(int(kept.sum.sum()), n)
+            self.assertFalse(kept.sum_restarted)
+            # A new calibration of one of its channels empties it, and says so.
+            cal["0:1"] = (4.0, 2.0)
+            b._check_calibrations(0.0)
+            self.assertEqual(int(kept.sum.sum()), 0)
+            st = kept.status(0)["sum"]
+            self.assertTrue(st["restarted"] and st["filling"])
+            # Changing the sum's options is a change of the gate.
+            cfg["gates"][0]["sum_partners"] = "nearest"
+            b.set_config(cfg)
+            self.assertIsNot(b._gates["g"], kept)
+
+    def test_sum_config_validation(self):
+        cfg = C.normalise_config({"gates": [{}]})
+        g = cfg["gates"][0]
+        self.assertEqual((g["sum"], g["sum_partners"], g["sum_max_kev"], g["sum_bin_kev"]),
+                         (False, "all", 16384.0, 1.0))
+        for bad in ({"sum_partners": "some"}, {"sum_bin_kev": 0}, {"sum_max_kev": -1},
+                    {"sum_max_kev": 70000, "sum_bin_kev": 1.0}):
+            with self.assertRaises(ValueError):
+                C.normalise_config({"gates": [bad]})
+        C.normalise_config({"gates": [{"sum_max_kev": 65536, "sum_bin_kev": 1.0}]})
+
+    def test_read_calibrations_follows_the_file(self):
+        boards = [{"id": "0", "name": "V1725S"}]
+        cwd = os.getcwd()
+        os.chdir(self.tmp.name)
+        try:
+            self.assertEqual(C.read_calibrations(boards, ["0:1"]), {"0:1": (0.0, 1.0)})
+            os.makedirs("calib")
+            with open("calib/V1725S_0.cal", "w") as f:
+                f.write("0 1\n5 2\n")
+            self.assertEqual(C.read_calibrations(boards, ["0:1", "0:3"]), {"0:1": (5.0, 2.0), "0:3": (0.0, 1.0)})
+            with open("calib/V1725S_0.cal.tmp", "w") as f:
+                f.write("0 1\n6 2\n")
+            os.replace("calib/V1725S_0.cal.tmp", "calib/V1725S_0.cal")
+            self.assertEqual(C.read_calibrations(boards, ["0:1"]), {"0:1": (6.0, 2.0)})
+        finally:
+            os.chdir(cwd)
 
     def test_chained_boards_share_a_clock_only_through_clk_in(self):
         def domains(controls):
