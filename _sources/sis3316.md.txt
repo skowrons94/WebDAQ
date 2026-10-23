@@ -1,0 +1,277 @@
+# Struck SIS3316 digitizers
+
+WebDAQ reads Struck SIS3316 boards (16 channels, 250 MHz 14-bit or 125 MHz
+16-bit) over Ethernet next to the CAEN boards. One run can mix both: the CAEN
+boards write `.caendat`, the SIS3316 boards write HDF5 files in the same run
+directory, and the rates, spectra, alerts and auto-restart treat them alike.
+
+The acquisition is done by `sis3316daq`, a pure-Python package from its own
+repository, [SisDAQ](https://github.com/skowrons94/SisDAQ), pinned as a
+submodule in `server/native/sis3316daq` and installed by `install.sh`. It can
+also be used on its own, outside WebDAQ (see its README).
+
+## Connecting the board
+
+The SIS3316 needs a dedicated network link: a direct cable (or a switch) on a
+second network interface of the DAQ PC, never the internet interface.
+
+1. Give that interface a fixed address, without a gateway, e.g. with
+   NetworkManager:
+
+   ```bash
+   sudo nmcli con add type ethernet ifname eno1 con-name sis3316 \
+        ipv4.method manual ipv4.addresses 192.168.1.1/24 ipv4.never-default yes ipv6.method disabled
+   ```
+
+2. Map an IP address onto the board's MAC address, `00:00:56:31:6x:xx` where
+   `xxx` is the board's serial number in hex (serial 108 → `00:00:56:31:60:6c`):
+
+   ```bash
+   sudo ip neigh replace 192.168.1.100 lladdr 00:00:56:31:60:6c dev eno1 nud permanent
+   ```
+
+   This entry does not survive a reboot. A NetworkManager dispatcher script
+   that runs the same command when the interface comes up makes it permanent
+   (on the LUNA DAQ PC: `/etc/NetworkManager/dispatcher.d/90-sis3316-arp`).
+
+The board answers on UDP port `0xE000`. With VME FPGA firmware before
+V3316-2008 it always answers *to* port `0xE000` on the PC, so only one program
+on the PC can talk to it: stop other SIS3316 tools while WebDAQ runs.
+
+## Adding it
+
+On the **Boards** page, *Add a Struck SIS3316*: enter a board ID (unique among
+all boards) and the IP address, then *Check connection* — it shows the serial
+number, firmware and temperature of the board that answered — and *Add
+SIS3316*. The board's settings file `conf/SIS3316_<id>.json` is created with
+defaults (all channels off) and a calibration file `calib/SIS3316_<id>.cal`.
+
+## Settings (DAQ page)
+
+Selecting an SIS3316 on the DAQ page shows its own dashboard instead of the
+CAEN register view. Channels are numbered 0 to 15, as on the CAEN boards and
+the histogram pages (Struck's manual calls them Ch1 to Ch16).
+
+**Settings** works like the CAEN page: **Channel enable** switches channels on
+(nothing is recorded until one is on; *All on* / *All off* for the whole
+board), and **Channel settings** lists every setting for the *Default* column
+and each enabled channel. The Default column applies to all channels not
+changed themselves; a value changed for one channel is highlighted, and the
+arrow in its header puts it back on the defaults. **Acquisition** below holds
+the board-wide settings (sample clock, readout interval, event window,
+pre-trigger, waveform and trapezoid trace lengths, pileup windows, NIM input TI).
+
+| Setting | Meaning |
+|---|---|
+| On | The channel triggers and records events |
+| Polarity | Negative inverts the input (the board triggers on rising edges) |
+| Range, 50 Ω, Offset | Input range (5 V / 2 V / 1.9 V), termination, offset DAC (32768 = centred) |
+| Threshold | Trigger threshold in ADC counts of pulse height |
+| Trig P / G, CFD | Fast trapezoid (trigger) peaking and gap times, constant-fraction timing |
+| E P / G | Energy trapezoid peaking and flat-top times |
+| τ table / τ factor | Decay correction of the energy filter (0 = off). Table 0 at 250 MHz: τ ≈ 2097 µs / factor |
+| Divider | Spectrum bin = max energy / divider. With divider = energy peaking, the bin is the pulse height in ADC counts |
+
+Saved settings apply at the next run start. During a run they reach the board
+at the next bank swap, except the clock and the waveform and trapezoid trace
+lengths, which shape the run file and are refused until the run stops.
+
+The *waveforms* switch of the histogram pages turns the raw samples of an
+SIS3316 on (1000 samples, or the last length used) and off.
+
+## The board's own utilities
+
+* **On-board histograms** — the board histograms the energy of every hit
+  itself (64K bins, with the channel's divider), independently of the
+  software spectra. Read any number of bins, clear one channel or all;
+  WebDAQ clears them at every run start.
+* **Counters** — live time, temperature and counter inputs (see *Live time
+  and scalers* below), and the trigger statistic counters since the run
+  start: all internal triggers, recorded hits, triggers lost to dead time,
+  pileup, vetoed and high-energy-suppressed triggers. During a run they also
+  feed the rates: *Lost* is the dead-time counter, and *Triggers* (on the
+  histogram cards, and `triggerRate` in Graphite) the internal trigger
+  counter. After a stop the tab keeps showing the last run's totals.
+* **Filter trace** — the last recorded output of the energy (or trigger)
+  trapezoid, for tuning peaking, gap and decay correction: with the right τ
+  the flat top is flat. Needs a trapezoid trace length > 0.
+* **Board info** — serial number, firmware, MAC address, sample clock and
+  temperature (Struck recommends 50 °C or less).
+
+## Run files
+
+Each run writes `data/run<N>/run_<N>_<cycle>.h5`, next to the settings file
+copied at the run start. The Data page lists them with the `.caendat` files.
+They need no conversion:
+
+```python
+import h5py, numpy as np, json
+
+with h5py.File("data/run12/run_12_0000.h5") as f:
+    b = f["board_3"]
+    ev = b["events"][:]                  # one row per hit
+    ch14 = ev[ev["channel"] == 14]       # channels are numbered 0-15, as everywhere in WebDAQ
+    energy = ch14["energy_max"] // 200   # // divider: the spectrum channel, as online
+                                         # (the energy calibration applies to this)
+    t_ns = ch14["timestamp"] * b.attrs["ns_per_sample"]
+    settings = json.loads(b.attrs["settings"])
+    waves = b["waveforms"][:10]          # row-aligned with events, if recorded
+```
+
+Rows are written bank by bank and channel by channel, so sort by `timestamp`
+when the order matters (coincidences).
+
+## Live time and scalers
+
+The board counts, per channel, six trigger statistics (Struck manual 4.9),
+latched at every bank swap; the readout reads them once per bank anyway, so
+none of this costs extra network traffic:
+
+| Counter | Counts |
+|---|---|
+| internal | every trigger of the channel's internal trigger logic |
+| hit | internal triggers that started an event (recorded) |
+| deadtime | triggers while the board was not ready to save an event: bank swap, memory bank almost full, writing the trapezoid trace or the rest of the ADC data |
+| pileup | triggers while the board was busy with an event |
+| veto | triggers during a veto |
+| high_energy | suppressed high-energy triggers |
+
+**Live time** of a channel is `1 − deadtime / internal`, the dead time
+`deadtime / internal`. It is the share of the channel's own triggers that
+found the board ready, so it is a count, not a clock: it is the live-time
+fraction of the run when the signals come at random times (source, beam),
+and the share of lost pulses for a periodic pulser. It does not include:
+pile-up inside an event being recorded (flagged in the event, counted as
+pileup), vetoed triggers, external triggers (the internal counter does not see
+them), or anything under the threshold. A channel without triggers has no
+live time (shown as —), not 100 %. The counters do not restart with the run
+on firmware V3316-2004, so the start latches them once straight after arming
+(a bank swap, which gives up the millisecond since the arm) and counts from
+there: every bank of the run is counted. Only the bank that fills while the
+settings are changed during a run, or while a board recovers, is left out.
+
+The Counters tab shows per enabled channel the live and dead time over the
+run, the dead time of the last stats interval, the triggers and the events
+read, plus the temperature (read once per stats interval), the lowest live
+time and the counter inputs.
+
+Graphite gets, next to the SIS rates (`<prefix>` is the Graphite prefix of
+the run, `ancillary.rates` by default):
+
+    <prefix>.bo_<id>.temperature                 °C
+    <prefix>.bo_<id>.ch_<ch>.deadFraction        dead time of the last stats interval, 0-1
+                                                 (not sent for an interval without triggers)
+    <prefix>.bo_<id>.counter.<name>.counts       counter input: pulses since the run start
+    <prefix>.bo_<id>.counter.<name>.total        ... times the scale (e.g. pC)
+    <prefix>.bo_<id>.counter.<name>.rate         ... per second, scaled (e.g. pC/s = pA)
+
+`<name>` is the counter's name with anything but letters, digits, `_` and `-`
+replaced by `_` ("Beam charge" → `Beam_charge`, µ → u). Two counter inputs
+whose names give the same path are refused when the settings are saved.
+
+### Files in the run directory
+
+A saved run gets, next to its `.h5` files, one file for all SIS3316 boards:
+
+`sis3316_scalers.csv` — every stats interval (and once more at the stop, with
+the last bank), one row per board and enabled channel:
+
+| Column | |
+|---|---|
+| `time` | local time of the row (ISO) |
+| `elapsed_s` | seconds since the run start |
+| `board`, `channel` | board id, channel 0-15 |
+| `internal` … `high_energy` | the six counters, cumulative since the run start |
+| `events` | events read and written for the channel |
+| `temperature_c` | board temperature |
+| `counter_name`, `counter_value`, `counter_unit` | for a counter input: its name, `internal` × scale, unit (empty otherwise) |
+
+```python
+import pandas as pd
+sc = pd.read_csv("data/run12/sis3316_scalers.csv")
+last = sc.groupby(["board", "channel"]).last()
+live = 1 - last.deadtime / last.internal
+```
+
+`sis3316_summary.json` — written at the stop:
+
+```json
+{"format_version": 1, "run": 12, "software": "...", "written": "...",
+ "counter_names": ["internal", "hit", "deadtime", "pileup", "veto", "high_energy"],
+ "live_time_definition": "live_fraction = 1 - deadtime / internal ...",
+ "boards": [{
+   "board_id": 3, "name": "SIS3316",
+   "duration_s": 3600.2,          // run start to stop
+   "counted_s": 3600.0,           // time spanned by the counted banks
+   "uncounted_banks": 0,          // banks not in the counts (settings changed, recovery)
+   "temperature_c": {"last": 41.2, "min": 40.8, "max": 41.5},
+   "channels": [{"channel": 2, "internal": 361000, "hit": 358000, "deadtime": 3000,
+                 "pileup": 0, "veto": 0, "high_energy": 0,
+                 "events_written": 358020, "dead_fraction": 0.0083,
+                 "live_fraction": 0.9917, "live_time_s": 3570.1, "integrity": "ok"}],
+   "counter_inputs": [{"channel": 14, "name": "Beam charge", "unit": "pC", "scale": 10.0,
+                       "metric": "Beam_charge", "counts": 1234567, "value": 12345670.0,
+                       "mean_rate": 3429.4}],
+   "integrity": {"ok": true, "mismatches": [], "tolerance": {"absolute": 2, "relative": 0.0}}
+ }]}
+```
+
+The same per board goes into every `.h5` file of the run, as attributes of
+`/board_<id>`: `statistic_names`, `statistic_totals` (16 × 6), `dead_fraction`
+and `live_fraction` (16, NaN for a channel off or without triggers),
+`counted_s`, and `run_summary` (the JSON above for that board).
+
+**Integrity check.** At the stop the hit counter of every channel is compared
+with the events actually read for it, over the same banks. They should be
+equal (every bank, the last one included, is read before the board is
+disarmed); when they differ by more than 2 events, the server log
+warns and one line starting with `[sis3316]` is added to the run's notes:
+events may be missing from the files (a bank read that failed, a decoding
+problem). Channels with the external trigger on, or the internal trigger
+off, are not checked, since their events do not go through the hit counter.
+
+## Counter inputs
+
+Any spare channel can count logic pulses: a current integrator's output (beam
+charge), a clock, a gate. In **Settings → Counter inputs**, *Add counter
+input*, choose the channel, a name, the quantity per pulse and its unit (e.g.
+*Beam charge*, 10, pC). The channel must be switched on.
+
+The count is the channel's **internal trigger counter**, not the hit counter:
+it counts every pulse over the threshold, whether or not the board was ready
+to record it, and the charge delivered during dead time is still charge on
+target. The channel's events are recorded as on any other channel (the
+energy is meaningless); at high rates they cost disk, so a few kHz is
+comfortable. Pulses closer together than about the trigger peaking + gap
+time count as one.
+
+Cabling (the inputs are analog, 50 Ω or 1 kΩ):
+
+* **NIM** (fast negative logic, −0.8 V into 50 Ω): *Polarity* negative,
+  *50 Ω termination* on, range 2 V or 5 V, *Threshold* at about half the
+  pulse: ~3000 ADC counts in the 2 V range (≈0.12 mV per count), ~1300 in the
+  5 V range (≈0.31 mV per count).
+* **TTL** (positive, 0/+3.3…5 V): *Polarity* positive. With the offset DAC
+  centred the input spans ±1 V or ±2.5 V, so a 5 V pulse clips: use a
+  TTL → NIM converter or a −6/−10 dB attenuator, or move the offset DAC so the
+  baseline sits near the bottom of the range. Termination on if the source
+  drives 50 Ω (most line drivers do; a CMOS gate output may not — then 1 kΩ).
+  Threshold at about half the pulse at the input, in ADC counts as above.
+* Pulses should be at least as long as the trigger *peaking time* (8 samples
+  = 32 ns at 250 MHz by default), or the trapezoid sees less than their full
+  height. Check on the histogram page that every pulse gives one event, and
+  compare the counter rate with the source.
+
+On a board with VME FPGA firmware V3316-200F and ADC FPGA firmware V0250-000E
+or later the board's own **User Counter** (manual 3.3.1.2.1 and 4.13) is the
+better tool: NIM input TI increments it, UI clears it, and its value is saved
+in every event header, so each event carries the integrated charge at its
+time, with no channel used up. This board's firmware (V3316-2004 /
+A_0250_0004) does not have it, hence the counter-input channel.
+
+## Test mode
+
+With `TEST_FLAG=True` an SIS3316 is simulated: every enabled channel sees a
+pulser of fixed amplitude (with ~1 % of extra triggers counted as dead
+time, so the live time is not 100 %), so adding the board, settings, runs, spectra and
+files all work without hardware.
