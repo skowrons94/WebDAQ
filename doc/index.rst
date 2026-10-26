@@ -30,6 +30,7 @@ repository.
    current-and-charge.md
    monitoring-and-alerts.md
    run-data.md
+   analysis.md
    elog.md
 
 .. toctree::

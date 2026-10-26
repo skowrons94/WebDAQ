@@ -59,7 +59,7 @@ def create_app(config_class=Config):
     jwt.init_app(app)
     CORS(app)
 
-    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog, grafana, notifications, sis3316, coincidences, monitoring
+    from app.routes import auth, experiment, stats, calib, current, digitizer, histograms, data, elog, grafana, notifications, sis3316, coincidences, monitoring, analysis
     app.register_blueprint(auth.bp)
     app.register_blueprint(experiment.bp)
     app.register_blueprint(stats.bp)
@@ -69,6 +69,8 @@ def create_app(config_class=Config):
     app.register_blueprint(histograms.bp)
     # Read-side access to completed runs (the Data dashboard).
     app.register_blueprint(data.bp)
+    # Near-line analysis workflows over converted runs (the Analysis page).
+    app.register_blueprint(analysis.bp)
     # PSI ELOG logbook (reading and posting entries).
     app.register_blueprint(elog.bp)
     # Grafana alert rules (the Alerts page and run-linked alerts).
