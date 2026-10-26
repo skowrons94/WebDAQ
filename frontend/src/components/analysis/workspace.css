@@ -18,6 +18,8 @@
   .analysis-grid > * { flex-shrink: 0; }
   .analysis-grid > aside:first-child { height: 360px; }
   .analysis-grid > section { height: 420px; }
+  /* One page scroll on a phone, not a scrolling panel inside it. */
+  .analysis-grid > aside:last-child { height: auto; min-height: 0; overflow: visible; }
 }
 
 .analysis-resize-handle { cursor: col-resize; touch-action: none; display: flex; align-items: center; justify-content: center; color: hsl(var(--muted-foreground)); border-radius: 6px; }

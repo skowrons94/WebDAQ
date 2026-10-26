@@ -43,7 +43,7 @@ const AnalysisNode = memo(function AnalysisNode({ data, selected }: NodeProps<Fl
       {(['inputs', 'outputs'] as const).map(side => Object.keys(data.spec[side]).map((port, index) => <Handle key={`${side}-${port}`} type={side === 'inputs' ? 'target' : 'source'} position={side === 'inputs' ? Position.Left : Position.Right} id={port} style={{ top: 17 + index * 22, background: 'hsl(var(--primary))', width: 10, height: 10 }} />))}
       {ports === 0 && <span className="px-3">Active experiment</span>}
     </div>
-    {Object.keys(data.params).length > 0 && <div className="px-4 pb-3 text-[11px] text-muted-foreground truncate">{Object.entries(data.params).filter(([, value]) => value !== '').slice(0, 2).map(([key, value]) => `${key}: ${value}`).join(' · ')}</div>}
+    {Object.keys(data.params).length > 0 && <div className="px-4 pb-3 text-[11px] text-muted-foreground truncate">{Object.keys(data.spec.params).filter(key => data.params[key] !== undefined && data.params[key] !== '' && !(data.kind === 'calibrate' && data.params.source !== 'manual' && (key === 'slope' || key === 'intercept'))).slice(0, 2).map(key => `${key}: ${data.params[key]}`).join(' · ')}</div>}
   </div>
 })
 const calculationKey = (graph: AnalysisGraph) => graphKey({ ...graph, nodes: graph.nodes.map(n => ({ ...n, position: { x: 0, y: 0 } })) })
@@ -359,7 +359,7 @@ export default function AnalysisWorkspace() {
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-card text-xs"><span className="text-muted-foreground">{nodes.length} nodes · {edges.length} connections</span><span className="text-muted-foreground">Click a node to edit</span></div>
         <div className="flex-1 min-h-0" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }} onDrop={e => { e.preventDefault(); addNode(e.dataTransfer.getData('application/lunadaq-node'), {x:e.clientX,y:e.clientY}) }}>
           <ReactFlow<FlowNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} isValidConnection={isValidConnection} onNodeClick={onNodeClick} onPaneClick={onPaneClick} onInit={onFlowInit} fitView panOnDrag={!phone} nodesDraggable={!phone} preventScrolling={!phone} minZoom={0.2} maxZoom={2} defaultEdgeOptions={edgeDefaults} deleteKeyCode={['Backspace', 'Delete']}>
-            <Background gap={20} size={1} /><Controls /><MiniMap style={minimapStyle} pannable zoomable maskStrokeColor="hsl(var(--primary))" maskStrokeWidth={1} nodeColor="hsl(var(--primary) / 0.45)" maskColor="hsl(var(--muted-foreground) / 0.12)" />
+            <Background gap={20} size={1} /><Controls />{!phone && <MiniMap style={minimapStyle} pannable zoomable maskStrokeColor="hsl(var(--primary))" maskStrokeWidth={1} nodeColor="hsl(var(--primary) / 0.45)" maskColor="hsl(var(--muted-foreground) / 0.12)" />}
           </ReactFlow>
         </div>
 
