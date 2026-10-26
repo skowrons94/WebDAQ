@@ -3,29 +3,44 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { ReactFlow, Background, Controls, MiniMap, Handle, Position, addEdge, useNodesState, useEdgesState, type Node, type NodeProps, type Edge, type Connection, type ReactFlowInstance } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { Database, GitBranch, Play, Plus, Save, Upload, Download, RefreshCw, Trash2, Loader2, X, GripVertical, GripHorizontal, Info } from 'lucide-react'
+import { AlertTriangle, Play, Plus, Save, Upload, Download, RefreshCw, Trash2, Loader2, X, GripVertical, GripHorizontal, Info } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { AnalysisContext, AnalysisNodeSpec, AnalysisGraph, AnalysisResult, AnalysisBatch, AnalysisSchema, RunSummary, getAnalysisContext, getRuns, getAnalysisBatch, startAnalysisBatch, getAnalysisSchema, executeAnalysis, getAnalysisJob, SavedAnalysisWorkflow, getAnalysisWorkflows, storeAnalysisWorkflow, loadAnalysisWorkflow, queryAnalysisRuns } from '@/lib/api'
+import { AnalysisContext, AnalysisNodeSpec, AnalysisGraph, AnalysisResult, AnalysisBatch, AnalysisSchema, RunSummary, getAnalysisContext, getRuns, getAnalysisBatch, startAnalysisBatch, getAnalysisSchema, executeAnalysis, getAnalysisJob, SavedAnalysisWorkflow, getAnalysisWorkflows, storeAnalysisWorkflow, loadAnalysisWorkflow, queryAnalysisRuns, getAnalysisRunFormats, type AnalysisRunFormat } from '@/lib/api'
+import { PageHeader } from '@/components/page-header'
+import { useRunStatus } from '@/hooks/use-run-status'
+import { useIsPhone } from '@/hooks/use-is-phone'
 import { download, graphKey, readGraph, starterGraph } from './graph'
 import { Results } from './results'
 import { RunQuery, emptyQuery } from './run-query'
 import { HelpTooltip, TooltipProvider } from '@/components/ui/tooltip'
 import './workspace.css'
 
+// Browser storage can be unavailable (private window, blocked site data): the
+// page then simply does not remember its panel sizes or a running job.
+function stored(storage: 'local' | 'session', key: string): string | null {
+  try { return (storage === 'local' ? localStorage : sessionStorage).getItem(key) } catch { return null }
+}
+function store(storage: 'local' | 'session', key: string, value: string | null) {
+  try {
+    const s = storage === 'local' ? localStorage : sessionStorage
+    if (value === null) s.removeItem(key); else s.setItem(key, value)
+  } catch { /* not kept */ }
+}
+
 type FlowNode = Node<{ kind: string; params: Record<string, string | number>; spec: AnalysisNodeSpec }, 'analysis'>
 const message = (error: unknown) => (error as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message || (error as Error)?.message || 'Request failed.'
 
 const AnalysisNode = memo(function AnalysisNode({ data, selected }: NodeProps<FlowNode>) {
   const ports = Math.max(Object.keys(data.spec.inputs).length, Object.keys(data.spec.outputs).length)
-  return <div className={`analysis-node rounded-xl border bg-card shadow-sm w-[220px] ${selected ? 'ring-2 ring-teal-500 border-teal-500' : ''}`}>
-    <div className="px-4 pt-3 pb-2 border-b"><p className="text-[10px] tracking-widest uppercase text-teal-600 dark:text-teal-400">{data.spec.group}</p><strong className="text-sm">{data.spec.label}</strong></div>
+  return <div className={`analysis-node rounded-xl border bg-card shadow-sm w-[220px] ${selected ? 'ring-2 ring-primary border-primary' : ''}`}>
+    <div className="px-4 pt-3 pb-2 border-b"><p className="text-[10px] tracking-widest uppercase text-primary">{data.spec.group}</p><strong className="text-sm">{data.spec.label}</strong></div>
     <div className="relative text-[11px] text-muted-foreground py-2" style={{ height: 22 + ports * 22 }}>
       {(['inputs', 'outputs'] as const).map(side => Object.keys(data.spec[side]).map((port, index) => <div key={`${side}-${port}`} className={`absolute ${side === 'inputs' ? 'left-3' : 'right-3 text-right'}`} style={{ top: 10 + index * 22 }}>{port}</div>))}
-      {(['inputs', 'outputs'] as const).map(side => Object.keys(data.spec[side]).map((port, index) => <Handle key={`${side}-${port}`} type={side === 'inputs' ? 'target' : 'source'} position={side === 'inputs' ? Position.Left : Position.Right} id={port} style={{ top: 17 + index * 22, background: '#0d9488', width: 10, height: 10 }} />))}
+      {(['inputs', 'outputs'] as const).map(side => Object.keys(data.spec[side]).map((port, index) => <Handle key={`${side}-${port}`} type={side === 'inputs' ? 'target' : 'source'} position={side === 'inputs' ? Position.Left : Position.Right} id={port} style={{ top: 17 + index * 22, background: 'hsl(var(--primary))', width: 10, height: 10 }} />))}
       {ports === 0 && <span className="px-3">Active experiment</span>}
     </div>
     {Object.keys(data.params).length > 0 && <div className="px-4 pb-3 text-[11px] text-muted-foreground truncate">{Object.entries(data.params).filter(([, value]) => value !== '').slice(0, 2).map(([key, value]) => `${key}: ${value}`).join(' · ')}</div>}
@@ -34,7 +49,7 @@ const AnalysisNode = memo(function AnalysisNode({ data, selected }: NodeProps<Fl
 const calculationKey = (graph: AnalysisGraph) => graphKey({ ...graph, nodes: graph.nodes.map(n => ({ ...n, position: { x: 0, y: 0 } })) })
 // MiniMap uses these dimensions for both its SVG and pointer coordinate mapping.
 const minimapStyle = { width: 130, height: 90 }
-const edgeDefaults = { style: { stroke: '#0d9488', strokeWidth: 1.8 } }
+const edgeDefaults = { style: { stroke: 'hsl(var(--primary))', strokeWidth: 1.8 } }
 const nodeTypes = { analysis: AnalysisNode }
 
 export default function AnalysisWorkspace() {
@@ -78,11 +93,11 @@ export default function AnalysisWorkspace() {
     const next = Math.round(Math.max(stackedResults ? 260 : 280, Math.min(maximum, size)))
     if (stackedResults) setResultsHeight(next)
     else setResultsWidth(next)
-    localStorage.setItem(stackedResults ? 'analysis-results-height' : 'analysis-results-width', String(next))
+    store('local', stackedResults ? 'analysis-results-height' : 'analysis-results-width', String(next))
   }
   useEffect(() => {
-    const width = Number(localStorage.getItem('analysis-results-width'))
-    const height = Number(localStorage.getItem('analysis-results-height'))
+    const width = Number(stored('local', 'analysis-results-width'))
+    const height = Number(stored('local', 'analysis-results-height'))
     if (width >= 280 && width <= 640) setResultsWidth(width)
     if (height >= 260 && height <= 1200) setResultsHeight(height)
     const media = window.matchMedia('(max-width: 1279px)')
@@ -97,13 +112,21 @@ export default function AnalysisWorkspace() {
     const maximum = Math.min(520, Math.max(260, available - (window.innerWidth >= 1280 ? resultsWidth + 436 : 400)))
     const next = Math.round(Math.max(260, Math.min(maximum, width)))
     setPanelWidth(next)
-    localStorage.setItem('analysis-panel-width', String(next))
+    store('local', 'analysis-panel-width', String(next))
   }
   useEffect(() => {
-    const saved = Number(localStorage.getItem('analysis-panel-width'))
+    const saved = Number(stored('local', 'analysis-panel-width'))
     if (saved >= 260 && saved <= 520) setPanelWidth(saved)
   }, [])
   const [selected, setSelected] = useState<string | null>(null)
+  // Nothing here competes with a run: Run and Batch convert wait for it to end
+  // (the server refuses them too, and stops a job when a run starts).
+  const runActive = useRunStatus(s => s.isRunning)
+  // On a phone the canvas is for looking and tapping a node to edit it: a
+  // drag scrolls the page instead of panning, and nodes stay where they are.
+  const phone = useIsPhone()
+  const [stopped, setStopped] = useState('')
+  const [formats, setFormats] = useState<Record<string, AnalysisRunFormat>>({})
   const [batch, setBatch] = useState<AnalysisBatch>({ state: 'idle', runs: [] })
   const [converter, setConverter] = useState(false)
   const [schema, setSchema] = useState<AnalysisSchema | null>(null)
@@ -126,13 +149,14 @@ export default function AnalysisWorkspace() {
     setTimeout(() => flow.current?.fitView({ padding: 0.15 }), 100)
   }, [setNodes, setEdges])
   const refreshRuns = useCallback(async () => {
-    const data = await getRuns(); setRuns(data.runs); setConverter(data.rureader_available)
+    const [data, kinds] = await Promise.all([getRuns(), getAnalysisRunFormats()])
+    setRuns(data.runs); setConverter(data.rureader_available); setFormats(kinds.runs)
   }, [])
   useEffect(() => {
     let active = true
-    Promise.all([getAnalysisContext(), getRuns(), getAnalysisBatch(), getAnalysisWorkflows()]).then(([ctx, data, status, library]) => {
+    Promise.all([getAnalysisContext(), getRuns(), getAnalysisBatch(), getAnalysisWorkflows(), getAnalysisRunFormats()]).then(([ctx, data, status, library, kinds]) => {
       if (!active) return
-      setWorkflows(library.workflows); setActiveWorkflow(ctx.active_workflow); setContext(ctx); setRuns(data.runs); setConverter(data.rureader_available); setBatch(status)
+      setWorkflows(library.workflows); setActiveWorkflow(ctx.active_workflow); setContext(ctx); setRuns(data.runs); setConverter(data.rureader_available); setBatch(status); setFormats(kinds.runs)
       let graph = ctx.examples?.find(w => w.id === 'spectrum')?.graph || starterGraph(ctx.catalog)
       if (ctx.workflow) {
         try { graph = readGraph(ctx.workflow, ctx.catalog) } catch (e) { setError(message(e)) }
@@ -140,7 +164,7 @@ export default function AnalysisWorkspace() {
       applyGraph(graph, ctx.catalog)
       setSavedGraph(graphKey(graph))
       if (ctx.warning) setError(ctx.warning)
-      const pending = sessionStorage.getItem(`analysis-job-${ctx.project_id}`)
+      const pending = stored('session', `analysis-job-${ctx.project_id}`)
       if (pending) setJobId(pending)
     }).catch(e => { if (active) setError(message(e)) })
     return () => { active = false }
@@ -169,12 +193,13 @@ export default function AnalysisWorkspace() {
         if (job.state === 'running') { timer = setTimeout(poll, 1000); return }
         if (job.result) { setResult(job.result); setResultGraph(calculationKey(job.result.workflow)); setNotice('Analysis completed.'); setSelected(null) }
         if (job.state === 'failed') setError(job.message || 'Analysis failed.')
-        sessionStorage.removeItem(`analysis-job-${context.project_id}`)
+        if (job.state === 'stopped') setStopped(job.message || 'Stopped: a run started.')
+        store('session', `analysis-job-${context.project_id}`, null)
         setJobId(null); setProgress('')
       } catch (e) {
         if (!active) return
         setError(message(e)); setJobId(null)
-        sessionStorage.removeItem(`analysis-job-${context.project_id}`)
+        store('session', `analysis-job-${context.project_id}`, null)
       }
     }
     poll()
@@ -216,7 +241,7 @@ export default function AnalysisWorkspace() {
     return !reachesSource(target.id)
   }, [nodes, edges])
   const action = async (fn: () => Promise<void>) => {
-    setError(''); setNotice(''); setBusy(true)
+    setError(''); setNotice(''); setStopped(''); setBusy(true)
     try { await fn() } catch (e) { setError(message(e)) } finally { setBusy(false) }
   }
   const addNode = (kind: string, drop?: { x: number; y: number }) => {
@@ -267,18 +292,20 @@ export default function AnalysisWorkspace() {
   }, [setNodes])
   if (!context) return <div className="p-8">{error ? <p role="alert" className="text-destructive">{error}</p> : 'Connecting to the experiment…'}</div>
   return <TooltipProvider delayDuration={150} skipDelayDuration={300}><div className="analysis-workspace">
-    <header className="flex flex-wrap items-center justify-between gap-4">
-      <div className="flex items-center gap-3"><div className="rounded-xl bg-teal-500/10 p-3 text-teal-600"><GitBranch size={24} /></div><div><h1 className="text-2xl font-semibold tracking-tight">Analysis</h1><p className="text-sm text-muted-foreground">{activeWorkflow?.name || workflowName || context.project_name}</p></div></div>
-      <div className="flex flex-wrap gap-2">
+    <PageHeader className="mb-0" title="Analysis"
+      description={<>{activeWorkflow?.name || workflowName || 'Workflows over the converted runs'} · <span className="break-all">{context.project_name}</span></>}
+      actions={<>
         <Button variant="outline" size="sm" disabled={busy} onClick={() => { setWorkflowName(activeWorkflow?.name || workflowName || 'Spectrum & yield'); setWorkflowDescription(activeWorkflow?.description || workflowDescription); setSaveOpen(true) }}><Save size={14} className="mr-2" />{dirty ? 'Save workflow •' : 'Save workflow'}</Button>
         <Button variant="outline" size="sm" onClick={() => download('lunadaq-workflow.json', JSON.stringify(graph, null, 2))}><Download size={14} className="mr-2" />Export</Button>
         <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}><Upload size={14} className="mr-2" />Import</Button>
         <input ref={fileInput} className="hidden" type="file" accept=".json,application/json" aria-label="Import workflow" onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return; action(async () => { if (file.size > 1_000_000) throw new Error('Workflow exceeds 1 MB.'); const next = readGraph(JSON.parse(await file.text()), context.catalog); applyGraph(next, context.catalog); setActiveWorkflow(null); setNotice('Workflow imported. Save to keep it in this experiment.') }) }} />
-        <Button size="sm" className="bg-teal-700 hover:bg-teal-800 text-white" disabled={busy || running || !nodes.length} onClick={() => action(async () => { const job = await executeAnalysis(graph); sessionStorage.setItem(`analysis-job-${context.project_id}`, job.id); setJobId(job.id); setProgress('Starting analysis…') })}>{jobId ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}Run pipeline</Button>
-      </div>
-    </header>
+        <Button size="sm" disabled={busy || running || runActive || !nodes.length || !!context.uproot_missing} title={runActive ? 'A run is in progress' : undefined} onClick={() => action(async () => { const job = await executeAnalysis(graph); store('session', `analysis-job-${context.project_id}`, job.id); setJobId(job.id); setProgress('Starting analysis…') })}>{jobId ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Play size={14} className="mr-2" />}Run pipeline</Button>
+      </>} />
+    {runActive && <div role="status" className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"><AlertTriangle size={16} className="mt-0.5 shrink-0" /><span>A run is in progress. Analysis and batch conversion wait until it stops, so they never compete with the acquisition{jobId ? '; the running job stops at its next chunk of events' : ''}.</span></div>}
+    {context.uproot_missing && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{context.uproot_missing} Workflows can still be edited and saved.</div>}
+    {stopped && <div role="status" className="rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning">{stopped}</div>}
     {error && <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{error}</div>}
-    {(notice || progress) && <p role="status" className="text-sm text-teal-700 dark:text-teal-400">{progress || notice}</p>}
+    {(notice || progress) && <p role="status" className="text-sm text-success">{progress || notice}</p>}
     <Dialog open={saveOpen} onOpenChange={setSaveOpen}><DialogContent><DialogHeader><DialogTitle>Save workflow</DialogTitle><DialogDescription>Keep a named workflow in {context.project_name}. Save a copy to create a separate variant.</DialogDescription></DialogHeader>
       <label className="text-sm space-y-1">Name<Input aria-label="Workflow name" maxLength={100} value={workflowName} onChange={e => setWorkflowName(e.target.value)} /></label>
       <label className="text-sm space-y-1">Description<Textarea aria-label="Workflow description" maxLength={2000} value={workflowDescription} onChange={e => setWorkflowDescription(e.target.value)} placeholder="What does this workflow analyse?" /></label>
@@ -297,13 +324,13 @@ export default function AnalysisWorkspace() {
         <div className="overflow-auto p-3 space-y-3 flex-1">
           {leftTab === 'nodes' ? <>
             <Input placeholder="Search nodes…" aria-label="Search nodes" value={libraryFilter} onChange={e => setLibraryFilter(e.target.value)} />
-            {Object.entries(context.catalog).filter(([, spec]) => `${spec.label} ${spec.group}`.toLowerCase().includes(libraryFilter.toLowerCase())).map(([kind, spec]) => <HelpTooltip key={kind} content={spec.description}><button draggable onDragStart={e => { e.dataTransfer.setData('application/lunadaq-node', kind); e.dataTransfer.effectAllowed = 'copy' }} onClick={() => addNode(kind)} className="w-full rounded-lg border p-3 text-left hover:border-teal-500 hover:bg-teal-500/5 transition-colors"><div className="flex items-center justify-between"><span className="font-medium text-sm">{spec.label}</span><Plus size={14} className="text-teal-600 shrink-0" /></div><p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">{spec.description}</p></button></HelpTooltip>)}
+            {Object.entries(context.catalog).filter(([, spec]) => `${spec.label} ${spec.group}`.toLowerCase().includes(libraryFilter.toLowerCase())).map(([kind, spec]) => <HelpTooltip key={kind} content={spec.description}><button draggable onDragStart={e => { e.dataTransfer.setData('application/lunadaq-node', kind); e.dataTransfer.effectAllowed = 'copy' }} onClick={() => addNode(kind)} className="w-full rounded-lg border p-3 text-left hover:border-primary hover:bg-primary/5 transition-colors"><div className="flex items-center justify-between"><span className="font-medium text-sm">{spec.label}</span><Plus size={14} className="text-primary shrink-0" /></div><p className="mt-1 text-xs leading-relaxed text-muted-foreground line-clamp-2">{spec.description}</p></button></HelpTooltip>)}
             <p className="text-xs text-muted-foreground">Drag a node onto the canvas.</p>
           </> : leftTab === 'workflows' ? <>
             <Input aria-label="Search workflows" placeholder="Search workflows…" value={workflowFilter} onChange={e => setWorkflowFilter(e.target.value)} />
 
             {!workflows.length && <p className="text-sm text-muted-foreground py-4">No saved workflows.</p>}
-            {workflows.filter(w => `${w.name} ${w.description}`.toLowerCase().includes(workflowFilter.toLowerCase())).map(w => <article key={w.id} className={`rounded-lg border p-3 space-y-2 ${activeWorkflow?.id === w.id ? 'border-teal-500 bg-teal-500/5' : ''}`}><h3 className="font-medium text-sm break-words">{w.name}{activeWorkflow?.id === w.id && <span className="ml-2 text-xs text-teal-600">Current</span>}</h3><p className="text-xs text-muted-foreground whitespace-pre-wrap break-words">{w.description}</p><Button variant="outline" size="sm" disabled={busy || running} onClick={() => loadNamed(w)}>Load workflow</Button></article>)}
+            {workflows.filter(w => `${w.name} ${w.description}`.toLowerCase().includes(workflowFilter.toLowerCase())).map(w => <article key={w.id} className={`rounded-lg border p-3 space-y-2 ${activeWorkflow?.id === w.id ? 'border-primary bg-primary/5' : ''}`}><h3 className="font-medium text-sm break-words">{w.name}{activeWorkflow?.id === w.id && <span className="ml-2 text-xs text-primary">Current</span>}</h3><p className="text-xs text-muted-foreground whitespace-pre-wrap break-words">{w.description}</p><Button variant="outline" size="sm" disabled={busy || running} onClick={() => loadNamed(w)}>Load workflow</Button></article>)}
             <h3 className="text-xs font-semibold pt-3">Examples</h3>
             {(context.examples || []).filter(w => `${w.name} ${w.description}`.toLowerCase().includes(workflowFilter.toLowerCase())).map(w => <article key={w.id} className="rounded-lg border p-3 space-y-2"><div className="flex justify-between gap-2"><h4 className="text-sm font-medium">{w.name}</h4><HelpTooltip content={w.description}><button type="button" aria-label={`About ${w.name}`} className="text-muted-foreground hover:text-foreground"><Info size={14} /></button></HelpTooltip></div><Button size="sm" variant="outline" disabled={busy || running} onClick={() => { if (dirty && !window.confirm('Replace unsaved changes with this example?')) return; applyGraph(readGraph(w.graph,context.catalog),context.catalog); setActiveWorkflow(null); setResult(null); setWorkflowName(w.name); setWorkflowDescription([w.description, '', 'Setup:', ...(w.setup || []).map(step => `• ${step}`)].join('\n')); setNotice('Template loaded. Choose runs and configure the analysis settings.'); }}>Load template</Button><details className="text-xs text-muted-foreground"><summary className="cursor-pointer">Setup requirements</summary><ul className="mt-2 list-disc space-y-2 pl-4">{(w.setup || []).map(step => <li key={step}>{step}</li>)}</ul></details></article>)}
             <Button size="sm" variant="ghost" disabled={busy} onClick={() => action(async () => setWorkflows((await getAnalysisWorkflows()).workflows))}><RefreshCw size={14} className="mr-2" />Refresh workflows</Button>
@@ -313,13 +340,13 @@ export default function AnalysisWorkspace() {
               onReset={() => { setTargetFilter(''); setTypeFilter(''); setExtraQuery(emptyQuery) }} onApply={() => useRuns(true)}
               count={queryRuns.length} pending={queryPending} error={queryError} active={!!hasQuery} />
             <div className="flex gap-2"><Input placeholder="Run, target or type…" aria-label="Filter runs" value={filter} onChange={e => setFilter(e.target.value)} /><Button variant="ghost" size="icon" aria-label="Refresh runs" onClick={() => action(refreshRuns)}><RefreshCw size={15} /></Button></div>
-            <div className="flex justify-between text-xs"><button className="text-teal-600" onClick={() => setSelectedRuns(visibleRuns.filter(r => r.complete).slice(0, 100).map(r => r.run_number))}>Select visible (up to 100)</button><button onClick={() => setSelectedRuns([])}>Clear</button></div>
+            <div className="flex justify-between text-xs"><button className="text-primary pointer-coarse:min-h-11" onClick={() => setSelectedRuns(visibleRuns.filter(r => r.complete).slice(0, 100).map(r => r.run_number))}>Select visible (up to 100)</button><button className="pointer-coarse:min-h-11" onClick={() => setSelectedRuns([])}>Clear</button></div>
             <Button size="sm" className="w-full" disabled={!selectedRuns.length} onClick={() => useRuns()}>Use {selectedRuns.length} selected runs</Button>
-            <Button size="sm" variant="outline" className="w-full" disabled={busy || running || !converter || !selectedRuns.length} onClick={() => action(async () => { await startAnalysisBatch(selectedRuns); setBatch(await getAnalysisBatch()) })}>Batch convert to ROOT</Button>
-            <p className="text-xs text-muted-foreground">{!converter && 'ROOT converter unavailable.'}</p>
+            <Button size="sm" variant="outline" className="w-full" disabled={busy || running || runActive || !converter || !selectedRuns.length} onClick={() => action(async () => { await startAnalysisBatch(selectedRuns); setBatch(await getAnalysisBatch()) })}>Batch convert to ROOT</Button>
+            <p className="text-xs text-muted-foreground">{!converter ? 'ROOT converter unavailable.' : runActive ? 'Batch conversion waits for the run to end.' : 'SIS3316 runs (HDF5) are skipped: RUReader converts .caendat only.'}</p>
             {batch.state !== 'idle' && <details open={batch.state === 'running'} className="rounded border p-2 text-xs"><summary className="cursor-pointer">Batch: {batch.state}</summary>{batch.runs.map(row => <details key={row.run} className="mt-2"><summary>Run {row.run}: {row.state}</summary><pre className="whitespace-pre-wrap break-words max-h-48 overflow-auto mt-1">{row.message}</pre></details>)}</details>}
             {!runs.length && <p className="text-sm text-muted-foreground py-6">No runs in this experiment yet.</p>}
-            {visibleRuns.map(run => <div key={run.run_number} className="rounded-lg border p-3 space-y-2"><label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 accent-teal-600" checked={selectedRuns.includes(run.run_number)} disabled={!run.complete} onChange={e => setSelectedRuns(all => e.target.checked ? [...all, run.run_number] : all.filter(n => n !== run.run_number))} /><span><strong>Run {run.run_number}</strong><span className="block text-xs text-muted-foreground">{run.target_name || 'No target'} · {run.run_type || 'No type'} · {run.complete ? run.converted ? 'ROOT ready' : run.has_data ? 'Needs conversion' : 'No raw data' : 'In progress'}</span></span></label><div className="flex justify-between text-xs"><Link href={`/logbook/${run.run_number}`} className="text-muted-foreground hover:underline">Logbook ↗</Link>{run.converted && run.complete && <button className="text-teal-600" onClick={() => inspect(run.run_number)}>Inspect ROOT</button>}</div></div>)}
+            {visibleRuns.map(run => { const kind = formats[String(run.run_number)]; const blocked = kind && !kind.analysable; return <div key={run.run_number} className="rounded-lg border p-3 space-y-2"><label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 h-4 w-4 accent-primary" checked={selectedRuns.includes(run.run_number)} disabled={!run.complete || !!blocked} onChange={e => setSelectedRuns(all => e.target.checked ? [...all, run.run_number] : all.filter(n => n !== run.run_number))} /><span className="min-w-0"><strong>Run {run.run_number}</strong><span className="block text-xs text-muted-foreground break-words">{run.target_name || 'No target'} · {run.run_type || 'No type'} · {blocked ? <span className="text-warning">Not analysable: {kind.reason}</span> : run.complete ? run.converted ? 'ROOT ready' : run.has_data ? 'Needs conversion' : 'No raw data' : 'In progress'}</span></span></label><div className="flex justify-between text-xs"><Link href={`/logbook/${run.run_number}`} className="text-muted-foreground hover:underline">Logbook ↗</Link>{run.converted && run.complete && <button className="text-primary" onClick={() => inspect(run.run_number)}>Inspect ROOT</button>}</div></div> })}
           </>}
         </div>
       </aside>
@@ -331,8 +358,8 @@ export default function AnalysisWorkspace() {
       <section className="flex flex-col min-w-0 rounded-xl border overflow-hidden bg-muted/20">
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-card text-xs"><span className="text-muted-foreground">{nodes.length} nodes · {edges.length} connections</span><span className="text-muted-foreground">Click a node to edit</span></div>
         <div className="flex-1 min-h-0" onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy' }} onDrop={e => { e.preventDefault(); addNode(e.dataTransfer.getData('application/lunadaq-node'), {x:e.clientX,y:e.clientY}) }}>
-          <ReactFlow<FlowNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} isValidConnection={isValidConnection} onNodeClick={onNodeClick} onPaneClick={onPaneClick} onInit={onFlowInit} fitView minZoom={0.2} maxZoom={2} defaultEdgeOptions={edgeDefaults} deleteKeyCode={['Backspace', 'Delete']}>
-            <Background gap={20} size={1} /><Controls /><MiniMap style={minimapStyle} pannable zoomable maskStrokeColor="#0d9488" maskStrokeWidth={1} nodeColor="#7ebdb3" maskColor="rgba(100,116,139,0.12)" />
+          <ReactFlow<FlowNode> nodes={nodes} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} isValidConnection={isValidConnection} onNodeClick={onNodeClick} onPaneClick={onPaneClick} onInit={onFlowInit} fitView panOnDrag={!phone} nodesDraggable={!phone} preventScrolling={!phone} minZoom={0.2} maxZoom={2} defaultEdgeOptions={edgeDefaults} deleteKeyCode={['Backspace', 'Delete']}>
+            <Background gap={20} size={1} /><Controls /><MiniMap style={minimapStyle} pannable zoomable maskStrokeColor="hsl(var(--primary))" maskStrokeWidth={1} nodeColor="hsl(var(--primary) / 0.45)" maskColor="hsl(var(--muted-foreground) / 0.12)" />
           </ReactFlow>
         </div>
 

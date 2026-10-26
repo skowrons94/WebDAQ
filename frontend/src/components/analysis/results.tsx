@@ -9,7 +9,11 @@ import { HelpTooltip } from '@/components/ui/tooltip'
 
 type ROI = { id: string; label: string; min: number; max: number }
 type ROIProps = { roiNodes: ROI[]; onROI: (id: string, min: number, max: number) => void }
-const colors = ['#0d9488', '#d97706', '#6366f1', '#e11d48', '#0284c7', '#65a30d']
+// Series colours are the theme's chart tokens, so both themes work.
+const colors = [1, 2, 3, 4, 5].map(n => `hsl(var(--chart-${n}))`)
+const axis = { stroke: 'hsl(var(--muted-foreground))', tick: { fill: 'hsl(var(--muted-foreground))' } }
+const grid = 'hsl(var(--border))'
+const tooltip = { contentStyle: { background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', color: 'hsl(var(--popover-foreground))' } }
 function csv(plot: AnalysisPlot) {
   if (plot.kind !== 'histogram') return 'run,x,y,error\n' + plot.points.map(p => [p.run, p.x, p.y, p.error].join(',')).join('\n')
   return 'run,bin_low_keV,bin_high_keV,counts,error\n' + plot.series.flatMap(s => s.counts.map((n, i) => [s.run, plot.edges[i], plot.edges[i + 1], n, Math.sqrt(s.variance?.[i] ?? Math.max(0,n))].join(','))).join('\n')
@@ -49,17 +53,17 @@ const Plot = memo(function Plot({ plot, roiNodes, onROI }: { plot: AnalysisPlot 
     <div className={`h-64 w-full text-xs ${roi ? 'cursor-crosshair select-none' : ''}`}>
       {visible && <ResponsiveContainer width="100%" height="100%">
         {plot.kind === 'histogram' ? <LineChart data={data} margin={{ top: 8, right: 16, bottom: 20, left: 0 }} onMouseDown={e => updateDrag(e,true)} onMouseMove={e => updateDrag(e)} onMouseUp={finish} onMouseLeave={() => {setDragging(false);setSelection(null)}}>
-          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-          <XAxis dataKey="energy" type="number" domain={['dataMin', 'dataMax']} label={{ value: 'Energy (keV)', position: 'bottom', offset: 0 }} tickFormatter={n => Number(n).toPrecision(3)} />
-          <YAxis width={42} /><Tooltip /><Legend verticalAlign="top" />
+          <CartesianGrid strokeDasharray="3 3" stroke={grid} />
+          <XAxis {...axis} dataKey="energy" type="number" domain={['dataMin', 'dataMax']} label={{ value: 'Energy (keV)', position: 'bottom', offset: 0 }} tickFormatter={n => Number(n).toPrecision(3)} />
+          <YAxis {...axis} width={42} /><Tooltip {...tooltip} /><Legend verticalAlign="top" />
           {plot.series.map((s, i) => <Line key={s.run} dataKey={`Run ${s.run}`} type="step" stroke={colors[i % colors.length]} dot={false} isAnimationActive={false} />)}
-          {plot.fit && <Line dataKey="fit" name="Fit" stroke="#e11d48" dot={false} isAnimationActive={false} />}
-          {roi && <ReferenceArea x1={selection ? Math.min(...selection) : roi.min} x2={selection ? Math.max(...selection) : roi.max} fill="#0d9488" fillOpacity={0.16} />}
+          {plot.fit && <Line dataKey="fit" name="Fit" stroke="hsl(var(--foreground))" strokeDasharray="4 2" dot={false} isAnimationActive={false} />}
+          {roi && <ReferenceArea x1={selection ? Math.min(...selection) : roi.min} x2={selection ? Math.max(...selection) : roi.max} fill="hsl(var(--primary))" fillOpacity={0.16} />}
         </LineChart> : plot.kind === 'time' ? <TimeChart plot={plot} /> : <ScatterChart margin={{ top: 8, right: 16, bottom: 20, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-          <XAxis dataKey="x" type="number" name={plot.x_label} domain={['auto', 'auto']} label={{ value: plot.x_label, position: 'bottom', offset: 0 }} tickFormatter={n => Number(n).toPrecision(3)} />
-          <YAxis dataKey="y" type="number" name={plot.y_label} width={48} tickFormatter={n => Number(n).toPrecision(2)} />
-          <Tooltip content={({ active, payload }) => { const p = payload?.[0]?.payload; return active && p ? <div className="border rounded bg-background p-2">Run {p.run}<br />{plot.x_label}: {p.x.toPrecision(6)}<br />{plot.y_label}: {p.y.toPrecision(6)} ± {p.error.toPrecision(3)}</div> : null }} />
+          <CartesianGrid strokeDasharray="3 3" stroke={grid} />
+          <XAxis {...axis} dataKey="x" type="number" name={plot.x_label} domain={['auto', 'auto']} label={{ value: plot.x_label, position: 'bottom', offset: 0 }} tickFormatter={n => Number(n).toPrecision(3)} />
+          <YAxis {...axis} dataKey="y" type="number" name={plot.y_label} width={48} tickFormatter={n => Number(n).toPrecision(2)} />
+          <Tooltip content={({ active, payload }) => { const p = payload?.[0]?.payload; return active && p ? <div className="border rounded bg-popover text-popover-foreground p-2">Run {p.run}<br />{plot.x_label}: {p.x.toPrecision(6)}<br />{plot.y_label}: {p.y.toPrecision(6)} ± {p.error.toPrecision(3)}</div> : null }} />
           <Scatter data={data} fill={colors[0]} isAnimationActive={false}><ErrorBar dataKey="error" direction="y" width={4} stroke={colors[0]} /></Scatter>
         </ScatterChart>}
       </ResponsiveContainer>}
@@ -72,7 +76,8 @@ export const Results = memo(function Results({ result, stale, ...roiProps }: { r
   return <div className="space-y-4">
     <div className="flex items-center justify-between"><h2 className="font-semibold">Results</h2>
       {result && <Button variant="outline" size="sm" onClick={() => download('analysis-results.json', JSON.stringify(result, null, 2))}>Export</Button>}</div>
-    {stale && result && <p className="text-xs text-amber-600">Changed — run again.</p>}
+    {stale && result && <p className="text-xs text-warning">Changed — run again.</p>}
+    {!!result?.warnings?.length && <div role="status" className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning"><p className="font-medium">Check before using these results</p><ul className="mt-1 list-disc space-y-1 pl-4">{result.warnings.map(w => <li key={w} className="break-words">{w}</li>)}</ul></div>}
     <div className="flex gap-1">{['charts', 'summary', 'raw'].map(t => <Button key={t} size="sm" variant={tab === t ? 'secondary' : 'ghost'} onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)}</Button>)}</div>
     {!result ? <p className="text-sm text-muted-foreground py-4">No results yet.</p> : <>
       {tab === 'charts' && (result.plots.length ? result.plots.slice().reverse().map(p => <Plot key={p.node} plot={p} {...roiProps} />) : <p className="text-sm text-muted-foreground">Add a plot node.</p>)}
@@ -98,9 +103,9 @@ const TimeChart = memo(function TimeChart({ plot, ...size }: { plot: Exclude<Ana
     return { data: Array.from(rows.values()).sort((a,b) => a.x-b.x), runs, errors }
   }, [plot])
   return <LineChart {...size} data={data} margin={{top:8,right:16,bottom:20,left:0}}>
-    <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-    <XAxis dataKey="x" type="number" domain={['dataMin','dataMax']} label={{value:plot.x_label,position:'bottom',offset:0}} tickFormatter={n => Number(n).toPrecision(3)} />
-    <YAxis width={48} tickFormatter={n => Number(n).toPrecision(2)} />
+    <CartesianGrid strokeDasharray="3 3" stroke={grid} />
+    <XAxis {...axis} dataKey="x" type="number" domain={['dataMin','dataMax']} label={{value:plot.x_label,position:'bottom',offset:0}} tickFormatter={n => Number(n).toPrecision(3)} />
+    <YAxis {...axis} width={48} tickFormatter={n => Number(n).toPrecision(2)} />
     <Tooltip content={({active,payload,label}) => active && payload?.length ? <div className="rounded-lg border bg-popover p-2 text-popover-foreground shadow-md"><p>{plot.x_label}: {Number(label).toPrecision(6)}</p>{payload.map(p => <p key={String(p.dataKey)} style={{color:p.color}}>{p.name}: {Number(p.value).toPrecision(6)} ± {Number(p.payload[String(p.dataKey).replace('run','error')]).toPrecision(3)}</p>)}</div> : null} />
     <Legend verticalAlign="top" />
     {runs.map((run,i) => <Line key={run} dataKey={`run${run}`} name={`Run ${run}`} stroke={colors[i%colors.length]} dot={false} connectNulls isAnimationActive={false}>{errors.has(run) && <ErrorBar dataKey={`error${run}`} direction="y" width={2} />}</Line>)}

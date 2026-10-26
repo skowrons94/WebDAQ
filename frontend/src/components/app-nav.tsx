@@ -15,7 +15,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import {
   Activity, AudioWaveform, BarChart3, BellRing, BookOpen, ChevronsLeft, ChevronsRight, Cog, Cpu,
-  GitMerge, HeartPulse, LayoutDashboard, LifeBuoy, LineChart, ScatterChart, SlidersHorizontal, Wrench,
+  GitBranch, GitMerge, HeartPulse, LayoutDashboard, LifeBuoy, LineChart, ScatterChart, SlidersHorizontal, Wrench,
 } from 'lucide-react'
 import { useDashboardTabStore } from '@/store/dashboard-tab-store'
 import { useVisualizationStore } from '@/store/visualization-settings-store'
@@ -59,6 +59,7 @@ export const NAV_GROUPS: { title: string; items: NavItem[] }[] = [
     title: 'Records',
     items: [
       { label: 'Logbook', href: '/logbook', icon: BookOpen },
+      { label: 'Analysis', href: '/analysis', icon: GitBranch },
     ],
   },
   {

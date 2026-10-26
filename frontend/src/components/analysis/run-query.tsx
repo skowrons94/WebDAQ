@@ -29,12 +29,12 @@ export function RunQuery(p: Props) {
     <div className="space-y-3 p-3">
       <Choice label="Target" value={p.target} options={p.targets} all="All targets" onChange={p.onTarget} />
       <Choice label="Run type" value={p.runType} options={p.runTypes} all="All types" onChange={p.onType} />
-      <details className="group border-t pt-3"><summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium [&::-webkit-details-marker]:hidden">Run numbers & flags {selectionCount > 0 && <span className="ml-auto mr-2 rounded bg-teal-500/10 px-1.5 text-teal-600">{selectionCount}</span>}<ChevronDown size={14} className="transition-transform group-open:rotate-180" /></summary><div className="space-y-3 pt-3">
+      <details className="group border-t pt-3"><summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium [&::-webkit-details-marker]:hidden">Run numbers & flags {selectionCount > 0 && <span className="ml-auto mr-2 rounded bg-primary/10 px-1.5 text-primary">{selectionCount}</span>}<ChevronDown size={14} className="transition-transform group-open:rotate-180" /></summary><div className="space-y-3 pt-3">
       <Choice label="Flag" value={p.fields.flag} options={['good','bad','unknown']} all="Any flag" onChange={v => p.onField('flag',v)} />
       {field('runs','Include runs','text','e.g. 101-107, 112')}
       {field('exclude','Exclude runs','text','e.g. 104, 109-111')}
       </div></details>
-      <details className="group border-t pt-3"><summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium [&::-webkit-details-marker]:hidden">Date & voltage {advancedCount > 0 && <span className="ml-auto mr-2 rounded bg-teal-500/10 px-1.5 text-teal-600">{advancedCount}</span>}<ChevronDown size={14} className="transition-transform group-open:rotate-180" /></summary>
+      <details className="group border-t pt-3"><summary className="flex cursor-pointer list-none items-center justify-between text-xs font-medium [&::-webkit-details-marker]:hidden">Date & voltage {advancedCount > 0 && <span className="ml-auto mr-2 rounded bg-primary/10 px-1.5 text-primary">{advancedCount}</span>}<ChevronDown size={14} className="transition-transform group-open:rotate-180" /></summary>
         <div className="space-y-3 pt-3">
           <fieldset className="space-y-2"><legend className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Run start date</legend>{field('date_from','From date','date')}{field('date_to','Through date','date')}</fieldset>
           <fieldset className="space-y-2"><legend className="mb-2 text-[11px] uppercase tracking-wide text-muted-foreground">Terminal voltage (kV)</legend><div className="grid grid-cols-2 gap-2">{field('voltage_min','Minimum kV','number','Min')}{field('voltage_max','Maximum kV','number','Max')}</div></fieldset>

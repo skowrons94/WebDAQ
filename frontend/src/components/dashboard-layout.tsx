@@ -20,6 +20,7 @@ import {
     SlidersHorizontal,
     StopCircle,
     GitMerge,
+    GitBranch,
 } from "lucide-react"
 import Link from "next/link"
 import {
@@ -58,7 +59,12 @@ const RunBar = dynamic(() => import('@/components/run-bar').then((m) => m.RunBar
 import { ServerStatus } from '@/components/server-status'
 import { RunStatusIndicator } from '@/components/run-status-indicator'
 
-export function Layout({ children }: { children: React.ReactNode }) {
+/**
+ * ``fullHeight``: on wide screens (xl) the page gets exactly the window below
+ * the header, without the footer, and scrolls inside its own panels — for an
+ * editor that fills the screen (Analysis). Below xl it scrolls as any page.
+ */
+export function Layout({ children, fullHeight = false }: { children: React.ReactNode; fullHeight?: boolean }) {
     const clearToken = useAuthStore((state) => state.clearToken)
     const router = useRouter()
     const setDashboardTab = useDashboardTabStore((state) => state.setTab)
@@ -110,7 +116,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
     return (
         // Bottom padding below md leaves room for the fixed run bar.
-        <div className="flex min-h-screen w-full flex-col pb-[4.75rem] md:pb-0">
+        <div className={`flex min-h-screen w-full flex-col pb-[4.75rem] md:pb-0 ${fullHeight ? 'xl:h-dvh xl:overflow-hidden' : ''}`}>
             {/* Keyboard users jump past the header and nav. */}
             <a
                 href="#main"
@@ -217,6 +223,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                                     <FlaskConical className="mr-2 h-4 w-4" />
                                     <span>Logbook</span>
                                 </CommandItem>
+                                <CommandItem onSelect={() => go('/analysis')}>
+                                    <GitBranch className="mr-2 h-4 w-4" />
+                                    <span>Analysis workflows</span>
+                                </CommandItem>
                                 <CommandItem onSelect={() => go('/board')}>
                                     <Cpu className="mr-2 h-4 w-4" />
                                     <span>Boards: discover and add</span>
@@ -309,13 +319,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     </DropdownMenu>
                 </div>
             </header>
-            <div className="flex flex-1">
+            <div className={`flex flex-1 ${fullHeight ? 'xl:min-h-0' : ''}`}>
                 <SideNav />
-                <div className="flex min-w-0 flex-1 flex-col">
-                    <main id="main" tabIndex={-1} className="flex-1 px-4 pt-4 outline-none md:px-8 md:pt-6">
+                <div className={`flex min-w-0 flex-1 flex-col ${fullHeight ? 'xl:min-h-0' : ''}`}>
+                    <main id="main" tabIndex={-1} className={`flex-1 px-4 pt-4 outline-none md:px-8 md:pt-6 ${fullHeight ? 'xl:flex xl:min-h-0 xl:flex-col xl:pb-4' : ''}`}>
                         {children}
                     </main>
-                    <footer className="mt-auto flex h-16 items-center justify-center bg-background text-sm text-muted-foreground">
+                    <footer className={`mt-auto flex h-16 items-center justify-center bg-background text-sm text-muted-foreground ${fullHeight ? 'xl:hidden' : ''}`}>
                         <span>LUNADAQ</span>
                     </footer>
                 </div>

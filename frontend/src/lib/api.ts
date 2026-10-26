@@ -1499,6 +1499,9 @@ export interface AnalysisContext {
     examples: { id: string; name: string; description: string; setup: string[]; graph: AnalysisGraph }[]
     project_id: string; project_name: string; catalog: Record<string, AnalysisNodeSpec>
     workflow: AnalysisGraph | null; warning: string | null; active_workflow: SavedAnalysisWorkflow | null
+    /** Why ROOT files cannot be read (uproot not installed), or null. */
+    uproot_missing: string | null
+    run_active: boolean
 }
 export type AnalysisPlot = {
     node: string; title: string; kind: 'histogram'; edges: number[]
@@ -1510,17 +1513,19 @@ export type AnalysisPlot = {
 export interface AnalysisResult {
     nodes: Record<string, unknown>; plots: AnalysisPlot[]; provenance: Record<string, unknown>
     workflow: AnalysisGraph; notes: string[]
+    /** What the job had to assume or could not use (a missing unit, calibration, current alignment). */
+    warnings?: string[]
 }
 export interface AnalysisJob {
-    id: string; state: 'running' | 'done' | 'failed'; node?: string; result?: AnalysisResult; message?: string
+    /** 'stopped': a run started while the job was going. */
+    id: string; state: 'running' | 'done' | 'failed' | 'stopped'; node?: string; result?: AnalysisResult; message?: string
 }
 export interface AnalysisBatch {
-    state: 'idle' | 'running' | 'done' | 'failed'
+    state: 'idle' | 'running' | 'done' | 'failed' | 'stopped'
     runs: { run: number; state: string; message: string }[]
 }
 export interface AnalysisSchema { files: { name: string; trees: { name: string; entries: number; branches: string[] }[] }[] }
 export const getAnalysisContext = (): Promise<AnalysisContext> => api.get('/analysis/context').then(r => r.data)
-export const saveAnalysisWorkflow = (graph: AnalysisGraph) => api.put('/analysis/workflow', graph)
 export const executeAnalysis = (graph: AnalysisGraph): Promise<{ id: string }> => api.post('/analysis/execute', graph).then(r => r.data)
 export const getAnalysisJob = (id: string): Promise<AnalysisJob> => api.get(`/analysis/jobs/${id}`).then(r => r.data)
 export const getAnalysisSchema = (run: number): Promise<AnalysisSchema> => api.get(`/analysis/runs/${run}/schema`).then(r => r.data)
@@ -1533,4 +1538,7 @@ export const storeAnalysisWorkflow = (value: { name: string; description: string
     (id ? api.put(`/analysis/workflows/${id}`, value) : api.post('/analysis/workflows', value)).then(r => r.data)
 export const loadAnalysisWorkflow = (id: string): Promise<SavedAnalysisWorkflow & { graph: AnalysisGraph }> => api.post(`/analysis/workflows/${id}/load`).then(r => r.data)
 
+/** Per run: can this page analyse it (SIS3316 runs are HDF5, which RUReader does not convert). */
+export interface AnalysisRunFormat { format: 'caendat' | 'hdf5' | 'mixed' | null; converted: boolean; analysable: boolean; reason: string | null }
+export const getAnalysisRunFormats = (): Promise<{ runs: Record<string, AnalysisRunFormat> }> => api.get('/analysis/runs').then(r => r.data)
 export const queryAnalysisRuns = (params: Record<string, string>): Promise<{runs: number[]}> => api.post('/analysis/query', params).then(r => r.data)
