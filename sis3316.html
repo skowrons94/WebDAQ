@@ -1,0 +1,462 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Struck SIS3316 digitizers &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Spectra, ROIs and the histogram dashboard" href="histograms-and-rois.html" />
+    <link rel="prev" title="CAEN digitizers: settings, filters and synchronisation" href="caen-settings.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Struck SIS3316 digitizers</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#connecting-the-board">Connecting the board</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#adding-it">Adding it</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#settings-daq-page">Settings (DAQ page)</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#the-board-s-own-utilities">The board’s own utilities</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#run-files">Run files</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#live-time-and-scalers">Live time and scalers</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#files-in-the-run-directory">Files in the run directory</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#counter-inputs">Counter inputs</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#test-mode">Test mode</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1"><a class="reference internal" href="coincidences.html">Online coincidences</a></li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="analysis.html">Offline Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Struck SIS3316 digitizers</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/sis3316.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="struck-sis3316-digitizers">
+<h1>Struck SIS3316 digitizers<a class="headerlink" href="#struck-sis3316-digitizers" title="Link to this heading"></a></h1>
+<p>WebDAQ reads Struck SIS3316 boards (16 channels, 250 MHz 14-bit or 125 MHz
+16-bit) over Ethernet next to the CAEN boards. One run can mix both: the CAEN
+boards write <code class="docutils literal notranslate"><span class="pre">.caendat</span></code>, the SIS3316 boards write HDF5 files in the same run
+directory, and the rates, spectra, alerts and auto-restart treat them alike.</p>
+<p>The acquisition is done by <code class="docutils literal notranslate"><span class="pre">sis3316daq</span></code>, a pure-Python package from its own
+repository, <a class="reference external" href="https://github.com/skowrons94/SisDAQ">SisDAQ</a>, pinned as a
+submodule in <code class="docutils literal notranslate"><span class="pre">server/native/sis3316daq</span></code> and installed by <code class="docutils literal notranslate"><span class="pre">install.sh</span></code>. It can
+also be used on its own, outside WebDAQ (see its README).</p>
+<section id="connecting-the-board">
+<h2>Connecting the board<a class="headerlink" href="#connecting-the-board" title="Link to this heading"></a></h2>
+<p>The SIS3316 needs a dedicated network link: a direct cable (or a switch) on a
+second network interface of the DAQ PC, never the internet interface.</p>
+<ol class="arabic">
+<li><p>Give that interface a fixed address, without a gateway, e.g. with
+NetworkManager:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>nmcli<span class="w"> </span>con<span class="w"> </span>add<span class="w"> </span><span class="nb">type</span><span class="w"> </span>ethernet<span class="w"> </span>ifname<span class="w"> </span>eno1<span class="w"> </span>con-name<span class="w"> </span>sis3316<span class="w"> </span><span class="se">\</span>
+<span class="w">     </span>ipv4.method<span class="w"> </span>manual<span class="w"> </span>ipv4.addresses<span class="w"> </span><span class="m">192</span>.168.1.1/24<span class="w"> </span>ipv4.never-default<span class="w"> </span>yes<span class="w"> </span>ipv6.method<span class="w"> </span>disabled
+</pre></div>
+</div>
+</li>
+<li><p>Map an IP address onto the board’s MAC address, <code class="docutils literal notranslate"><span class="pre">00:00:56:31:6x:xx</span></code> where
+<code class="docutils literal notranslate"><span class="pre">xxx</span></code> is the board’s serial number in hex (serial 108 → <code class="docutils literal notranslate"><span class="pre">00:00:56:31:60:6c</span></code>):</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>sudo<span class="w"> </span>ip<span class="w"> </span>neigh<span class="w"> </span>replace<span class="w"> </span><span class="m">192</span>.168.1.100<span class="w"> </span>lladdr<span class="w"> </span><span class="m">00</span>:00:56:31:60:6c<span class="w"> </span>dev<span class="w"> </span>eno1<span class="w"> </span>nud<span class="w"> </span>permanent
+</pre></div>
+</div>
+<p>This entry does not survive a reboot. A NetworkManager dispatcher script
+that runs the same command when the interface comes up makes it permanent
+(on the LUNA DAQ PC: <code class="docutils literal notranslate"><span class="pre">/etc/NetworkManager/dispatcher.d/90-sis3316-arp</span></code>).</p>
+</li>
+</ol>
+<p>The board answers on UDP port <code class="docutils literal notranslate"><span class="pre">0xE000</span></code>. With VME FPGA firmware before
+V3316-2008 it always answers <em>to</em> port <code class="docutils literal notranslate"><span class="pre">0xE000</span></code> on the PC, so only one program
+on the PC can talk to it: stop other SIS3316 tools while WebDAQ runs.</p>
+</section>
+<section id="adding-it">
+<h2>Adding it<a class="headerlink" href="#adding-it" title="Link to this heading"></a></h2>
+<p>On the <strong>Boards</strong> page, <em>Add a Struck SIS3316</em>: enter a board ID (unique among
+all boards) and the IP address, then <em>Check connection</em> — it shows the serial
+number, firmware and temperature of the board that answered — and <em>Add
+SIS3316</em>. The board’s settings file <code class="docutils literal notranslate"><span class="pre">conf/SIS3316_&lt;id&gt;.json</span></code> is created with
+defaults (all channels off) and a calibration file <code class="docutils literal notranslate"><span class="pre">calib/SIS3316_&lt;id&gt;.cal</span></code>.</p>
+</section>
+<section id="settings-daq-page">
+<h2>Settings (DAQ page)<a class="headerlink" href="#settings-daq-page" title="Link to this heading"></a></h2>
+<p>Selecting an SIS3316 on the DAQ page shows its own dashboard instead of the
+CAEN register view. Channels are numbered 0 to 15, as on the CAEN boards and
+the histogram pages (Struck’s manual calls them Ch1 to Ch16).</p>
+<p><strong>Settings</strong> works like the CAEN page: <strong>Channel enable</strong> switches channels on
+(nothing is recorded until one is on; <em>All on</em> / <em>All off</em> for the whole
+board), and <strong>Channel settings</strong> lists every setting for the <em>Default</em> column
+and each enabled channel. The Default column applies to all channels not
+changed themselves; a value changed for one channel is highlighted, and the
+arrow in its header puts it back on the defaults. <strong>Acquisition</strong> below holds
+the board-wide settings (sample clock, readout interval, event window,
+pre-trigger, waveform and trapezoid trace lengths, pileup windows, NIM input TI).</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Setting</p></th>
+<th class="head"><p>Meaning</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>On</p></td>
+<td><p>The channel triggers and records events</p></td>
+</tr>
+<tr class="row-odd"><td><p>Polarity</p></td>
+<td><p>Negative inverts the input (the board triggers on rising edges)</p></td>
+</tr>
+<tr class="row-even"><td><p>Range, 50 Ω, Offset</p></td>
+<td><p>Input range (5 V / 2 V / 1.9 V), termination, offset DAC (32768 = centred)</p></td>
+</tr>
+<tr class="row-odd"><td><p>Threshold</p></td>
+<td><p>Trigger threshold in ADC counts of pulse height</p></td>
+</tr>
+<tr class="row-even"><td><p>Trig P / G, CFD</p></td>
+<td><p>Fast trapezoid (trigger) peaking and gap times, constant-fraction timing</p></td>
+</tr>
+<tr class="row-odd"><td><p>E P / G</p></td>
+<td><p>Energy trapezoid peaking and flat-top times</p></td>
+</tr>
+<tr class="row-even"><td><p>τ table / τ factor</p></td>
+<td><p>Decay correction of the energy filter (0 = off). Table 0 at 250 MHz: τ ≈ 2097 µs / factor</p></td>
+</tr>
+<tr class="row-odd"><td><p>Divider</p></td>
+<td><p>Spectrum bin = max energy / divider. With divider = energy peaking, the bin is the pulse height in ADC counts</p></td>
+</tr>
+</tbody>
+</table>
+<p>Saved settings apply at the next run start. During a run they reach the board
+at the next bank swap, except the clock and the waveform and trapezoid trace
+lengths, which shape the run file and are refused until the run stops.</p>
+<p>The <em>waveforms</em> switch of the histogram pages turns the raw samples of an
+SIS3316 on (1000 samples, or the last length used) and off.</p>
+</section>
+<section id="the-board-s-own-utilities">
+<h2>The board’s own utilities<a class="headerlink" href="#the-board-s-own-utilities" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>On-board histograms</strong> — the board histograms the energy of every hit
+itself (64K bins, with the channel’s divider), independently of the
+software spectra. Read any number of bins, clear one channel or all;
+WebDAQ clears them at every run start.</p></li>
+<li><p><strong>Counters</strong> — live time, temperature and counter inputs (see <em>Live time
+and scalers</em> below), and the trigger statistic counters since the run
+start: all internal triggers, recorded hits, triggers lost to dead time,
+pileup, vetoed and high-energy-suppressed triggers. During a run they also
+feed the rates: <em>Lost</em> is the dead-time counter, and <em>Triggers</em> (on the
+histogram cards, and <code class="docutils literal notranslate"><span class="pre">triggerRate</span></code> in Graphite) the internal trigger
+counter. After a stop the tab keeps showing the last run’s totals.</p></li>
+<li><p><strong>Filter trace</strong> — the last recorded output of the energy (or trigger)
+trapezoid, for tuning peaking, gap and decay correction: with the right τ
+the flat top is flat. Needs a trapezoid trace length &gt; 0.</p></li>
+<li><p><strong>Board info</strong> — serial number, firmware, MAC address, sample clock and
+temperature (Struck recommends 50 °C or less).</p></li>
+</ul>
+</section>
+<section id="run-files">
+<h2>Run files<a class="headerlink" href="#run-files" title="Link to this heading"></a></h2>
+<p>Each run writes <code class="docutils literal notranslate"><span class="pre">data/run&lt;N&gt;/run_&lt;N&gt;_&lt;cycle&gt;.h5</span></code>, next to the settings file
+copied at the run start. The Data page lists them with the <code class="docutils literal notranslate"><span class="pre">.caendat</span></code> files.
+They need no conversion:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">h5py</span><span class="o">,</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span><span class="o">,</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="k">with</span> <span class="n">h5py</span><span class="o">.</span><span class="n">File</span><span class="p">(</span><span class="s2">"data/run12/run_12_0000.h5"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">b</span> <span class="o">=</span> <span class="n">f</span><span class="p">[</span><span class="s2">"board_3"</span><span class="p">]</span>
+    <span class="n">ev</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="s2">"events"</span><span class="p">][:]</span>                  <span class="c1"># one row per hit</span>
+    <span class="n">ch14</span> <span class="o">=</span> <span class="n">ev</span><span class="p">[</span><span class="n">ev</span><span class="p">[</span><span class="s2">"channel"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">14</span><span class="p">]</span>       <span class="c1"># channels are numbered 0-15, as everywhere in WebDAQ</span>
+    <span class="n">energy</span> <span class="o">=</span> <span class="n">ch14</span><span class="p">[</span><span class="s2">"energy_max"</span><span class="p">]</span> <span class="o">//</span> <span class="mi">200</span>   <span class="c1"># // divider: the spectrum channel, as online</span>
+                                         <span class="c1"># (the energy calibration applies to this)</span>
+    <span class="n">t_ns</span> <span class="o">=</span> <span class="n">ch14</span><span class="p">[</span><span class="s2">"timestamp"</span><span class="p">]</span> <span class="o">*</span> <span class="n">b</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"ns_per_sample"</span><span class="p">]</span>
+    <span class="n">settings</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">b</span><span class="o">.</span><span class="n">attrs</span><span class="p">[</span><span class="s2">"settings"</span><span class="p">])</span>
+    <span class="n">waves</span> <span class="o">=</span> <span class="n">b</span><span class="p">[</span><span class="s2">"waveforms"</span><span class="p">][:</span><span class="mi">10</span><span class="p">]</span>          <span class="c1"># row-aligned with events, if recorded</span>
+</pre></div>
+</div>
+<p>Rows are written bank by bank and channel by channel, so sort by <code class="docutils literal notranslate"><span class="pre">timestamp</span></code>
+when the order matters (coincidences).</p>
+</section>
+<section id="live-time-and-scalers">
+<h2>Live time and scalers<a class="headerlink" href="#live-time-and-scalers" title="Link to this heading"></a></h2>
+<p>The board counts, per channel, six trigger statistics (Struck manual 4.9),
+latched at every bank swap; the readout reads them once per bank anyway, so
+none of this costs extra network traffic:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Counter</p></th>
+<th class="head"><p>Counts</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>internal</p></td>
+<td><p>every trigger of the channel’s internal trigger logic</p></td>
+</tr>
+<tr class="row-odd"><td><p>hit</p></td>
+<td><p>internal triggers that started an event (recorded)</p></td>
+</tr>
+<tr class="row-even"><td><p>deadtime</p></td>
+<td><p>triggers while the board was not ready to save an event: bank swap, memory bank almost full, writing the trapezoid trace or the rest of the ADC data</p></td>
+</tr>
+<tr class="row-odd"><td><p>pileup</p></td>
+<td><p>triggers while the board was busy with an event</p></td>
+</tr>
+<tr class="row-even"><td><p>veto</p></td>
+<td><p>triggers during a veto</p></td>
+</tr>
+<tr class="row-odd"><td><p>high_energy</p></td>
+<td><p>suppressed high-energy triggers</p></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Live time</strong> of a channel is <code class="docutils literal notranslate"><span class="pre">1</span> <span class="pre">−</span> <span class="pre">deadtime</span> <span class="pre">/</span> <span class="pre">internal</span></code>, the dead time
+<code class="docutils literal notranslate"><span class="pre">deadtime</span> <span class="pre">/</span> <span class="pre">internal</span></code>. It is the share of the channel’s own triggers that
+found the board ready, so it is a count, not a clock: it is the live-time
+fraction of the run when the signals come at random times (source, beam),
+and the share of lost pulses for a periodic pulser. It does not include:
+pile-up inside an event being recorded (flagged in the event, counted as
+pileup), vetoed triggers, external triggers (the internal counter does not see
+them), or anything under the threshold. A channel without triggers has no
+live time (shown as —), not 100 %. The counters do not restart with the run
+on firmware V3316-2004, so the start latches them once straight after arming
+(a bank swap, which gives up the millisecond since the arm) and counts from
+there: every bank of the run is counted. Only the bank that fills while the
+settings are changed during a run, or while a board recovers, is left out.</p>
+<p>The Counters tab shows per enabled channel the live and dead time over the
+run, the dead time of the last stats interval, the triggers and the events
+read, plus the temperature (read once per stats interval), the lowest live
+time and the counter inputs.</p>
+<p>Graphite gets, next to the SIS rates (<code class="docutils literal notranslate"><span class="pre">&lt;prefix&gt;</span></code> is the Graphite prefix of
+the run, <code class="docutils literal notranslate"><span class="pre">ancillary.rates</span></code> by default):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>&lt;prefix&gt;.bo_&lt;id&gt;.temperature                 °C
+&lt;prefix&gt;.bo_&lt;id&gt;.ch_&lt;ch&gt;.deadFraction        dead time of the last stats interval, 0-1
+                                             (not sent for an interval without triggers)
+&lt;prefix&gt;.bo_&lt;id&gt;.counter.&lt;name&gt;.counts       counter input: pulses since the run start
+&lt;prefix&gt;.bo_&lt;id&gt;.counter.&lt;name&gt;.total        ... times the scale (e.g. pC)
+&lt;prefix&gt;.bo_&lt;id&gt;.counter.&lt;name&gt;.rate         ... per second, scaled (e.g. pC/s = pA)
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">&lt;name&gt;</span></code> is the counter’s name with anything but letters, digits, <code class="docutils literal notranslate"><span class="pre">_</span></code> and <code class="docutils literal notranslate"><span class="pre">-</span></code>
+replaced by <code class="docutils literal notranslate"><span class="pre">_</span></code> (“Beam charge” → <code class="docutils literal notranslate"><span class="pre">Beam_charge</span></code>, µ → u). Two counter inputs
+whose names give the same path are refused when the settings are saved.</p>
+<section id="files-in-the-run-directory">
+<h3>Files in the run directory<a class="headerlink" href="#files-in-the-run-directory" title="Link to this heading"></a></h3>
+<p>A saved run gets, next to its <code class="docutils literal notranslate"><span class="pre">.h5</span></code> files, one file for all SIS3316 boards:</p>
+<p><code class="docutils literal notranslate"><span class="pre">sis3316_scalers.csv</span></code> — every stats interval (and once more at the stop, with
+the last bank), one row per board and enabled channel:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>Column</p></th>
+<th class="head"><p></p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">time</span></code></p></td>
+<td><p>local time of the row (ISO)</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">elapsed_s</span></code></p></td>
+<td><p>seconds since the run start</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">board</span></code>, <code class="docutils literal notranslate"><span class="pre">channel</span></code></p></td>
+<td><p>board id, channel 0-15</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">internal</span></code> … <code class="docutils literal notranslate"><span class="pre">high_energy</span></code></p></td>
+<td><p>the six counters, cumulative since the run start</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">events</span></code></p></td>
+<td><p>events read and written for the channel</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">temperature_c</span></code></p></td>
+<td><p>board temperature</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">counter_name</span></code>, <code class="docutils literal notranslate"><span class="pre">counter_value</span></code>, <code class="docutils literal notranslate"><span class="pre">counter_unit</span></code></p></td>
+<td><p>for a counter input: its name, <code class="docutils literal notranslate"><span class="pre">internal</span></code> × scale, unit (empty otherwise)</p></td>
+</tr>
+</tbody>
+</table>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span><span class="w"> </span><span class="nn">pandas</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">pd</span>
+<span class="n">sc</span> <span class="o">=</span> <span class="n">pd</span><span class="o">.</span><span class="n">read_csv</span><span class="p">(</span><span class="s2">"data/run12/sis3316_scalers.csv"</span><span class="p">)</span>
+<span class="n">last</span> <span class="o">=</span> <span class="n">sc</span><span class="o">.</span><span class="n">groupby</span><span class="p">([</span><span class="s2">"board"</span><span class="p">,</span> <span class="s2">"channel"</span><span class="p">])</span><span class="o">.</span><span class="n">last</span><span class="p">()</span>
+<span class="n">live</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">-</span> <span class="n">last</span><span class="o">.</span><span class="n">deadtime</span> <span class="o">/</span> <span class="n">last</span><span class="o">.</span><span class="n">internal</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">sis3316_summary.json</span></code> — written at the stop:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="nt">"format_version"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"run"</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span><span class="w"> </span><span class="nt">"software"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"written"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"counter_names"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"internal"</span><span class="p">,</span><span class="w"> </span><span class="s2">"hit"</span><span class="p">,</span><span class="w"> </span><span class="s2">"deadtime"</span><span class="p">,</span><span class="w"> </span><span class="s2">"pileup"</span><span class="p">,</span><span class="w"> </span><span class="s2">"veto"</span><span class="p">,</span><span class="w"> </span><span class="s2">"high_energy"</span><span class="p">],</span>
+<span class="w"> </span><span class="nt">"live_time_definition"</span><span class="p">:</span><span class="w"> </span><span class="s2">"live_fraction = 1 - deadtime / internal ..."</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"boards"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span>
+<span class="w">   </span><span class="nt">"board_id"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"SIS3316"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"duration_s"</span><span class="p">:</span><span class="w"> </span><span class="mf">3600.2</span><span class="p">,</span><span class="w">          </span><span class="c1">// run start to stop</span>
+<span class="w">   </span><span class="nt">"counted_s"</span><span class="p">:</span><span class="w"> </span><span class="mf">3600.0</span><span class="p">,</span><span class="w">           </span><span class="c1">// time spanned by the counted banks</span>
+<span class="w">   </span><span class="nt">"uncounted_banks"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w">          </span><span class="c1">// banks not in the counts (settings changed, recovery)</span>
+<span class="w">   </span><span class="nt">"temperature_c"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"last"</span><span class="p">:</span><span class="w"> </span><span class="mf">41.2</span><span class="p">,</span><span class="w"> </span><span class="nt">"min"</span><span class="p">:</span><span class="w"> </span><span class="mf">40.8</span><span class="p">,</span><span class="w"> </span><span class="nt">"max"</span><span class="p">:</span><span class="w"> </span><span class="mf">41.5</span><span class="p">},</span>
+<span class="w">   </span><span class="nt">"channels"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"channel"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">"internal"</span><span class="p">:</span><span class="w"> </span><span class="mi">361000</span><span class="p">,</span><span class="w"> </span><span class="nt">"hit"</span><span class="p">:</span><span class="w"> </span><span class="mi">358000</span><span class="p">,</span><span class="w"> </span><span class="nt">"deadtime"</span><span class="p">:</span><span class="w"> </span><span class="mi">3000</span><span class="p">,</span>
+<span class="w">                 </span><span class="nt">"pileup"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"veto"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="nt">"high_energy"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<span class="w">                 </span><span class="nt">"events_written"</span><span class="p">:</span><span class="w"> </span><span class="mi">358020</span><span class="p">,</span><span class="w"> </span><span class="nt">"dead_fraction"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0083</span><span class="p">,</span>
+<span class="w">                 </span><span class="nt">"live_fraction"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.9917</span><span class="p">,</span><span class="w"> </span><span class="nt">"live_time_s"</span><span class="p">:</span><span class="w"> </span><span class="mf">3570.1</span><span class="p">,</span><span class="w"> </span><span class="nt">"integrity"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ok"</span><span class="p">}],</span>
+<span class="w">   </span><span class="nt">"counter_inputs"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"channel"</span><span class="p">:</span><span class="w"> </span><span class="mi">14</span><span class="p">,</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Beam charge"</span><span class="p">,</span><span class="w"> </span><span class="nt">"unit"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pC"</span><span class="p">,</span><span class="w"> </span><span class="nt">"scale"</span><span class="p">:</span><span class="w"> </span><span class="mf">10.0</span><span class="p">,</span>
+<span class="w">                       </span><span class="nt">"metric"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Beam_charge"</span><span class="p">,</span><span class="w"> </span><span class="nt">"counts"</span><span class="p">:</span><span class="w"> </span><span class="mi">1234567</span><span class="p">,</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="mf">12345670.0</span><span class="p">,</span>
+<span class="w">                       </span><span class="nt">"mean_rate"</span><span class="p">:</span><span class="w"> </span><span class="mf">3429.4</span><span class="p">}],</span>
+<span class="w">   </span><span class="nt">"integrity"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"mismatches"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w"> </span><span class="nt">"tolerance"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"absolute"</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="nt">"relative"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.0</span><span class="p">}}</span>
+<span class="w"> </span><span class="p">}]}</span>
+</pre></div>
+</div>
+<p>The same per board goes into every <code class="docutils literal notranslate"><span class="pre">.h5</span></code> file of the run, as attributes of
+<code class="docutils literal notranslate"><span class="pre">/board_&lt;id&gt;</span></code>: <code class="docutils literal notranslate"><span class="pre">statistic_names</span></code>, <code class="docutils literal notranslate"><span class="pre">statistic_totals</span></code> (16 × 6), <code class="docutils literal notranslate"><span class="pre">dead_fraction</span></code>
+and <code class="docutils literal notranslate"><span class="pre">live_fraction</span></code> (16, NaN for a channel off or without triggers),
+<code class="docutils literal notranslate"><span class="pre">counted_s</span></code>, and <code class="docutils literal notranslate"><span class="pre">run_summary</span></code> (the JSON above for that board).</p>
+<p><strong>Integrity check.</strong> At the stop the hit counter of every channel is compared
+with the events actually read for it, over the same banks. They should be
+equal (every bank, the last one included, is read before the board is
+disarmed); when they differ by more than 2 events, the server log
+warns and one line starting with <code class="docutils literal notranslate"><span class="pre">[sis3316]</span></code> is added to the run’s notes:
+events may be missing from the files (a bank read that failed, a decoding
+problem). Channels with the external trigger on, or the internal trigger
+off, are not checked, since their events do not go through the hit counter.</p>
+</section>
+</section>
+<section id="counter-inputs">
+<h2>Counter inputs<a class="headerlink" href="#counter-inputs" title="Link to this heading"></a></h2>
+<p>Any spare channel can count logic pulses: a current integrator’s output (beam
+charge), a clock, a gate. In <strong>Settings → Counter inputs</strong>, <em>Add counter
+input</em>, choose the channel, a name, the quantity per pulse and its unit (e.g.
+<em>Beam charge</em>, 10, pC). The channel must be switched on.</p>
+<p>The count is the channel’s <strong>internal trigger counter</strong>, not the hit counter:
+it counts every pulse over the threshold, whether or not the board was ready
+to record it, and the charge delivered during dead time is still charge on
+target. The channel’s events are recorded as on any other channel (the
+energy is meaningless); at high rates they cost disk, so a few kHz is
+comfortable. Pulses closer together than about the trigger peaking + gap
+time count as one.</p>
+<p>Cabling (the inputs are analog, 50 Ω or 1 kΩ):</p>
+<ul class="simple">
+<li><p><strong>NIM</strong> (fast negative logic, −0.8 V into 50 Ω): <em>Polarity</em> negative,
+<em>50 Ω termination</em> on, range 2 V or 5 V, <em>Threshold</em> at about half the
+pulse: ~3000 ADC counts in the 2 V range (≈0.12 mV per count), ~1300 in the
+5 V range (≈0.31 mV per count).</p></li>
+<li><p><strong>TTL</strong> (positive, 0/+3.3…5 V): <em>Polarity</em> positive. With the offset DAC
+centred the input spans ±1 V or ±2.5 V, so a 5 V pulse clips: use a
+TTL → NIM converter or a −6/−10 dB attenuator, or move the offset DAC so the
+baseline sits near the bottom of the range. Termination on if the source
+drives 50 Ω (most line drivers do; a CMOS gate output may not — then 1 kΩ).
+Threshold at about half the pulse at the input, in ADC counts as above.</p></li>
+<li><p>Pulses should be at least as long as the trigger <em>peaking time</em> (8 samples
+= 32 ns at 250 MHz by default), or the trapezoid sees less than their full
+height. Check on the histogram page that every pulse gives one event, and
+compare the counter rate with the source.</p></li>
+</ul>
+<p>On a board with VME FPGA firmware V3316-200F and ADC FPGA firmware V0250-000E
+or later the board’s own <strong>User Counter</strong> (manual 3.3.1.2.1 and 4.13) is the
+better tool: NIM input TI increments it, UI clears it, and its value is saved
+in every event header, so each event carries the integrated charge at its
+time, with no channel used up. This board’s firmware (V3316-2004 /
+A_0250_0004) does not have it, hence the counter-input channel.</p>
+</section>
+<section id="test-mode">
+<h2>Test mode<a class="headerlink" href="#test-mode" title="Link to this heading"></a></h2>
+<p>With <code class="docutils literal notranslate"><span class="pre">TEST_FLAG=True</span></code> an SIS3316 is simulated: every enabled channel sees a
+pulser of fixed amplitude (with ~1 % of extra triggers counted as dead
+time, so the live time is not 100 %), so adding the board, settings, runs, spectra and
+files all work without hardware.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="caen-settings.html" class="btn btn-neutral float-left" title="CAEN digitizers: settings, filters and synchronisation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="histograms-and-rois.html" class="btn btn-neutral float-right" title="Spectra, ROIs and the histogram dashboard" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

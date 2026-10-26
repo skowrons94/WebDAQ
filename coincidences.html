@@ -1,0 +1,297 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="./">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Online coincidences &mdash; WebDAQ 5.0</title>
+      <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="_static/css/theme.css?v=9edc463e" />
+
+  
+      <script src="_static/jquery.js?v=5d32c60e"></script>
+      <script src="_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="_static/documentation_options.js?v=ee801c84"></script>
+      <script src="_static/doctools.js?v=fd6eb6e6"></script>
+      <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Beam current and accumulated charge" href="current-and-charge.html" />
+    <link rel="prev" title="Spectra, ROIs and the histogram dashboard" href="histograms-and-rois.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            WebDAQ
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Taking data</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="welcome.html">WebDAQ — data acquisition for the LUNA experiment</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="example-session.html">A complete session, start to finish</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">User guide</a></li>
+<li class="toctree-l1"><a class="reference internal" href="troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Subsystems</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="caen-settings.html">CAEN digitizers: settings, filters and synchronisation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="sis3316.html">Struck SIS3316 digitizers</a></li>
+<li class="toctree-l1"><a class="reference internal" href="histograms-and-rois.html">Spectra, ROIs and the histogram dashboard</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Online coincidences</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#a-gate-is-a-sentence">1. A gate is a sentence</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#what-a-gate-shows">2. What a gate shows</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#sum-spectrum">3. Sum spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#aligning-channels-in-time">4. Aligning channels in time</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#only-channels-on-one-clock">5. Only channels on one clock</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#time-between-hits">6. Time between hits</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#how-it-works-and-what-it-costs">7. How it works, and what it costs</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="current-and-charge.html">Beam current and accumulated charge</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring-and-alerts.html">Monitoring: Graphite, Grafana, alerts and notifications</a></li>
+<li class="toctree-l1"><a class="reference internal" href="run-data.html">Run data and conversion</a></li>
+<li class="toctree-l1"><a class="reference internal" href="analysis.html">Offline Analysis</a></li>
+<li class="toctree-l1"><a class="reference internal" href="elog.html">The ELOG logbook</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">How it works</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="details.html">How WebDAQ works</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory-structure.html">Directory structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server-architecture.html">Server architecture</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">WebDAQ</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
+      <li class="breadcrumb-item active">Online coincidences</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/coincidences.md.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="online-coincidences">
+<h1>Online coincidences<a class="headerlink" href="#online-coincidences" title="Link to this heading"></a></h1>
+<p>The Coincidences page (sidebar → Spectra → Coincidences) builds spectra of channels
+gated by other channels, live, while the run is going. It is a view on the
+data: the run files keep every hit, so a gate set up wrong costs nothing — fix
+it and the gate starts over.</p>
+<hr class="docutils" />
+<section id="a-gate-is-a-sentence">
+<h2>1. A gate is a sentence<a class="headerlink" href="#a-gate-is-a-sentence" title="Link to this heading"></a></h2>
+<p>Each gate reads as one sentence, filled in on its card:</p>
+<blockquote>
+<div><p>Spectrum of <strong>[channels]</strong> <strong>[in coincidence with | with a veto from]</strong>
+<strong>[partner channels]</strong> within ± <strong>[window]</strong> ns <em>(at least <strong>n</strong> of them)</em></p>
+</div></blockquote>
+<ul class="simple">
+<li><p><strong>In coincidence with</strong> keeps a hit of the channels when at least one partner
+(or <em>n</em> different partners, when there are several) fires within the window
+around it, before or after. Example: the HPGe spectrum in coincidence with a
+scintillator.</p></li>
+<li><p><strong>With a veto from</strong> keeps a hit when <em>no</em> partner fires within the window —
+a Compton or cosmic-ray veto. The vetoed spectrum and the coincidence
+spectrum of the same gate add up to the singles spectrum.</p></li>
+</ul>
+<p>Click <strong>Channels</strong> or <strong>Partners</strong> to pick them from a grid of every board’s
+channels. Then <strong>Save</strong>: the gate is built from the next hit on (or from the
+next run).</p>
+<p>Optional:</p>
+<ul class="simple">
+<li><p><strong>Energy–energy matrix</strong>: the energy of the gated channel against the energy
+of its partner, for coincidence gates.</p></li>
+<li><p><strong>Δt plot range</strong>: how far either side the Δt spectrum reaches (below).</p></li>
+<li><p><strong>Sum spectrum</strong>: the energy of a hit and of its partners added, in keV, for
+coincidence gates (section 3).</p></li>
+</ul>
+</section>
+<section id="what-a-gate-shows">
+<h2>2. What a gate shows<a class="headerlink" href="#what-a-gate-shows" title="Link to this heading"></a></h2>
+<ul class="simple">
+<li><p><strong>Counts and rates</strong>: how many hits of the channels passed, the fraction of
+all their hits, and the rate over the last few seconds against the singles
+rate.</p></li>
+<li><p><strong>The gated (or vetoed) spectrum</strong> of each channel of the gate, with the same
+energy calibration and rebinning as on the Histograms page.</p></li>
+<li><p><strong>The Δt spectrum</strong>, t(partner) − t(channel), for all partners together or one
+by one. Real coincidences make a peak; the flat floor under it is chance. Set
+the window so it covers the peak, and not much more.</p></li>
+<li><p><strong>The matrix</strong>, if switched on.</p></li>
+<li><p><strong>The sum spectrum</strong>, if switched on, with the number of sums and how many
+fell above its range.</p></li>
+</ul>
+</section>
+<section id="sum-spectrum">
+<h2>3. Sum spectrum<a class="headerlink" href="#sum-spectrum" title="Link to this heading"></a></h2>
+<p>For a coincidence gate, <strong>Sum spectrum</strong> adds up, for every hit of the gate’s
+channels that passes the gate, its calibrated energy and that of its partners
+within the window, and fills one spectrum per gate with the total (keV). A
+cascade whose gammas land in different detectors shows up as a peak at the
+energy of the level it started from.</p>
+<ul class="simple">
+<li><p><strong>Partners: all in the window</strong> adds every partner hit within ± window, on
+any partner channel. <strong>Nearest of each channel</strong> adds only the hit of each
+partner channel nearest in time, which keeps a second, unrelated hit on the
+same detector out of the sum.</p></li>
+<li><p>The fold is the gate’s own condition: a hit is summed when at least <em>n</em>
+partner channels fired (<em>at least n of them</em>), the same hits that go into
+the gated spectrum.</p></li>
+<li><p><strong>Each event is summed once.</strong> When the channels and the partners are
+different detectors, the sum is built from each gated hit to its partners.
+When a detector is on both sides (channels A, B in coincidence with A, B),
+the event A+B would otherwise be summed twice, once from A and once from B.
+It is summed only from its earliest hit, the <em>anchor</em>: a hit is skipped when
+an earlier hit within the window, on a channel that is both gated and a
+partner, would have summed it. Hits at exactly the same time are ordered the
+same way every time. In a long chain of hits each closer than the window to
+the next, the later ones are skipped too; at the rates where that happens
+the sum is dominated by chance anyway.</p></li>
+<li><p><strong>Every channel of the gate needs an energy calibration</strong>, on both sides,
+since energies from different detectors can only be added in keV. Until they
+have one, the gate’s card says which channels lack it and the sum stays
+empty; the rest of the gate works. Calibrate them from their cards on the
+Histograms page. The calibrations are read when the gate starts and checked
+every second: a new calibration of one of the gate’s channels during the run
+empties the sum spectrum and starts it again (the card says when), because
+its bins would otherwise mix two energy scales.</p></li>
+<li><p><strong>Range and bin width</strong> (default 0 – 16384 keV in 1 keV bins). Sums above the
+range are counted as <strong>Above … keV</strong> on the card, never dropped silently;
+sums below 0 keV (a negative calibration offset) are counted too.</p></li>
+</ul>
+<p><strong>Chance coincidences under the sum peak.</strong> A partner hit that fired by chance
+within the window adds its energy to the sum like a real one and moves the
+event out of its peak, or a chance pair makes a sum where there is no real
+event. Judge how many there are from the Δt plot: the flat floor is chance,
+so the floor level per ns × 2 × window, compared with the counts in the
+peak, is the fraction of summed events that are chance. Narrow the window to
+the Δt peak (after <strong>Align in time</strong>) to keep it small; <em>nearest</em> helps when
+one detector fires often.</p>
+</section>
+<section id="aligning-channels-in-time">
+<h2>4. Aligning channels in time<a class="headerlink" href="#aligning-channels-in-time" title="Link to this heading"></a></h2>
+<p>Cables, detectors and shaping put each channel’s signal at its own delay, so
+the Δt peak of a real coincidence is rarely at 0. Once a gate has collected a
+peak, <strong>Align in time</strong> shifts each partner’s time offset so its peak sits at
+0 against the gate’s first channel. The gate then starts over with the new
+offsets, and a narrow window is enough.</p>
+<p>The offsets are listed, and can be edited, under <strong>Timing settings</strong>. They are
+per channel and shared by every gate.</p>
+</section>
+<section id="only-channels-on-one-clock">
+<h2>5. Only channels on one clock<a class="headerlink" href="#only-channels-on-one-clock" title="Link to this heading"></a></h2>
+<p>Two hits can only be compared if they were timed by the same clock. That is
+the case for the channels of one board, and for the CAEN boards of a
+synchronised chain (see the CAEN settings) that also share one clock: every
+board but the first takes its clock from CLK-IN (Acquisition Control 0x8100,
+bit 6). Boards started together but each on its own oscillator are not on one
+clock. Boards that run on their own
+clocks — two independent CAEN boards, or a CAEN board and an SIS3316 — drift
+apart by microseconds within seconds, so no gate can mix them. The channel
+picker greys out the boards that do not share a clock with what is already
+picked, and a saved gate that mixes them says so on its card.</p>
+</section>
+<section id="time-between-hits">
+<h2>6. Time between hits<a class="headerlink" href="#time-between-hits" title="Link to this heading"></a></h2>
+<p>At the bottom of the page, pick any channel to see the time between its
+consecutive hits, on a log time axis from 1 ns to 10 s. A random source gives
+one smooth bump at 1/rate. Look for:</p>
+<ul class="simple">
+<li><p>a cut on the left of the bump: the dead time;</p></li>
+<li><p>a spike at short times: double triggering, or ringing;</p></li>
+<li><p>sharp lines: a pulser, or periodic noise.</p></li>
+</ul>
+</section>
+<section id="how-it-works-and-what-it-costs">
+<h2>7. How it works, and what it costs<a class="headerlink" href="#how-it-works-and-what-it-costs" title="Link to this heading"></a></h2>
+<p>The boards involved in a gate export their hits (16 bytes each; boards not in
+any gate export nothing). Every quarter of a second the server collects them,
+sorts them in time per clock and evaluates the gates.</p>
+<p>A board does not deliver its hits in time order: a channel’s events wait in the
+board until its buffer is read out, and a quiet channel waits longer. So a hit
+is only evaluated once every active board of its clock has delivered data at
+least <strong>Wait for slower channels</strong> later (Timing settings, default 2 s of data
+time). A hit arriving after its time has already been evaluated is counted as
+<strong>late</strong> in the page header and left out of the gates (it is still in the
+singles spectra and the file). If late hits appear, raise that latency; it
+costs only display delay and a little memory.</p>
+<p>Memory stays bounded: the pending hits are shown in the header in MB, and are
+capped (about 64 MB per clock) whatever the rate. Each gate’s outputs are
+fixed-size arrays, made when the gate starts and never grown: 4 bytes per bin
+of each gated channel’s spectrum (128 kB for a 32768-bin channel), 4 kB per
+Δt spectrum (one per channel–partner pair), 1 MB for the energy–energy matrix
+when it is on (512 × 512), and for the sum spectrum 4 bytes per bin, 64 kB at
+the default 16384 bins and at most 256 kB (65536 bins). With the most of
+everything (16 gates of 32 + 32 channels) that is about 200 MB; a
+usual setup of a few gates over a few channels stays within a few MB. Hits the online decoder had to
+skip because it was behind are shown as <strong>not seen</strong>: the coincidence rates miss
+them, the file does not.</p>
+<p>The configuration is stored in <code class="docutils literal notranslate"><span class="pre">conf/coincidences.json</span></code> in the working
+directory, like the other dashboards, so it is the same for everyone and
+survives a restart.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="histograms-and-rois.html" class="btn btn-neutral float-left" title="Spectra, ROIs and the histogram dashboard" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="current-and-charge.html" class="btn btn-neutral float-right" title="Beam current and accumulated charge" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, LUNA collaboration.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
