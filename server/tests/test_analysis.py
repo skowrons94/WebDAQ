@@ -16,9 +16,11 @@ def workflow(runs='1,2'):
              ('db', 'database'), ('yield', 'yield'), ('beam', 'beam_energy'), ('hist', 'histogram'), ('plot', 'plot')]
     nodes = [dict(id=i, kind=k, params={}, position={'x': 0, 'y': 0}) for i, k in kinds]
     nodes[0]['params'] = {'runs': runs}
-    nodes[1]['params'] = {'slope': 2, 'intercept': 1}
+    nodes[1]['params'] = {'source': 'manual', 'slope': 2, 'intercept': 1}
     nodes[2]['params'] = {'board': 1, 'channel': 2}
-    nodes[3]['params'] = {'min': 3, 'max': 9}
+    # Calibrated integer energies are spread over their channel (±1 keV at
+    # slope 2): the bounds sit where no spread value can cross them.
+    nodes[3]['params'] = {'min': 4, 'max': 8}
     nodes[7]['params'] = {'bins': 5, 'min': 0, 'max': 10}
     connections = [('load', 'cal', 'events', 'events'), ('cal', 'channel', 'events', 'events'),
                    ('channel', 'roi', 'events', 'events'), ('roi', 'yield', 'counts', 'counts'),
@@ -185,7 +187,7 @@ class AnalysisRoutesTests(unittest.TestCase):
         self.routes = routes
         self.tmp = tempfile.TemporaryDirectory(); self.addCleanup(self.tmp.cleanup)
         for p in (patch.object(run_data, 'DATA_DIR', self.tmp.name),
-                  patch.object(routes, 'workflow_path', return_value=Path(self.tmp.name) / 'workflow.json')):
+                  patch.object(routes, 'library_path', return_value=Path(self.tmp.name) / 'analysis-workflows.json')):
             p.start(); self.addCleanup(p.stop)
         routes._jobs.clear(); routes._batch.update(state='idle', runs=[])
         with self.app.app_context():
@@ -199,7 +201,8 @@ class AnalysisRoutesTests(unittest.TestCase):
             self.assertEqual(self.client.get(path).status_code, 401)
         for path in ('/analysis/execute', '/analysis/conversions'):
             self.assertEqual(self.client.post(path, json={}).status_code, 401)
-        self.assertEqual(self.client.put('/analysis/workflow', json={}).status_code, 401)
+        # The single-workflow store of the first version is gone.
+        self.assertIn(self.client.put('/analysis/workflow', headers=self.auth, json={}).status_code, (404, 405))
         self.assertGreaterEqual(len(self.client.get('/analysis/context', headers=self.auth).get_json()['catalog']), 22)
 
     def test_query_endpoint_and_examples(self):
@@ -231,7 +234,8 @@ class AnalysisRoutesTests(unittest.TestCase):
 
     def test_save_draft_and_invalid_execution(self):
         graph = workflow('')
-        self.assertEqual(self.client.put('/analysis/workflow', headers=self.auth, json=graph).status_code, 200)
+        body = {'name': 'Draft', 'description': '', 'graph': graph}
+        self.assertEqual(self.client.post('/analysis/workflows', headers=self.auth, json=body).status_code, 201)
         self.assertEqual(self.client.get('/analysis/context', headers=self.auth).get_json()['workflow'], graph)
         self.assertEqual(self.client.post('/analysis/execute', headers=self.auth, json=graph).status_code, 400)
 
@@ -259,7 +263,7 @@ class AnalysisRoutesTests(unittest.TestCase):
             self.assertEqual(self.client.post(url, headers=self.auth, json=invalid).status_code, 400)
         self.assertEqual(len(self.client.get(url, headers=self.auth).get_json()['workflows']), 2)
         self.assertEqual(list(Path(self.tmp.name).glob('*.tmp')), [])
-        with patch.object(self.routes, 'workflow_path', return_value=Path(self.tmp.name) / 'another' / 'workflow.json'):
+        with patch.object(self.routes, 'library_path', return_value=Path(self.tmp.name) / 'another' / 'analysis-workflows.json'):
             self.assertEqual(self.client.get(url, headers=self.auth).get_json()['workflows'], [])
 
     def test_legacy_library_and_corruption(self):
@@ -311,3 +315,50 @@ class AnalysisRoutesTests(unittest.TestCase):
         self.routes._batch['state'] = 'running'
         self.assertEqual(self.client.post('/analysis/execute', headers=self.auth, json=workflow()).status_code, 409)
         self.routes._batch['state'] = 'idle'
+
+    def test_never_competes_with_a_run(self):
+        with patch.object(self.routes, 'run_active', return_value=True):
+            for path, body in (('/analysis/execute', workflow('1')), ('/analysis/conversions', {'runs': [1]})):
+                response = self.client.post(path, headers=self.auth, json=body)
+                self.assertEqual(response.status_code, 409)
+                self.assertIn('run is in progress', response.get_json()['message'])
+            self.assertTrue(self.client.get('/analysis/context', headers=self.auth).get_json()['run_active'])
+
+    def test_job_stops_when_a_run_starts(self):
+        with patch.object(a, 'execute', side_effect=a.AnalysisStopped(self.routes.RUN_STARTED)):
+            ident = self.client.post('/analysis/execute', headers=self.auth, json=workflow('1')).get_json()['id']
+            for _ in range(300):
+                job = self.client.get('/analysis/jobs/' + ident, headers=self.auth).get_json()
+                if job['state'] != 'running': break
+                time.sleep(.01)
+        self.assertEqual(job['state'], 'stopped'); self.assertIn('a run started', job['message'])
+
+    def test_batch_skips_sis3316_and_stops_for_a_run(self):
+        from app import db
+        from app.models.run_metadata import RunMetadata
+        with self.app.app_context():
+            db.session.add(RunMetadata(run_number=3, end_time=datetime.utcnow())); db.session.commit()
+        Path(run_data.run_dir(3)).mkdir(); (Path(run_data.run_dir(3)) / 'SIS3316_1.h5').write_bytes(b'hdf5')
+        formats = self.client.get('/analysis/runs', headers=self.auth).get_json()['runs']
+        self.assertFalse(formats['3']['analysable']); self.assertIn('HDF5', formats['3']['reason'])
+        self.assertTrue(formats['1']['analysable'])
+        manager = Mock()
+        manager.available.return_value = '/test/RUReader'; manager.start.return_value = (True, 'Started')
+        manager.status.return_value = {'state': 'done', 'log': ['converted']}
+        with patch.object(run_data, 'get_conversion_manager', return_value=manager):
+            self.assertEqual(self.client.post('/analysis/conversions', headers=self.auth, json={'runs': [1, 3]}).status_code, 202)
+            for _ in range(300):
+                if self.routes._batch['state'] != 'running': break
+                time.sleep(.01)
+            rows = {row['run']: row for row in self.routes._batch['runs']}
+            self.assertEqual(rows[3]['state'], 'skipped'); self.assertIn('RUReader converts .caendat only', rows[3]['message'])
+            self.assertEqual(manager.start.call_count, 1)
+            # A run starting after the request: nothing more is converted.
+            answers = iter([False, True])
+            manager.start.reset_mock()
+            with patch.object(self.routes, 'run_active', side_effect=lambda: next(answers, True)):
+                self.assertEqual(self.client.post('/analysis/conversions', headers=self.auth, json={'runs': [1]}).status_code, 202)
+                for _ in range(300):
+                    if self.routes._batch['state'] != 'running': break
+                    time.sleep(.01)
+            self.assertEqual(self.routes._batch['state'], 'stopped'); self.assertEqual(manager.start.call_count, 0)

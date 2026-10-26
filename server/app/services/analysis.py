@@ -31,7 +31,7 @@ CATALOG = {
                       'file': field('ROOT filename (blank: all files)', '', 'text'),
                       'tree': field('Tree (blank: Data / DataR)', '', 'text'),
                       'timestamp': field('Timestamp branch', 'Timestamp', 'text'),
-                      'time_scale': field('Timestamp to seconds (ps = 1e-12)', 1e-12),
+                      'time_scale': field("Timestamp to seconds (0: the file's TimestampUnit)", 0),
                       'time_offset': field('Time offset from run start (s)', 0),
                       'flag': field('Run flag', '', 'text', ['', 'good', 'bad', 'unknown']),
                       'exclude': field('Exclude runs', '', 'text'),
@@ -42,9 +42,10 @@ CATALOG = {
                       'energy': field('Energy branch', 'Energy', 'text')}},
     'database': {'label': 'Run Database', 'group': 'Inputs', 'description': 'Read metadata from the active experiment database.',
                  'inputs': {}, 'outputs': {'metadata': 'metadata'}, 'params': {}},
-    'calibrate': {'label': 'Calibrate Energy', 'group': 'Transform', 'description': 'E = slope × ADC + intercept; applies to every selected run.',
+    'calibrate': {'label': 'Calibrate Energy', 'group': 'Transform', 'description': "E = offset + slope × Energy. 'run': each run's own calibration, per board and channel (the .cal files copied into the run directory at its start). 'manual': the slope and intercept typed here, for every run.",
                   'inputs': {'events': 'events'}, 'outputs': {'events': 'events'}, 'params': {
-                      'slope': field('Slope (keV/ADC)', 1), 'intercept': field('Intercept (keV)', 0)}},
+                      'source': field('Calibration', 'run', 'text', ['run', 'manual']),
+                      'slope': field('Slope (keV/ADC), manual only', 1), 'intercept': field('Intercept (keV), manual only', 0)}},
     'channel': {'label': 'Channel Energy', 'group': 'Selection', 'description': 'Select a board and detector channel before counting.',
                 'inputs': {'events': 'events'}, 'outputs': {'events': 'events'}, 'params': {
                     'board': field('Board ID', 0), 'channel': field('Channel', 0)}},
@@ -177,7 +178,7 @@ def validate_graph(graph):
         if kind == 'load_runs':
             if params['runs'].strip() or not any(params.get(k, '').strip() for k in ('target', 'run_type', 'flag', 'exclude', 'date_from', 'date_to', 'voltage_min', 'voltage_max')):
                 parse_runs(params['runs'])
-            if params['time_scale'] <= 0: raise AnalysisError('Timestamp scale must be positive.')
+            if params['time_scale'] < 0: raise AnalysisError('Timestamp scale must be positive, or 0 to use the unit stored in the file.')
             if params['file'] and (Path(params['file']).name != params['file'] or not params['file'].endswith('.root')):
                 raise AnalysisError(f'{ident}: choose a ROOT filename inside the run directory.')
         by_id[ident] = {**node, 'params': params}
@@ -247,25 +248,160 @@ def inspect_run(run):
     return out
 
 
+class AnalysisStopped(AnalysisError):
+    """The job gave way to something more important (a run started)."""
+
+
+class Job:
+    """What one execution carries through its nodes: its deadline, the check
+    that stops it when a run starts, the warnings for the result, and the
+    per-run tables (calibrations, timestamp units) read once."""
+
+    def __init__(self, deadline, should_stop=None):
+        self.deadline = deadline
+        self.should_stop = should_stop or (lambda: None)
+        self.warnings = []
+        self.cache = {}
+
+    def warn(self, text):
+        if text not in self.warnings:
+            self.warnings.append(text)
+
+    def check(self):
+        if time.monotonic() > self.deadline:
+            raise AnalysisError('Analysis exceeded 5 minutes. Select fewer runs or split the workflow.')
+        reason = self.should_stop()
+        if reason:
+            raise AnalysisStopped(reason)
+
+
+def as_job(value):
+    """Nodes accept a bare deadline too (the unit tests call them that way)."""
+    return value if isinstance(value, Job) else Job(value)
+
+
 @dataclass(frozen=True)
 class Events:
     runs: tuple
     files: tuple  # (run number, tuple of paths)
     tree: str
     energy: str
-    slope: float = 1
-    intercept: float = 0
+    # None: the raw Energy value. 'run': each run's own .cal files, per board
+    # and channel. ('linear', slope, intercept): the same line for every run.
+    calibration: object = None
     board: int | None = None
     channel: int | None = None
     timestamp: str = 'Timestamp'
-    time_scale: float = 1e-12
+    # Seconds per timestamp unit; 0 reads the unit RUReader stored in the file.
+    time_scale: float = 0
     time_offset: float = 0
 
 
-def chunks(events, deadline, with_time=False):
+def describe_calibration(calibration):
+    if calibration is None:
+        return 'none (raw Energy values)'
+    if calibration == 'run':
+        return "each run's own calibration (data/run<N>/<board>_<id>.cal)"
+    return {'slope': calibration[1], 'intercept': calibration[2]}
+
+
+# RUReader writes the unit of the Timestamp branch as the title of a TNamed
+# called TimestampUnit, at the top of every output file (RUReader.cc,
+# WriteMetadata); 'raw' is the bare board counter, whose tick per board is in
+# the Boards TNamed ("<id>:<name>:<PHA|PSD>:<channels>:<ps per tick>ps;...").
+TIME_UNIT_SECONDS = {'ps': 1e-12, 'ns': 1e-9, 'us': 1e-6, 'ms': 1e-3, 's': 1.0}
+
+
+def _title(obj):
+    # A TNamed comes back as a model with members; a TObjString is a str.
+    if isinstance(obj, str):
+        return str(obj).strip()
+    try:
+        return str(obj.member('fTitle')).strip()
+    except Exception:
+        return ''
+
+
+def file_time_scale(root, run, path, job):
+    """Seconds per Timestamp unit of one file: a number, or {board: seconds}
+    for raw counters. Falls back to ps, with a warning, when the file does not
+    say (written by an older RUReader or by something else)."""
+    unit = _title(root['TimestampUnit']) if 'TimestampUnit' in root else ''
+    if unit in TIME_UNIT_SECONDS:
+        return TIME_UNIT_SECONDS[unit], unit
+    if unit == 'raw':
+        ticks = {}
+        text = _title(root['Boards']) if 'Boards' in root else ''
+        for entry in filter(None, (part.strip() for part in text.split(';'))):
+            fields = entry.split(':')
+            try:
+                ticks[int(fields[0])] = float(fields[-1].removesuffix('ps')) * 1e-12
+            except (ValueError, IndexError):
+                continue
+        if not ticks:
+            raise AnalysisError(f'Run {run}, {path.name}: raw timestamps without a Boards tick list; convert with --ts-unit ps.')
+        return ticks, 'raw'
+    job.warn(f'Run {run}, {path.name}: no TimestampUnit in the file; timestamps taken as ps.')
+    return 1e-12, None
+
+
+def board_calibration(run, board, job):
+    """(offsets, slopes) per channel of one board, from the .cal file the run
+    copied at its start; identity, with a warning, where there is none."""
+    key = ('cal', run, board)
+    if key in job.cache:
+        return job.cache[key]
+    from .calibration import read_table_file
+    directory = Path(run_data.run_dir(run))
+    matches = sorted(directory.glob(f'*_{board}.cal'))
+    if len(matches) > 1:
+        raise AnalysisError(f'Run {run}: several calibration files for board {board} ({", ".join(m.name for m in matches)}).')
+    if matches:
+        table = read_table_file(str(matches[0]), 64)
+        if (directory / 'calib_history.jsonl').is_file():
+            job.warn(f'Run {run}: the calibration was changed during the run (calib_history.jsonl); the copy taken at its start is used.')
+    else:
+        table = [(0.0, 1.0)] * 64
+        job.warn(f'Run {run}: no calibration file for board {board}; its energies stay in channels.')
+    offsets = np.array([row[0] for row in table]); slopes = np.array([row[1] for row in table])
+    job.cache[key] = (offsets, slopes)
+    return offsets, slopes
+
+
+def calibrate(events, run, raw, boards, channels, rng, job):
+    """Energy in calibrated units. An integer Energy value k stands for the
+    whole channel [k - 0.5, k + 0.5): it is spread uniformly over it before the
+    calibration is applied, or a slope that is not a whole number of bins would
+    leave some bins with one channel and others with two (picket fence). The
+    generator is seeded per file chunk, so every node sees the same values."""
+    values = np.asarray(raw, dtype=np.float64)
+    if events.calibration is None:
+        return values
+    if np.issubdtype(np.asarray(raw).dtype, np.integer):
+        values = values + rng.uniform(-0.5, 0.5, len(values))
+    if events.calibration != 'run':
+        _, slope, intercept = events.calibration
+        return values * slope + intercept
+    out = np.empty_like(values)
+    for board in np.unique(boards):
+        offsets, slopes = board_calibration(run, int(board), job)
+        mask = boards == board
+        channel = np.asarray(channels[mask], dtype=np.int64)
+        inside = (channel >= 0) & (channel < len(offsets))
+        index = np.where(inside, channel, 0)
+        offset = np.where(inside, offsets[index], 0.0); slope = np.where(inside, slopes[index], 1.0)
+        out[mask] = offset + slope * values[mask]
+        if events.channel is not None and (events.board is None or int(board) == events.board) and 0 <= events.channel < len(offsets):
+            if (offsets[events.channel], slopes[events.channel]) == (0.0, 1.0):
+                job.warn(f'Run {run}: board {int(board)} channel {events.channel} is uncalibrated (offset 0, slope 1); its energies stay in channels.')
+    return out
+
+
+def chunks(events, job, with_time=False):
+    job = as_job(job)
     uproot = root_module()
     for run, paths in events.files:
-        for path in paths:
+        for file_index, path in enumerate(paths):
             with uproot.open(path) as root:
                 tree_name = events.tree or next((name for name in ('Data', 'DataR') if name in root), None)
                 if not tree_name or tree_name not in root:
@@ -277,36 +413,76 @@ def chunks(events, deadline, with_time=False):
                 if with_time:
                     if events.timestamp not in tree.keys(): raise AnalysisError(f'Run {run}: missing timestamp branch {events.timestamp}.')
                     branches.append(events.timestamp)
+                    scale, unit = file_time_scale(root, run, path, job)
+                    if events.time_scale:
+                        if isinstance(scale, float) and unit and not math.isclose(scale, events.time_scale):
+                            job.warn(f'Run {run}, {path.name}: the file stores timestamps in {unit}; the scale typed in Load Run(s) ({events.time_scale:g} s) is used instead.')
+                        scale = events.time_scale
                 has_board = 'Board' in tree.keys()
                 if has_board:
                     branches.append('Board')
                 elif events.board not in (None, 0):
                     raise AnalysisError(f'Run {run}: legacy tree has no Board branch; only board 0 is supported.')
-                for arrays in tree.iterate(branches, step_size=100_000, library='np'):
-                    if time.monotonic() > deadline:
-                        raise AnalysisError('Analysis exceeded 5 minutes. Select fewer runs or split the workflow.')
-                    energy = np.asarray(arrays[events.energy], dtype=np.float64)
+                for chunk_index, arrays in enumerate(tree.iterate(branches, step_size=100_000, library='np')):
+                    job.check()
+                    raw = arrays[events.energy]
+                    if np.asarray(raw).ndim != 1: raise AnalysisError('Select a scalar energy branch.')
+                    channels = np.asarray(arrays['Channel'])
+                    boards = np.asarray(arrays['Board']) if has_board else np.zeros(len(channels), dtype=np.int64)
+                    rng = np.random.default_rng([run, file_index, chunk_index])
+                    energy = calibrate(events, run, raw, boards, channels, rng, job)
                     mask = np.ones(len(energy), dtype=bool)
                     if events.channel is not None:
-                        mask &= arrays['Channel'] == events.channel
+                        mask &= channels == events.channel
                     if events.board is not None and has_board:
-                        mask &= arrays['Board'] == events.board
-                    energy = energy[mask] * events.slope + events.intercept
+                        mask &= boards == events.board
+                    energy = energy[mask]
                     if not np.all(np.isfinite(energy)):
                         raise AnalysisError(f'Run {run}: non-finite energy values or calibration overflow.')
-                    if energy.ndim != 1: raise AnalysisError('Select a scalar energy branch.')
                     if with_time:
-                        times = np.asarray(arrays[events.timestamp], dtype=float)[mask] * events.time_scale + events.time_offset
+                        stamps = np.asarray(arrays[events.timestamp], dtype=float)[mask]
+                        if isinstance(scale, dict):
+                            per_event = np.array([scale.get(int(b), np.nan) for b in boards[mask]]) if len(stamps) else np.zeros(0)
+                            if not np.isfinite(per_event).all():
+                                raise AnalysisError(f'Run {run}, {path.name}: raw timestamps of a board missing from the Boards list.')
+                            times = stamps * per_event + events.time_offset
+                        else:
+                            times = stamps * scale + events.time_offset
                         if times.ndim != 1 or not np.isfinite(times).all() or np.any(times < 0): raise AnalysisError('Timestamps must be finite non-negative seconds relative to run start.')
                         yield run, energy, times
                     else:
                         yield run, energy
 
 
-def execute(graph, metadata, progress=lambda _: None):
-    """Execute against a frozen metadata snapshot; never modify run records."""
+def run_format(run):
+    """'caendat', 'hdf5' (a SIS3316 run), 'mixed' or None: what raw data the
+    run directory holds."""
+    names = [f['name'] for f in run_data.list_files(run)['data']]
+    caen = any(n.endswith('.caendat') for n in names); h5 = any(n.endswith('.h5') for n in names)
+    return 'mixed' if caen and h5 else 'caendat' if caen else 'hdf5' if h5 else None
+
+
+SIS3316_REASON = 'SIS3316 runs are HDF5 files; RUReader converts .caendat only.'
+
+
+# A Poisson count n = 0 still says something: the 84.13 % one-sided upper
+# limit (Gehrels 1986, ApJ 303, 336, eq. 9 with S = 1) is 1.841 counts. It is
+# used as the 1-sigma error of an empty count, so a zero yield is never shown
+# as exact.
+ZERO_COUNT_ERROR = 1.841
+
+
+def count_error(n):
+    return math.sqrt(n) if n > 0 else ZERO_COUNT_ERROR
+
+
+def execute(graph, metadata, progress=lambda _: None, should_stop=None):
+    """Execute against a frozen metadata snapshot; never modify run records.
+
+    ``should_stop`` is asked between chunks of events: a non-empty answer (the
+    reason) stops the job with AnalysisStopped."""
     nodes, incoming, order = validate_graph(graph)
-    deadline = time.monotonic() + 300
+    job = Job(time.monotonic() + 300, should_stop)
     outputs, summaries, plots, provenance = {}, {}, [], {}
     result_bins = 0
     for ident in order:
@@ -325,6 +501,8 @@ def execute(graph, metadata, progress=lambda _: None):
                     state = run_data.get_conversion_manager().status(run)['state']
                     if state in ('running', 'failed'):
                         raise AnalysisError(f'Run {run}: conversion is {state}; finish a successful conversion first.')
+                    if not run_data.list_files(run)['root'] and run_format(run) == 'hdf5':
+                        raise AnalysisError(f'Run {run} is not analysable here: {SIS3316_REASON}')
                     paths = tuple(root_paths(run, p['file']))
                     files.append((run, paths))
                     source = provenance.setdefault(str(run), {'metadata': metadata[run], 'files': []})
@@ -337,11 +515,15 @@ def execute(graph, metadata, progress=lambda _: None):
                         if previous is None:
                             source['files'].append(entry)
                 result = {'events': Events(tuple(runs), tuple(files), p['tree'], p['energy'], timestamp=p['timestamp'], time_scale=p['time_scale'], time_offset=p['time_offset'])}
+                if p['time_scale']:
+                    job.warn(f"{ident}: timestamps scaled by the typed {p['time_scale']:g} s per unit instead of the file's TimestampUnit.")
             elif kind == 'database':
                 result = {'metadata': metadata}
             elif kind == 'calibrate':
-                data = args['events']
-                result = {'events': replace(data, slope=data.slope * p['slope'], intercept=data.intercept * p['slope'] + p['intercept'])}
+                # Either way the calibration starts from the raw Energy value:
+                # a manual one overrides the run's, it is not applied on top.
+                calibration = 'run' if p['source'] == 'run' else ('linear', p['slope'], p['intercept'])
+                result = {'events': replace(args['events'], calibration=calibration)}
             elif kind == 'channel':
                 result = {'events': replace(args['events'], board=int(p['board']), channel=int(p['channel']))}
             elif kind in ('roi', 'histogram'):
@@ -353,7 +535,7 @@ def execute(graph, metadata, progress=lambda _: None):
                     if result_bins > 1_000_000:
                         raise AnalysisError('Workflow exceeds one million output bins. Reduce runs, histograms or bins.')
                 values = {run: 0 if kind == 'roi' else np.zeros(int(p['bins']), dtype=np.int64) for run in data.runs}
-                for run, energy in chunks(data, deadline):
+                for run, energy in chunks(data, job):
                     if kind == 'roi':
                         values[run] += int(np.count_nonzero((energy > p['min']) & (energy < p['max'])))
                     else:
@@ -372,8 +554,10 @@ def execute(graph, metadata, progress=lambda _: None):
                     if charge is None or not math.isfinite(charge) or charge <= 0:
                         raise AnalysisError(f'Run {run}: saved charge must be positive to calculate yield.')
                     value = counts['value'] if isinstance(counts, dict) else counts
-                    error = counts['error'] if isinstance(counts, dict) else math.sqrt(counts)
+                    error = counts['error'] if isinstance(counts, dict) else count_error(counts)
                     values[run] = {'value': value / charge, 'error': error / charge, 'counts': value, 'charge_uC': charge}
+                    if not isinstance(counts, dict) and counts == 0:
+                        values[run]['upper_limit_84'] = ZERO_COUNT_ERROR / charge
                 result = {'values': values}
             elif kind == 'beam_energy':
                 values = {}
@@ -395,21 +579,23 @@ def execute(graph, metadata, progress=lambda _: None):
                 result = {'points': points}
             else:
                 from .analysis_nodes import run_node
-                result, extra_plots = run_node(kind, p, args, ident, metadata, deadline, provenance)
+                result, extra_plots = run_node(kind, p, args, ident, metadata, job, provenance)
                 result_bins += sum(sum(len(row['counts']) for row in plot['series']) if plot['kind'] == 'histogram' else len(plot['points']) for plot in extra_plots)
                 if result_bins > 1_000_000: raise AnalysisError('Workflow exceeds one million output bins/points.')
                 plots.extend(extra_plots)
-            if time.monotonic() > deadline: raise AnalysisError('Analysis exceeded 5 minutes.')
+            job.check()
             outputs[ident] = result
             if 'events' in result:
                 ev = result['events']
-                summaries[ident] = {'runs': list(ev.runs), 'energy_branch': ev.energy, 'slope': ev.slope, 'intercept': ev.intercept, 'board': ev.board, 'channel': ev.channel}
+                summaries[ident] = {'runs': list(ev.runs), 'energy_branch': ev.energy, 'calibration': describe_calibration(ev.calibration), 'board': ev.board, 'channel': ev.channel}
             elif 'current' in result:
                 summaries[ident] = {'runs': {run: {'samples': len(row['time']), 'column': p['column']} for run,row in result['current'].items()}}
             elif kind == 'database':
                 summaries[ident] = {'source': 'Active experiment database (read only)'}
             else:
                 summaries[ident] = result
+        except AnalysisStopped:
+            raise
         except (AnalysisError, OSError, KeyError, ValueError, TypeError, RuntimeError, ImportError) as exc:
             raise AnalysisError(f'{ident} ({CATALOG[kind]["label"]}): {exc}') from exc
     for run, source in provenance.items():
@@ -419,6 +605,10 @@ def execute(graph, metadata, progress=lambda _: None):
             if stat.st_size != file['bytes'] or stat.st_mtime_ns != file['mtime_ns']:
                 raise AnalysisError(f'Run {run}: ROOT input changed during analysis; run again when conversion finishes.')
     return {'nodes': summaries, 'plots': plots, 'provenance': provenance, 'workflow': graph,
+            'warnings': job.warnings,
             'notes': ['ROI bounds are exclusive; histogram bins follow NumPy conventions.',
+                      'Calibrated integer energies are spread uniformly over their channel (±0.5) before calibrating, with a fixed seed: no picket-fence bins, and the same values in every node.',
+                      'Time normalisation (background scaled by time) uses the wall-clock run duration, not the live time.',
+                      'An empty count gets the Gehrels 84 % upper limit (1.841 counts) as its error.',
                       'Errors propagate counting and fit variance; efficiency may add a shared systematic. Charge/calibration uncertainties are not propagated. Shared backgrounds correlate different runs.',
                       'Charge comes from the saved run database in µC; beam energy uses the workflow formula.']}

@@ -101,6 +101,12 @@ def _atomic_write(path: str, text: str) -> None:
 def read_table(board_name: str, board_id: str, channels: int) -> List[Tuple[float, float]]:
     """Every channel's (offset, slope); (0, 1) — uncalibrated — where missing."""
     path, _ = _paths(board_name, board_id)
+    return read_table_file(path, channels)
+
+
+def read_table_file(path: str, channels: int) -> List[Tuple[float, float]]:
+    """The table of one .cal file wherever it is: calib/ for the live one, a
+    run directory for the copy that run was taken with."""
     table = [(0.0, 1.0)] * channels
     try:
         rows = np.loadtxt(path, dtype=float, ndmin=2)

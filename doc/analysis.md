@@ -1,8 +1,12 @@
 # Offline Analysis
 
-The **Analysis** page builds graph workflows against the active experiment's
-run database and converted ROOT event trees. It does not issue acquisition
-commands. Start with the supplied spectrum/yield graph, or add nodes from the
+The **Analysis** page (sidebar: Records → Analysis) builds graph workflows
+against the active experiment's run database and converted ROOT event trees. It
+does not issue acquisition commands, and it never competes with a run: while a
+run is going, **Run pipeline** and **Batch convert** are disabled and the server
+answers them with 409. A job that is running when a run starts stops at its next
+chunk of events with *Stopped: a run started*; a batch conversion finishes the
+run it is converting (RUReader cannot be paused) and starts no other. Start with the supplied spectrum/yield graph, or add nodes from the
 library. Click a node to edit its parameters in the inspector. Drag between
 compatible ports to connect nodes; select a node or edge and press Delete to
 remove it. Zoom, pan, fit view, and the minimap work in the graph canvas.
@@ -10,7 +14,9 @@ remove it. Zoom, pan, fit view, and the minimap work in the graph canvas.
 ## Prepare runs
 
 1. Open **Runs**, filter by run number, target or type, and select completed runs.
-2. Use **Batch convert to ROOT** for runs with `.caendat` data. It uses the same
+2. Use **Batch convert to ROOT** for runs with `.caendat` data. SIS3316 runs
+   are skipped with *SIS3316 runs are HDF5 files; RUReader converts .caendat
+   only*, and the run list marks them as not analysable here. It uses the same
    RUReader conversion manager as the logbook and processes runs serially.
    Existing ROOT output is preserved. Per-run status and the conversion log
    remain visible in the batch panel. For advanced converter options or retrying
@@ -46,13 +52,26 @@ There is no separate list-only node family. Drag library items onto the canvas t
 | --- | --- |
 | Load Run(s) | Select completed runs and ROOT event trees. |
 | Run Database | Read the active experiment's metadata; no external DB path. |
-| Calibrate Energy | `E_keV = slope × ADC + intercept`. Defaults are identity; enter your measured calibration. |
+| Calibrate Energy | `E = offset + slope × Energy`. **run** (default): each run's own calibration, per board and channel, from the `.cal` files copied into `data/run<N>/` when it started (one `offset slope` line per channel; `0 1` means uncalibrated, and the result warns about it). **manual**: the typed slope and intercept for every run, an explicit override. Either way it starts from the raw `Energy` value. |
 | Channel Energy | Select **both** board ID and detector channel. Required before ROI/histogram nodes. |
 | ROI Counts | Count events strictly inside `minimum < E < maximum`, matching the reference node editor. |
-| Yield | `Y = N / Q`, `σY = sqrt(N) / Q`, using the saved database charge in µC. Missing/nonpositive charge is an error. |
+| Yield | `Y = N / Q`, `σY = sqrt(N) / Q`, using the saved database charge in µC. For `N = 0` the error is the Gehrels 84 % upper limit, 1.841 counts (also given as `upper_limit_84`). Missing/nonpositive charge is an error. |
 | Beam Energy | `scale × (terminal_voltage + probe_voltage) + offset`, in keV with voltages in kV. Defaults `0.9933` and `−0.41` reproduce the reference app; verify them for your accelerator. Missing voltages are an error. |
 | Histogram | One spectrum per run, on shared, explicit bins and energy range. NumPy bin convention: left-inclusive/right-exclusive, final upper edge inclusive. |
 | Plot Series | Match X and Y by run number, sort by X, and show Y error bars. Different run sets are rejected. |
+
+**Calibrated integer energies.** `Energy` is an integer channel number `k`, and
+the calibration of the Histograms page treats it as the channel's centre. A
+calibrated value is computed from `k + u`, with `u` uniform in [−0.5, 0.5): the
+event is spread over its channel. Without it, a slope that is not a whole
+number of output bins puts one channel in some bins and two in others
+(picket-fence artefacts). The generator is seeded per run, file and chunk, so a
+workflow gives the same numbers every time and every node sees the same values.
+Raw (uncalibrated) energies and floating-point branches are not spread. Choose
+ROI bounds as usual; an event within half a channel of a bound can fall either
+side of it, as it would in a real spectrum of that resolution. (The other
+remedy, output bins aligned to channel boundaries, does not work when runs or
+channels have different calibrations but share one histogram.)
 
 Raw ROI uncertainty is Poisson counting statistics. Extracted areas carry their
 subtraction or fit variance into Yield. Charge uncertainty, dead time, pile-up,
@@ -70,17 +89,26 @@ variances, while still drawing a chart. Connect it to:
   Background runs are summed. Scale by signal elapsed measurement time / summed
   background time, signal charge / summed background charge, or a manual factor.
   Net counts are `S − aB`; variance is `Var(S) + a² Var(B)`. Negative net bins are
-  retained. Time is wall-clock run duration, not live time. Exposure errors are
+  retained. **Time is the wall-clock run duration** (Start Time to Stop Time),
+  not the live time: with different dead time in signal and background runs,
+  use charge or a manual factor. (SIS3316 runs record live time, but they are
+  not analysable here yet.) Exposure errors are
   not included. A shared background correlates different signal runs.
 - **Peak area**: integrate bins whose centres are strictly inside the bounds.
 - **Sideband subtraction**: subtract a flat continuum from two non-overlapping
   flanking sidebands, weighted by actual included bin widths. Propagates sideband
   counting variance; assumes locally flat background.
-- **Peak fit**: bin-integrated Gaussian plus linear background, using weighted
-  least squares and `sqrt(max(variance, 1))` bin errors. Output is the **total
-  Gaussian area**, not just its part inside the fit window. Summary diagnostics
-  include centroid, sigma, covariance, residuals and reduced chi-square. Inspect
-  them, especially for sparse spectra: this is not a Poisson-likelihood fit.
+- **Peak fit**: bin-integrated Gaussian plus linear background. When any bin of
+  the window holds fewer than 20 counts it maximises the Poisson likelihood
+  (minimises the Cash statistic `C = 2 Σ (μ − n + n ln(n/μ))`), starting from the
+  least-squares solution; the covariance is the inverse Fisher information
+  `Jᵀ diag(1/μ) J`, so an absent peak (area at zero) still has a real error
+  (with centroid and width then held fixed). Otherwise, and always for spectra
+  that are no longer plain counts (background-subtracted: variance ≠ counts),
+  it is weighted least squares with `sqrt(max(variance, 1))` bin errors.
+  Output is the **total Gaussian area**, not just its part inside the fit
+  window. Summary diagnostics name the method and give centroid, sigma,
+  covariance, residuals and `cash_per_dof` or `reduced_chi_square`.
 - **Calibration fit**: a straight line through supplied `[ADC, energy_keV]`
   reference points, with residual plots. Covariance uses residual scatter for
   more than two points; two-point covariance is unavailable. Reference-point
@@ -105,20 +133,32 @@ coordinates as the destination. Sideband bounds remain inspector parameters.
 ## Time analysis and ROOT trees
 
 **Inspect ROOT → Use tree** sets filename, tree and run on the selected source
-(or the first source). Energy/timestamp branches remain editable. RUReader's
-default Timestamp unit is ps (`1e-12` seconds per tick). Set the scale to match
-your conversion and an explicit offset to align timestamps to run start; clock
-origins are not inferred.
+(or the first source). Energy/timestamp branches remain editable. The unit of
+the Timestamp branch is read from each file: RUReader stores it as the title of
+the `TimestampUnit` object (`ps`, `ns`, `us`, `ms`, `s`, or `raw`, whose tick per
+board comes from the `Boards` object). A file without it is read as ps, and the
+result says so in its warnings. A nonzero **Timestamp to seconds** in Load
+Run(s) overrides the file (with a warning when they differ). Event time 0 is the
+acquisition start, which is the run's Start Time to within the time the boards
+take to start; **Time offset** shifts it if needed.
 
 **Counting rate over time** bins detector-selected ROI events and divides by
 actual bin duration, including the final short bin. Zero stop uses run duration.
 **Load current** reads the same runs' current.txt with an explicit recorded column
-such as `Ch0(uA)` or `Current(uA)`; no physical channel is assumed. **Yield over
-time** divides each bin's counts by trapezoidally integrated current over the
-same interval, using full-resolution samples and interpolated endpoints. Missing
-coverage, non-monotonic times, and nonpositive charge are errors. Interpolation
-assumes linear current between samples: inspect gaps. Current uncertainty is not
-included. Plot nodes retain run IDs. This analyses recorded runs, not live DAQ.
+such as `Ch0(uA)` or `Current(uA)`; no physical channel is assumed. Its times
+count from the file's `Start time` line, written when the current recording
+began; they are shifted onto the run's clock with the run's Start Time from
+`metadata.json` (`run_data.run_window`), so current and events share one time
+base. When that is not possible the result warns and the log's time 0 is taken
+as the run start. **Yield over time** divides each bin's counts by the charge in
+the same interval, with the rule used everywhere else in WebDAQ (the Data page,
+the run record, RUReader): readings joined by straight lines, a step of more
+than 10 s without a reading carries no charge, the first and last readings are
+held to the run's start and stop for at most 10 s, nothing outside the run
+counts. The bins of a run add up to its charge. A bin without charge is left
+out (with a warning); a bin partly in a gap is kept, its charge leaving the
+silent time out, and the result counts such bins. Empty count bins get the
+Gehrels error. Current uncertainty is not included. Plot nodes retain run IDs. This analyses recorded runs, not live DAQ.
 
 Richer run queries support ranges, exclusions, flags, start-date bounds and
 terminal-voltage ranges, combined with AND. Date-only upper bounds include the
@@ -149,11 +189,11 @@ loading a template.
 
 Expand **Setup requirements** on each template for its prerequisites. These
 instructions are also copied into its description when saving a new workflow.
-The identity energy calibration, board/channel 0, 0–2000 keV spectrum and
-400–600 keV ROI are explicit starting settings, not measured values. Adjust
+Calibrate Energy uses each run's own calibration; board/channel 0, the 0–2000 keV
+spectrum and 400–600 keV ROI are explicit starting settings, not measured values. Adjust
 both paths of a background workflow consistently. Calibration reference points,
-efficiency curves and the current-log column are deliberately blank. The default
-Timestamp scale is ps; verify your ROOT conversion and time origin. Time stop 0
+efficiency curves and the current-log column are deliberately blank. The Timestamp
+unit comes from the file; verify the time origin. Time stop 0
 uses each run's duration; narrow it to current-log coverage for time yields.
 Beam Energy uses neutral scale 1 and offset 0 in templates; configure your
 accelerator's voltage calibration and ion charge state. Existing saved workflows
@@ -174,8 +214,11 @@ The focused grips also support arrow keys and Home/End.
 and descriptions. **Save workflow** creates a named entry or updates the current
 one; **Save a copy** creates a variant. Loading another workflow asks before
 replacing unsaved edits. The library is stored atomically in
-`conf/analysis-workflows.json` (up to 50 workflows). The original
-`conf/analysis-workflow.json` is retained and appears as **Previous workflow**.
+`conf/analysis-workflows.json` (up to 50 workflows) of the working directory,
+which is the experiment's directory when the server is started from the page,
+so every experiment has its own. A single-workflow
+`conf/analysis-workflow.json` from the first version is read as **Previous
+workflow** and left untouched.
 Drafts may have disconnected nodes. Saving is shared by browsers using that
 experiment (last save wins). Export workflow JSON for portable backups. **Import** accepts
 LUNAdaq version 1 JSON; prototype NucleoFlow JSON is not directly compatible.
@@ -201,8 +244,10 @@ it does not pretend partially converted output is ready for analysis.
 
 ## Install and test
 
-`environment.yml` includes `uproot>=5,<6` and `scipy>=1.11`; rerun the installer or update the
-`luna` environment after pulling this feature. Frontend dependencies include
+`environment.yml` includes `uproot>=5,<6` (scipy was already there); install it
+into the `luna` environment between runs (`conda install -n luna -c conda-forge
+'uproot>=5,<6'`). Without it the server starts as before and the Analysis page
+says that uproot is missing. Frontend dependencies include
 `@xyflow/react`. The offline reader does not require a working PyROOT import,
 but RUReader still needs its compiled ROOT libraries for conversion.
 
@@ -221,9 +266,11 @@ and [NumPy polyfit](https://numpy.org/doc/stable/reference/generated/numpy.polyf
 
 ## Editor rendering and layout
 
-On wide screens the editor fills the space between the header and footer;
-results scroll inside their own panel. At narrower widths the panels stack,
-with a separately resizable results height. More results never increase that
+On wide screens the editor fills the window below the header (the page uses
+the layout's full-height mode); results scroll inside their own panel. At
+narrower widths the panels stack, with a separately resizable results height.
+On a phone the panels stack in one column: library and runs, a shorter graph
+(view and edit parameters by tapping a node), then results. More results never increase that
 panel's height. Library nodes show short descriptions and styled help opens
 on hover after 150 ms or on keyboard focus.
 

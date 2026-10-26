@@ -2,15 +2,16 @@
 from copy import deepcopy
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest import TestCase
+import importlib.util
+from unittest import TestCase, skipUnless
 from unittest.mock import patch
 import numpy as np
-import uproot
 from app.services import analysis as a, run_data
 from app.services.analysis_examples import examples
 from app.services.analysis_workflows import validate_draft
 
 
+@skipUnless(importlib.util.find_spec('uproot'), 'Install uproot for ROOT tests')
 class ExamplePortabilityTests(TestCase):
     def test_templates_are_unbound_drafts(self):
         for template in examples():
@@ -31,6 +32,7 @@ class ExamplePortabilityTests(TestCase):
                     a.validate_graph(template['graph'])
 
     def test_all_templates_execute_with_non_demo_inputs(self):
+        import uproot
         rng = np.random.default_rng(2026)
         with TemporaryDirectory() as tmp, patch.object(run_data, 'DATA_DIR', tmp):
             metadata = {}
@@ -45,7 +47,8 @@ class ExamplePortabilityTests(TestCase):
                     root['EventsPSD'].extend(dict(EnergyLong=(energy-10)/.5,
                         Ticks=(np.linspace(.1, seconds-.1, count)*1e9).astype('uint64'),
                         Board=np.full(count, 2, dtype='uint16'), Channel=np.full(count, 3, dtype='uint16')))
-                (path / 'current.txt').write_text(f'# Time(s)\tCh2(uA)\n0 2\n{seconds} 2\n')
+                # A reading every second: longer silences carry no charge.
+                (path / 'current.txt').write_text('# Time(s)\tCh2(uA)\n' + ''.join(f'{t} 2\n' for t in range(seconds + 1)))
                 metadata[run] = dict(complete=True, charge_uC=seconds*2, terminal_voltage=200, probe_voltage=1,
                                      start_time='2026-01-01T00:00:00', end_time=f'2026-01-01T00:{seconds//60:02}:{seconds%60:02}')
             for template in examples():
@@ -55,7 +58,7 @@ class ExamplePortabilityTests(TestCase):
                         p, kind = node['params'], node['kind']
                         if kind == 'load_runs': p.update(runs='42' if node['id'] == 'background_runs' else '7', tree='EventsPSD', energy='EnergyLong', timestamp='Ticks', time_scale=1e-9)
                         if kind == 'channel': p.update(board=2, channel=3)
-                        if kind == 'calibrate': p.update(slope=.5, intercept=10)
+                        if kind == 'calibrate': p.update(source='manual', slope=.5, intercept=10)
                         if kind == 'calibration_fit': p['points'] = '[[100,60],[200,110],[400,210]]'
                         if kind == 'load_current': p['column'] = 'Ch2(uA)'
                         if kind == 'efficiency': p['curve'] = '[[100,0.2],[2000,0.1]]'

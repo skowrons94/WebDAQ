@@ -1,4 +1,13 @@
-"""Authenticated experiment-local analysis and serial batch conversion."""
+"""Authenticated experiment-local analysis and serial batch conversion.
+
+Nothing here may compete with a run for the disk or the CPU: a job or a batch
+is refused while a run is going, and one already going stops (at its next
+chunk of events, or before its next conversion) as soon as a run starts.
+
+Workflows are stored in conf/ of the working directory, which is the
+experiment's directory: the page's launcher starts the server there
+(frontend/src/app/api/server-control), so each experiment keeps its own.
+"""
 import copy
 import hashlib
 import json
@@ -13,7 +22,21 @@ from flask import Blueprint, current_app, jsonify, request
 from ..models.run_metadata import RunMetadata
 from ..utils.jwt_utils import jwt_required_custom
 from ..services import analysis, run_data, analysis_workflows
+from ..services.daq_manager import get_daq_manager
 from .data import _boards_of
+
+TEST_FLAG = str(os.getenv('TEST_FLAG', '')).strip().lower() in ('1', 'true', 'yes', 'on')
+RUN_ACTIVE = 'A run is in progress: analysis and batch conversion wait until it stops, so they never compete with the acquisition.'
+RUN_STARTED = 'Stopped: a run started. Run it again when the run has ended.'
+
+
+def run_active():
+    return get_daq_manager(test_flag=TEST_FLAG).is_running()
+
+
+def stop_reason():
+    """Asked by a job between chunks of events."""
+    return RUN_STARTED if run_active() else None
 
 bp = Blueprint('analysis', __name__)
 _lock = threading.Lock()
@@ -30,12 +53,10 @@ def metadata_snapshot():
             for r in RunMetadata.query.all()}
 
 
-def workflow_path():
-    return Path('conf/analysis-workflow.json')
-
-
 def library_path():
-    return workflow_path().with_name('analysis-workflows.json')
+    # A single-workflow file of the first version of this page,
+    # conf/analysis-workflow.json, is read once as "Previous workflow".
+    return Path('conf/analysis-workflows.json')
 
 
 def payload():
@@ -55,14 +76,7 @@ def invalid(error):
 @bp.get('/analysis/context')
 @jwt_required_custom
 def context():
-    path = workflow_path()
-    saved, warning = None, None
-    if path.exists():
-        try:
-            saved = json.loads(path.read_text())
-        except (OSError, ValueError):
-            warning = 'The saved workflow could not be read. Import a backup or save a new workflow.'
-    active = None
+    saved, warning, active = None, None, None
     try:
         library = analysis_workflows.read(library_path())
         active = next((w for w in library['workflows'] if w['id'] == library.get('active_id')), None)
@@ -72,29 +86,29 @@ def context():
         warning = str(exc)
     from ..services.analysis_examples import examples
     identity = f'{Path.cwd()}|{current_app.config["SQLALCHEMY_DATABASE_URI"]}'
+    try:
+        analysis.root_module(); uproot_missing = None
+    except analysis.AnalysisError as exc:
+        uproot_missing = str(exc)
     return jsonify({'project_id': hashlib.sha256(identity.encode()).hexdigest()[:16],
                     'project_name': Path.cwd().name, 'catalog': analysis.CATALOG,
-                    'examples': examples(), 'workflow': saved, 'active_workflow': {k: v for k, v in active.items() if k != 'graph'} if active else None, 'warning': warning})
+                    'examples': examples(), 'workflow': saved, 'active_workflow': {k: v for k, v in active.items() if k != 'graph'} if active else None,
+                    'warning': warning, 'uproot_missing': uproot_missing, 'run_active': run_active()})
 
 
-@bp.put('/analysis/workflow')
+@bp.get('/analysis/runs')
 @jwt_required_custom
-def save_workflow():
-    graph = payload()
-    # Drafts can have unconnected nodes/empty run selectors. Validate at execution.
-    if graph.get('version') != 1 or not isinstance(graph.get('nodes'), list) or not isinstance(graph.get('edges'), list):
-        raise analysis.AnalysisError('Expected a version 1 workflow with nodes and edges.')
-    if len(graph['nodes']) > 50 or len(graph['edges']) > 150:
-        raise analysis.AnalysisError('Workflow exceeds node/connection limits.')
-    path = workflow_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(f'.{uuid.uuid4().hex}.tmp')
-    try:
-        temporary.write_text(json.dumps(graph, allow_nan=False, indent=2))
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
-    return jsonify({'saved': True})
+def run_formats():
+    """Which completed runs this page can analyse, and why not the others."""
+    out = {}
+    for record in RunMetadata.query.all():
+        kind = analysis.run_format(record.run_number)
+        converted = bool(run_data.list_files(record.run_number)['root'])
+        reason = None
+        if kind == 'hdf5' and not converted:
+            reason = analysis.SIS3316_REASON
+        out[record.run_number] = {'format': kind, 'converted': converted, 'analysable': reason is None, 'reason': reason}
+    return jsonify({'runs': out})
 
 
 @bp.get('/analysis/workflows')
@@ -159,6 +173,8 @@ def schema(run):
 @bp.post('/analysis/execute')
 @jwt_required_custom
 def execute():
+    if run_active():
+        return jsonify({'message': RUN_ACTIVE}), 409
     graph = payload()
     analysis.validate_graph(graph)
     metadata = metadata_snapshot()
@@ -174,11 +190,14 @@ def execute():
             with _lock:
                 _jobs[ident]['node'] = node
         try:
-            result = analysis.execute(graph, metadata, progress)
+            result = analysis.execute(graph, metadata, progress, stop_reason)
             # Refuse non-finite output instead of returning invalid JSON.
             json.dumps(result, allow_nan=False)
             with _lock:
                 _jobs[ident].update(state='done', result=result)
+        except analysis.AnalysisStopped as exc:
+            with _lock:
+                _jobs[ident].update(state='stopped', message=str(exc))
         except Exception as exc:
             with _lock:
                 _jobs[ident].update(state='failed', message=str(exc))
@@ -207,6 +226,8 @@ def conversion_status():
 @bp.post('/analysis/conversions')
 @jwt_required_custom
 def convert_batch():
+    if run_active():
+        return jsonify({'message': RUN_ACTIVE}), 409
     body = payload()
     runs = analysis.parse_runs(body.get('runs', []))
     metadata = metadata_snapshot()
@@ -218,6 +239,9 @@ def convert_batch():
         files = run_data.list_files(run)
         if run not in metadata or not metadata[run]['complete'] or not files['data']:
             raise analysis.AnalysisError(f'Run {run}: conversion requires a completed run with raw data.')
+        if analysis.run_format(run) == 'hdf5':
+            rows.append({'run': run, 'state': 'skipped', 'message': analysis.SIS3316_REASON})
+            continue
         state = manager.status(run)['state']
         if state in ('running', 'failed'):
             raise analysis.AnalysisError(f'Run {run}: conversion is {state}. Check its logbook conversion tab before batching.')
@@ -233,6 +257,14 @@ def convert_batch():
             for row in rows:
                 if row['state'] == 'skipped':
                     continue
+                # A conversion already going finishes (RUReader cannot be
+                # paused), but none is started once a run is on.
+                if run_active():
+                    with _lock:
+                        for rest in rows:
+                            if rest['state'] == 'queued':
+                                rest.update(state='stopped', message=RUN_STARTED)
+                    break
                 run = row['run']
                 # Also cooperate with conversions started from the logbook.
                 started, message = manager.start(run, options[run])
@@ -248,7 +280,8 @@ def convert_batch():
                         break
                     time.sleep(0.5)
             with _lock:
-                _batch['state'] = 'failed' if any(row['state'] == 'failed' for row in rows) else 'done'
+                _batch['state'] = ('failed' if any(row['state'] == 'failed' for row in rows)
+                                   else 'stopped' if any(row['state'] == 'stopped' for row in rows) else 'done')
         except Exception as exc:
             with _lock:
                 for row in rows:
